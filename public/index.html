@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#15170f">
+  <title>赤潮：钢铁前线 · 局域网战场</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+  <div class="scanlines" aria-hidden="true"></div>
+
+  <main id="app">
+    <canvas id="homeBg" class="home-bg-canvas"></canvas>
+    <section id="homeScreen" class="screen home-screen">
+      <header class="brand-block">
+        <div class="eyebrow"><span class="live-dot"></span> LAN COMMAND NETWORK</div>
+        <h1><span data-text="赤潮">赤潮</span><b data-text="钢铁前线">钢铁前线</b></h1>
+        <p>原创局域网即时战略 · 建造基地 · 采集矿石 · 摧毁敌军指挥中心</p>
+      </header>
+
+      <div class="home-grid">
+        <section class="panel enlist-panel">
+          <div class="panel-kicker">COMMANDER PROFILE</div>
+          <h2>进入作战网络</h2>
+          <label class="field-label" for="playerName">指挥官代号</label>
+          <div class="input-shell">
+            <span class="input-icon">⌁</span>
+            <input id="playerName" maxlength="16" autocomplete="nickname" placeholder="输入你的名字">
+          </div>
+
+          <div class="divider"><span>创建新战场</span></div>
+          <label class="field-label" for="roomName">战场名称</label>
+          <div class="input-shell">
+            <span class="input-icon">▦</span>
+            <input id="roomName" maxlength="24" placeholder="例如：午休闪击战">
+          </div>
+          <button id="createRoomBtn" class="button primary full">
+            <span class="button-glint"></span>
+            创建房间
+            <small>CREATE BATTLE</small>
+          </button>
+
+          <div class="quick-join">
+            <div class="divider"><span>或使用房间码</span></div>
+            <div class="inline-form">
+              <div class="input-shell compact">
+                <input id="roomCodeInput" maxlength="6" placeholder="6 位房间码" spellcheck="false">
+              </div>
+              <button id="joinCodeBtn" class="button secondary">加入</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel server-panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-kicker">ACTIVE OPERATIONS</div>
+              <h2>可用战场</h2>
+            </div>
+            <button id="refreshRoomsBtn" class="icon-button" title="刷新房间">↻</button>
+          </div>
+          <div id="serverStatus" class="server-status">
+            <span class="status-light"></span>
+            <span>正在连接作战服务器…</span>
+          </div>
+          <div id="roomList" class="room-list" aria-live="polite">
+            <div class="empty-state">
+              <div class="radar-icon"><i></i><i></i></div>
+              <strong>正在扫描战场</strong>
+              <span>等待服务器响应</span>
+            </div>
+          </div>
+          <div class="network-card">
+            <div><span>本机战区</span><strong id="netHost">—</strong></div>
+            <div><span>通信端口</span><strong id="netPort">—</strong></div>
+            <div><span>同步模式</span><strong>实时权威</strong></div>
+          </div>
+        </section>
+      </div>
+
+      <footer class="home-footer">
+        <span>推荐使用 Chrome / Edge 桌面浏览器</span>
+        <span class="key-hints"><kbd>WASD</kbd> 移动画面　<kbd>右键</kbd> 下达命令　<kbd>拖拽</kbd> 框选部队</span>
+      </footer>
+    </section>
+
+    <section id="lobbyScreen" class="screen lobby-screen hidden">
+      <header class="lobby-header">
+        <button id="leaveLobbyBtn" class="back-button">← 返回大厅</button>
+        <div class="lobby-title">
+          <span>战前部署 / PRE-BATTLE DEPLOYMENT</span>
+          <h2 id="lobbyRoomName">战场</h2>
+        </div>
+        <div class="room-code-card" id="copyRoomCode" title="点击复制房间码">
+          <span>房间码</span>
+          <strong id="lobbyRoomCode">------</strong>
+          <small>点击复制</small>
+        </div>
+      </header>
+
+      <div class="lobby-layout">
+        <section class="panel roster-panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-kicker">TASK FORCE</div>
+              <h2>参战序列</h2>
+            </div>
+            <span id="playerCount" class="counter">1 / 6</span>
+          </div>
+          <div id="playerRoster" class="player-roster"></div>
+          <div class="lobby-actions">
+            <button id="readyBtn" class="button ready-button">准备作战</button>
+            <button id="addBotBtn" class="button secondary hidden">＋ 添加 AI</button>
+            <button id="randomTeamBtn" class="button secondary hidden">🎲 随机分组</button>
+            <button id="randomSpawnBtn" class="button secondary hidden">🎲 随机出生</button>
+            <button id="startGameBtn" class="button primary hidden">开始战斗</button>
+          </div>
+          <div id="lobbyHint" class="lobby-hint">等待其他指挥官加入…</div>
+        </section>
+
+        <aside class="lobby-side">
+          <section class="panel map-briefing">
+            <div class="panel-kicker">TACTICAL BRIEFING</div>
+            <h2 id="mapNameDisplay">北境冲突区</h2>
+            <div id="mapPreviewContainer" class="map-preview">
+              <div class="map-grid"></div>
+              <div id="mapSpawnPreviews"></div>
+              <div class="map-crosshair"></div>
+            </div>
+            <div class="briefing-stats">
+              <div><span>地图规模</span><strong id="mapSizeDisplay">9600 × 6000</strong></div>
+              <div><span>玩家上限</span><strong id="mapMaxPlayersDisplay">6</strong></div>
+              <div><span>初始资金</span><strong>$ 6,800</strong></div>
+              <div><span>胜利条件</span><strong>摧毁总部</strong></div>
+              <div><span>兵种克制</span><strong>火焰克步兵·攻城克建筑</strong></div>
+            </div>
+            <!-- display:none 必须留在行内：app.js 用 style.display='' 清空行内值来显示它 -->
+            <div id="mapSelectHost" style="display:none;">
+              <label class="field-label" for="mapSelectDropdown">选择战场</label>
+              <select id="mapSelectDropdown"></select>
+            </div>
+          </section>
+
+          <section class="panel chat-panel">
+            <div class="panel-kicker">SECURE CHANNEL</div>
+            <div id="lobbyChatMessages" class="chat-messages"></div>
+            <form id="lobbyChatForm" class="chat-form">
+              <input id="lobbyChatInput" maxlength="100" placeholder="发送战术消息…" autocomplete="off">
+              <button type="submit" class="icon-button">➤</button>
+            </form>
+          </section>
+        </aside>
+      </div>
+    </section>
+
+    <section id="gameScreen" class="game-screen hidden">
+      <header class="game-topbar">
+        <div class="top-brand">
+          <span>赤潮</span>
+          <strong>钢铁前线</strong>
+        </div>
+        <div class="resource-strip">
+          <div class="resource-item credits">
+            <span class="resource-icon">◆</span>
+            <div><small>资金</small><strong id="cashValue">$ 0</strong></div>
+          </div>
+          <div class="resource-item power">
+            <span class="resource-icon">ϟ</span>
+            <div><small>电力</small><strong id="powerValue">0 / 0</strong></div>
+          </div>
+          <div class="resource-item forces">
+            <span class="resource-icon">▲</span>
+            <div><small>兵力</small><strong id="forceValue">0</strong></div>
+          </div>
+        </div>
+        <div id="matchClock" class="match-clock">00:00</div>
+        <div id="connectionBadge" class="connection-badge"><i></i> 已连接</div>
+        <button id="gameMenuBtn" class="icon-button game-menu-button">☰</button>
+      </header>
+
+      <div class="battlefield-shell">
+        <canvas id="gameCanvas" tabindex="0"></canvas>
+        <canvas id="hudCanvas"></canvas>
+        <div id="fpsMeter" class="fps-meter">-- FPS</div>
+        <div id="selectionBox" class="selection-box hidden"></div>
+        <div id="buildCursorLabel" class="build-cursor-label hidden"></div>
+        <div id="toastStack" class="toast-stack"></div>
+
+        <aside class="command-sidebar">
+          <div class="sidebar-top">
+            <div class="minimap-frame">
+              <span class="hazard-edge" aria-hidden="true"></span>
+              <div class="power-column" title="电力负载">
+                <div class="power-meter"><i id="statPowerFill"></i></div>
+                <span class="power-bolt" aria-hidden="true">ϟ</span>
+              </div>
+              <div class="minimap-well">
+                <canvas id="minimapCanvas" width="260" height="160"></canvas>
+              </div>
+              <span class="corner tl"></span><span class="corner tr"></span>
+              <span class="corner bl"></span><span class="corner br"></span>
+            </div>
+            <div id="scoreboard" class="scoreboard"></div>
+          </div>
+
+          <div class="command-tabs" role="tablist">
+            <button class="command-tab active" data-tab="buildings">建筑</button>
+            <button class="command-tab" data-tab="infantry">步兵</button>
+            <button class="command-tab" data-tab="vehicles">载具</button>
+          </div>
+
+          <div id="commandGrid" class="command-grid"></div>
+
+          <div id="tacticalReadout" class="tactical-readout">
+            <div class="readout-head"><span>FIELD STATUS</span><i></i>战场态势</div>
+            <div class="readout-grid">
+              <div><small>部队</small><strong id="statUnits">0</strong></div>
+              <div><small>建筑</small><strong id="statBuildings">0</strong></div>
+              <div><small>采矿车</small><strong id="statHarvesters">0</strong></div>
+              <div><small>累计采集</small><strong id="statHarvested">0</strong></div>
+              <div><small>击毁</small><strong id="statKills">0</strong></div>
+              <div><small>损失</small><strong id="statLost">0</strong></div>
+            </div>
+            <div class="readout-power">
+              <small>电力负载 <b id="statPowerText">0%</b>　·　负载表位于雷达左缘</small>
+            </div>
+          </div>
+
+          <div id="selectionInfo" class="selection-info">
+            <div class="selection-empty">
+              <span class="selection-reticle">⌖</span>
+              <strong>未选择作战单位</strong>
+              <small>左键单选或拖拽框选</small>
+            </div>
+          </div>
+
+          <div class="orders-row">
+            <button id="attackMoveBtn" class="order-button" title="攻击移动 (Q)"><span>⌁</span>攻击移动</button>
+            <button id="repairBtn" class="order-button" title="前往最近维修厂 (R)"><span>✚</span>维修载具</button>
+            <button id="deployBtn" class="order-button hidden" title="展开为新基地 (D)"><span>⬢</span>展开</button>
+            <button id="stopBtn" class="order-button" title="停止 (S)"><span>■</span>停止</button>
+            <button id="pingBtn" class="order-button" title="地图信标 (G)"><span>◉</span>信标</button>
+            <button id="strikeBtn" class="order-button strike-button hidden" title="轨道打击 (X)"><span>☢</span>轨道打击</button>
+          </div>
+
+          <div class="counter-panel" id="counterPanel">
+            <button class="counter-toggle" id="counterToggle">
+              <span>兵种克制</span>
+              <i class="counter-arrow">▾</i>
+            </button>
+            <div class="counter-body" id="counterBody">
+              <table class="counter-table">
+                <tr><td class="ct-head" colspan="4">兵营 · 步兵</td></tr>
+                <tr><td class="ct-attacker">♟ 突击兵</td><td class="ct-arrow">→</td><td class="ct-target">基础·对步兵×1.0</td><td class="ct-mult">—</td></tr>
+                <tr><td class="ct-attacker">↟ 火箭兵</td><td class="ct-arrow">→</td><td class="ct-target">重甲/建筑</td><td class="ct-mult">×1.5</td></tr>
+                <tr><td class="ct-attacker">⌖ 狙击手</td><td class="ct-arrow">→</td><td class="ct-target">步兵</td><td class="ct-mult">×2.2</td></tr>
+                <tr><td class="ct-head" colspan="4">工厂 · 载具</td></tr>
+                <tr><td class="ct-attacker">▰ 坦克</td><td class="ct-arrow">→</td><td class="ct-target">建筑</td><td class="ct-mult">×1.2</td></tr>
+                <tr><td class="ct-attacker">◆ 猎犬战车</td><td class="ct-arrow">→</td><td class="ct-target">侦察·对步兵×1.0</td><td class="ct-mult">—</td></tr>
+                <tr><td class="ct-attacker">◉ 攻城炮</td><td class="ct-arrow">→</td><td class="ct-target">建筑/重甲</td><td class="ct-mult">×1.8</td></tr>
+                <tr><td class="ct-attacker">◭ 歼击车</td><td class="ct-arrow">→</td><td class="ct-target">重甲</td><td class="ct-mult">×2.1</td></tr>
+              </table>
+              <div class="counter-note">
+                <span class="ct-weak">弱</span> 歼击车打步兵仅×0.25<br>
+                <span class="ct-weak">弱</span> 狙击/突击打建筑仅×0.1/×0.3<br>
+                <span class="ct-weak">弱</span> 突击/猎犬打坦克仅×0.35<br>
+                <span class="ct-strong">送</span> 建造精炼厂附赠一辆矿车<br>
+                <span class="ct-strong">展</span> 基地车可展开为新指挥中心
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <div class="battle-chat">
+          <div id="battleChatMessages" class="battle-chat-messages"></div>
+          <form id="battleChatForm" class="battle-chat-form hidden">
+            <input id="battleChatInput" maxlength="100" placeholder="按 Enter 发送消息" autocomplete="off">
+          </form>
+        </div>
+
+        <div class="control-legend">
+          <span><kbd>左键</kbd> 选择</span>
+          <span><kbd>右键</kbd> 移动 / 攻击</span>
+          <span><kbd>R</kbd> 维修载具</span>
+          <span><kbd>Q</kbd> 攻击移动</span>
+          <span><kbd>空格</kbd> 返回基地</span>
+        </div>
+      </div>
+
+      <div id="gameMenu" class="modal-backdrop hidden">
+        <div class="modal-card">
+          <div class="panel-kicker">TACTICAL PAUSE</div>
+          <h2>作战菜单</h2>
+          <p>多人战斗不会暂停。</p>
+          <button id="resumeBtn" class="button primary full">返回战场</button>
+          <button id="leaveGameBtn" class="button danger full">离开本局</button>
+          <button id="openSettingsBtn" class="button secondary full">系统设置</button>
+        </div>
+      </div>
+
+      <div id="settingsModal" class="modal-backdrop hidden">
+        <div class="settings-card">
+          <div class="panel-kicker">SYSTEM CONFIGURATION</div>
+          <h2>系统设置</h2>
+          <div class="settings-body">
+            <div class="setting-group">
+              <div class="setting-label">主音量</div>
+              <input id="masterVolume" type="range" min="0" max="100" value="70">
+            </div>
+            <div class="setting-group">
+              <div class="setting-label">音效音量</div>
+              <input id="sfxVolume" type="range" min="0" max="100" value="80">
+            </div>
+            <div class="setting-group">
+              <div class="setting-label">粒子效果</div>
+              <select id="particleQuality">
+                <option value="low" selected>低 (200)</option>
+                <option value="medium">中 (400)</option>
+                <option value="high">高 (600)</option>
+              </select>
+            </div>
+            <div class="setting-group">
+              <div class="setting-label">地图黑幕精度</div>
+              <select id="fogQuality">
+                <option value="low" selected>低 (快速)</option>
+                <option value="medium">中 (均衡)</option>
+                <option value="high">高 (精细)</option>
+              </select>
+            </div>
+            <div class="setting-group">
+              <div class="setting-label">阴影质量</div>
+              <select id="shadowQuality">
+                <option value="structures">建筑投影</option>
+                <option value="all">全部投影</option>
+                <option value="off" selected>关闭</option>
+              </select>
+            </div>
+            <div class="setting-group">
+              <div class="setting-label">泛光效果</div>
+              <select id="bloomQuality">
+                <option value="on">开启</option>
+                <option value="low">低</option>
+                <option value="off" selected>关闭</option>
+              </select>
+            </div>
+            <div class="setting-group">
+              <div class="setting-label">场景细节</div>
+              <select id="sceneryQuality">
+                <option value="on">开启</option>
+                <option value="off" selected>关闭</option>
+              </select>
+            </div>
+            <div class="setting-group">
+              <div class="setting-label">弹道轨迹</div>
+              <select id="projectileQuality">
+                <option value="on" selected>开启</option>
+                <option value="off">关闭</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button id="settingsCloseBtn" class="button primary full">确认</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="resultModal" class="modal-backdrop hidden">
+        <div class="result-card">
+          <div id="resultEmblem" class="result-emblem">★</div>
+          <div id="resultKicker" class="panel-kicker">MISSION COMPLETE</div>
+          <h2 id="resultTitle">胜利</h2>
+          <p id="resultText">敌方指挥体系已经瓦解。</p>
+          <div id="resultStats" class="result-stats"></div>
+          <button id="returnHomeBtn" class="button primary">返回作战大厅</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <template id="roomItemTemplate">
+    <article class="room-item">
+      <div class="room-emblem">◇</div>
+      <div class="room-main">
+        <strong class="room-title"></strong>
+        <span class="room-meta"></span>
+      </div>
+      <div class="room-capacity"></div>
+      <button class="button join-button">加入</button>
+    </article>
+  </template>
+
+  <script>
+    // Keep the lobby actionable when a later game module fails to start, and
+    // expose the exact source location instead of leaving every button inert.
+    window.addEventListener('error', function (event) {
+      if (window.__ironFrontBooted) { return; }
+      var status = document.getElementById('serverStatus');
+      if (!status) { return; }
+      status.className = 'server-status offline';
+      var label = status.querySelector('span:last-child');
+      if (label) {
+        label.textContent = '客户端启动失败，请刷新页面（' +
+          (event.lineno || '?') + ':' + (event.colno || '?') + '）';
+      }
+    });
+  </script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
