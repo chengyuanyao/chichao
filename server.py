@@ -21,6 +21,7 @@ import sys
 import threading
 import time
 import uuid
+from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -37,6 +38,11 @@ STARTED_AT = time.time()
 LOCK = threading.RLock()
 ROOMS = {}
 RUNNING = True
+
+# 静态资源内存缓存：路径 -> ((mtime, size), (content, content_type, last_modified))。
+# 用独立的小锁，不为读个文件去抢全局 LOCK（那会卡住 20Hz 模拟线程）。
+_STATIC_CACHE = {}
+_STATIC_LOCK = threading.Lock()
 
 COLORS = ["#42d9ff", "#ff4f55", "#f6c84a", "#a77bff", "#3ddc84", "#ff8c42"]
 BOT_NAMES = ["北辰", "赤狐", "磐石", "夜枭", "雷霆", "灰熊"]
@@ -541,6 +547,19 @@ def player_power(room, player_id):
     game = room.get("game")
     if not game:
         return 0, 0
+    # 每个模拟帧按玩家缓存一次电力。过去 tick_structures 里每个在建/在产建筑、
+    # 每辆矿车、每个 bot、每条 SSE 连接的 public_player 都各扫一遍全部建筑，
+    # 叠加成 O(结构数²) 并全部压在全局锁内。电力在单个 tick 内本就不变，
+    # _snapshotVersion 每 tick 末与每条改状态指令后都会自增，正好当缓存键。
+    version = game.get("_snapshotVersion", 0)
+    cache = game.get("_powerCache")
+    if cache is None or cache[0] != version:
+        cache = (version, {})
+        game["_powerCache"] = cache
+    per_player = cache[1]
+    cached = per_player.get(player_id)
+    if cached is not None:
+        return cached
     supply = 0
     usage = 0
     for structure in game["structures"]:
@@ -551,6 +570,7 @@ def player_power(room, player_id):
             supply += value
         else:
             usage += -value
+    per_player[player_id] = (supply, usage)
     return supply, usage
 
 
@@ -2543,10 +2563,17 @@ def nearest_enemy(game, owner, x, y, max_distance, spatial_index=None):
     return best
 
 
-def nearest_enemy_structure(game, owner, x, y, max_distance):
+def nearest_enemy_structure(game, owner, x, y, max_distance, spatial_index=None):
     best = None
     best_dist_sq = max_distance * max_distance
-    for entity in game["structures"]:
+    # 与 nearest_enemy 一样走共享的战术空间网格，只在候选里筛出敌方建筑，
+    # 不再每次线性扫整张结构表（网格里混着单位，靠 id 前缀挑出建筑）。
+    candidates = (spatial_candidates(
+        spatial_index, x, y, max_distance, 16.0)
+        if spatial_index else game["structures"])
+    for entity in candidates:
+        if not entity["id"].startswith("s"):
+            continue
         if is_friendly(game, entity["owner"], owner) or entity["hp"] <= 0:
             continue
         dx = entity["x"] - x
@@ -2952,7 +2979,8 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                 if (target and unit["kind"] == "artillery"
                         and target["kind"] not in STRUCTURE_TYPES):
                     building = nearest_enemy_structure(
-                        game, unit["owner"], unit["x"], unit["y"], aggro)
+                        game, unit["owner"], unit["x"], unit["y"], aggro,
+                        combat_spatial)
                     if building:
                         target = building
                 unit["targetId"] = target["id"] if target else None
@@ -3148,10 +3176,18 @@ def tick_bots(room):
             issue_attack(game, bot["id"], set(u["id"] for u in combat), target["id"])
 
 
-def remove_destroyed_and_check(room):
+def remove_destroyed(room):
+    """把刚阵亡的单位/建筑移出列表并补大爆炸特效，每 tick 都跑。
+
+    过去清理跟胜负判定一起按 0.45s 节奏走，于是阵亡单位会以 hp=0 在原地继续
+    留在快照里近半秒，爆炸火球也要等清理周期到了才出现。死亡反馈本该即时；
+    没东西死时两个列表推导直接早退，开销可忽略。
+    """
     game = room["game"]
     destroyed_units = [u for u in game["units"] if u["hp"] <= 0]
     destroyed_structures = [s for s in game["structures"] if s["hp"] <= 0]
+    if not destroyed_units and not destroyed_structures:
+        return
     for entity in destroyed_units + destroyed_structures:
         game["effects"].append({
             "id": new_id("e"), "type": "explosion", "x": entity["x"], "y": entity["y"],
@@ -3160,6 +3196,10 @@ def remove_destroyed_and_check(room):
     game["units"] = [u for u in game["units"] if u["hp"] > 0]
     game["structures"] = [s for s in game["structures"] if s["hp"] > 0]
 
+
+def check_elimination_and_victory(room):
+    """淘汰与胜负判定。仍按 victoryClock 的 0.45s 节奏跑，不需要 20Hz 的精度。"""
+    game = room["game"]
     for player in room["players"].values():
         if player["eliminated"]:
             continue
@@ -3186,6 +3226,12 @@ def remove_destroyed_and_check(room):
             room["status"] = "finished"
             team_winners = [p["name"] for p in alive]
             add_chat(room, "作战系统", "队伍 %s 赢得了本局战斗！" % ("、".join(team_winners)), True)
+
+
+def remove_destroyed_and_check(room):
+    """清理 + 判定合并入口（保留给直接调用它的旧代码与测试）。"""
+    remove_destroyed(room)
+    check_elimination_and_victory(room)
 
 
 def spawn_crates(game, terrain, dt):
@@ -3347,9 +3393,12 @@ def tick_game(room, dt):
         tick_bots(room)
         game["botClock"] = 2.25
 
+    # 每 tick 及时清掉尸体，让爆炸在倒下那一瞬就出现；淘汰/胜负判定仍按
+    # 0.45s 的节奏走，不需要逐 tick 的精度。
+    remove_destroyed(room)
     game["victoryClock"] -= dt
     if game["victoryClock"] <= 0:
-        remove_destroyed_and_check(room)
+        check_elimination_and_victory(room)
         game["victoryClock"] = 0.45
 
     # Expire alliance proposals after 45 seconds
@@ -3389,6 +3438,35 @@ def game_loop():
                     ROOMS.pop(room_id, None)
         elapsed = time.time() - current
         time.sleep(max(0.005, 0.05 - elapsed))
+
+
+def static_entry(target):
+    """读静态文件并按 (mtime, size) 缓存进内存，返回 (content, content_type, last_modified)。
+
+    过去每次请求都从磁盘重读整份文件 —— terrain-ground.png 有 3.5MB，多名玩家
+    同时开局就是几次整读。改成只在文件真的变了（mtime 或大小不同）时才重读；
+    os.stat 本身只是一次廉价系统调用，不读文件内容，开发时改完文件也能立即生效。
+    """
+    try:
+        stat = os.stat(target)
+    except OSError:
+        return None
+    key = (stat.st_mtime, stat.st_size)
+    with _STATIC_LOCK:
+        cached = _STATIC_CACHE.get(target)
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        try:
+            with open(target, "rb") as handle:
+                content = handle.read()
+        except OSError:
+            return None
+        content_type = mimetypes.guess_type(target)[0] or "application/octet-stream"
+        if target.endswith(".js"):
+            content_type = "application/javascript"
+        entry = (content, content_type, formatdate(stat.st_mtime, usegmt=True))
+        _STATIC_CACHE[target] = (key, entry)
+        return entry
 
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
@@ -3759,15 +3837,24 @@ class GameHandler(BaseHTTPRequestHandler):
         if not target.startswith(os.path.abspath(PUBLIC_ROOT) + os.sep) or not os.path.isfile(target):
             self.send_json(404, {"ok": False, "error": "页面不存在"})
             return
-        with open(target, "rb") as handle:
-            content = handle.read()
-        content_type = mimetypes.guess_type(target)[0] or "application/octet-stream"
-        if target.endswith(".js"):
-            content_type = "application/javascript"
+        entry = static_entry(target)
+        if entry is None:
+            self.send_json(404, {"ok": False, "error": "页面不存在"})
+            return
+        content, content_type, last_modified = entry
+        # 浏览器持有的副本仍新鲜就直接 304，整张贴图不必再发一遍
+        if self.headers.get("If-Modified-Since") == last_modified:
+            self.send_response(304)
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Last-Modified", last_modified)
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            return
         self.send_response(200)
         self.send_header("Content-Type", content_type + ("; charset=utf-8" if content_type.startswith("text/") or "javascript" in content_type else ""))
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-cache")
+        self.send_header("Last-Modified", last_modified)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(content)
