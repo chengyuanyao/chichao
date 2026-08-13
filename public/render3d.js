@@ -1512,6 +1512,8 @@ export function createRenderer(canvas) {
 
   const SCATTER_CHUNK = 1400;
   let scatterGroup = null;
+  // 取消令牌：新的 buildScatter 会让仍在分块构建的旧任务自动放弃（重连/改画质）。
+  let scatterBuildToken = 0;
 
   // 各主题的配色：松林 / 荒漠 / 城区废墟
   const SCATTER_THEMES = {
@@ -1661,12 +1663,16 @@ export function createRenderer(canvas) {
   }
 
   function buildScatter() {
+    // 取消任何仍在分块构建的旧任务，并清掉旧植被
+    const token = ++scatterBuildToken;
     if (scatterGroup) {
       worldRoot.remove(scatterGroup);
       scatterGroup.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
       scatterGroup = null;
     }
-    if (!state.scatter) return;
+    state.scatterCount = 0;
+    state.scatterChunks = 0;
+    if (!state.scatter || !state.map) return;
 
     const mw = state.map.width;
     const mh = state.map.height;
@@ -1675,9 +1681,6 @@ export function createRenderer(canvas) {
     const spawnPoints = state.spawnPoints || [];
     const resources = state.resources || [];
 
-    scatterGroup = new THREE.Group();
-    worldRoot.add(scatterGroup);
-
     const material = applyFogMask(new THREE.MeshLambertMaterial({
       vertexColors: true, flatShading: true
     }));
@@ -1685,71 +1688,97 @@ export function createRenderer(canvas) {
     const chunksX = Math.ceil(mw / SCATTER_CHUNK);
     const chunksY = Math.ceil(mh / SCATTER_CHUNK);
     const step = 84 / theme.density;      // 采样间距，越小越密
+    const group = new THREE.Group();
     let placed = 0;
 
-    for (let cx = 0; cx < chunksX; cx++) {
-      for (let cy = 0; cy < chunksY; cy++) {
-        const parts = [];
-        const x0 = cx * SCATTER_CHUNK;
-        const y0 = cy * SCATTER_CHUNK;
-        const x1 = Math.min(mw, x0 + SCATTER_CHUNK);
-        const y1 = Math.min(mh, y0 + SCATTER_CHUNK);
+    // 单个 1400 单位见方区块的采样与合并（原同步双重循环的循环体，逻辑原样保留）
+    function buildChunk(cx, cy) {
+      const parts = [];
+      const x0 = cx * SCATTER_CHUNK;
+      const y0 = cy * SCATTER_CHUNK;
+      const x1 = Math.min(mw, x0 + SCATTER_CHUNK);
+      const y1 = Math.min(mh, y0 + SCATTER_CHUNK);
 
-        for (let sx = x0; sx < x1; sx += step) {
-          for (let sy = y0; sy < y1; sy += step) {
-            const h1 = hash2(sx * 7.3, sy * 3.1);
-            // 成林/空地：低频噪声决定这一带的密度
-            const clump = clumpNoise(sx, sy);
-            if (h1 > 0.10 + clump * 0.78) continue;   // 噪声高的地方成密林
+      for (let sx = x0; sx < x1; sx += step) {
+        for (let sy = y0; sy < y1; sy += step) {
+          const h1 = hash2(sx * 7.3, sy * 3.1);
+          // 成林/空地：低频噪声决定这一带的密度
+          const clump = clumpNoise(sx, sy);
+          if (h1 > 0.10 + clump * 0.78) continue;   // 噪声高的地方成密林
 
-            // 在格子里抖动，避免看出网格
-            const jx = sx + (hash2(sx * 1.7, sy * 9.4) - 0.5) * step * 1.6;
-            const jy = sy + (hash2(sx * 5.1, sy * 2.9) - 0.5) * step * 1.6;
-            if (jx < 40 || jy < 40 || jx > mw - 40 || jy > mh - 40) continue;
-            if (!scatterAllowed(jx, jy, spawnPoints, resources)) continue;
+          // 在格子里抖动，避免看出网格
+          const jx = sx + (hash2(sx * 1.7, sy * 9.4) - 0.5) * step * 1.6;
+          const jy = sy + (hash2(sx * 5.1, sy * 2.9) - 0.5) * step * 1.6;
+          if (jx < 40 || jy < 40 || jx > mw - 40 || jy > mh - 40) continue;
+          if (!scatterAllowed(jx, jy, spawnPoints, resources)) continue;
 
-            let seed = Math.floor(hash2(jx * 3.7, jy * 8.2) * 1e9);
-            const rand = function () {
-              seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-              return seed / 0x7fffffff;
-            };
+          let seed = Math.floor(hash2(jx * 3.7, jy * 8.2) * 1e9);
+          const rand = function () {
+            seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+            return seed / 0x7fffffff;
+          };
 
-            const kind = rand();
-            const scale = 1.15 + rand() * 0.95;
-            const nearRavine = riverDepthAt(jx, jy) > 0.04;
-            let items;
-            if (nearRavine) {
-              // 沟壑坡面不长草木，只有碎石
-              items = pebbleParts(scale * 1.3, rand, theme);
-            } else if (kind < 0.62) items = pineParts(scale, rand, theme);
-            else if (kind < 0.86) items = bushParts(scale * 1.1, rand, theme);
-            else items = pebbleParts(scale, rand, theme);
+          const kind = rand();
+          const scale = 1.15 + rand() * 0.95;
+          const nearRavine = riverDepthAt(jx, jy) > 0.04;
+          let items;
+          if (nearRavine) {
+            // 沟壑坡面不长草木，只有碎石
+            items = pebbleParts(scale * 1.3, rand, theme);
+          } else if (kind < 0.62) items = pineParts(scale, rand, theme);
+          else if (kind < 0.86) items = bushParts(scale * 1.1, rand, theme);
+          else items = pebbleParts(scale, rand, theme);
 
-            const place = new THREE.Matrix4()
-              .makeRotationY(rand() * TAU)
-              .setPosition(jx, groundHeight(jx, jy), jy);
-            items.forEach(function (part) {
-              part.matrix = place.clone().multiply(part.matrix);
-              parts.push(part);
-            });
-            placed++;
-          }
+          const place = new THREE.Matrix4()
+            .makeRotationY(rand() * TAU)
+            .setPosition(jx, groundHeight(jx, jy), jy);
+          items.forEach(function (part) {
+            part.matrix = place.clone().multiply(part.matrix);
+            parts.push(part);
+          });
+          placed++;
         }
-
-        if (!parts.length) continue;
-        const mesh = new THREE.Mesh(mergeParts(parts), material);
-        // 每块单独一个 mesh，three.js 按包围球自动视锥剔除；
-        // 再加一个到相机的距离剔除（见 render 里的 scatterCull）。
-        mesh.frustumCulled = true;
-        mesh.castShadow = false;
-        mesh.receiveShadow = false;
-        mesh.userData.cx = (x0 + x1) / 2;
-        mesh.userData.cy = (y0 + y1) / 2;
-        scatterGroup.add(mesh);
       }
+
+      if (!parts.length) return;
+      const mesh = new THREE.Mesh(mergeParts(parts), material);
+      // 每块单独一个 mesh，three.js 按包围球自动视锥剔除；
+      // 再加一个到相机的距离剔除（见 render 里的 scatterCull）。
+      mesh.frustumCulled = true;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.userData.cx = (x0 + x1) / 2;
+      mesh.userData.cy = (y0 + y1) / 2;
+      group.add(mesh);
     }
-    state.scatterCount = placed;
-    state.scatterChunks = scatterGroup.children.length;
+
+    // 撒草木是纯装饰：单位落地、拾取、迷雾都不依赖它。原先它在地形构建末尾
+    // 一次性跑完（上万零件的合并），开局会明显卡一下。改成首帧之后按块构建，
+    // 每帧最多约 8ms；全部建完才整体挂进场景，避免树木逐块「蹦」出来。
+    let cx = 0, cy = 0;
+    const stepFrame = function () {
+      if (token !== scatterBuildToken) {
+        // 被更新的 buildScatter 取代（重连 / 改画质），丢弃这个半成品
+        group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
+        return;
+      }
+      const deadline = performance.now() + 8;
+      while (cy < chunksY) {
+        buildChunk(cx, cy);
+        cx++;
+        if (cx >= chunksX) { cx = 0; cy++; }
+        if (performance.now() >= deadline) break;
+      }
+      if (cy < chunksY) {
+        requestAnimationFrame(stepFrame);
+      } else {
+        scatterGroup = group;
+        worldRoot.add(scatterGroup);
+        state.scatterCount = placed;
+        state.scatterChunks = group.children.length;
+      }
+    };
+    requestAnimationFrame(stepFrame);
   }
 
   /**

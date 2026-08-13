@@ -35,6 +35,10 @@ PORT = int(os.environ.get("PORT", "18081"))
 HOST = os.environ.get("HOST", "0.0.0.0")
 STARTED_AT = time.time()
 
+# 刷钱调试接口 /api/give 默认只对服务器本机开放（你在服务器上跑 give_cash.py 做
+# 测试），局域网其他玩家访问会被拒。确需从别的机器用时设环境变量 IFL_CHEATS=1 放开。
+CHEATS_OPEN = os.environ.get("IFL_CHEATS", "").strip().lower() in ("1", "true", "on")
+
 LOCK = threading.RLock()
 ROOMS = {}
 RUNNING = True
@@ -3333,14 +3337,17 @@ def apply_crate(room, player_id, crate):
                      "%s 超级武器已满，转为资金 +800" % player["name"], True)
 
 
-def tick_pending_strikes(room, dt):
+def tick_pending_strikes(room, dt, combat_spatial=None):
     """推进轨道打击：到点的弹着依次结算范围伤害 + 爆炸特效，全部走完即移除。"""
     game = room["game"]
     strikes = game.get("pendingStrikes")
     if not strikes:
         return
     now_e = game["elapsed"]
-    entity_index, combat_spatial = build_combat_indexes(game)
+    # 复用 tick_game 在 tick_projectiles 前建好的索引，不再每 tick 第三次重建。
+    # 两者之间没有实体移动，坐标仍然准确；被炮弹打死的实体下面按 hp<=0 跳过。
+    if combat_spatial is None:
+        _entity_index, combat_spatial = build_combat_indexes(game)
     for strike in strikes:
         impacts = strike["impacts"]
         idx = strike["fired"]
@@ -3379,7 +3386,7 @@ def tick_game(room, dt):
     tick_structures(room, dt, combat_spatial)
     entity_index, combat_spatial = build_combat_indexes(game)
     tick_projectiles(room, dt, entity_index, combat_spatial)
-    tick_pending_strikes(room, dt)
+    tick_pending_strikes(room, dt, combat_spatial)
 
     for effect in game["effects"]:
         effect["ttl"] -= dt
@@ -3538,10 +3545,15 @@ class GameHandler(BaseHTTPRequestHandler):
         elif path == "/api/events":
             self.handle_events(query)
         elif path == "/api/give":
+            # 安全：调试/测试接口，仅服务器本机（跑 give_cash.py 的机器）可用，
+            # 除非显式设了 IFL_CHEATS=1。行为：调用即给指定玩家【随机减钱】。
+            if not CHEATS_OPEN and self.client_address[0] not in ("127.0.0.1", "::1", "localhost"):
+                self.send_json(403, {"ok": False, "error": "刷钱接口仅服务器本机可用"})
+                return
             player_name = (query.get("name") or [""])[0]
             cash_str = (query.get("cash") or ["0"])[0]
             try:
-                amount = float(cash_str)
+                amount = max(0.0, float(cash_str))
             except ValueError:
                 self.send_json(400, {"ok": False, "error": "金额无效"})
                 return
@@ -3550,9 +3562,11 @@ class GameHandler(BaseHTTPRequestHandler):
                 for room in ROOMS.values():
                     for player in room["players"].values():
                         if player["name"] == player_name:
-                            player["cash"] += amount
+                            # 随机减去 [0, 请求金额] 之间的一笔；现金最低减到 0，不变负
+                            removed = min(player["cash"], random.uniform(0.0, amount))
+                            player["cash"] -= removed
                             found = True
-                            self.send_json(200, {"ok": True, "name": player_name, "added": amount, "cash": player["cash"]})
+                            self.send_json(200, {"ok": True, "name": player_name, "removed": removed, "cash": player["cash"]})
                             break
                     if found:
                         break
