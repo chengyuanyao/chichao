@@ -358,21 +358,21 @@ DAMAGE_MULTIPLIER = {
 
 UNIT_TYPES = {
     "rifle": {
-        "name": "突击兵", "cost": 180, "hp": 110, "speed": 92.0,
+        "name": "突击兵", "cost": 180, "hp": 110, "speed": 110.4,
         "damage": 13.0, "range": 125.0, "cooldown": 0.62,
         "size": 10.0, "build": 3.0, "producer": "barracks",
         "projectile": "bullet", "projectileSpeed": 680.0, "splash": 0.0,
         "sight": 350.0, "armor": "infantry", "damageType": "bullet",
     },
     "rocket": {
-        "name": "火箭兵", "cost": 340, "hp": 95, "speed": 77.0,
+        "name": "火箭兵", "cost": 340, "hp": 95, "speed": 92.4,
         "damage": 38.0, "range": 205.0, "cooldown": 1.2,
         "size": 11.0, "build": 5.0, "producer": "barracks",
         "projectile": "rocket", "projectileSpeed": 285.0, "splash": 42.0,
         "sight": 390.0, "armor": "infantry", "damageType": "rocket",
     },
     "sniper": {
-        "name": "狙击手", "cost": 420, "hp": 75, "speed": 75.0,
+        "name": "狙击手", "cost": 420, "hp": 75, "speed": 90.0,
         "damage": 55.0, "range": 310.0, "cooldown": 1.6,
         "size": 10.0, "build": 6.0, "producer": "barracks",
         "projectile": "sniper", "projectileSpeed": 1200.0, "splash": 0.0,
@@ -381,28 +381,28 @@ UNIT_TYPES = {
     # 军犬：红色警戒式近战特种兵。全场最速，扑咬对步兵一击必杀（克制表 ×4），
     # 但对载具/建筑零伤害；便宜的肉盾与侦察兵，专咬成群步兵。
     "dog": {
-        "name": "军犬", "cost": 120, "hp": 55, "speed": 122.0,
+        "name": "军犬", "cost": 120, "hp": 55, "speed": 146.4,
         "damage": 60.0, "range": 30.0, "cooldown": 0.8,
         "size": 8.0, "build": 2.5, "producer": "barracks",
         "projectile": "bite", "projectileSpeed": 1000.0, "splash": 0.0,
         "sight": 400.0, "armor": "infantry", "damageType": "bite",
     },
     "tank": {
-        "name": "先锋坦克", "cost": 780, "hp": 620, "speed": 63.0,
+        "name": "先锋坦克", "cost": 780, "hp": 620, "speed": 75.6,
         "damage": 68.0, "range": 180.0, "cooldown": 1.38,
         "size": 20.0, "build": 8.0, "producer": "factory",
         "projectile": "shell", "projectileSpeed": 390.0, "splash": 51.0,
         "sight": 440.0, "armor": "heavy", "damageType": "shell",
     },
     "scout": {
-        "name": "猎犬战车", "cost": 460, "hp": 260, "speed": 108.0,
+        "name": "猎犬战车", "cost": 460, "hp": 260, "speed": 129.6,
         "damage": 20.0, "range": 145.0, "cooldown": 0.72,
         "size": 16.0, "build": 6.0, "producer": "factory",
         "projectile": "bullet", "projectileSpeed": 720.0, "splash": 0.0,
         "sight": 620.0, "armor": "light", "damageType": "bullet",
     },
     "harvester": {
-        "name": "采矿车", "cost": 920, "hp": 680, "speed": 53.0,
+        "name": "采矿车", "cost": 920, "hp": 680, "speed": 63.6,
         "damage": 0.0, "range": 0.0, "cooldown": 0.0,
         "size": 22.0, "build": 9.0, "producer": "factory",
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
@@ -410,21 +410,21 @@ UNIT_TYPES = {
         "armor": "heavy", "damageType": "none",
     },
     "artillery": {
-        "name": "攻城炮", "cost": 960, "hp": 300, "speed": 42.0,
+        "name": "攻城炮", "cost": 960, "hp": 300, "speed": 50.4,
         "damage": 85.0, "range": 340.0, "cooldown": 2.2,
         "size": 22.0, "build": 10.0, "producer": "factory",
         "projectile": "siege", "projectileSpeed": 260.0, "splash": 55.0,
         "sight": 290.0, "armor": "heavy", "damageType": "siege",
     },
     "tank_destroyer": {
-        "name": "坦克歼击车", "cost": 1050, "hp": 320, "speed": 55.0,
+        "name": "坦克歼击车", "cost": 1050, "hp": 320, "speed": 66.0,
         "damage": 78.0, "range": 230.0, "cooldown": 1.7,
         "size": 18.0, "build": 8.0, "producer": "factory",
         "projectile": "ap", "projectileSpeed": 800.0, "splash": 0.0,
         "sight": 410.0, "armor": "heavy", "damageType": "ap",
     },
     "mcv": {
-        "name": "基地车", "cost": 2500, "hp": 900, "speed": 38.0,
+        "name": "基地车", "cost": 2500, "hp": 900, "speed": 45.6,
         "damage": 0.0, "range": 0.0, "cooldown": 0.0,
         "size": 24.0, "build": 14.0, "producer": "factory",
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
@@ -432,7 +432,7 @@ UNIT_TYPES = {
         "canDeploy": True,
     },
     "v3": {
-        "name": "东风快递", "cost": 2000, "hp": 260, "speed": 32.0,
+        "name": "东风快递", "cost": 2000, "hp": 260, "speed": 38.4,
         "damage": 200.0, "range": 500.0, "cooldown": 5.0,
         "size": 22.0, "build": 18.0, "producer": "factory",
         "projectile": "missile", "projectileSpeed": 160.0, "splash": 100.0,
@@ -440,7 +440,7 @@ UNIT_TYPES = {
     },
     # ---- 高级兵种：靠 requires 卡在二级科技后，贵在单兵质量而非数量 ----
     "overlord": {
-        "name": "天启坦克", "cost": 1700, "hp": 1500, "speed": 48.0,
+        "name": "天启坦克", "cost": 1700, "hp": 1500, "speed": 57.6,
         "damage": 120.0, "range": 195.0, "cooldown": 1.6,
         "size": 24.0, "build": 16.0, "producer": "factory",
         "requires": ["repair"],
@@ -448,7 +448,7 @@ UNIT_TYPES = {
         "sight": 450.0, "armor": "heavy", "damageType": "shell",
     },
     "tesla": {
-        "name": "磁暴步兵", "cost": 650, "hp": 190, "speed": 68.0,
+        "name": "磁暴步兵", "cost": 650, "hp": 190, "speed": 81.6,
         "damage": 26.0, "range": 150.0, "cooldown": 0.5,
         "size": 11.0, "build": 7.0, "producer": "barracks",
         "requires": ["factory"],
@@ -456,7 +456,7 @@ UNIT_TYPES = {
         "sight": 380.0, "armor": "infantry", "damageType": "tesla",
     },
     "prism": {
-        "name": "光棱坦克", "cost": 1450, "hp": 360, "speed": 56.0,
+        "name": "光棱坦克", "cost": 1450, "hp": 360, "speed": 67.2,
         "damage": 100.0, "range": 305.0, "cooldown": 1.8,
         "size": 19.0, "build": 13.0, "producer": "factory",
         "requires": ["repair"],
