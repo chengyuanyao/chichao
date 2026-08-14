@@ -1044,6 +1044,10 @@ export function createRenderer(canvas) {
   let groundTexture = null;
   let terrainGroup = null;
   let waterMesh = null;
+  // 已经建好的静态世界的身份。full 帧不等于「静态数据变了」——重连、恢复
+  // 会话、以及每条 REST 响应都会带 full 帧，其中绝大多数是同一张图。
+  // 只有这个键变了才值得推倒重建，否则直接复用显存里现成的地形与植被。
+  let builtWorldKey = '';
   // 地形建好后直接采样网格高度。过去每个可见单位每帧都重新遍历河流、山脉
   // 并执行多组三角函数，军团规模上来后 CPU 时间会线性爆炸。
   let heightField = null;
@@ -2307,6 +2311,24 @@ export function createRenderer(canvas) {
   const fogMaskedShaders = [];
   const waterShaders = [];
 
+  // 探索覆盖度粗网格。探索黑幕是永久的（探开就不再变黑），所以一个视野圆
+  // 只要整个落在「已经完全探开」的区域里，再画一遍连一个像素都不会变。
+  // 大部分时间部队都在自家已探开的地盘上机动，靠这张网格就能整帧跳过
+  // 全画布填充、全画布合成和整张贴图上传。
+  const FOG_CELL = 8;          // 覆盖网格格子边长（迷雾画布像素）
+  const FOG_CORE = 0.82;       // 渐变里 alpha 已达 1 的实心区占半径的比例
+  let fogCover = null;         // Uint8Array，1 = 该格已完全探开
+  let fogCoverW = 0;
+  let fogCoverH = 0;
+  let fogApplied = null;       // 已画过的视野圆（量化后），去重用
+  let fogFullRepaint = true;   // 画布刚重建，需要整张合成一次
+  // 探索黑幕是永久揭开的静态信息，不参与战斗判定（敌方单位可见性由服务端
+  // 视野决定，走的是另一条路）。所以没必要每个快照都重新合成并整张重传：
+  // 攒够间隔再一次性处理累积的脏矩形，晚 100 多毫秒揭开黑幕看不出来。
+  const FOG_UPLOAD_INTERVAL = 200;
+  let fogLastUpload = 0;
+  let fogPx0 = Infinity, fogPy0 = Infinity, fogPx1 = -Infinity, fogPy1 = -Infinity;
+
   function buildFogPlane() {
     const fw = Math.max(2, Math.ceil(state.map.width / state.fogScale));
     const fh = Math.max(2, Math.ceil(state.map.height / state.fogScale));
@@ -2321,6 +2343,16 @@ export function createRenderer(canvas) {
     exploredCanvas.width = fw; exploredCanvas.height = fh;
     exploredCtx = exploredCanvas.getContext('2d');
     exploredCtx.clearRect(0, 0, fw, fh);
+
+    // 覆盖网格跟着画布尺寸重建。这里一律从「什么都没探开」重新算起：
+    // 保守方向是多画几次，绝不会漏掉真正该探开的地方。
+    fogCoverW = Math.ceil(fw / FOG_CELL);
+    fogCoverH = Math.ceil(fh / FOG_CELL);
+    fogCover = new Uint8Array(fogCoverW * fogCoverH);
+    fogApplied = new Set();
+    fogFullRepaint = true;
+    fogLastUpload = 0;
+    fogPx0 = Infinity; fogPy0 = Infinity; fogPx1 = -Infinity; fogPy1 = -Infinity;
     // 调整黑幕精度时保留已经探开的区域，不能因为改了一项画质设置重新变黑。
     if (previousExplored) {
       exploredCtx.drawImage(previousExplored, 0, 0, fw, fh);
@@ -2382,6 +2414,74 @@ export function createRenderer(canvas) {
     }
   }
 
+  /**
+   * 这个视野圆还可能探开新东西吗？
+   *
+   * 两道筛子：位置与半径量化后完全相同的圆已经画过（原地不动的建筑、驻守的
+   * 部队每帧都会送来同一个圆）；或者它覆盖到的每一格都已经完全探开。
+   * 两者都是「再画一遍也不会改变任何像素」，可以安全跳过。
+   *
+   * 判第二道筛子时只能看真正与圆相交的格子。用包围盒会永远判成「有新东西」
+   * ——盒子四角落在圆外，那里几乎不可能被标记成已探开，筛子等于没装。
+   */
+  function fogCircleAdds(cx, cy, r) {
+    const key = (cx | 0) + '|' + (cy | 0) + '|' + (r | 0);
+    if (fogApplied.has(key)) return false;
+    // 集合无限膨胀没有意义；到上限就清空，代价只是每个圆各多画一次。
+    if (fogApplied.size > 20000) fogApplied.clear();
+    fogApplied.add(key);
+    if (!fogCover) return true;
+    const rSq = r * r;
+    const gx0 = Math.max(0, Math.floor((cx - r) / FOG_CELL));
+    const gy0 = Math.max(0, Math.floor((cy - r) / FOG_CELL));
+    const gx1 = Math.min(fogCoverW - 1, Math.floor((cx + r) / FOG_CELL));
+    const gy1 = Math.min(fogCoverH - 1, Math.floor((cy + r) / FOG_CELL));
+    for (let gy = gy0; gy <= gy1; gy++) {
+      const row = gy * fogCoverW;
+      const ty = gy * FOG_CELL;
+      const ny = cy < ty ? ty : (cy > ty + FOG_CELL ? ty + FOG_CELL : cy);
+      const nySq = (ny - cy) * (ny - cy);
+      if (nySq > rSq) continue;
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const lx = gx * FOG_CELL;
+        const nx = cx < lx ? lx : (cx > lx + FOG_CELL ? lx + FOG_CELL : cx);
+        if ((nx - cx) * (nx - cx) + nySq > rSq) continue;
+        if (!fogCover[row + gx]) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 把这个视野圆实心区完全盖住的格子标记成已探开。
+   *
+   * 只认 0.82r 以内 —— 渐变在那之外开始衰减，alpha 到不了 1。而且要求整格
+   * （四个角）都在实心区里才标记：宁可漏标多画一次，也不能错标，错标会让
+   * 真正该探开的地方永远留一圈没擦干净的黑边。
+   */
+  function fogMarkCovered(cx, cy, r) {
+    if (!fogCover) return;
+    const core = r * FOG_CORE;
+    const coreSq = core * core;
+    const gx0 = Math.max(0, Math.floor((cx - core) / FOG_CELL));
+    const gy0 = Math.max(0, Math.floor((cy - core) / FOG_CELL));
+    const gx1 = Math.min(fogCoverW - 1, Math.floor((cx + core) / FOG_CELL));
+    const gy1 = Math.min(fogCoverH - 1, Math.floor((cy + core) / FOG_CELL));
+    for (let gy = gy0; gy <= gy1; gy++) {
+      const row = gy * fogCoverW;
+      const ty = gy * FOG_CELL;
+      const fy = Math.max(Math.abs(ty - cy), Math.abs(ty + FOG_CELL - cy));
+      const fySq = fy * fy;
+      if (fySq > coreSq) continue;
+      for (let gx = gx0; gx <= gx1; gx++) {
+        if (fogCover[row + gx]) continue;
+        const lx = gx * FOG_CELL;
+        const fx = Math.max(Math.abs(lx - cx), Math.abs(lx + FOG_CELL - cx));
+        if (fx * fx + fySq <= coreSq) fogCover[row + gx] = 1;
+      }
+    }
+  }
+
   function updateFog() {
     if (!fogCtx) return;
     const fw = fogCanvas.width;
@@ -2390,22 +2490,55 @@ export function createRenderer(canvas) {
 
     // 红警 2 式黑幕：把每次走到的视野永久画进 exploredCanvas，之后不会
     // 因单位离开而重新压暗。边缘使用软渐变，探图边界不会像圆规画出来。
+    // 只画真正可能探开新地方的圆，并把它们的包围盒并进累积脏矩形。
+    // 画进 exploredCanvas 这一步每帧都做：它很便宜，而且要保证不丢探索。
     exploredCtx.globalCompositeOperation = 'source-over';
     for (let i = 0; i < visionSources.length; i += 3) {
       const cx = visionSources[i] * inv;
       const cy = visionSources[i + 1] * inv;
       const r = visionSources[i + 2] * inv;
+      if (!fogCircleAdds(cx, cy, r)) continue;
       const d = r * 2;
       exploredCtx.drawImage(fogGradientCanvas, cx - r, cy - r, d, d);
+      fogMarkCovered(cx, cy, r);
+      if (cx - r < fogPx0) fogPx0 = cx - r;
+      if (cy - r < fogPy0) fogPy0 = cy - r;
+      if (cx + r > fogPx1) fogPx1 = cx + r;
+      if (cy + r > fogPy1) fogPy1 = cy + r;
     }
+
+    // 探索黑幕一个像素都没变：不必重新合成，更不必把整张贴图重传一遍。
+    // 部队在已探开的地盘上机动时，绝大多数帧都会走到这里。
+    if (!fogFullRepaint && fogPx1 < fogPx0) return;
+    const nowMs = performance.now();
+    // 还没到合成间隔：脏矩形留着，下一个快照再一起处理。
+    if (!fogFullRepaint && nowMs - fogLastUpload < FOG_UPLOAD_INTERVAL) return;
+    fogLastUpload = nowMs;
+
+    let x0 = 0, y0 = 0, x1 = fw, y1 = fh;
+    if (fogFullRepaint) {
+      fogFullRepaint = false;
+    } else {
+      x0 = Math.max(0, Math.floor(fogPx0));
+      y0 = Math.max(0, Math.floor(fogPy0));
+      x1 = Math.min(fw, Math.ceil(fogPx1));
+      y1 = Math.min(fh, Math.ceil(fogPy1));
+    }
+    fogPx0 = Infinity; fogPy0 = Infinity; fogPx1 = -Infinity; fogPy1 = -Infinity;
+    if (x1 <= x0 || y1 <= y0) return;
+    const w = x1 - x0;
+    const h = y1 - y0;
 
     // 只剩“未探索 / 已探索”两种状态：已探索区域完全清除黑幕，不再有
     // 当前视野之外的二次灰雾。敌方移动单位仍按服务端实时视野规则隐藏。
+    // 先 clear 再 fill：脏矩形是反复重画的，直接 source-over 叠会让这一块
+    // 越描越黑，和画布其余部分割裂出可见的接缝。
     fogCtx.globalCompositeOperation = 'source-over';
+    fogCtx.clearRect(x0, y0, w, h);
     fogCtx.fillStyle = 'rgba(3, 7, 9, 0.94)';
-    fogCtx.fillRect(0, 0, fw, fh);
+    fogCtx.fillRect(x0, y0, w, h);
     fogCtx.globalCompositeOperation = 'destination-out';
-    fogCtx.drawImage(exploredCanvas, 0, 0);
+    fogCtx.drawImage(exploredCanvas, x0, y0, w, h, x0, y0, w, h);
     fogCtx.globalCompositeOperation = 'source-over';
     fogTexture.needsUpdate = true;
   }
@@ -3994,7 +4127,12 @@ export function createRenderer(canvas) {
       if (options.postfx) postfx.setOptions(options.postfx);
     },
 
-    /** 一局开始（或重连收到 full 帧）时调用，重建地形与静态数据。 */
+    /**
+     * 一局开始（或重连收到 full 帧）时调用，刷新静态数据。
+     *
+     * 地形、植被、道路、矿脉、迷雾画布全部按「地图身份」缓存：同一局里反复
+     * 收到 full 帧只更新引用，不碰几何体。返回是否真的重建了世界。
+     */
     setMatch: function (map, terrain, resources, sight, spawnPoints) {
       state.map = map;
       state.terrain = terrain || { rivers: [], bridges: [] };
@@ -4004,6 +4142,21 @@ export function createRenderer(canvas) {
       if (sight) state.sight = sight;
       // 撒草木时要避开出生点，给基地留出空地
       state.spawnPoints = spawnPoints || state.spawnPoints || [];
+
+      // 每局开新地图时服务端会给 map.seed 一个新随机值，尺寸与地形要素数量
+      // 一并入键，防止「换了图但恰好同尺寸」漏判。
+      const t = state.terrain;
+      const worldKey = [
+        map.width, map.height, map.seed,
+        t.theme || '',
+        (t.rivers || []).length, (t.bridges || []).length,
+        (t.mountains || []).length, (t.roads || []).length,
+        state.resources.length
+      ].join('|');
+      if (worldKey === builtWorldKey && terrainGroup) {
+        return false;
+      }
+      builtWorldKey = worldKey;
 
       const rebuild = function () { buildTerrain(); };
       if (!groundTexture) {
@@ -4029,6 +4182,7 @@ export function createRenderer(canvas) {
       // 重复更密：900 一贴在近景会被拉糊，看起来像低分辨率网格
       groundTexture.repeat.set(map.width / 420, map.height / 420);
       rebuild();
+      return true;
     },
 
     setPalette: function (players, viewerId, isFriendly) {
