@@ -295,7 +295,7 @@ MAPS = {
 }
 COMBAT_CELL_SIZE = 256.0
 SEPARATION_CELL_SIZE = 64.0
-VEHICLE_KINDS = frozenset(("tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv", "v3"))
+VEHICLE_KINDS = frozenset(("tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv", "v3", "overlord", "prism"))
 REPAIR_RATE = 105.0
 REPAIR_COST_PER_HP = 0.35
 REPAIR_DOCKS_PER_RING = 8
@@ -348,6 +348,10 @@ DAMAGE_MULTIPLIER = {
     "super":   {"infantry": 1.50, "light": 1.30, "heavy": 1.10, "structure": 1.40},
     # V3 远程火箭：曲射拆建筑，溅射清阵，弹速慢能被看见躲
     "missile": {"infantry": 0.50, "light": 0.70, "heavy": 0.65, "structure": 1.50},
+    # 磁暴步兵的电弧：快脉冲专电载具，对建筑和步兵都一般
+    "tesla":   {"infantry": 0.80, "light": 1.40, "heavy": 1.30, "structure": 0.50},
+    # 光棱坦克的聚焦光束：精准点杀伤，克轻型与建筑，打不动重甲与人群
+    "laser":   {"infantry": 0.45, "light": 1.50, "heavy": 0.85, "structure": 1.70},
 }
 
 UNIT_TYPES = {
@@ -422,6 +426,31 @@ UNIT_TYPES = {
         "size": 22.0, "build": 18.0, "producer": "factory",
         "projectile": "missile", "projectileSpeed": 160.0, "splash": 100.0,
         "sight": 310.0, "armor": "light", "damageType": "missile",
+    },
+    # ---- 高级兵种：靠 requires 卡在二级科技后，贵在单兵质量而非数量 ----
+    "overlord": {
+        "name": "天启坦克", "cost": 1700, "hp": 1500, "speed": 48.0,
+        "damage": 120.0, "range": 195.0, "cooldown": 1.6,
+        "size": 24.0, "build": 16.0, "producer": "factory",
+        "requires": ["repair"],
+        "projectile": "shell", "projectileSpeed": 400.0, "splash": 30.0,
+        "sight": 450.0, "armor": "heavy", "damageType": "shell",
+    },
+    "tesla": {
+        "name": "磁暴步兵", "cost": 650, "hp": 190, "speed": 68.0,
+        "damage": 26.0, "range": 150.0, "cooldown": 0.5,
+        "size": 11.0, "build": 7.0, "producer": "barracks",
+        "requires": ["factory"],
+        "projectile": "tesla", "projectileSpeed": 900.0, "splash": 0.0,
+        "sight": 380.0, "armor": "infantry", "damageType": "tesla",
+    },
+    "prism": {
+        "name": "光棱坦克", "cost": 1450, "hp": 360, "speed": 56.0,
+        "damage": 100.0, "range": 305.0, "cooldown": 1.8,
+        "size": 19.0, "build": 13.0, "producer": "factory",
+        "requires": ["repair"],
+        "projectile": "laser", "projectileSpeed": 1400.0, "splash": 0.0,
+        "sight": 480.0, "armor": "light", "damageType": "laser",
     },
 }
 
@@ -1632,6 +1661,10 @@ def queue_unit(room, player_id, kind):
                  and s["active"] and s["hp"] > 0]
     if not producers:
         raise ValueError("缺少对应生产建筑")
+    # 高级兵种的二级科技门槛：光有生产建筑不够，还得有配套支援建筑在运转
+    for requirement in definition.get("requires", []):
+        if not has_active_structure(game, player_id, requirement):
+            raise ValueError("缺少前置建筑：%s" % STRUCTURE_TYPES[requirement]["name"])
     producer = min(producers, key=lambda item: len(item["queue"]))
     if len(producer["queue"]) >= 5:
         raise ValueError("生产队列已满")
@@ -2639,7 +2672,15 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
                     source_unit = u
                     break
             if source_unit:
-                source_unit["kills"] = source_unit.get("kills", 0) + 1
+                new_kills = source_unit.get("kills", 0) + 1
+                source_unit["kills"] = new_kills
+                # 升军衔瞬间（3/8/16 杀，与 tick_units 的分级阈值一致）发一个晋升
+                # 特效，客户端据此画金色礼花并播晋升音。
+                if new_kills in (3, 8, 16):
+                    game["effects"].append({
+                        "id": new_id("e"), "type": "promote",
+                        "x": source_unit["x"], "y": source_unit["y"], "ttl": 1.0,
+                    })
 
 
 def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
@@ -3144,9 +3185,17 @@ def tick_bots(room):
         try:
             roll = random.random()
             if "factory" in kinds and roll < 0.58:
-                queue_unit(room, bot["id"], "tank" if roll < 0.4 else "scout")
+                if "repair" in kinds and roll < 0.16:
+                    # 维修厂撑起二级科技后，掺高级装甲：天启抗线 / 光棱远程点杀
+                    queue_unit(room, bot["id"], "overlord" if roll < 0.08 else "prism")
+                else:
+                    queue_unit(room, bot["id"], "tank" if roll < 0.4 else "scout")
             elif "barracks" in kinds:
-                queue_unit(room, bot["id"], "rocket" if roll < 0.78 else "rifle")
+                if "factory" in kinds and roll < 0.72:
+                    # 工厂开了二级科技，兵营开始出磁暴步兵专电载具
+                    queue_unit(room, bot["id"], "tesla")
+                else:
+                    queue_unit(room, bot["id"], "rocket" if roll < 0.86 else "rifle")
         except ValueError:
             pass
 

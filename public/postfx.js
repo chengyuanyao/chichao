@@ -127,10 +127,12 @@ vec3 agxEotf(vec3 val) {
   // 回到线性；最终的 sRGB 编码在输出前统一做
   return pow(max(val, vec3(0.0)), vec3(2.2));
 }
+// 收敛 punchy：饱和提升 1.4→1.18、对比曲线 1.35→1.22。色相分离保留（RTS 靠它
+// 分队/辨兵种），但去掉那股「冲」劲，画面更平、更中性，贴近 Apple/Google 的干净。
 vec3 agxLookPunchy(vec3 val) {
   float luma = dot(val, vec3(0.2126, 0.7152, 0.0722));
-  val = pow(max(val, vec3(0.0)), vec3(1.35));
-  return luma + 1.4 * (val - luma);
+  val = pow(max(val, vec3(0.0)), vec3(1.22));
+  return luma + 1.18 * (val - luma);
 }
 
 /* 手动 sRGB 编码：见文件头，离屏目标上 three 的自动转换是空操作 */
@@ -336,12 +338,14 @@ export function createPostFX(renderer) {
       tBloomNear: { value: null },
       tBloomFar: { value: null },
       uBloom: { value: 0.65 },
-      uVignette: { value: 0.34 },
+      // 偏 Apple/Google 的干净画面：暗角收敛把四角打开，暖调与饱和往下压一档
+      // 让画面更中性、更平。饱和度仍 >1 保住 RTS 靠色相分队/辨兵种的可读性。
+      uVignette: { value: 0.20 },
       uScanline: { value: 0.0 },
       uExposure: { value: 1.6 },
-      uWarmth: { value: 0.35 },
-      uSaturation: { value: 1.14 },
-      uContrast: { value: 1.04 },
+      uWarmth: { value: 0.26 },
+      uSaturation: { value: 1.08 },
+      uContrast: { value: 1.02 },
       uTonemap: { value: 0.0 },
       uTime: { value: 0 },
       uResolution: { value: new THREE.Vector2(1, 1) }

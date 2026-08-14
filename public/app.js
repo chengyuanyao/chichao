@@ -31,6 +31,9 @@ import { createRenderer } from './render3d.js';
     artillery: { name: '攻城炮', cost: 960, icon: '◉', producer: 'factory', desc: '极远溅射，克建筑/重甲', damageType: 'siege' },
     tank_destroyer: { name: '坦克歼击车', cost: 720, icon: '◭', producer: 'factory', desc: '专杀坦克，×2.1反重甲', damageType: 'ap' },
     v3: { name: '东风快递', cost: 2000, icon: '⊹', producer: 'factory', desc: '超远程导弹打击，大溅射', damageType: 'missile' },
+    overlord: { name: '天启坦克', cost: 1700, icon: '⬟', producer: 'factory', requires: ['repair'], desc: '超重型主战，双管重炮抗线 · 需维修厂', damageType: 'shell' },
+    tesla: { name: '磁暴步兵', cost: 650, icon: '⚡', producer: 'barracks', requires: ['factory'], desc: '动力甲反甲步兵，电弧专电载具 · 需工厂', damageType: 'tesla' },
+    prism: { name: '光棱坦克', cost: 1450, icon: '✦', producer: 'factory', requires: ['repair'], desc: '远程聚焦光束，点杀轻型与建筑 · 需维修厂', damageType: 'laser' },
     harvester: { name: '采矿车', cost: 920, icon: '▣', producer: 'factory', desc: '自动采集矿石' },
     mcv: { name: '基地车', cost: 2500, icon: '⬢', producer: 'factory', desc: '可展开为新指挥中心', canDeploy: true }
   };
@@ -451,6 +454,69 @@ import { createRenderer } from './render3d.js';
         pPoly(c, [[hx, 53.5], [hx + 3, 50], [hx + 5.4, 50], [hx + 2.4, 53.5]], P_OUT);
       }
       pLine(c, 21, 42.6, 61, 42.6, 1.2, 'rgba(243,233,212,.45)');
+    },
+    overlord: function (c) {
+      pShadow(c, 48, 59, 31);
+      // 更宽更低的履带底盘 + 六对负重轮：一看就比先锋坦克壮
+      pRect(c, 18, 47, 60, 11, P_DARK);
+      pCirc(c, 20, 52.5, 6, P_DARK);
+      pCirc(c, 76, 52.5, 6, P_DARK);
+      pCirc(c, 27, 52.5, 2.6, P_OUT);
+      pCirc(c, 37, 52.5, 2.6, P_OUT);
+      pCirc(c, 47, 52.5, 2.6, P_OUT);
+      pCirc(c, 57, 52.5, 2.6, P_OUT);
+      pCirc(c, 67, 52.5, 2.6, P_OUT);
+      pPoly(c, [[16, 47], [80, 47], [72, 36], [24, 36]], P_BODY);
+      pPoly(c, [[80, 47], [64, 47], [61, 36], [72, 36]], 'rgba(10,10,6,.25)');
+      // 低矮宽炮塔 + 招牌双联主炮（上下两根粗管）
+      pRect(c, 33, 27, 26, 9, P_BODY);
+      pRect(c, 33, 27, 26, 2.5, P_LITE);
+      pRect(c, 58, 27.5, 30, 3.2, P_DARK);
+      pRect(c, 58, 31.5, 30, 3.2, P_DARK);
+      pRect(c, 86, 26.6, 4, 5, P_OUT);
+      pRect(c, 86, 30.6, 4, 5, P_OUT);
+      pStar(c, 42, 31, 3.2, P_RED);
+      pLine(c, 22, 36.6, 70, 36.6, 1.5, 'rgba(243,233,212,.5)');
+    },
+    tesla: function (c) {
+      pBust(c, P_BODY);
+      // 全封闭动力甲头盔 + 一字目镜
+      c.beginPath();
+      c.fillStyle = P_DARK;
+      c.arc(48, 28, 11, Math.PI, 0);
+      c.closePath();
+      c.fill();
+      pRect(c, 37, 27, 22, 4, P_DARK);
+      pRect(c, 40, 29, 16, 2, P_LCD);
+      // 背部磁暴线圈：两根竖杆 + 顶端电弧球，线圈间拉一道闪电
+      pLine(c, 36, 42, 36, 20, 2.5, P_BRASS_D);
+      pLine(c, 60, 42, 60, 20, 2.5, P_BRASS_D);
+      pCirc(c, 36, 18, 2.6, P_LCD);
+      pCirc(c, 60, 18, 2.6, P_LCD);
+      pPoly(c, [[38, 22], [46, 18], [44, 24], [52, 20], [46, 27], [40, 25]], P_GOLD);
+      // 手中的电击叉：叉头两根尖
+      pLine(c, 30, 58, 72, 34, 3, P_OUT);
+      pLine(c, 72, 34, 80, 28, 2, P_BRASS);
+      pLine(c, 72, 34, 82, 34, 2, P_BRASS);
+    },
+    prism: function (c) {
+      pShadow(c, 48, 58, 26);
+      pRect(c, 24, 47, 48, 10, P_DARK);
+      pCirc(c, 26, 52, 5, P_DARK);
+      pCirc(c, 70, 52, 5, P_DARK);
+      pCirc(c, 34, 52, 2.4, P_OUT);
+      pCirc(c, 44, 52, 2.4, P_OUT);
+      pCirc(c, 54, 52, 2.4, P_OUT);
+      pCirc(c, 62, 52, 2.4, P_OUT);
+      pPoly(c, [[22, 47], [74, 47], [68, 38], [28, 38]], P_BODY);
+      pPoly(c, [[74, 47], [60, 47], [57, 38], [68, 38]], 'rgba(10,10,6,.25)');
+      // 竖起的棱镜支臂 + 顶端聚焦棱镜（菱形水晶），镜面甩出一道光束
+      pLine(c, 46, 40, 56, 22, 3, P_DARK);
+      pPoly(c, [[56, 12], [63, 20], [56, 28], [49, 20]], P_LCD);
+      pPoly(c, [[56, 12], [63, 20], [56, 20]], '#fff3c9');
+      pLine(c, 63, 20, 90, 16, 1.5, P_GOLD);
+      pStar(c, 34, 33, 2.6, P_RED);
+      pLine(c, 27, 38.6, 65, 38.6, 1.4, 'rgba(243,233,212,.5)');
     }
   };
 
@@ -1880,7 +1946,9 @@ import { createRenderer } from './render3d.js';
       var kind = button.dataset.kind;
       var definition = button.dataset.type === 'building' ? BUILDINGS[kind] : UNITS[kind];
       var isBuilding = button.dataset.type === 'building';
-      var requirementsMet = isBuilding ? definition.requires.every(hasStructure) : hasStructure(definition.producer);
+      var requirementsMet = isBuilding
+        ? definition.requires.every(hasStructure)
+        : hasStructure(definition.producer) && (definition.requires || []).every(hasStructure);
       var status = button.querySelector('.command-status');
       var progress = 0;
       var queued = 0;
@@ -2062,6 +2130,7 @@ import { createRenderer } from './render3d.js';
     }
     var playExplosion = false;
     var playComplete = false;
+    var playPromote = false;
     roomState.game.effects.forEach(function (effect) {
       if (seenEffects.has(effect.id)) {
         return;
@@ -2073,6 +2142,8 @@ import { createRenderer } from './render3d.js';
         playExplosion = true;
       } else if (effect.type === 'complete') {
         playComplete = true;
+      } else if (effect.type === 'promote') {
+        playPromote = true;
       }
     });
     if (playExplosion) {
@@ -2080,6 +2151,9 @@ import { createRenderer } from './render3d.js';
     }
     if (playComplete) {
       sound('complete');
+    }
+    if (playPromote) {
+      sound('promote');
     }
     if (seenEffects.size > 1200) {
       seenEffects.clear();
@@ -3111,7 +3185,7 @@ import { createRenderer } from './render3d.js';
   }
 
   function selectedDamagedVehicles() {
-    var vehicleKinds = { tank: true, scout: true, harvester: true, artillery: true, tank_destroyer: true, mcv: true, v3: true };
+    var vehicleKinds = { tank: true, scout: true, harvester: true, artillery: true, tank_destroyer: true, mcv: true, v3: true, overlord: true, prism: true };
     return roomState.game.units.filter(function (unit) {
       return selectedUnits.has(unit.id) && vehicleKinds[unit.kind] && unit.hp < unit.maxHp - 0.1;
     });
@@ -3331,6 +3405,25 @@ import { createRenderer } from './render3d.js';
       out(c2g);
       c2.start(now + 0.04);
       c2.stop(now + 0.28);
+      return;
+    }
+    if (type === 'promote') {
+      // 晋升：上扬的大调琶音（do-mi-sol-do），短促明亮，与爆炸/完工的音色区分开
+      var notes = [523.25, 659.25, 783.99, 1046.5];
+      for (var ni = 0; ni < notes.length; ni++) {
+        var pOsc = audioContext.createOscillator();
+        var pGain = audioContext.createGain();
+        var t0 = now + ni * 0.06;
+        pOsc.type = 'triangle';
+        pOsc.frequency.setValueAtTime(notes[ni], t0);
+        pGain.gain.setValueAtTime(0, t0);
+        pGain.gain.linearRampToValueAtTime(0.07, t0 + 0.015);
+        pGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+        pOsc.connect(pGain);
+        out(pGain);
+        pOsc.start(t0);
+        pOsc.stop(t0 + 0.24);
+      }
       return;
     }
     var config = {

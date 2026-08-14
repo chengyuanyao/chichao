@@ -167,7 +167,9 @@ const MAT = {
   exhaust: [2.4, 0.95, 0.28],
   furnace: [2.6, 1.35, 0.35],
   oreGlow: [2.5, 1.7, 0.42],
-  hazard: [2.6, 0.5, 0.35]
+  hazard: [2.6, 0.5, 0.35],
+  teslaArc: [0.55, 1.65, 2.6],
+  prismGlow: [1.5, 2.3, 2.4]
 };
 
 const ROT_X90 = new THREE.Matrix4().makeRotationX(Math.PI / 2);
@@ -242,6 +244,21 @@ function infantryParts(weapon) {
     body.push(box(2.6, 1.8, 1.1, 2.4, 9.9, 1.6, MAT.darkSteel));
     body.push(box(3.4, 0.7, 0.7, 12.4, 8.2, 1.6, MAT.darkSteel));
     glow.push(box(0.9, 0.6, 0.6, 3.6, 9.9, 1.6, GLOW_HOT));
+  } else if (weapon === 'tesla') {
+    // 动力甲比普通步兵壮一圈：加宽肩甲 + 加厚胸甲
+    body.push(box(4.4, 2.6, 10.6, -0.2, 11.2, 0, 0.5));
+    body.push(box(5.2, 4.0, 7.0, -3.8, 8.8, 0, MAT.darkSteel));   // 线圈基座背包
+    // 背部两根磁暴线圈（铜色），顶端各顶一颗电弧球
+    body.push(cyl(1.2, 1.5, 7.0, 6, -4.4, 14.0, 2.2, MAT.copper));
+    body.push(cyl(1.2, 1.5, 7.0, 6, -4.4, 14.0, -2.2, MAT.copper));
+    // 电击叉：粗短叉杆 + 前端两根分叉电极
+    body.push(box(9.0, 1.6, 1.6, 4.6, 8.4, 1.9, MAT.gunmetal));
+    body.push(cyl(0.5, 0.9, 4.4, 6, 9.4, 9.0, 3.1, MAT.copper, ROT_Z90));
+    body.push(cyl(0.5, 0.9, 4.4, 6, 9.4, 9.0, 0.7, MAT.copper, ROT_Z90));
+    // 线圈球与叉尖的电弧蓝光（>1 自发光，走辉光）
+    glow.push(sph(1.5, 6, -4.4, 18.0, 2.2, MAT.teslaArc));
+    glow.push(sph(1.5, 6, -4.4, 18.0, -2.2, MAT.teslaArc));
+    glow.push(sph(1.1, 6, 11.6, 9.0, 1.9, MAT.teslaArc));
   }
   return { body: body, glow: glow };
 }
@@ -402,6 +419,55 @@ const UNIT_BUILDERS = {
         box(16, 0.8, 0.5, -2, 10.6, 9.8, GLOW_SOFT),
         box(16, 0.8, 0.5, -2, 10.6, -9.8, GLOW_SOFT),
         box(1.2, 1.0, 5.0, 6.6, 17.6, 0, GLOW_HOT)                // 观瞄条
+      ]
+    };
+  },
+
+  overlord: function () {
+    return {
+      body: trackedHull(40, 24, 10, 0.82).concat([
+        // 宽扁炮塔比先锋坦克更矮更宽，压住整车重心
+        taperedBox(22, 19, 18, 15, 8, 2, 16.5, 0, 1.0),
+        taperedBox(7, 13, 5, 11, 4, 6, 21.0, 0, 0.8),           // 炮塔正面防盾
+        // 招牌双联主炮：左右并排两根长管 + 各自制退器
+        cyl(1.6, 1.9, 24, 10, 14, 16.4, 3.6, MAT.gunmetal, ROT_Z90),
+        cyl(1.6, 1.9, 24, 10, 14, 16.4, -3.6, MAT.gunmetal, ROT_Z90),
+        cyl(2.5, 2.5, 3.4, 10, 26, 16.4, 3.6, MAT.darkSteel, ROT_Z90),
+        cyl(2.5, 2.5, 3.4, 10, 26, 16.4, -3.6, MAT.darkSteel, ROT_Z90),
+        box(10, 1.0, 1.4, -4, 20.4, 8.0, MAT.warnYellow),       // 侧警示条
+        box(10, 1.0, 1.4, -4, 20.4, -8.0, MAT.warnYellow),
+        box(3.4, 3.0, 3.4, -6, 21.4, 0, MAT.steel),             // 指挥塔
+        box(6, 2.0, 6, 12, 12.4, 0, MAT.steel)                  // 首上附加装甲
+      ]),
+      glow: [
+        box(16, 1.0, 0.7, -2, 12.6, 11.4, GLOW_SOFT),
+        box(16, 1.0, 0.7, -2, 12.6, -11.4, GLOW_SOFT),
+        box(1.6, 1.2, 1.2, 8.5, 21.6, 0, GLOW_HOT),             // 车长观瞄
+        box(2.8, 0.8, 3.8, -8.4, 20.0, 0, GLOW_SOFT)            // 炮塔尾舱
+      ]
+    };
+  },
+
+  tesla: function () { return infantryParts('tesla'); },
+
+  prism: function () {
+    return {
+      body: trackedHull(32, 18, 8, 0.9).concat([
+        taperedBox(16, 14, 13, 11, 7, -1, 15, 0, 1.0),          // 车体上部
+        // 竖起的棱镜支臂（略前倾）+ 基座
+        box(3.0, 2.0, 3.0, 4, 15.5, 0, MAT.darkSteel),
+        box(2.2, 14, 2.2, 4, 22, 0, MAT.gunmetal),
+        // 聚焦棱镜：两段四棱锥扣出一枚菱形水晶
+        cyl(0.6, 3.0, 3.4, 4, 4, 30.5, 0, MAT.glass),
+        cyl(3.0, 0.6, 3.4, 4, 4, 33.9, 0, MAT.glass),
+        box(1.0, 1.0, 5.0, -6, 16.5, 0, MAT.steel)              // 尾部散热排
+      ]),
+      glow: [
+        box(15, 0.9, 0.6, -1, 11.8, 9.0, GLOW_SOFT),
+        box(15, 0.9, 0.6, -1, 11.8, -9.0, GLOW_SOFT),
+        // 棱镜核心是一团高亮青光，会被辉光单独提出来
+        sph(2.0, 8, 4, 32.2, 0, MAT.prismGlow),
+        box(1.2, 1.0, 1.2, 4, 22.5, 0, MAT.prismGlow)
       ]
     };
   },
@@ -773,9 +839,10 @@ const BRIDGE_RENDER_SPAN = 2.0;
  * 视距看步兵只有几个像素，根本认不出兵种。这里按兵种放大到能辨识的比例。
  */
 const UNIT_VISUAL_SCALE = {
-  rifle: 1.75, rocket: 1.75, sniper: 1.75,
+  rifle: 1.75, rocket: 1.75, sniper: 1.75, tesla: 1.75,
   tank: 1.25, scout: 1.3, tank_destroyer: 1.25,
-  artillery: 1.25, harvester: 1.16, mcv: 1.30, v3: 1.25
+  artillery: 1.25, harvester: 1.16, mcv: 1.30, v3: 1.25,
+  overlord: 1.28, prism: 1.25
 };
 
 /* 共享的哈希值噪声：天空的云、水面的泡沫、地形的细节法线都用同一套，
@@ -860,7 +927,8 @@ export function createRenderer(canvas) {
   });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
+  // 软阴影：PCFSoft 的软边比硬 PCF 更接近 Apple 那种柔和的接触影
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.setClearColor(0x9ec8d8);
 
   const postfx = createPostFX(renderer);
@@ -905,7 +973,8 @@ export function createRenderer(canvas) {
 
   const sun = new THREE.DirectionalLight(0xffedc2, 2.3);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(512, 512);
+  // 阴影默认关闭、开了就是要画质，所以给到 1024，软边的细节才出得来
+  sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.camera.near = 50;
   sun.shadow.camera.far = 3200;
   sun.shadow.bias = -0.0012;
@@ -1210,6 +1279,41 @@ export function createRenderer(canvas) {
     return result;
   }
 
+  /**
+   * 把泥地照片「洗」成干净的细节贴图（Apple/Google 式干净地表的关键一步）。
+   *
+   * 原图偏暗、饱和、颗粒重，直接乘在顶点色上整张地图发闷、发脏。这里一次性
+   * 处理成：降采样软化颗粒 → 大幅去饱和（固有色交给顶点色分层）→ 提亮并压
+   * 对比（围绕一个亮基调收拢，泥点变成细腻的明暗颗粒）。贴图从此只提供微观
+   * 质感，宏观颜色全由顶点色决定 —— 这正是干净地图「颜色是大块平滑形状」的
+   * 做法。原图加载失败或处理异常时回退原图，绝不让地面渲染开天窗。
+   */
+  function cleanGroundTexture(image) {
+    const size = 512;                 // 顺手降采样：canvas 缩放自带柔化
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(image, 0, 0, size, size);
+    const img = ctx.getImageData(0, 0, size, size);
+    const d = img.data;
+    // 泥感主要来自脏褐的色相和重颗粒，不是单纯的暗。所以重点去饱和 + 柔化，
+    // 亮度只适度提（BASE 150 ≈ 0.59，比原图 ~0.37 亮但留给 AgX 足够高光余量）。
+    const KEEP_SAT = 0.22;             // 只留一点点固有色
+    const BASE = 150, CONTRAST = 0.42; // 适度提亮 + 收对比
+    for (let i = 0; i < d.length; i += 4) {
+      const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      for (let k = 0; k < 3; k++) {
+        const v = lum + (d[i + k] - lum) * KEEP_SAT;       // 去饱和
+        const lifted = BASE + (v - 128) * CONTRAST;         // 提亮 + 收对比
+        d[i + k] = lifted < 0 ? 0 : (lifted > 255 ? 255 : lifted);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
   function buildTerrain() {
     const buildStarted = performance.now();
     heightField = null;
@@ -1250,8 +1354,9 @@ export function createRenderer(canvas) {
       heights[i] = height;
       pos.setY(i, height);
 
-      // 地表分层着色。河道改绘成干涸的沟壑：沟底压成裸露的土岩色，
-      // 岸沿带一圈风化土，山体转灰岩，其余按低频噪声在草绿与干土之间过渡。
+      // 地表分层着色。参考 Apple/Google 地图的「干净地表」：色相聚拢成柔和的
+      // 鼠尾草绿、压小明度差，另叠一层随海拔的拓扑明暗（坡顶受光、谷底背光），
+      // 让大地形不靠噪点也有层次。河道仍是干涸沟壑，但沟底从黑泥抬成暖褐干沟。
       const stone = Math.min(1, rock / 70);
       // 沟壑带：越深越靠近沟底，色越干越暗
       const ravine = Math.min(1, depth * 1.4);
@@ -1259,27 +1364,29 @@ export function createRenderer(canvas) {
       const bank = Math.max(0, 1 - Math.abs(depth - 0.10) / 0.14) * (depth > 0.005 ? 1 : 0);
       // 低频噪声决定草木茂盛程度，和撒草木用的是同一套噪声，色块和植被对得上
       const lush = clumpNoise(wx, wz);
+      // 归一化海拔 → 拓扑光影：坡顶微亮、谷底微暗，所有分区最后统一乘上
+      const topo = 1 + Math.max(-1, Math.min(1, height / 24)) * 0.08;
 
-      // 参考画面的地表是明快的春绿，干土偏金黄而不是灰褐 —— 色相之间
-      // 拉开差距，草地 / 沟壑 / 岩石才能一眼分块。
-      let r = 0.68 + lush * 0.14;
-      let g = 1.02 + lush * 0.34;
-      let b = 0.52 + lush * 0.08;
-      // 干土斑块：晒黄的草皮
-      const dry = Math.max(0, 0.42 - lush) * 1.8;
-      r += dry * 0.36; g += dry * 0.02; b -= dry * 0.10;
+      // 柔和春绿：降一点峰值饱和、抬一点蓝，绿得不再「荧光」，更像鼠尾草
+      let r = 0.70 + lush * 0.12;
+      let g = 1.00 + lush * 0.30;
+      let b = 0.56 + lush * 0.12;
+      // 干土斑块：晒黄的草皮（收一点，别那么燥）
+      const dry = Math.max(0, 0.42 - lush) * 1.6;
+      r += dry * 0.30; g += dry * 0.03; b -= dry * 0.06;
       // 风化土岸沿：绿地和沟壑之间的那道干土亮边
-      r = r * (1 - bank) + 0.82 * bank;
-      g = g * (1 - bank) + 0.62 * bank;
-      b = b * (1 - bank) + 0.38 * bank;
-      // 岩石
-      r = r * (1 - stone * 0.55) + stone * 0.66;
-      g = g * (1 - stone * 0.5) + stone * 0.64;
-      b = b * (1 - stone * 0.42) + stone * 0.62;
-      // 沟壑底：压成暗土岩，靠近沟心越干越暗
-      r = r * (1 - ravine) + 0.34 * ravine;
-      g = g * (1 - ravine) + 0.27 * ravine;
-      b = b * (1 - ravine) + 0.18 * ravine;
+      r = r * (1 - bank) + 0.80 * bank;
+      g = g * (1 - bank) + 0.64 * bank;
+      b = b * (1 - bank) + 0.42 * bank;
+      // 岩石：带一点暖意的灰，不是水泥灰
+      r = r * (1 - stone * 0.5) + stone * 0.62;
+      g = g * (1 - stone * 0.46) + stone * 0.60;
+      b = b * (1 - stone * 0.40) + stone * 0.57;
+      // 沟壑底：抬成暖褐干沟，不再是吸光的黑泥
+      r = r * (1 - ravine) + 0.46 * ravine;
+      g = g * (1 - ravine) + 0.38 * ravine;
+      b = b * (1 - ravine) + 0.27 * ravine;
+      r *= topo; g *= topo; b *= topo;
       colors[i * 3] = r;
       colors[i * 3 + 1] = g;
       colors[i * 3 + 2] = b;
@@ -1519,10 +1626,11 @@ export function createRenderer(canvas) {
   const SCATTER_THEMES = {
     grassland: {
       trunk: [0.42, 0.30, 0.19],
-      foliage: [[0.24, 0.52, 0.26], [0.32, 0.64, 0.33], [0.19, 0.42, 0.23]],
-      bush: [[0.33, 0.56, 0.29], [0.42, 0.64, 0.35]],
+      // 灰绿/橄榄（抬红蓝、压一点绿峰），和洗干净的鼠尾草地面同色系，不刺眼
+      foliage: [[0.30, 0.50, 0.30], [0.38, 0.60, 0.37], [0.25, 0.41, 0.27]],
+      bush: [[0.38, 0.54, 0.33], [0.46, 0.61, 0.39]],
       rock: [[0.40, 0.39, 0.36], [0.32, 0.31, 0.29]],
-      reed: [[0.36, 0.50, 0.24], [0.46, 0.58, 0.28]],
+      reed: [[0.42, 0.50, 0.30], [0.50, 0.57, 0.34]],
       density: 1.0
     },
     arid: {
@@ -2372,6 +2480,28 @@ export function createRenderer(canvas) {
         box(3, 20, 3, -14, 50, 0, GLOW_HOT)
       ]);
     }
+    if (kind === 'overlord') {
+      return hull(40, 24, 10).concat([
+        taperedBox(22, 19, 18, 15, 8, 2, 16, 0, 1.0),
+        cyl(1.6, 1.9, 24, 8, 14, 16, 3.6, MAT.gunmetal, ROT_Z90),
+        cyl(1.6, 1.9, 24, 8, 14, 16, -3.6, MAT.gunmetal, ROT_Z90)
+      ]);
+    }
+    if (kind === 'prism') {
+      return hull(32, 18, 8).concat([
+        taperedBox(16, 14, 13, 11, 7, -1, 15, 0, 1.0),
+        box(2.2, 14, 2.2, 4, 22, 0, MAT.gunmetal),
+        sph(2.2, 6, 4, 32, 0, MAT.prismGlow)
+      ]);
+    }
+    if (kind === 'tesla') {
+      return infantry.concat([
+        box(4.4, 2.6, 10.6, -0.2, 11.2, 0, 0.5),
+        sph(1.5, 5, -4.4, 18, 2.2, MAT.teslaArc),
+        sph(1.5, 5, -4.4, 18, -2.2, MAT.teslaArc),
+        box(9.0, 1.6, 1.6, 4.6, 8.4, 1.9, MAT.gunmetal)
+      ]);
+    }
     return infantry;
   }
 
@@ -2457,7 +2587,9 @@ export function createRenderer(canvas) {
   // GPU 程序/JS 垃圾。
   const barGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   const barBgMaterial = new THREE.MeshBasicMaterial({
-    color: 0x121510, transparent: true, opacity: 0.78,
+    // 底板压得更轻更扁：不再是单位头顶一块厚重的黑牌，只留一层让彩条
+    // 在亮地面上读得出的淡底（地面变干净变亮后这层仍要保住对比度）
+    color: 0x10130e, transparent: true, opacity: 0.6,
     depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide
   });
   const barFillMaterial = new THREE.MeshBasicMaterial({
@@ -2652,7 +2784,11 @@ export function createRenderer(canvas) {
     sniper: { len: 34, thick: 0.6, color: 0xbfe9ff, arc: 0 },
     siege: { len: 24, thick: 2.4, color: 0xffb347, arc: 120 },
     ap: { len: 26, thick: 1.0, color: 0xd8f0ff, arc: 6 },
-    missile: { len: 32, thick: 2.8, color: 0xff6633, arc: 140 }
+    missile: { len: 32, thick: 2.8, color: 0xff6633, arc: 140 },
+    // 磁暴电弧：短促、近乎笔直的蓝白电光
+    tesla: { len: 16, thick: 1.4, color: 0x86b8ff, arc: 0 },
+    // 光棱聚焦光束：细长、笔直、亮青色，指哪打哪
+    laser: { len: 30, thick: 0.9, color: 0xa8f4ff, arc: 0 }
   };
 
   function ensureTracerMesh(needed) {
@@ -3049,6 +3185,25 @@ export function createRenderer(canvas) {
           r: 1.0, g: 0.78, b: 0.28
         };
       });
+    } else if (type === 'promote') {
+      // 晋升礼花：金色星点腾空 + 地面扩散一道金环。金色写成 >1 的线性值，
+      // 走自发光被辉光提出来；与爆炸的橙、完工的绿在色相上区分开。
+      burst(fireLayer, 16, function (i) {
+        const a = (i / 16) * TAU + rand() * 0.6;
+        return {
+          x: x + Math.cos(a) * 7, y: 5 + rand() * 8, z: y + Math.sin(a) * 7,
+          vx: Math.cos(a) * (10 + rand() * 14),
+          vy: 130 + rand() * 100,
+          vz: Math.sin(a) * (10 + rand() * 14),
+          life: 0.6 + rand() * 0.45, maxLife: 1.05,
+          size: 5 + rand() * 4, buoyancy: -0.4,
+          r: 2.3, g: 1.85, b: 0.5
+        };
+      });
+      shockLayer.spawn({
+        x: x, y: y, radius: 9, growth: 96, alpha: 0.85,
+        life: 0.6, maxLife: 0.6, r: 1.0, g: 0.85, b: 0.3
+      });
     }
   }
 
@@ -3105,6 +3260,36 @@ export function createRenderer(canvas) {
     ringMesh.count = 0;
     worldRoot.add(ringMesh);
     return ringMesh;
+  }
+
+  // 军衔环：连续细金圈，无括弧无刻线、静止不转 —— 和「旋转的选中括弧环」一眼
+  // 区分开。让老兵以上(3/8/16 杀)的单位即便没被选中，也能在军团里被一眼认出。
+  // 颜色沿用选中环的三档军衔配色，仅亮度略低，避免大片金环盖过「选中」语义。
+  const rankRingGeo = new THREE.RingGeometry(0.84, 1.0, 28)
+    .rotateX(-Math.PI / 2);
+  const rankRingMaterial = new THREE.MeshBasicMaterial({
+    transparent: true, opacity: 0.9, depthWrite: false,
+    fog: false, side: THREE.DoubleSide, toneMapped: false
+  });
+  let rankRingMesh = null;
+  const rankRingVisuals = [];
+
+  function ensureRankRingMesh(needed) {
+    if (rankRingMesh && rankRingMesh.instanceMatrix.count >= needed) {
+      return rankRingMesh;
+    }
+    if (rankRingMesh) {
+      worldRoot.remove(rankRingMesh);
+      rankRingMesh.dispose();
+    }
+    rankRingMesh = new THREE.InstancedMesh(rankRingGeo, rankRingMaterial,
+      Math.max(16, Math.ceil(needed * 1.5)));
+    rankRingMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    rankRingMesh.frustumCulled = false;
+    rankRingMesh.renderOrder = 3;
+    rankRingMesh.count = 0;
+    worldRoot.add(rankRingMesh);
+    return rankRingMesh;
   }
 
   let previewGroup = null;
@@ -3663,6 +3848,39 @@ export function createRenderer(canvas) {
       if (rings.instanceColor) rings.instanceColor.needsUpdate = true;
     }
 
+    // 军衔环：未选中的老兵/精英/王牌脚下常驻一枚金环。selected 里的是旋转
+    // 选中环（已按军衔配色），这里只补没选中的，避免同单位两环叠着闪。
+    rankRingVisuals.length = 0;
+    for (let i = 0; i < snapshotVisuals.length; i++) {
+      const vis = snapshotVisuals[i];
+      if (!vis.inRenderRange) continue;
+      const kills = vis.unit.kills || 0;
+      if (kills < 3 || selected.has(vis.unit.id)) continue;
+      rankRingVisuals.push(vis);
+    }
+    if (rankRingVisuals.length) {
+      const rankRings = ensureRankRingMesh(rankRingVisuals.length);
+      for (let i = 0; i < rankRingVisuals.length; i++) {
+        const vis = rankRingVisuals[i];
+        const kills = vis.unit.kills || 0;
+        const r = vis.unit.size * 1.4;
+        matrix.compose(
+          vecPos.set(vis.x, groundHeight(vis.x, vis.y) + 2.1, vis.y),
+          quatIdentity,
+          vecScale.set(r, 1, r));
+        rankRings.setMatrixAt(i, matrix);
+        if (kills >= 16) tmpColor.set(1.05, 0.9, 0.3);
+        else if (kills >= 8) tmpColor.set(0.95, 0.7, 0.15);
+        else tmpColor.set(0.7, 0.5, 0.12);
+        rankRings.setColorAt(i, tmpColor);
+      }
+      rankRings.count = rankRingVisuals.length;
+      rankRings.instanceMatrix.needsUpdate = true;
+      if (rankRings.instanceColor) rankRings.instanceColor.needsUpdate = true;
+    } else if (rankRingMesh) {
+      rankRingMesh.count = 0;
+    }
+
     updatePreview(payload.buildPreview);
 
     // 水面：整体轻微涨落 + 推进波纹时间
@@ -3742,12 +3960,23 @@ export function createRenderer(canvas) {
       const rebuild = function () { buildTerrain(); };
       if (!groundTexture) {
         groundTexture = textureLoader.load('/terrain-ground.png', function () {
-          groundTexture.colorSpace = THREE.SRGBColorSpace;
+          try {
+            // 洗成干净细节贴图后再上地面；repeat 已在下面按地图尺寸设好，抄过来
+            const cleaned = cleanGroundTexture(groundTexture.image);
+            cleaned.wrapS = cleaned.wrapT = THREE.RepeatWrapping;
+            cleaned.anisotropy = groundTexture.anisotropy;
+            cleaned.repeat.copy(groundTexture.repeat);
+            groundTexture = cleaned;
+          } catch (err) {
+            // 清洗失败就退回原图，地面照常渲染
+            groundTexture.colorSpace = THREE.SRGBColorSpace;
+          }
           rebuild();
         });
         groundTexture.wrapS = THREE.RepeatWrapping;
         groundTexture.wrapT = THREE.RepeatWrapping;
         groundTexture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+        groundTexture.colorSpace = THREE.SRGBColorSpace;
       }
       // 重复更密：900 一贴在近景会被拉糊，看起来像低分辨率网格
       groundTexture.repeat.set(map.width / 420, map.height / 420);
