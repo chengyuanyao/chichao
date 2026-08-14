@@ -26,6 +26,7 @@ import { createRenderer } from './render3d.js';
     rifle: { name: '突击兵', cost: 180, icon: '♟', producer: 'barracks', desc: '灵活的基础步兵', damageType: 'bullet' },
     rocket: { name: '火箭兵', cost: 340, icon: '↟', producer: 'barracks', desc: '远程反装甲单位，克重甲', damageType: 'rocket' },
     sniper: { name: '狙击手', cost: 420, icon: '⌖', producer: 'barracks', desc: '超远狙杀步兵，无力反甲', damageType: 'sniper' },
+    dog: { name: '军犬', cost: 120, icon: '♞', producer: 'barracks', desc: '全场最速近战，扑咬步兵一击必杀，对载具/建筑无效', damageType: 'bite' },
     tank: { name: '先锋坦克', cost: 780, icon: '▰', producer: 'factory', desc: '主力装甲单位，克建筑', damageType: 'shell' },
     scout: { name: '猎犬战车', cost: 460, icon: '◆', producer: 'factory', desc: '高速侦察战车', damageType: 'bullet' },
     artillery: { name: '攻城炮', cost: 960, icon: '◉', producer: 'factory', desc: '极远溅射，克建筑/重甲', damageType: 'siege' },
@@ -341,6 +342,28 @@ import { createRenderer } from './render3d.js';
       pCirc(c, 54, 38, 1.6, P_LCD);
       pLine(c, 82, 26, 86, 30, 1.5, P_OUT);
       pLine(c, 40, 26, 48, 20, 1.2, 'rgba(243,233,212,.35)');
+    },
+    dog: function (c) {
+      // 侧面剪影：低身长躯、竖耳、翘尾，一眼是条蓄势扑跃的军犬
+      pShadow(c, 48, 60, 27);
+      // 四条腿
+      pRect(c, 50, 48, 3.2, 12, P_DARK);
+      pRect(c, 56, 48, 3.2, 12, P_DARK);
+      pRect(c, 30, 48, 3.2, 12, P_DARK);
+      pRect(c, 36, 48, 3.2, 12, P_DARK);
+      // 长而低的躯干 + 深色背鞍
+      pPoly(c, [[28, 50], [60, 50], [63, 42], [57, 36], [36, 36], [28, 43]], P_BODY);
+      pPoly(c, [[36, 36], [57, 36], [59, 40], [34, 40]], P_DARK);
+      // 向后上方翘起的尾巴
+      pLine(c, 29, 42, 20, 27, 3.4, P_DARK);
+      pLine(c, 20, 27, 23, 22, 2.6, P_DARK);
+      // 头颅 + 前伸的深色吻部 + 竖耳
+      pPoly(c, [[58, 42], [69, 42], [71, 31], [64, 26], [58, 31]], P_BODY);
+      pPoly(c, [[68, 39], [78, 36], [78, 32], [69, 31]], P_DARK);
+      pPoly(c, [[60, 28], [64, 17], [68, 27]], P_DARK);
+      // 红项圈 + 眼睛
+      pLine(c, 59, 41, 62, 30, 3, P_RED);
+      pCirc(c, 65, 33, 1.6, P_LCD);
     },
     tank: function (c) {
       pShadow(c, 48, 58, 27);

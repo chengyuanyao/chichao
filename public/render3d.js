@@ -163,6 +163,9 @@ const MAT = {
   glass: [0.16, 0.24, 0.29],
   warnYellow: [0.66, 0.54, 0.12],
   copper: [0.48, 0.30, 0.15],
+  // 军犬被毛：黄褐主色 + 深色背鞍/吻部/爪（天然色，不跟团队色走）
+  furTan: [0.46, 0.34, 0.20],
+  furDark: [0.23, 0.18, 0.14],
   // 自发光（分量 > 1）
   exhaust: [2.4, 0.95, 0.28],
   furnace: [2.6, 1.35, 0.35],
@@ -288,6 +291,36 @@ const UNIT_BUILDERS = {
   rifle: function () { return infantryParts('rifle'); },
   rocket: function () { return infantryParts('rocket'); },
   sniper: function () { return infantryParts('sniper'); },
+
+  dog: function () {
+    // 军犬：贴地的四足轮廓，德牧式黄褐被毛 + 深色背鞍/吻/爪。
+    // 团队色不给皮毛（荧光狗太出戏），只给战术背心与发光项圈做阵营识别。
+    const tailRot = new THREE.Matrix4().makeRotationZ(0.9);   // 尾巴上翘
+    const body = [
+      box(16.0, 5.6, 5.6, 0, 6.8, 0, MAT.furTan),              // 主躯干
+      box(6.0, 6.4, 6.2, 6.2, 7.2, 0, MAT.furTan),             // 前胸更壮
+      box(11.0, 1.6, 5.9, -1.6, 9.4, 0, MAT.furDark),          // 背鞍（黑背）
+      box(5.4, 4.6, 4.8, 9.4, 9.0, 0, MAT.furTan),             // 头颅
+      box(3.6, 2.6, 3.0, 12.6, 8.0, 0, MAT.furDark),           // 吻部
+      box(1.1, 3.0, 1.3, 7.8, 12.4, 1.7, MAT.furDark),         // 竖耳
+      box(1.1, 3.0, 1.3, 7.8, 12.4, -1.7, MAT.furDark),
+      box(7.5, 3.4, 6.3, 1.0, 7.4, 0, 0.9),                    // 战术背心（团队色）
+      cyl(0.9, 0.55, 6.0, 6, -9.2, 9.0, 0, MAT.furDark, tailRot) // 翘尾
+    ];
+    [5.2, -5.2].forEach(function (px) {
+      [2.0, -2.0].forEach(function (pz) {
+        body.push(box(1.9, 5.0, 1.9, px, 2.5, pz, MAT.furDark)); // 四条腿
+      });
+    });
+    return {
+      body: body,
+      glow: [
+        box(1.3, 4.8, 5.4, 7.0, 8.2, 0, GLOW_SOFT),            // 发光项圈
+        sph(0.6, 5, 11.6, 9.8, 1.5, GLOW_HOT),                 // 眼
+        sph(0.6, 5, 11.6, 9.8, -1.5, GLOW_HOT)
+      ]
+    };
+  },
 
   tank: function () {
     return {
@@ -839,7 +872,7 @@ const BRIDGE_RENDER_SPAN = 2.0;
  * 视距看步兵只有几个像素，根本认不出兵种。这里按兵种放大到能辨识的比例。
  */
 const UNIT_VISUAL_SCALE = {
-  rifle: 1.75, rocket: 1.75, sniper: 1.75, tesla: 1.75,
+  rifle: 1.75, rocket: 1.75, sniper: 1.75, tesla: 1.75, dog: 1.7,
   tank: 1.25, scout: 1.3, tank_destroyer: 1.25,
   artillery: 1.25, harvester: 1.16, mcv: 1.30, v3: 1.25,
   overlord: 1.28, prism: 1.25
@@ -2502,6 +2535,19 @@ export function createRenderer(canvas) {
         box(9.0, 1.6, 1.6, 4.6, 8.4, 1.9, MAT.gunmetal)
       ]);
     }
+    if (kind === 'dog') {
+      // 远景 LOD：低矮长身 + 头块 + 四条腿，认得出是四足兽即可
+      const quad = [
+        box(16, 6, 6, 0, 6, 0, MAT.furTan),
+        box(6, 5, 5, 9, 8, 0, MAT.furTan)
+      ];
+      [5, -5].forEach(function (px) {
+        [2, -2].forEach(function (pz) {
+          quad.push(box(1.6, 5, 1.6, px, 2.5, pz, MAT.furDark));
+        });
+      });
+      return quad;
+    }
     return infantry;
   }
 
@@ -3765,6 +3811,8 @@ export function createRenderer(canvas) {
       let tracerCount = 0;
       for (let i = 0; i < projectiles.length; i++) {
         const p = projectiles[i];
+        // 军犬的扑咬是近战：不画弹道，命中反馈交给服务端的 impact 特效
+        if (p.kind === 'bite') continue;
         const pdx = p.x - state.camX;
         const pdy = p.y - state.camY;
         if (!inViewportBounds(p.x, p.y)) continue;

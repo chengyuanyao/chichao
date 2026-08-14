@@ -352,6 +352,8 @@ DAMAGE_MULTIPLIER = {
     "tesla":   {"infantry": 0.80, "light": 1.40, "heavy": 1.30, "structure": 0.50},
     # 光棱坦克的聚焦光束：精准点杀伤，克轻型与建筑，打不动重甲与人群
     "laser":   {"infantry": 0.45, "light": 1.50, "heavy": 0.85, "structure": 1.70},
+    # 军犬扑咬：一口一个步兵，对装甲和建筑完全无从下口（×0）
+    "bite":    {"infantry": 4.00, "light": 0.00, "heavy": 0.00, "structure": 0.00},
 }
 
 UNIT_TYPES = {
@@ -375,6 +377,15 @@ UNIT_TYPES = {
         "size": 10.0, "build": 6.0, "producer": "barracks",
         "projectile": "sniper", "projectileSpeed": 1200.0, "splash": 0.0,
         "sight": 480.0, "armor": "infantry", "damageType": "sniper",
+    },
+    # 军犬：红色警戒式近战特种兵。全场最速，扑咬对步兵一击必杀（克制表 ×4），
+    # 但对载具/建筑零伤害；便宜的肉盾与侦察兵，专咬成群步兵。
+    "dog": {
+        "name": "军犬", "cost": 120, "hp": 55, "speed": 122.0,
+        "damage": 60.0, "range": 30.0, "cooldown": 0.8,
+        "size": 8.0, "build": 2.5, "producer": "barracks",
+        "projectile": "bite", "projectileSpeed": 1000.0, "splash": 0.0,
+        "sight": 400.0, "armor": "infantry", "damageType": "bite",
     },
     "tank": {
         "name": "先锋坦克", "cost": 780, "hp": 620, "speed": 63.0,
@@ -2622,6 +2633,30 @@ def nearest_enemy_structure(game, owner, x, y, max_distance, spatial_index=None)
     return best
 
 
+def nearest_enemy_infantry(game, owner, x, y, max_distance, spatial_index=None):
+    """军犬专用：只扑步兵。克制表里 bite 对载具/建筑全是 ×0，追上去也是白送，
+    所以自动索敌时干脆只看装甲为 infantry 的敌方单位（含敌方军犬）。"""
+    best = None
+    best_dist_sq = max_distance * max_distance
+    candidates = (spatial_candidates(
+        spatial_index, x, y, max_distance, 16.0)
+        if spatial_index else game["units"])
+    for entity in candidates:
+        if not entity["id"].startswith("u"):
+            continue
+        if UNIT_TYPES.get(entity.get("kind"), {}).get("armor") != "infantry":
+            continue
+        if is_friendly(game, entity["owner"], owner) or entity["hp"] <= 0:
+            continue
+        dx = entity["x"] - x
+        dy = entity["y"] - y
+        current_sq = dx * dx + dy * dy
+        if current_sq < best_dist_sq:
+            best = entity
+            best_dist_sq = current_sq
+    return best
+
+
 def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
     span = math.hypot(target["x"] - attacker["x"], target["y"] - attacker["y"])
     game["projectiles"].append({
@@ -3028,6 +3063,12 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                         combat_spatial)
                     if building:
                         target = building
+                # 军犬只扑步兵：对载具/建筑零伤害，追上去等于送死。
+                # 覆盖自动索敌结果；玩家手点的目标（上面 find_entity）不受影响。
+                if unit["kind"] == "dog":
+                    target = nearest_enemy_infantry(
+                        game, unit["owner"], unit["x"], unit["y"], aggro,
+                        combat_spatial)
                 unit["targetId"] = target["id"] if target else None
                 unit["scan"] = 0.28 + random.random() * 0.22
         if target:
@@ -3195,7 +3236,9 @@ def tick_bots(room):
                     # 工厂开了二级科技，兵营开始出磁暴步兵专电载具
                     queue_unit(room, bot["id"], "tesla")
                 else:
-                    queue_unit(room, bot["id"], "rocket" if roll < 0.86 else "rifle")
+                    # 基础混编：火箭兵为主，掺突击兵，偶尔放条军犬（便宜、咬步兵、能侦察）
+                    queue_unit(room, bot["id"],
+                               "rocket" if roll < 0.80 else ("rifle" if roll < 0.93 else "dog"))
         except ValueError:
             pass
 
