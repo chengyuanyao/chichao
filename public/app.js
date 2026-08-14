@@ -1145,9 +1145,12 @@ import { createRenderer } from './render3d.js';
    * 服务端只在每条 SSE 流的首帧（以及每次 REST 拉取）发送地图、地形、
    * 矿脉布局和视距表；之后每帧只带矿脉余量 `ore`。这里把缓存的静态部分
    * 贴回去，让后面的代码仍然看到一个完整的 game 对象。
+   *
+   * 返回这一帧是否可用于渲染：还没收到过任何 full 帧就先来了增量帧的话，
+   * 手上没有地图与地形，补不出完整对象，只能整帧丢弃等下一帧。
    */
   function hydrateGame(game, mapConfig) {
-    if (!game) { return; }
+    if (!game) { return true; }
     if (game.full) {
       var byId = {};
       (game.resources || []).forEach(function (r) { byId[r.id] = r; });
@@ -1158,10 +1161,17 @@ import { createRenderer } from './render3d.js';
         resourceById: byId,
         sight: game.sight
       };
-      view3d.setMatch(game.map, game.terrain, game.resources, game.sight,
-        (mapConfig && mapConfig.spawnPoints) || []);
-      minimapStaticKey = '';
-    } else if (matchStatic) {
+      // setMatch 内部按地图身份判等：同一局里重复收到 full 帧不会重建世界，
+      // 那么小地图的静态层同样不该重画。
+      if (view3d.setMatch(game.map, game.terrain, game.resources, game.sight,
+          (mapConfig && mapConfig.spawnPoints) || [])) {
+        minimapStaticKey = '';
+      }
+    } else if (!matchStatic) {
+      // 还没拿到过任何 full 帧就收到增量帧：没有地图与地形，渲染不出东西。
+      // 丢掉这一帧的战场数据，等 SSE 首帧或 /api/state 补上静态块。
+      return false;
+    } else {
       game.map = matchStatic.map;
       game.terrain = matchStatic.terrain;
       game.resources = matchStatic.resources;
@@ -1178,12 +1188,15 @@ import { createRenderer } from './render3d.js';
       game.resources = matchStatic.resources;
     }
     if (!game.resources) { game.resources = []; }
+    return true;
   }
 
   function applyRoomState(state) {
     var previousStatus = roomState && roomState.status;
     if (state.maps) { cachedMaps = state.maps; }
-    hydrateGame(state.game, state.mapConfig);
+    if (!hydrateGame(state.game, state.mapConfig)) {
+      delete state.game;
+    }
     roomState = state;
     if (state.players) {
       var nextPaletteKey = (session && session.playerId || '') + '|' + state.players.map(function (p) {

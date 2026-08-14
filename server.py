@@ -3770,7 +3770,13 @@ class GameHandler(BaseHTTPRequestHandler):
             # 指令可能在两个模拟 tick 之间直接改变建筑/队列；REST 响应必须看到
             # 新状态，不能复用刚才 SSE 建出的旧快照。
             invalidate_game_snapshot(room.get("game"))
-            response = {"ok": True, "room": public_room(room, viewer_id=player["id"])}
+            # 战斗中的指令响应只回动态数据。地图、地形、矿点布局、视距表一局
+            # 之内不变，客户端在首帧就缓存好了；过去每条移动指令都附一份 full
+            # 快照，客户端收到后会把整个 3D 世界推倒重建 —— 两万顶点的地形
+            # 网格、近三千株草木、两张迷雾画布、全部道路与矿脉，点一下卡一下。
+            in_battle = action == "command" and room["status"] == "playing"
+            response = {"ok": True, "room": public_room(
+                room, viewer_id=player["id"], full=not in_battle)}
         self.send_json(200, response)
 
     def handle_events(self, query):
