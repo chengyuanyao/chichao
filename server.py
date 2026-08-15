@@ -337,23 +337,28 @@ CRATE_TYPES = {
 }
 
 # Armor types and damage multiplier table for unit-counter system.
+# 查表缺省 1.0（apply_damage 里 .get(armor, 1.0)），所以新增的 arcane(魔导)
+# 护甲只需在它加成的行里写出系数，其余行自动按 1.0 中性处理。
 DAMAGE_MULTIPLIER = {
-    "bullet":  {"infantry": 1.0, "light": 0.65, "heavy": 0.35, "structure": 0.30},
+    #                                                        arcane=魔导(法师/傀儡等魔法单位)
+    "bullet":  {"infantry": 1.0, "light": 0.65, "heavy": 0.35, "structure": 0.30, "arcane": 1.50},
     "rocket":  {"infantry": 0.75, "light": 1.30, "heavy": 1.50, "structure": 0.85},
-    "shell":   {"infantry": 0.55, "light": 1.00, "heavy": 1.00, "structure": 1.20},
-    "sniper":  {"infantry": 2.20, "light": 0.40, "heavy": 0.15, "structure": 0.10},
+    "shell":   {"infantry": 0.55, "light": 1.00, "heavy": 1.00, "structure": 1.20, "arcane": 0.80},
+    "sniper":  {"infantry": 2.20, "light": 0.40, "heavy": 0.15, "structure": 0.10, "arcane": 2.00},
     "siege":   {"infantry": 0.25, "light": 0.30, "heavy": 0.25, "structure": 1.80},
     "ap":      {"infantry": 0.25, "light": 0.65, "heavy": 2.10, "structure": 0.70},
     # 超级武器：对全甲种都致命，清场用。siege 对步兵只有 0.25，清不动人。
     "super":   {"infantry": 1.50, "light": 1.30, "heavy": 1.10, "structure": 1.40},
     # V3 远程火箭：曲射拆建筑，溅射清阵，弹速慢能被看见躲
     "missile": {"infantry": 0.50, "light": 0.70, "heavy": 0.65, "structure": 1.50},
-    # 磁暴步兵的电弧：快脉冲专电载具，对建筑和步兵都一般
-    "tesla":   {"infantry": 0.80, "light": 1.40, "heavy": 1.30, "structure": 0.50},
-    # 光棱坦克的聚焦光束：精准点杀伤，克轻型与建筑，打不动重甲与人群
-    "laser":   {"infantry": 0.45, "light": 1.50, "heavy": 0.85, "structure": 1.70},
-    # 军犬扑咬：一口一个步兵，对装甲和建筑完全无从下口（×0）
-    "bite":    {"infantry": 4.00, "light": 0.00, "heavy": 0.00, "structure": 0.00},
+    # 磁暴步兵的电弧：快脉冲专电载具，对建筑和步兵都一般；电磁干扰魔力场，是科技杀法师的关键
+    "tesla":   {"infantry": 0.80, "light": 1.40, "heavy": 1.30, "structure": 0.50, "arcane": 2.00},
+    # 光棱坦克的聚焦光束：精准点杀伤，克轻型与建筑，打不动重甲与人群；也能切开魔导护甲
+    "laser":   {"infantry": 0.45, "light": 1.50, "heavy": 0.85, "structure": 1.70, "arcane": 1.50},
+    # 军犬扑咬：一口一个步兵，对装甲和建筑完全无从下口（×0）；法师一样是肉
+    "bite":    {"infantry": 4.00, "light": 0.00, "heavy": 0.00, "structure": 0.00, "arcane": 1.50},
+    # 奥术魔法：无视钢铁装甲熔重甲（法师是反坦克答案），但法术拆不动建筑
+    "magic":   {"infantry": 1.20, "light": 1.30, "heavy": 1.60, "structure": 0.60, "arcane": 1.00},
 }
 
 UNIT_TYPES = {
@@ -429,7 +434,7 @@ UNIT_TYPES = {
         "size": 24.0, "build": 14.0, "producer": "factory",
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
         "sight": 320.0, "armor": "heavy", "damageType": "none",
-        "canDeploy": True,
+        "canDeploy": True, "deploysInto": "hq",
     },
     "v3": {
         "name": "东风快递", "cost": 2000, "hp": 260, "speed": 38.4,
@@ -463,6 +468,66 @@ UNIT_TYPES = {
         "projectile": "laser", "projectileSpeed": 1400.0, "splash": 0.0,
         "sight": 480.0, "armor": "light", "damageType": "laser",
     },
+    # ==================== 魔法阵营「秘法会」（faction=magic） ====================
+    # 独立经济：自己的主堡/法力塔/精炼所/采矿/基地车，数值与科技对位、只换皮换名。
+    "mharvester": {
+        "name": "浮游晶簇", "cost": 920, "hp": 680, "speed": 63.6,
+        "damage": 0.0, "range": 0.0, "cooldown": 0.0,
+        "size": 22.0, "build": 9.0, "producer": "mcircle",
+        "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
+        "capacity": 850.0, "harvestRate": 145.0, "sight": 330.0,
+        "armor": "light", "damageType": "none",
+    },
+    "mmcv": {
+        "name": "迁徙法阵", "cost": 2500, "hp": 900, "speed": 45.6,
+        "damage": 0.0, "range": 0.0, "cooldown": 0.0,
+        "size": 24.0, "build": 14.0, "producer": "mcircle",
+        "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
+        "sight": 320.0, "armor": "light", "damageType": "none",
+        "canDeploy": True, "deploysInto": "mhq",
+    },
+    # ---- 军事：奥术圣殿(步兵) / 召唤法阵(构装与魔兽) ----
+    # 奥术法师：远程魔法弹，熔重甲的反坦克答案；魔导甲怕磁暴/狙击/子弹。
+    "mage": {
+        "name": "奥术法师", "cost": 500, "hp": 90, "speed": 78.0,
+        "damage": 42.0, "range": 220.0, "cooldown": 1.1,
+        "size": 10.0, "build": 5.0, "producer": "mtemple",
+        "projectile": "arcane", "projectileSpeed": 800.0, "splash": 0.0,
+        "sight": 410.0, "armor": "arcane", "damageType": "magic",
+    },
+    # 冰霜女巫：伤害低但命中挂减速，是魔法阵营的控制/拉扯核心。
+    "frost": {
+        "name": "冰霜女巫", "cost": 550, "hp": 85, "speed": 74.0,
+        "damage": 16.0, "range": 205.0, "cooldown": 1.3,
+        "size": 10.0, "build": 6.0, "producer": "mtemple",
+        "projectile": "frost", "projectileSpeed": 700.0, "splash": 40.0,
+        "sight": 420.0, "armor": "arcane", "damageType": "magic",
+        "slow": {"mult": 0.45, "duration": 2.5},
+    },
+    # 岩石傀儡：构装前排，高血慢速，投掷巨石溅射，踩步兵/轻型。
+    "golem": {
+        "name": "岩石傀儡", "cost": 850, "hp": 760, "speed": 52.0,
+        "damage": 52.0, "range": 130.0, "cooldown": 1.2,
+        "size": 20.0, "build": 9.0, "producer": "mcircle",
+        "projectile": "boulder", "projectileSpeed": 420.0, "splash": 34.0,
+        "sight": 360.0, "armor": "arcane", "damageType": "magic",
+    },
+    # 影豹：全场最快的魔法兽，近战扑击(爪击瞬发)，侧翼包抄/切后排。
+    "panther": {
+        "name": "影豹", "cost": 420, "hp": 180, "speed": 132.0,
+        "damage": 26.0, "range": 34.0, "cooldown": 0.7,
+        "size": 12.0, "build": 5.0, "producer": "mcircle",
+        "projectile": "claw", "projectileSpeed": 1000.0, "splash": 0.0,
+        "sight": 520.0, "armor": "arcane", "damageType": "magic",
+    },
+    # 秘法巨龙：魔法阵营的重炮，远程大火球大溅射，压轴质量兵种。
+    "dragon": {
+        "name": "秘法巨龙", "cost": 1600, "hp": 900, "speed": 60.0,
+        "damage": 95.0, "range": 260.0, "cooldown": 1.7,
+        "size": 24.0, "build": 15.0, "producer": "mcircle",
+        "projectile": "fireball", "projectileSpeed": 520.0, "splash": 60.0,
+        "sight": 460.0, "armor": "arcane", "damageType": "magic",
+    },
 }
 
 DEFAULT_MAP = "north_conflict"
@@ -471,7 +536,7 @@ STRUCTURE_TYPES = {
     "hq": {
         "name": "指挥中心", "cost": 0, "hp": 2400, "size": 58.0,
         "build": 0.0, "deploy": 0.0, "power": 35, "requires": [], "sight": 650.0,
-        "armor": "structure",
+        "armor": "structure", "packsInto": "mcv",
     },
     "power": {
         "name": "磁能电站", "cost": 600, "hp": 760, "size": 40.0,
@@ -513,7 +578,108 @@ STRUCTURE_TYPES = {
         "projectile": "shell", "projectileSpeed": 420.0, "splash": 45.0,
         "armor": "structure", "damageType": "shell",
     },
+    # ==================== 魔法阵营「秘法会」建筑（faction=magic） ====================
+    # 与科技对位：主堡=hq / 法力塔=power / 精炼所=refinery / 圣殿=barracks /
+    # 法阵=factory / 奥术塔=defense。role 字段让经济逻辑跨阵营复用。
+    "mhq": {
+        "name": "魔法主堡", "cost": 0, "hp": 2400, "size": 58.0,
+        "build": 0.0, "deploy": 0.0, "power": 35, "requires": [], "sight": 650.0,
+        "armor": "structure", "packsInto": "mmcv",
+    },
+    "mpower": {
+        "name": "法力塔", "cost": 600, "hp": 760, "size": 40.0,
+        "build": 8.0, "deploy": 2.2, "power": 120, "requires": ["mhq"], "sight": 350.0,
+        "armor": "structure",
+    },
+    "mrefinery": {
+        "name": "水晶精炼所", "cost": 1400, "hp": 1350, "size": 52.0,
+        "build": 14.0, "deploy": 3.2, "power": -30, "requires": ["mhq"], "sight": 390.0,
+        "armor": "structure",
+    },
+    "mtemple": {
+        "name": "奥术圣殿", "cost": 700, "hp": 900, "size": 42.0,
+        "build": 10.0, "deploy": 2.8, "power": -20, "requires": ["mpower"], "sight": 410.0,
+        "armor": "structure",
+    },
+    "mcircle": {
+        "name": "召唤法阵", "cost": 1600, "hp": 1600, "size": 58.0,
+        "build": 18.0, "deploy": 4.2, "power": -45, "requires": ["mrefinery", "mpower"], "sight": 460.0,
+        "armor": "structure",
+    },
+    "mtower": {
+        "name": "奥术塔", "cost": 950, "hp": 1300, "size": 30.0,
+        "build": 12.0, "deploy": 3.0, "power": -25, "requires": ["mpower"], "sight": 560.0,
+        "damage": 55.0, "range": 300.0, "cooldown": 0.9,
+        "projectile": "arcane", "projectileSpeed": 700.0, "splash": 30.0,
+        "armor": "structure", "damageType": "magic",
+    },
 }
+
+# ---- 阵营与角色分类 ----
+# faction：tech(钢铁军团) / magic(秘法会)，建造与生产按 player["faction"] 校验。
+# role：跨阵营的功能角色。经济逻辑（出生配置、采矿返回、精炼厂赠车、基地车
+# 展开、出售保护、bot 寻目标）一律按 role 判定而不是写死 kind —— 魔法阵营出
+# 同 role 的换皮建筑即可整套复用。新增兵种/建筑 = 加定义 + 在下面登记 role。
+MAGIC_STRUCTURES = frozenset(("mhq", "mpower", "mrefinery", "mtemple", "mcircle", "mtower"))
+MAGIC_UNITS = frozenset(("mharvester", "mmcv", "mage", "frost", "golem", "panther", "dragon"))
+
+_STRUCTURE_ROLES = {
+    "hq": "hq", "mhq": "hq",
+    "power": "power", "mpower": "power",
+    "refinery": "refinery", "mrefinery": "refinery",
+    "barracks": "barracks", "mtemple": "barracks",
+    "factory": "factory", "mcircle": "factory",
+    "repair": "repair",
+    "turret": "defense", "missile": "defense", "mtower": "defense",
+}
+_UNIT_ROLES = {
+    "harvester": "harvester", "mharvester": "harvester",
+    "mcv": "mcv", "mmcv": "mcv",
+}
+
+for _kind, _def in STRUCTURE_TYPES.items():
+    _def["role"] = _STRUCTURE_ROLES.get(_kind)
+    _def["faction"] = "magic" if _kind in MAGIC_STRUCTURES else "tech"
+for _kind, _def in UNIT_TYPES.items():
+    _def["role"] = _UNIT_ROLES.get(_kind)
+    _def["faction"] = "magic" if _kind in MAGIC_UNITS else "tech"
+
+
+def structure_role(kind):
+    return STRUCTURE_TYPES.get(kind, {}).get("role")
+
+
+def unit_role(kind):
+    return UNIT_TYPES.get(kind, {}).get("role")
+
+
+# 各阵营的出生与经济基础 kind。start_game 出生配置、精炼厂赠车都从这里取，
+# 日后要加第三个阵营只需在 UNIT/STRUCTURE 表加定义、在这里登记一行。
+FACTION_LOADOUT = {
+    "tech": {"hq": "hq", "power": "power", "refinery": "refinery",
+             "harvester": "harvester", "mcv": "mcv", "infantry": "rifle", "armor": "tank"},
+    "magic": {"hq": "mhq", "power": "mpower", "refinery": "mrefinery",
+              "harvester": "mharvester", "mcv": "mmcv", "infantry": "mage", "armor": "golem"},
+}
+
+
+def faction_loadout(faction):
+    return FACTION_LOADOUT.get(faction, FACTION_LOADOUT["tech"])
+
+
+# AI 按 role 取的建造 kind（role→具体建筑）。魔法换皮复用同一套决策：
+# 圣殿=兵营 / 法阵=工厂 / 奥术塔=防御塔；魔法没有维修厂，也不造导弹塔。
+FACTION_BUILDINGS = {
+    "tech": {"power": "power", "barracks": "barracks", "refinery": "refinery",
+             "factory": "factory", "repair": "repair", "defense": "turret"},
+    "magic": {"power": "mpower", "barracks": "mtemple", "refinery": "mrefinery",
+              "factory": "mcircle", "defense": "mtower"},
+}
+
+
+def faction_buildings(faction):
+    return FACTION_BUILDINGS.get(faction, FACTION_BUILDINGS["tech"])
+
 
 def now():
     return time.time()
@@ -625,6 +791,7 @@ def public_player(room, player, viewer_id=None):
         "name": player["name"],
         "color": player["color"],
         "team": player.get("team", 0),
+        "faction": player.get("faction", "tech"),
         "spawn": player.get("spawn", -1),
         "ready": player["ready"],
         "isBot": player["isBot"],
@@ -651,9 +818,11 @@ def public_unit(unit):
         "size": unit["size"], "dir": round(unit["dir"], 3),
         "kills": unit.get("kills", 0),
     }
-    if unit["kind"] == "harvester":
+    if unit_role(unit["kind"]) == "harvester":
         result["cargo"] = round(unit["cargo"], 1)
         result["capacity"] = unit["capacity"]
+    if unit.get("slowMult", 1.0) < 1.0:
+        result["slow"] = True
     if unit.get("repairing"):
         result["repairing"] = True
     return result
@@ -672,7 +841,7 @@ def public_structure(structure):
             "total": item["total"],
         } for item in structure["queue"]],
     }
-    if structure["kind"] == "turret":
+    if structure_role(structure["kind"]) == "defense":
         result["dir"] = round(structure["dir"], 3)
     if structure.get("packable"):
         result["packable"] = True
@@ -1029,6 +1198,7 @@ def create_human(name, color, team=0, spawn=-1):
         "name": clean_text(name, 16, "指挥官"),
         "color": color,
         "team": team,
+        "faction": "tech",
         "spawn": spawn,
         "ready": False,
         "isBot": False,
@@ -1051,7 +1221,8 @@ def create_bot(room):
     color = next((item for item in COLORS if item not in used_colors), COLORS[len(room["players"]) % len(COLORS)])
     bot = {
         "id": new_id("b"), "token": None, "name": name, "color": color,
-        "team": 0, "spawn": -1, "ready": True, "isBot": True, "connections": 1, "lastSeen": now(),
+        # 新 AI 随机站队，加进来就是科技对魔法；房主仍可在列表里改它的阵营
+        "team": 0, "faction": random.choice(("tech", "magic")), "spawn": -1, "ready": True, "isBot": True, "connections": 1, "lastSeen": now(),
         "cash": 0, "eliminated": False, "kills": 0, "unitsLost": 0,
         "harvested": 0, "buildQueue": [], "strikeCharges": 0,
     }
@@ -1100,6 +1271,7 @@ def make_unit(kind, owner, x, y):
         "harvestTarget": None, "returnTarget": None,
         "repairTargetId": None, "repairAngle": 0.0, "repairRing": 0,
         "repairing": False, "manualUntil": 0.0, "order": "guard",
+        "slowMult": 1.0, "slowTimer": 0.0,
         "_path": None, "_pathDest": None, "kills": 0,
     }
 
@@ -1492,17 +1664,20 @@ def start_game(room):
         x, y = spawn_points[sp]
         toward_x = 1 if x < center_x else -1
         toward_y = 1 if y < center_y else -1
-        start_hq = make_structure("hq", player["id"], x, y, True)
+        # 按阵营发出生装备：科技(指挥中心/电站/精炼厂/采矿车 + 突击兵/坦克)，
+        # 魔法(主堡/法力塔/精炼所/浮游晶簇 + 法师/傀儡)。kind 全部取自阵营装备表。
+        loadout = faction_loadout(player.get("faction", "tech"))
+        start_hq = make_structure(loadout["hq"], player["id"], x, y, True)
         start_hq["packable"] = True
         game["structures"].append(start_hq)
-        game["structures"].append(make_structure("power", player["id"], x + toward_x * 125, y, True))
-        refinery = make_structure("refinery", player["id"], x, y + toward_y * 155, True)
+        game["structures"].append(make_structure(loadout["power"], player["id"], x + toward_x * 125, y, True))
+        refinery = make_structure(loadout["refinery"], player["id"], x, y + toward_y * 155, True)
         game["structures"].append(refinery)
-        harvester = make_unit("harvester", player["id"], refinery["x"] + toward_x * 70, refinery["y"])
+        harvester = make_unit(loadout["harvester"], player["id"], refinery["x"] + toward_x * 70, refinery["y"])
         game["units"].append(harvester)
         for n in range(3):
-            game["units"].append(make_unit("rifle", player["id"], x + toward_x * (75 + n * 16), y + toward_y * 70))
-        game["units"].append(make_unit("tank", player["id"], x + toward_x * 92, y + toward_y * 112))
+            game["units"].append(make_unit(loadout["infantry"], player["id"], x + toward_x * (75 + n * 16), y + toward_y * 70))
+        game["units"].append(make_unit(loadout["armor"], player["id"], x + toward_x * 92, y + toward_y * 112))
         # 家矿要跟随出生方向，但不能随着大战场尺寸一起越推越远；否则恢复
         # 9600×6000 后首轮回款会比小地图慢十几秒。短边地图仍用 20%，
         # 大地图把矿区中心限制在距基地约 650 世界单位内。
@@ -1592,7 +1767,7 @@ def position_clear(game, x, y, size):
 def place_structure(room, player_id, kind, x, y, free=False):
     game = room["game"]
     player = room["players"][player_id]
-    if kind not in STRUCTURE_TYPES or kind == "hq":
+    if kind not in STRUCTURE_TYPES or structure_role(kind) == "hq":
         raise ValueError("未知建筑")
     definition = STRUCTURE_TYPES[kind]
     map_w = game["map"]["width"]
@@ -1621,8 +1796,11 @@ def queue_structure(room, player_id, kind):
     game = room["game"]
     player = room["players"][player_id]
     definition = STRUCTURE_TYPES.get(kind)
-    if not definition or kind == "hq":
+    if not definition or structure_role(kind) == "hq":
         raise ValueError("未知建筑")
+    # 阵营校验：科技/魔法各有独立建筑树，跨阵营不能建造
+    if definition.get("faction", "tech") != player.get("faction", "tech"):
+        raise ValueError("你的阵营无法建造该建筑")
     for requirement in definition["requires"]:
         if not has_active_structure(game, player_id, requirement):
             raise ValueError("缺少前置建筑")
@@ -1666,6 +1844,9 @@ def queue_unit(room, player_id, kind):
     definition = UNIT_TYPES.get(kind)
     if not definition:
         raise ValueError("未知单位")
+    # 阵营校验：科技/魔法各有独立兵种树，跨阵营不能生产
+    if definition.get("faction", "tech") != player.get("faction", "tech"):
+        raise ValueError("你的阵营无法生产该单位")
     producer_kind = definition["producer"]
     producers = [s for s in game["structures"]
                  if s["owner"] == player_id and s["kind"] == producer_kind
@@ -1763,7 +1944,7 @@ def issue_move(game, player_id, unit_ids, x, y, attack_move=False):
         unit["_pathUnavailable"] = False
         unit["_routeRetry"] = 0.0
         unit["_stuck"] = 0.0
-        if unit["kind"] == "harvester":
+        if unit_role(unit["kind"]) == "harvester":
             unit["manualUntil"] = 0.0
 
 
@@ -1828,8 +2009,9 @@ def issue_deploy(game, player_id, unit_ids):
             raise ValueError("此处无法展开：空间不足")
         if game_terrain(game).blocked(unit["x"], unit["y"], 30):
             raise ValueError("不能在水中或山地展开")
-        # Transform MCV into HQ at current location
-        new_hq = make_structure("hq", player_id, unit["x"], unit["y"], True)
+        # 基地车展开为该阵营的主堡（科技→指挥中心 / 魔法→魔法主堡）
+        hq_kind = UNIT_TYPES[unit["kind"]].get("deploysInto", "hq")
+        new_hq = make_structure(hq_kind, player_id, unit["x"], unit["y"], True)
         new_hq["packable"] = True
         game["structures"].append(new_hq)
         unit["hp"] = 0
@@ -1844,12 +2026,13 @@ def issue_deploy(game, player_id, unit_ids):
 
 def issue_undeploy(game, player_id, structure_id):
     hq = find_entity(game, structure_id)
-    if not hq or hq.get("kind") != "hq" or hq["owner"] != player_id:
+    if not hq or structure_role(hq.get("kind")) != "hq" or hq["owner"] != player_id:
         raise ValueError("请选择己方指挥中心")
     if not hq.get("packable"):
         raise ValueError("该指挥中心无法折叠")
     # 只检查地形和敌方建筑，自己的建筑不挡路
-    mcv_size = UNIT_TYPES["mcv"]["size"]
+    pack_kind = STRUCTURE_TYPES[hq["kind"]].get("packsInto", "mcv")
+    mcv_size = UNIT_TYPES[pack_kind]["size"]
     x, y = hq["x"], hq["y"]
     terrain = game_terrain(game)
     if terrain.point_in_water(x, y):
@@ -1865,7 +2048,7 @@ def issue_undeploy(game, player_id, structure_id):
             continue
         if math.hypot(structure["x"] - x, structure["y"] - y) < structure["size"] + mcv_size + 18:
             raise ValueError("敌方建筑距离过近，无法折叠")
-    mcv = make_unit("mcv", player_id, x, y)
+    mcv = make_unit(pack_kind, player_id, x, y)
     mcv["hp"] = min(hq["hp"], mcv["maxHp"])
     game["units"].append(mcv)
     hq["hp"] = 0
@@ -1950,7 +2133,7 @@ def handle_game_command(room, player, payload):
     elif command == "sell":
         structure_id = payload.get("structureId")
         structure = next((s for s in game["structures"] if s["id"] == structure_id and s["owner"] == player["id"]), None)
-        if not structure or structure["kind"] == "hq":
+        if not structure or structure_role(structure["kind"]) == "hq":
             raise ValueError("该建筑不可出售")
         refund = int(STRUCTURE_TYPES[structure["kind"]]["cost"] * 0.5 * max(0.25, structure["hp"] / structure["maxHp"]))
         player["cash"] += refund
@@ -2462,6 +2645,8 @@ def game_terrain(game):
 
 
 def move_toward(terrain, entity, target_x, target_y, speed, dt, stop_distance=0.0):
+    # 冰霜减速：被女巫命中的单位短期移速下降（slowMult<1），所有移动统一走这里
+    speed *= entity.get("slowMult", 1.0)
     # pathDest 存的是调用方传入的原始目标，用来判断「是不是还在去同一个地方」。
     path = entity.get("_path")
     path_dest = entity.get("_pathDest")
@@ -2657,6 +2842,15 @@ def nearest_enemy_infantry(game, owner, x, y, max_distance, spatial_index=None):
     return best
 
 
+def apply_slow(projectile, target):
+    """冰霜命中：给敌方单位挂上短期减速。只影响单位(移动)，建筑无所谓。"""
+    slow = projectile.get("slow")
+    if not slow or not target["id"].startswith("u") or target["hp"] <= 0:
+        return
+    target["slowMult"] = slow["mult"]
+    target["slowTimer"] = slow["duration"]
+
+
 def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
     span = math.hypot(target["x"] - attacker["x"], target["y"] - attacker["y"])
     game["projectiles"].append({
@@ -2668,6 +2862,7 @@ def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
         "damage": definition["damage"] * damage_mult, "speed": definition["projectileSpeed"],
         "splash": definition.get("splash", 0.0), "kind": definition["projectile"],
         "damageType": definition.get("damageType", "bullet"),
+        "slow": definition.get("slow"),
         "ttl": 3.5,
     })
     game["effects"].append({
@@ -2737,6 +2932,7 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
                 apply_damage(room, target, projectile["damage"], projectile["owner"],
                              projectile.get("damageType"), game,
                              projectile.get("sourceId"))
+                apply_slow(projectile, target)
             splash = projectile.get("splash", 0)
             if splash > 0:
                 candidates = (spatial_candidates(
@@ -2753,6 +2949,7 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
                         apply_damage(room, entity, projectile["damage"] * 0.45 * (1.0 - radius / splash), projectile["owner"],
                                      projectile.get("damageType"), game,
                                      projectile.get("sourceId"))
+                        apply_slow(projectile, entity)
             game["effects"].append({
                 "id": new_id("e"), "type": "impact", "x": impact_x, "y": impact_y,
                 "ttl": 0.65 if projectile["kind"] != "bullet" else 0.22,
@@ -2826,7 +3023,7 @@ def tick_repair_unit(room, unit, dt, entity_index, power_cache, terrain):
 def tick_harvester(room, unit, dt, entity_index=None, terrain=None):
     game = room["game"]
     terrain = terrain or game_terrain(game)
-    definition = UNIT_TYPES["harvester"]
+    definition = UNIT_TYPES[unit["kind"]]  # 采矿车/浮游晶簇各用各的属性
     if unit.get("order") in ("move", "attackMove"):
         if unit["destX"] is not None:
             if move_toward(terrain, unit, unit["destX"], unit["destY"], definition["speed"], dt):
@@ -2839,8 +3036,8 @@ def tick_harvester(room, unit, dt, entity_index=None, terrain=None):
 
     if unit["cargo"] >= unit["capacity"] - 0.1 or unit.get("returnTarget"):
         refinery = find_entity(game, unit.get("returnTarget"), entity_index)
-        if not refinery or refinery["owner"] != unit["owner"] or refinery["kind"] != "refinery" or not refinery["active"]:
-            candidates = [s for s in game["structures"] if s["owner"] == unit["owner"] and s["kind"] == "refinery" and s["active"] and s["hp"] > 0]
+        if not refinery or refinery["owner"] != unit["owner"] or structure_role(refinery["kind"]) != "refinery" or not refinery["active"]:
+            candidates = [s for s in game["structures"] if s["owner"] == unit["owner"] and structure_role(s["kind"]) == "refinery" and s["active"] and s["hp"] > 0]
             refinery = min(candidates, key=lambda s: distance(s, unit)) if candidates else None
             unit["returnTarget"] = refinery["id"] if refinery else None
         if refinery:
@@ -3012,10 +3209,15 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
         unit["repairing"] = False
         unit["cooldown"] = max(0.0, unit["cooldown"] - dt * (1.0 / cd_mult))
         unit["scan"] = max(0.0, unit["scan"] - dt)
+        # 冰霜减速衰减：计时归零则恢复满速
+        if unit.get("slowTimer", 0.0) > 0.0:
+            unit["slowTimer"] = max(0.0, unit["slowTimer"] - dt)
+            if unit["slowTimer"] <= 0.0:
+                unit["slowMult"] = 1.0
         if unit.get("order") == "repair":
             tick_repair_unit(room, unit, dt, entity_index, repair_power_cache, terrain)
             continue
-        if unit["kind"] == "harvester":
+        if unit_role(unit["kind"]) == "harvester":
             tick_harvester(room, unit, dt, entity_index, terrain)
             continue
 
@@ -3132,13 +3334,15 @@ def tick_structures(room, dt, combat_spatial=None):
                 structure["active"] = True
                 structure["hp"] = max(1.0, structure["maxHp"] - structure.get("constructionDamage", 0.0))
                 game["effects"].append({"id": new_id("e"), "type": "complete", "x": structure["x"], "y": structure["y"], "ttl": 1.2})
-                # New refinery comes with a free harvester
-                if structure["kind"] == "refinery":
+                # 新精炼厂按所属玩家阵营赠送对应采集单位（采矿车/浮游晶簇）
+                if structure_role(structure["kind"]) == "refinery":
                     spawn_angle = random.random() * math.pi * 2
                     spawn_x = structure["x"] + math.cos(spawn_angle) * 70
                     spawn_y = structure["y"] + math.sin(spawn_angle) * 70
                     if not terrain.blocked(spawn_x, spawn_y):
-                        gift = make_unit("harvester", structure["owner"], spawn_x, spawn_y)
+                        owner_faction = room["players"][structure["owner"]].get("faction", "tech")
+                        gift_kind = faction_loadout(owner_faction)["harvester"]
+                        gift = make_unit(gift_kind, structure["owner"], spawn_x, spawn_y)
                         game["units"].append(gift)
             continue
 
@@ -3160,7 +3364,7 @@ def tick_structures(room, dt, combat_spatial=None):
                     unit["destX"], unit["destY"] = structure["rally"]
                     unit["order"] = "move"
 
-        if structure["kind"] in ("turret", "missile"):
+        if structure_role(structure["kind"]) == "defense":
             definition = STRUCTURE_TYPES[structure["kind"]]
             structure["cooldown"] = max(0.0, structure["cooldown"] - dt)
             target = nearest_enemy(
@@ -3198,41 +3402,52 @@ def bot_place_prepared(room, bot, kind):
 def tick_bots(room):
     game = room["game"]
     for bot in [p for p in room["players"].values() if p["isBot"] and not p["eliminated"]]:
+        faction = bot.get("faction", "tech")
+        magic = faction == "magic"
+        fb = faction_buildings(faction)
         own_structures = [s for s in game["structures"] if s["owner"] == bot["id"] and s["hp"] > 0]
-        kinds = set(s["kind"] for s in own_structures if s["active"])
+        # 按 role 判定已建成的建筑：圣殿=兵营、法阵=工厂，魔法换皮整套复用同一套决策
+        roles = set(structure_role(s["kind"]) for s in own_structures if s["active"])
         supply, usage = player_power(room, bot["id"])
         build_queue = bot.get("buildQueue", [])
         if build_queue and build_queue[0].get("ready"):
             bot_place_prepared(room, bot, build_queue[0]["kind"])
         elif not build_queue:
             try:
-                if supply < usage + 35 and bot["cash"] >= STRUCTURE_TYPES["power"]["cost"]:
-                    queue_structure(room, bot["id"], "power")
-                elif "barracks" not in kinds and bot["cash"] >= STRUCTURE_TYPES["barracks"]["cost"]:
-                    queue_structure(room, bot["id"], "barracks")
-                elif "refinery" not in kinds and bot["cash"] >= STRUCTURE_TYPES["refinery"]["cost"]:
-                    queue_structure(room, bot["id"], "refinery")
-                elif "factory" not in kinds and bot["cash"] >= STRUCTURE_TYPES["factory"]["cost"]:
-                    queue_structure(room, bot["id"], "factory")
-                elif ("factory" in kinds and "repair" not in kinds
+                if supply < usage + 35 and bot["cash"] >= STRUCTURE_TYPES[fb["power"]]["cost"]:
+                    queue_structure(room, bot["id"], fb["power"])
+                elif "barracks" not in roles and bot["cash"] >= STRUCTURE_TYPES[fb["barracks"]]["cost"]:
+                    queue_structure(room, bot["id"], fb["barracks"])
+                elif "refinery" not in roles and bot["cash"] >= STRUCTURE_TYPES[fb["refinery"]]["cost"]:
+                    queue_structure(room, bot["id"], fb["refinery"])
+                elif "factory" not in roles and bot["cash"] >= STRUCTURE_TYPES[fb["factory"]]["cost"]:
+                    queue_structure(room, bot["id"], fb["factory"])
+                elif (not magic and "factory" in roles and "repair" not in roles
                       and random.random() < 0.30
-                      and bot["cash"] >= STRUCTURE_TYPES["repair"]["cost"]):
-                    queue_structure(room, bot["id"], "repair")
-                elif random.random() < 0.14 and bot["cash"] >= STRUCTURE_TYPES["turret"]["cost"]:
-                    queue_structure(room, bot["id"], "turret")
+                      and bot["cash"] >= STRUCTURE_TYPES[fb["repair"]]["cost"]):
+                    queue_structure(room, bot["id"], fb["repair"])
+                elif random.random() < 0.14 and bot["cash"] >= STRUCTURE_TYPES[fb["defense"]]["cost"]:
+                    queue_structure(room, bot["id"], fb["defense"])
             except ValueError:
                 pass
 
         try:
             roll = random.random()
-            if "factory" in kinds and roll < 0.58:
-                if "repair" in kinds and roll < 0.16:
+            if "factory" in roles and roll < 0.58:
+                if magic:
+                    # 召唤法阵：傀儡抗线为主，掺影豹，偶尔召唤巨龙（魔法版天启）
+                    queue_unit(room, bot["id"],
+                               "dragon" if roll < 0.08 else ("golem" if roll < 0.5 else "panther"))
+                elif "repair" in roles and roll < 0.16:
                     # 维修厂撑起二级科技后，掺高级装甲：天启抗线 / 光棱远程点杀
                     queue_unit(room, bot["id"], "overlord" if roll < 0.08 else "prism")
                 else:
                     queue_unit(room, bot["id"], "tank" if roll < 0.4 else "scout")
-            elif "barracks" in kinds:
-                if "factory" in kinds and roll < 0.72:
+            elif "barracks" in roles:
+                if magic:
+                    # 奥术圣殿：奥术法师为主，掺冰霜女巫群体减速
+                    queue_unit(room, bot["id"], "mage" if roll < 0.78 else "frost")
+                elif "factory" in roles and roll < 0.72:
                     # 工厂开了二级科技，兵营开始出磁暴步兵专电载具
                     queue_unit(room, bot["id"], "tesla")
                 else:
@@ -3244,7 +3459,7 @@ def tick_bots(room):
 
         repair_bays = [
             structure for structure in own_structures
-            if structure["kind"] == "repair" and structure["active"]
+            if structure_role(structure["kind"]) == "repair" and structure["active"]
         ]
         damaged = [
             unit for unit in game["units"]
@@ -3262,11 +3477,11 @@ def tick_bots(room):
 
         combat = [
             unit for unit in game["units"]
-            if unit["owner"] == bot["id"] and unit["kind"] != "harvester"
+            if unit["owner"] == bot["id"] and unit_role(unit["kind"]) != "harvester"
             and unit["hp"] > 0 and unit.get("order") != "repair"
             and unit["hp"] / unit["maxHp"] >= 0.45
         ]
-        enemies = [s for s in game["structures"] if not is_friendly(game, s["owner"], bot["id"]) and s["kind"] == "hq" and s["hp"] > 0]
+        enemies = [s for s in game["structures"] if not is_friendly(game, s["owner"], bot["id"]) and structure_role(s["kind"]) == "hq" and s["hp"] > 0]
         if len(combat) >= 5 and enemies and random.random() < 0.48:
             target = min(enemies, key=lambda s: math.hypot(s["x"] - combat[0]["x"], s["y"] - combat[0]["y"]))
             issue_attack(game, bot["id"], set(u["id"] for u in combat), target["id"])
@@ -3775,6 +3990,22 @@ class GameHandler(BaseHTTPRequestHandler):
                 if not target:
                     raise ValueError("玩家不存在")
                 target["team"] = int(payload.get("team", 0))
+            elif action == "setFaction":
+                if room["status"] != "lobby":
+                    raise ValueError("战斗已经开始")
+                faction = str(payload.get("faction", "tech"))
+                if faction not in ("tech", "magic"):
+                    raise ValueError("未知阵营")
+                # 玩家改自己的阵营；AI 的阵营由房主指定
+                target_id = payload.get("playerId") or player["id"]
+                target = room["players"].get(target_id)
+                if not target:
+                    raise ValueError("玩家不存在")
+                is_self = target["id"] == player["id"]
+                host_sets_bot = target["isBot"] and room["hostId"] == player["id"]
+                if not (is_self or host_sets_bot):
+                    raise ValueError("只能设置自己的阵营")
+                target["faction"] = faction
             elif action == "setSpawn":
                 if room["hostId"] != player["id"] or room["status"] != "lobby":
                     raise ValueError("只有房主可以设置出生地")

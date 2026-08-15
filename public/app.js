@@ -16,7 +16,13 @@ import { createRenderer } from './render3d.js';
     factory: { name: '重装工厂', cost: 1600, build: 18, icon: '▰', size: 58, requires: ['refinery', 'power'], desc: '生产装甲单位' },
     turret: { name: '哨戒炮塔', cost: 950, build: 12, icon: '⌖', size: 30, requires: ['power'], desc: '自动攻击附近敌军' },
     missile: { name: '导弹炮塔', cost: 1500, build: 16, icon: '⊿', size: 34, requires: ['barracks', 'power'], desc: '远程高伤大溅射，冷却慢' },
-    repair: { name: '战地维修厂', cost: 1250, build: 15, icon: '✚', size: 50, requires: ['factory', 'power'], desc: '维修受损装甲载具' }
+    repair: { name: '战地维修厂', cost: 1250, build: 15, icon: '✚', size: 50, requires: ['factory', 'power'], desc: '维修受损装甲载具' },
+    // ---- 秘法会（魔法阵营，faction=magic）独立经济与军事建筑 ----
+    mpower: { name: '法力塔', cost: 600, build: 8, icon: '✦', size: 40, requires: ['mhq'], faction: 'magic', desc: '提供 120 电力' },
+    mrefinery: { name: '水晶精炼所', cost: 1400, build: 14, icon: '◈', size: 52, requires: ['mhq'], faction: 'magic', desc: '接收浮游晶簇的水晶' },
+    mtemple: { name: '奥术圣殿', cost: 700, build: 10, icon: '✠', size: 42, requires: ['mpower'], faction: 'magic', desc: '训练奥术步兵' },
+    mcircle: { name: '召唤法阵', cost: 1600, build: 18, icon: '⬡', size: 58, requires: ['mrefinery', 'mpower'], faction: 'magic', desc: '召唤构装体与魔兽' },
+    mtower: { name: '奥术塔', cost: 950, build: 12, icon: '✵', size: 30, requires: ['mpower'], faction: 'magic', desc: '自动攻击附近敌军（魔法）' }
   };
 
   var BUILD_ANCHOR_RANGES = { hq: 360, power: 220, refinery: 250, barracks: 220, factory: 270, repair: 240 };
@@ -36,7 +42,15 @@ import { createRenderer } from './render3d.js';
     tesla: { name: '磁暴步兵', cost: 650, icon: '⚡', producer: 'barracks', requires: ['factory'], desc: '动力甲反甲步兵，电弧专电载具 · 需工厂', damageType: 'tesla' },
     prism: { name: '光棱坦克', cost: 1450, icon: '✦', producer: 'factory', requires: ['repair'], desc: '远程聚焦光束，点杀轻型与建筑 · 需维修厂', damageType: 'laser' },
     harvester: { name: '采矿车', cost: 920, icon: '▣', producer: 'factory', desc: '自动采集矿石' },
-    mcv: { name: '基地车', cost: 2500, icon: '⬢', producer: 'factory', desc: '可展开为新指挥中心', canDeploy: true }
+    mcv: { name: '基地车', cost: 2500, icon: '⬢', producer: 'factory', desc: '可展开为新指挥中心', canDeploy: true },
+    // ---- 秘法会（魔法阵营，faction=magic）----
+    mage: { name: '奥术法师', cost: 500, icon: '✦', producer: 'mtemple', faction: 'magic', desc: '远程奥术弹，熔重甲的反坦克手', damageType: 'magic' },
+    frost: { name: '冰霜女巫', cost: 550, icon: '❄', producer: 'mtemple', faction: 'magic', desc: '命中减速敌军，控制拉扯核心', damageType: 'magic' },
+    golem: { name: '岩石傀儡', cost: 850, icon: '⛰', producer: 'mcircle', faction: 'magic', desc: '构装前排，高血投石溅射', damageType: 'magic' },
+    panther: { name: '影豹', cost: 420, icon: '♞', producer: 'mcircle', faction: 'magic', desc: '全场最快魔兽，近战侧翼包抄', damageType: 'magic' },
+    dragon: { name: '秘法巨龙', cost: 1600, icon: '✹', producer: 'mcircle', faction: 'magic', desc: '重型远程火球，大溅射压轴', damageType: 'magic' },
+    mharvester: { name: '浮游晶簇', cost: 920, icon: '◈', producer: 'mcircle', faction: 'magic', desc: '自动采集水晶' },
+    mmcv: { name: '迁徙法阵', cost: 2500, icon: '⬡', producer: 'mcircle', faction: 'magic', desc: '可展开为魔法主堡', canDeploy: true }
   };
 
   var STRUCTURE_NAMES = {
@@ -75,6 +89,18 @@ import { createRenderer } from './render3d.js';
   var P_LCD = '#ffd23e';
   var P_RED = '#c8241e';
   var P_GOLD = '#e8c56d';
+  // 秘法会配色：奥术紫 / 冰霜蓝 / 龙火橙 / 水晶 / 岩体 / 法袍
+  var P_ARCANE = '#b46bff';
+  var P_FROST = '#9fe8ff';
+  var P_FIRE = '#ff8a3a';
+  var P_CRYSTAL = '#9a7fd0';
+  var P_STONE = '#5b5566';
+  var P_ROBE = '#4a3a5e';
+  // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
+  var MAGIC_KINDS = {
+    mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mtower: 1,
+    mage: 1, frost: 1, golem: 1, panther: 1, dragon: 1, mharvester: 1, mmcv: 1
+  };
 
   function pRect(c, x, y, w, h, fill) {
     c.fillStyle = fill;
@@ -540,16 +566,201 @@ import { createRenderer } from './render3d.js';
       pLine(c, 63, 20, 90, 16, 1.5, P_GOLD);
       pStar(c, 34, 33, 2.6, P_RED);
       pLine(c, 27, 38.6, 65, 38.6, 1.4, 'rgba(243,233,212,.5)');
+    },
+    /* ---- 秘法会（魔法阵营）建筑 ---- */
+    mhq: function (c) {
+      pShadow(c, 48, 59, 28);
+      // 阶梯圣城 + 中央法塔
+      pPoly(c, [[22, 58], [74, 58], [66, 42], [30, 42]], P_STONE);
+      pPoly(c, [[74, 58], [58, 58], [55, 42], [66, 42]], 'rgba(10,10,6,.24)');
+      pPoly(c, [[34, 42], [62, 42], [57, 22], [41, 22]], '#4a4257');
+      // 塔顶悬浮巨水晶 + 环绕符环
+      pPoly(c, [[48, 6], [54, 14], [48, 22], [42, 14]], P_ARCANE);
+      c.strokeStyle = P_FROST; c.lineWidth = 1.5;
+      c.beginPath(); c.ellipse(48, 14, 11, 4, 0, 0, Math.PI * 2); c.stroke();
+      // 奥术窗 + 顶边高光
+      pRect(c, 44, 30, 3, 6, P_ARCANE);
+      pRect(c, 51, 30, 3, 6, P_ARCANE);
+      pLine(c, 31, 41.5, 65, 41.5, 1.5, 'rgba(180,107,255,.5)');
+    },
+    mpower: function (c) {
+      pShadow(c, 48, 59, 24);
+      // 两根相对的水晶塔
+      pPoly(c, [[34, 56], [42, 56], [40, 20], [36, 20]], P_CRYSTAL);
+      pPoly(c, [[54, 56], [62, 56], [60, 20], [56, 20]], P_CRYSTAL);
+      // 塔身符环
+      c.strokeStyle = P_ARCANE; c.lineWidth = 2;
+      c.beginPath(); c.ellipse(38, 30, 6, 2.5, 0, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.ellipse(58, 30, 6, 2.5, 0, 0, Math.PI * 2); c.stroke();
+      // 共同托起的悬浮法力球
+      pCirc(c, 48, 13, 5, P_ARCANE);
+      pCirc(c, 48, 13, 2, '#f2e6ff');
+    },
+    mrefinery: function (c) {
+      pShadow(c, 44, 58, 28);
+      pRect(c, 24, 40, 36, 18, P_STONE);
+      pRect(c, 56, 40, 8, 18, 'rgba(10,10,6,.22)');
+      // 中央待炼巨晶 + 环绕符筒
+      pPoly(c, [[38, 40], [44, 16], [50, 40]], P_CRYSTAL);
+      pPoly(c, [[44, 16], [47.5, 24], [44, 40]], 'rgba(243,233,212,.18)');
+      c.strokeStyle = P_ARCANE; c.lineWidth = 2;
+      c.beginPath(); c.ellipse(44, 32, 10, 3.5, 0, 0, Math.PI * 2); c.stroke();
+      // 卸晶槽 + 寒蓝晶堆（对应矿厂的金矿堆）
+      pRect(c, 62, 30, 8, 26, P_DARK);
+      pCirc(c, 22, 55, 3.5, P_FROST);
+      pCirc(c, 29, 57, 4, P_FROST);
+      pCirc(c, 25, 52, 1.2, '#ffffff');
+      pLine(c, 18, 40.5, 58, 40.5, 1.5, 'rgba(159,232,255,.5)');
+    },
+    mtemple: function (c) {
+      pShadow(c, 48, 59, 26);
+      // 三角亭顶 + 双柱 + 亭心悬浮符文石
+      pPoly(c, [[28, 34], [68, 34], [48, 20]], P_STONE);
+      pRect(c, 32, 34, 5, 20, '#4a4257');
+      pRect(c, 59, 34, 5, 20, '#4a4257');
+      pPoly(c, [[48, 30], [53, 38], [48, 46], [43, 38]], P_ARCANE);
+      pCirc(c, 48, 38, 1.6, '#f2e6ff');
+      pRect(c, 26, 54, 44, 5, P_STONE);
+      pLine(c, 30, 33.5, 66, 33.5, 1.5, 'rgba(180,107,255,.5)');
+    },
+    mcircle: function (c) {
+      pShadow(c, 48, 60, 30);
+      pRect(c, 20, 52, 56, 8, P_STONE);
+      // 地面召唤阵纹（透视双环）
+      c.strokeStyle = P_ARCANE; c.lineWidth = 2;
+      c.beginPath(); c.ellipse(48, 50, 24, 6, 0, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.ellipse(48, 50, 15, 3.6, 0, 0, Math.PI * 2); c.stroke();
+      // 竖立符文环 + 环心奥术漩涡
+      c.strokeStyle = P_CRYSTAL; c.lineWidth = 3.5;
+      c.beginPath(); c.ellipse(48, 29, 9, 16, 0, 0, Math.PI * 2); c.stroke();
+      pCirc(c, 48, 29, 6, P_ARCANE);
+      pCirc(c, 48, 29, 2.4, '#f2e6ff');
+    },
+    mtower: function (c) {
+      pShadow(c, 48, 59, 18);
+      // 石座 + 收束水晶尖塔
+      pPoly(c, [[36, 58], [60, 58], [55, 48], [41, 48]], P_STONE);
+      pPoly(c, [[43, 48], [53, 48], [50, 18], [46, 18]], P_CRYSTAL);
+      // 塔顶悬浮晶核 + 符环
+      pPoly(c, [[48, 8], [53, 15], [48, 22], [43, 15]], P_ARCANE);
+      pCirc(c, 48, 15, 1.6, '#f2e6ff');
+      c.strokeStyle = P_FROST; c.lineWidth = 1.4;
+      c.beginPath(); c.ellipse(48, 15, 9, 3.5, 0, 0, Math.PI * 2); c.stroke();
+    },
+    /* ---- 秘法会（魔法阵营）单位 ---- */
+    mage: function (c) {
+      pShadow(c, 48, 60, 20);
+      // 长袍 + 尖顶兜帽 + 阴影里的脸
+      pPoly(c, [[34, 60], [62, 60], [55, 30], [41, 30]], P_ROBE);
+      pPoly(c, [[62, 60], [50, 60], [50, 30], [55, 30]], 'rgba(10,10,6,.28)');
+      pPoly(c, [[40, 32], [56, 32], [48, 16]], P_ROBE);
+      pCirc(c, 48, 30, 5.5, P_OUT);
+      pCirc(c, 46, 29.5, 1, P_ARCANE);
+      pCirc(c, 50, 29.5, 1, P_ARCANE);
+      // 前举法杖 + 杖顶奥术法球
+      pLine(c, 60, 56, 70, 20, 2.6, P_DARK);
+      pCirc(c, 70, 18, 3.4, P_ARCANE);
+      pCirc(c, 70, 18, 1.6, '#f2e6ff');
+    },
+    frost: function (c) {
+      pShadow(c, 48, 60, 20);
+      // 冰蓝长袍 + 苍白面容
+      pPoly(c, [[34, 60], [62, 60], [55, 30], [41, 30]], '#46586f');
+      pPoly(c, [[62, 60], [50, 60], [50, 30], [55, 30]], 'rgba(10,10,6,.28)');
+      pCirc(c, 48, 30, 6, '#e9f3fb');
+      // 冰晶头冠：三枚冰棱
+      pPoly(c, [[42, 27], [44.5, 16], [47, 26]], P_FROST);
+      pPoly(c, [[46, 26], [48, 13], [50, 26]], '#d6efff');
+      pPoly(c, [[49, 26], [51.5, 16], [54, 27]], P_FROST);
+      // 冰霜法杖 + 杖顶冰晶
+      pLine(c, 60, 56, 70, 20, 2.6, P_DARK);
+      pPoly(c, [[70, 12], [73, 18], [70, 24], [67, 18]], P_FROST);
+      pCirc(c, 70, 18, 1.4, '#ffffff');
+    },
+    golem: function (c) {
+      pShadow(c, 48, 61, 30);
+      // 厚重岩躯 + 巨石双臂 + 水晶拳
+      pPoly(c, [[30, 60], [66, 60], [60, 28], [36, 28]], P_STONE);
+      pPoly(c, [[66, 60], [50, 60], [50, 28], [60, 28]], 'rgba(10,10,6,.28)');
+      pCirc(c, 46, 24, 6.5, P_STONE);
+      pRect(c, 24, 34, 8, 20, '#4a4453');
+      pRect(c, 64, 34, 8, 20, '#4a4453');
+      pRect(c, 24, 52, 8, 7, P_CRYSTAL);
+      pRect(c, 64, 52, 8, 7, P_CRYSTAL);
+      // 胸口奥术核心 + 双眼
+      pCirc(c, 48, 42, 4.5, P_ARCANE);
+      pCirc(c, 48, 42, 2, '#f2e6ff');
+      pCirc(c, 44, 23, 1.2, P_ARCANE);
+      pCirc(c, 48, 23, 1.2, P_ARCANE);
+    },
+    panther: function (c) {
+      pShadow(c, 48, 60, 28);
+      // 流线四足 + 上扬长尾 + 脊背魔纹
+      pRect(c, 52, 46, 2.6, 13, '#241a33');
+      pRect(c, 58, 46, 2.6, 13, '#241a33');
+      pRect(c, 30, 46, 2.6, 13, '#241a33');
+      pRect(c, 36, 46, 2.6, 13, '#241a33');
+      pPoly(c, [[26, 50], [62, 50], [66, 41], [58, 34], [36, 34], [26, 42]], '#33254a');
+      pLine(c, 27, 42, 16, 26, 3, '#241a33');
+      pPoly(c, [[60, 42], [72, 42], [74, 32], [66, 27], [60, 32]], '#33254a');
+      pPoly(c, [[70, 39], [80, 36], [80, 33], [71, 32]], '#241a33');
+      pPoly(c, [[62, 29], [65, 19], [68, 28]], '#241a33');
+      pLine(c, 34, 35.5, 58, 35.5, 1.5, P_ARCANE);
+      pCirc(c, 67, 33, 1.5, P_ARCANE);
+    },
+    dragon: function (c) {
+      pShadow(c, 50, 61, 30);
+      // 长尾 + 躯干 + 腿
+      pLine(c, 28, 46, 10, 52, 3.5, '#31402a');
+      pPoly(c, [[24, 52], [62, 52], [58, 38], [30, 38]], '#3a4a2c');
+      pPoly(c, [[62, 52], [48, 52], [48, 38], [58, 38]], 'rgba(10,10,6,.25)');
+      pRect(c, 34, 50, 3.4, 11, '#31402a');
+      pRect(c, 52, 50, 3.4, 11, '#31402a');
+      // 后掠双翼
+      pPoly(c, [[34, 40], [50, 12], [56, 38]], '#46582f');
+      pPoly(c, [[40, 40], [60, 18], [58, 40]], '#2c3823');
+      // 长颈 + 头 + 水晶角
+      pLine(c, 58, 40, 72, 24, 5, '#3a4a2c');
+      pPoly(c, [[68, 26], [82, 22], [84, 27], [70, 30]], '#3a4a2c');
+      pPoly(c, [[70, 24], [73, 14], [75, 23]], P_CRYSTAL);
+      // 口中龙火 + 眼
+      pPoly(c, [[84, 24], [94, 21], [86, 28]], P_FIRE);
+      pCirc(c, 76, 24, 1.5, '#ffd9a0');
+    },
+    mharvester: function (c) {
+      pShadow(c, 48, 60, 26);
+      // 悬浮底座托着一簇参差水晶
+      pPoly(c, [[28, 52], [68, 52], [62, 46], [34, 46]], P_DARK);
+      pPoly(c, [[40, 46], [44, 24], [48, 46]], P_CRYSTAL);
+      pPoly(c, [[48, 46], [53, 30], [57, 46]], '#8a6fc0');
+      pPoly(c, [[33, 46], [37, 33], [41, 46]], '#8a6fc0');
+      // 悬浮光环 + 主晶顶光 + 底座悬浮核心
+      pLine(c, 30, 55.5, 66, 55.5, 1.5, P_FROST);
+      pCirc(c, 44, 22, 1.6, P_ARCANE);
+      pCirc(c, 48, 49, 2, P_ARCANE);
+    },
+    mmcv: function (c) {
+      pShadow(c, 48, 61, 28);
+      // 悬浮平台 + 竖立符文环 + 环心漩涡
+      pPoly(c, [[22, 52], [74, 52], [66, 45], [30, 45]], P_STONE);
+      c.strokeStyle = P_CRYSTAL; c.lineWidth = 4;
+      c.beginPath(); c.ellipse(48, 33, 8, 14, 0, 0, Math.PI * 2); c.stroke();
+      pCirc(c, 48, 33, 5, P_ARCANE);
+      pCirc(c, 48, 33, 2, '#f2e6ff');
+      pRect(c, 32, 40, 4, 8, '#4a4453');
+      pRect(c, 60, 40, 4, 8, '#4a4453');
+      pLine(c, 26, 55.5, 70, 55.5, 1.5, P_FROST);
     }
   };
 
-  // 深红内衬 + 低透明放射线 + 径向明暗：所有肖像共用的底子
-  function portraitBackdrop(c, w, h) {
-    c.fillStyle = '#4a1013';
+  // 深红内衬 + 低透明放射线 + 径向明暗：所有肖像共用的底子。
+  // magic 时换暗紫，与钢铁军团的深红底阵营对撞一眼可辨。
+  function portraitBackdrop(c, w, h, magic) {
+    c.fillStyle = magic ? '#2a1140' : '#4a1013';
     c.fillRect(0, 0, w, h);
     c.save();
     c.translate(w / 2, h * 0.62);
-    c.fillStyle = 'rgba(200,36,30,.16)';
+    c.fillStyle = magic ? 'rgba(150,80,220,.16)' : 'rgba(200,36,30,.16)';
     for (var i = 0; i < 12; i++) {
       var a0 = i * Math.PI / 6;
       c.beginPath();
@@ -560,9 +771,15 @@ import { createRenderer } from './render3d.js';
     }
     c.restore();
     var g = c.createRadialGradient(w / 2, h * 0.45, 8, w / 2, h * 0.5, w * 0.72);
-    g.addColorStop(0, 'rgba(90,18,22,.5)');
-    g.addColorStop(0.55, 'rgba(74,16,19,0)');
-    g.addColorStop(1, 'rgba(10,10,6,.6)');
+    if (magic) {
+      g.addColorStop(0, 'rgba(96,44,150,.5)');
+      g.addColorStop(0.55, 'rgba(42,17,64,0)');
+      g.addColorStop(1, 'rgba(10,10,6,.6)');
+    } else {
+      g.addColorStop(0, 'rgba(90,18,22,.5)');
+      g.addColorStop(0.55, 'rgba(74,16,19,0)');
+      g.addColorStop(1, 'rgba(10,10,6,.6)');
+    }
     c.fillStyle = g;
     c.fillRect(0, 0, w, h);
   }
@@ -595,7 +812,7 @@ import { createRenderer } from './render3d.js';
     cv.width = PORTRAIT_W;
     cv.height = PORTRAIT_H;
     var c = cv.getContext('2d');
-    portraitBackdrop(c, PORTRAIT_W, PORTRAIT_H);
+    portraitBackdrop(c, PORTRAIT_W, PORTRAIT_H, !!MAGIC_KINDS[kind]);
     var painter = PORTRAIT_PAINTERS[kind];
     if (painter) {
       c.save();
@@ -1350,7 +1567,7 @@ import { createRenderer } from './render3d.js';
     // Rebuilding on every SSE tick destroys open dropdowns instantly.
     var rosterKey = roomState.players.map(function (p) {
       return p.id + ':' + p.team + ':' + (p.spawn == null ? -1 : p.spawn) + ':' +
-             p.ready + ':' + p.isBot + ':' + p.name + ':' + p.color;
+             p.ready + ':' + p.isBot + ':' + p.name + ':' + p.color + ':' + (p.faction || 'tech');
     }).join('|') + (me && me.isHost ? '|host' : '') + '|' + roomState.selectedMap;
     if (playerRoster.dataset.key === rosterKey) {
       renderChat(lobbyChatMessages, roomState.chat, 30);
@@ -1425,6 +1642,26 @@ import { createRenderer } from './render3d.js';
         });
         slot.appendChild(spawnSelect);
       }
+
+      // 阵营选择（自助）：本人随时可改；AI 由房主指定；其它玩家只读
+      var factionSelect = document.createElement('select');
+      factionSelect.className = 'faction-select';
+      factionSelect.title = '选择阵营：钢铁军团(科技) / 秘法会(魔法)';
+      [['tech', '⚙ 钢铁军团'], ['magic', '✦ 秘法会']].forEach(function (pair) {
+        var opt = document.createElement('option');
+        opt.value = pair[0];
+        opt.textContent = pair[1];
+        if ((player.faction || 'tech') === pair[0]) { opt.selected = true; }
+        factionSelect.appendChild(opt);
+      });
+      var canEditFaction = (me && player.id === me.id) || (me && me.isHost && player.isBot);
+      factionSelect.disabled = !canEditFaction;
+      if (canEditFaction) {
+        factionSelect.addEventListener('change', function () {
+          sendAction('setFaction', { playerId: player.id, faction: factionSelect.value });
+        });
+      }
+      slot.appendChild(factionSelect);
       playerRoster.appendChild(slot);
     });
 
@@ -1924,18 +2161,28 @@ import { createRenderer } from './render3d.js';
     if (!me) {
       return;
     }
+    var myFaction = (me && me.faction) || 'tech';
+    // 阵营过滤：科技/魔法各看各的建造树；缺 faction 字段的按科技处理
+    var sameFaction = function (entry) { return (entry.faction || 'tech') === myFaction; };
     var definitions;
     if (activeTab === 'buildings') {
-      definitions = BUILDINGS;
+      definitions = {};
+      Object.keys(BUILDINGS).forEach(function (key) {
+        if (sameFaction(BUILDINGS[key])) { definitions[key] = BUILDINGS[key]; }
+      });
     } else if (activeTab === 'infantry') {
+      // 步兵页 = 兵营/奥术圣殿出的单位
       definitions = {};
       Object.keys(UNITS).forEach(function (key) {
-        if (UNITS[key].producer === 'barracks') { definitions[key] = UNITS[key]; }
+        var u = UNITS[key];
+        if ((u.producer === 'barracks' || u.producer === 'mtemple') && sameFaction(u)) { definitions[key] = u; }
       });
     } else {
+      // 载具页 = 工厂/召唤法阵出的单位
       definitions = {};
       Object.keys(UNITS).forEach(function (key) {
-        if (UNITS[key].producer === 'factory') { definitions[key] = UNITS[key]; }
+        var u = UNITS[key];
+        if ((u.producer === 'factory' || u.producer === 'mcircle') && sameFaction(u)) { definitions[key] = u; }
       });
     }
     var gridKey = String(gameKey) + ':' + activeTab;

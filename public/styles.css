@@ -541,6 +541,22 @@ select:focus {
   margin-left: 6px;
 }
 
+/* 阵营选择器：秘法会选项用紫色点缀，与钢铁军团的黄铜区分 */
+.faction-select {
+  padding: 3px 5px;
+  font-size: 11px;
+  margin-left: 6px;
+  border: 1px solid #59532f;
+  background: linear-gradient(180deg, #2b2e1d, #1a1c11);
+  color: #ddd2b2;
+  outline: none;
+}
+
+.faction-select:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
 /* ---------- 7. 主页 ---------- */
 
 .home-screen {

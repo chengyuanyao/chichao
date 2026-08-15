@@ -166,6 +166,14 @@ const MAT = {
   // 军犬被毛：黄褐主色 + 深色背鞍/吻部/爪（天然色，不跟团队色走）
   furTan: [0.46, 0.34, 0.20],
   furDark: [0.23, 0.18, 0.14],
+  // ---- 秘法会（魔法阵营）天然材质与自发光 ----
+  magicStone: [0.40, 0.38, 0.44],   // 傀儡岩体
+  magicHide: [0.30, 0.22, 0.38],    // 影豹暗紫皮
+  scaleHide: [0.30, 0.36, 0.24],    // 巨龙鳞皮
+  crystal: [0.55, 0.40, 0.75],      // 水晶体
+  arcaneGlow: [1.7, 0.95, 2.7],     // 奥术紫（自发光）
+  frostGlow: [1.2, 2.1, 2.7],       // 冰霜蓝（自发光）
+  fireGlow: [2.7, 1.3, 0.5],        // 龙火橙（自发光）
   // 自发光（分量 > 1）
   exhaust: [2.4, 0.95, 0.28],
   furnace: [2.6, 1.35, 0.35],
@@ -318,6 +326,160 @@ const UNIT_BUILDERS = {
         box(1.3, 4.8, 5.4, 7.0, 8.2, 0, GLOW_SOFT),            // 发光项圈
         sph(0.6, 5, 11.6, 9.8, 1.5, GLOW_HOT),                 // 眼
         sph(0.6, 5, 11.6, 9.8, -1.5, GLOW_HOT)
+      ]
+    };
+  },
+
+  /* ==================== 秘法会（魔法阵营）模型 ==================== */
+  mage: function () {
+    // 长袍法师：锥形袍 + 兜帽 + 前举法杖，杖顶一颗奥术紫法球
+    const body = [
+      taperedBox(7.2, 7.2, 4.6, 4.6, 9.5, 0, 6.2, 0, 0.85),   // 长袍
+      box(3.4, 2.0, 6.4, 0, 11.4, 0, 0.55),                   // 肩甲
+      sph(2.3, 8, 0, 13.8, 0, 0.9),                           // 头
+      taperedBox(3.0, 3.0, 1.2, 1.2, 2.8, 0, 15.6, 0, 0.7),   // 兜帽尖
+      cyl(0.4, 0.4, 12, 6, 4.6, 8.0, 2.2, MAT.gunmetal, ROT_Z90) // 法杖
+    ];
+    return {
+      body: body,
+      glow: [
+        sph(1.4, 6, 10.6, 8.0, 2.2, MAT.arcaneGlow),          // 杖顶法球
+        box(2.0, 0.6, 0.6, 0, 12.6, 0, GLOW_SOFT)             // 头巾符带
+      ]
+    };
+  },
+
+  frost: function () {
+    // 冰霜女巫：长袍 + 冰晶头冠 + 冰霜法杖，通体冰蓝
+    const body = [
+      taperedBox(7.0, 7.0, 4.4, 4.4, 9.5, 0, 6.2, 0, 0.8),
+      box(3.2, 1.8, 6.2, 0, 11.4, 0, 0.5),
+      sph(2.2, 8, 0, 13.8, 0, 0.9),
+      box(0.5, 2.0, 0.5, 0, 16.0, 1.2, MAT.crystal),          // 冰晶头冠
+      box(0.5, 2.4, 0.5, 0, 16.3, 0, MAT.crystal),
+      box(0.5, 2.0, 0.5, 0, 16.0, -1.2, MAT.crystal),
+      cyl(0.35, 0.35, 12, 6, 4.6, 8.2, 2.2, MAT.gunmetal, ROT_Z90)
+    ];
+    return {
+      body: body,
+      glow: [
+        sph(1.3, 6, 10.6, 8.2, 2.2, MAT.frostGlow),           // 冰霜法球
+        sph(0.6, 5, 0, 17.8, 0, MAT.frostGlow)                // 冠顶寒光
+      ]
+    };
+  },
+
+  golem: function () {
+    // 岩石傀儡：厚重岩躯 + 巨石双臂 + 水晶拳，胸口一颗奥术核心
+    const body = [
+      taperedBox(11, 9, 9, 7, 11, 0, 10, 0, MAT.magicStone),  // 躯干
+      sph(2.6, 7, 3.4, 15.4, 0, MAT.magicStone),              // 头
+      box(4.2, 9, 4.2, 1.0, 9.0, 6.2, MAT.magicStone),        // 巨石手臂
+      box(4.2, 9, 4.2, 1.0, 9.0, -6.2, MAT.magicStone),
+      box(3.6, 4.0, 3.6, 2.0, 4.0, 6.4, MAT.crystal),         // 水晶拳
+      box(3.6, 4.0, 3.6, 2.0, 4.0, -6.4, MAT.crystal),
+      box(4.0, 6, 4.4, 0, 3, 3.0, MAT.magicStone),            // 腿
+      box(4.0, 6, 4.4, 0, 3, -3.0, MAT.magicStone)
+    ];
+    return {
+      body: body,
+      glow: [
+        sph(1.8, 7, 4.6, 11.0, 0, MAT.arcaneGlow),            // 胸口核心
+        sph(0.6, 5, 5.6, 15.8, 1.0, MAT.arcaneGlow),          // 眼
+        sph(0.6, 5, 5.6, 15.8, -1.0, MAT.arcaneGlow)
+      ]
+    };
+  },
+
+  panther: function () {
+    // 影豹：流线四足魔兽，暗紫皮 + 脊背魔纹 + 紫瞳
+    const tailRot = new THREE.Matrix4().makeRotationZ(0.7);
+    const body = [
+      box(17, 4.6, 4.8, 0, 6.0, 0, MAT.magicHide),            // 躯干
+      box(6.5, 5.2, 5.0, 6.4, 6.6, 0, MAT.magicHide),         // 前肩
+      box(5.0, 3.8, 4.2, 9.8, 8.0, 0, MAT.magicHide),         // 头
+      box(2.8, 2.0, 2.4, 12.6, 7.4, 0, MAT.magicHide),        // 吻
+      box(1.0, 2.2, 1.0, 8.6, 10.4, 1.4, MAT.magicHide),      // 耳
+      box(1.0, 2.2, 1.0, 8.6, 10.4, -1.4, MAT.magicHide),
+      cyl(0.7, 0.4, 6.5, 6, -9.4, 7.6, 0, MAT.magicHide, tailRot) // 长尾
+    ];
+    [5.4, -5.4].forEach(function (px) {
+      [1.8, -1.8].forEach(function (pz) {
+        body.push(box(1.6, 5.4, 1.6, px, 2.7, pz, MAT.magicHide));
+      });
+    });
+    return {
+      body: body,
+      glow: [
+        sph(0.7, 5, 12.0, 8.6, 1.3, MAT.arcaneGlow),          // 紫瞳
+        sph(0.7, 5, 12.0, 8.6, -1.3, MAT.arcaneGlow),
+        box(15, 0.5, 0.5, -0.5, 8.6, 0, MAT.arcaneGlow)       // 脊背魔纹
+      ]
+    };
+  },
+
+  dragon: function () {
+    // 秘法巨龙：长颈 + 后掠双翼 + 粗尾，口中衔一团龙火
+    const body = [
+      taperedBox(20, 12, 16, 9, 9, -1, 9, 0, MAT.scaleHide),  // 主躯干
+      box(8, 4.5, 4.5, 10, 13, 0, MAT.scaleHide),             // 长颈
+      box(6, 4, 4, 15, 15, 0, MAT.scaleHide),                 // 头颅
+      box(3, 2, 2.4, 18.4, 14.4, 0, MAT.scaleHide),           // 吻
+      box(0.8, 2.6, 0.8, 13.4, 17.4, 1.4, MAT.crystal),       // 角
+      box(0.8, 2.6, 0.8, 13.4, 17.4, -1.4, MAT.crystal),
+      box(12, 0.8, 12, -2, 14, 9, MAT.scaleHide, 0.4),        // 后掠双翼
+      box(12, 0.8, 12, -2, 14, -9, MAT.scaleHide, -0.4),
+      box(10, 2.4, 2.4, -13, 8, 0, MAT.scaleHide)             // 尾
+    ];
+    [6, -6].forEach(function (px) {
+      [4, -4].forEach(function (pz) {
+        body.push(box(2.4, 6, 2.4, px, 3, pz, MAT.scaleHide));
+      });
+    });
+    return {
+      body: body,
+      glow: [
+        sph(1.0, 6, 20.0, 14.6, 0, MAT.fireGlow),             // 口中龙火
+        sph(0.7, 5, 16.4, 16.0, 1.4, MAT.fireGlow),           // 眼
+        sph(0.7, 5, 16.4, 16.0, -1.4, MAT.fireGlow)
+      ]
+    };
+  },
+
+  mharvester: function () {
+    // 浮游晶簇：悬浮底座上托着一簇水晶，底部悬浮光环（无履带，靠浮空）
+    const body = [
+      taperedBox(16, 14, 18, 16, 4, 0, 6, 0, MAT.darkSteel),  // 悬浮底座
+      taperedBox(7, 7, 2.5, 2.5, 12, -2, 14, 0, MAT.crystal), // 主晶柱
+      taperedBox(5, 5, 1.8, 1.8, 9, 5, 12, 3, MAT.crystal),
+      taperedBox(5, 5, 1.8, 1.8, 9, 4, 12, -4, MAT.crystal),
+      taperedBox(4, 4, 1.5, 1.5, 7, -7, 11, 3, MAT.crystal)
+    ];
+    return {
+      body: body,
+      glow: [
+        sph(2.2, 7, 0, 8.5, 0, MAT.arcaneGlow),               // 悬浮核心
+        box(14, 0.5, 0.5, 0, 3.0, 7.5, MAT.frostGlow),        // 悬浮光环
+        box(14, 0.5, 0.5, 0, 3.0, -7.5, MAT.frostGlow),
+        sph(1.2, 6, -2, 21, 0, MAT.arcaneGlow)                // 主晶顶光
+      ]
+    };
+  },
+
+  mmcv: function () {
+    // 迁徙法阵：悬浮平台 + 竖立的符文环，环心是奥术漩涡
+    const body = [
+      taperedBox(22, 16, 24, 18, 5, 0, 6, 0, MAT.magicStone), // 悬浮平台
+      cyl(9, 9, 2, 12, 0, 16, 0, MAT.crystal, ROT_Z90),       // 符文环（盘面朝 ±X）
+      box(3, 8, 3, -8, 8, 0, MAT.magicStone),                 // 立柱
+      box(3, 8, 3, 8, 8, 0, MAT.magicStone)
+    ];
+    return {
+      body: body,
+      glow: [
+        cyl(6.5, 6.5, 1.2, 12, 0, 16, 0, MAT.arcaneGlow, ROT_Z90), // 环心漩涡
+        box(20, 0.6, 0.6, 0, 3.2, 8, MAT.frostGlow),
+        box(20, 0.6, 0.6, 0, 3.2, -8, MAT.frostGlow)
       ]
     };
   },
@@ -700,6 +862,97 @@ function structureParts(kind, size) {
       add(GLOW, new THREE.BoxGeometry(s * 0.1, s * 0.04, s * 0.1),
         q[0] * s * 0.6, s * 0.75, q[1] * s * 0.6, GLOW_HOT);
     });
+    /* ---------------- 秘法会（魔法阵营）建筑 ----------------
+     * 与工业风的钢铁军团对应位同尺寸、同功能，但用「浮空水晶 + 符文环 +
+     * 石砌圣所」的经典奇幻语言重述。辉光一律走固有奥术紫/冰蓝（MAT.arcaneGlow /
+     * frostGlow），不随团队色变 —— 远远一看发光色相就能分清两个阵营。
+     */
+  } else if (kind === 'mhq') {
+    // 魔法主堡：石砌阶梯圣城 + 高耸法塔，塔顶悬浮一枚巨型水晶
+    taper(HULL, s * 1.72, s * 1.72, s * 1.5, s * 1.5, s * 0.62, 0, s * 0.31 + 3.4, 0, MAT.magicStone);
+    taper(TEAM, s * 0.98, s * 0.98, s * 0.6, s * 0.6, s * 1.1, 0, s * 1.12 + 3.4, 0, 1.0);
+    add(TEAM, new THREE.BoxGeometry(s * 1.06, s * 0.08, s * 1.06), 0, s * 1.5, 0, 0.55);
+    // 奥术窗带
+    [0.78, 1.18].forEach(function (h) {
+      add(GLOW, new THREE.BoxGeometry(s * 0.95, s * 0.07, s * 0.82), 0, s * h, 0, MAT.arcaneGlow);
+      add(GLOW, new THREE.BoxGeometry(s * 0.82, s * 0.07, s * 0.95), 0, s * h, 0, MAT.arcaneGlow);
+    });
+    // 四角水晶方尖碑
+    [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
+      taper(HULL, s * 0.3, s * 0.3, s * 0.14, s * 0.14, s * 0.72,
+        q[0] * s * 0.68, s * 0.36 + 3.4, q[1] * s * 0.68, MAT.crystal);
+      add(GLOW, new THREE.SphereGeometry(s * 0.07, 8, 6),
+        q[0] * s * 0.68, s * 0.74, q[1] * s * 0.68, MAT.arcaneGlow);
+    });
+    // 塔顶悬浮巨水晶 + 符环
+    taper(GLOW, s * 0.34, s * 0.34, s * 0.06, s * 0.06, s * 0.72, 0, s * 2.0, 0, MAT.arcaneGlow);
+    add(GLOW, new THREE.TorusGeometry(s * 0.5, s * 0.04, 6, 18), 0, s * 1.95, 0, MAT.arcaneGlow, ROT_X90);
+  } else if (kind === 'mpower') {
+    // 法力塔：两根水晶塔相对而立，共同托起一颗悬浮法力球
+    taper(HULL, s * 1.6, s * 1.28, s * 1.44, s * 1.14, s * 0.5, 0, s * 0.25 + 3.4, 0, MAT.magicStone);
+    [-1, 1].forEach(function (side) {
+      taper(HULL, s * 0.42, s * 0.42, s * 0.18, s * 0.18, s * 1.15,
+        side * s * 0.46, s * 0.57 + 3.4, 0, MAT.crystal);
+      add(GLOW, new THREE.TorusGeometry(s * 0.3, s * 0.04, 6, 14),
+        side * s * 0.46, s * 1.16, 0, MAT.arcaneGlow, ROT_X90);
+      add(GLOW, new THREE.SphereGeometry(s * 0.12, 10, 6),
+        side * s * 0.46, s * 1.36, 0, MAT.arcaneGlow);
+    });
+    // 悬浮法力球 + 斜置符环
+    add(GLOW, new THREE.SphereGeometry(s * 0.3, 12, 8), 0, s * 1.5, 0, MAT.arcaneGlow);
+    add(GLOW, new THREE.TorusGeometry(s * 0.44, s * 0.03, 6, 16), 0, s * 1.5, 0, MAT.frostGlow, ROT_X90);
+    add(HULL, new THREE.BoxGeometry(s * 0.5, s * 0.4, s * 0.6), 0, s * 0.42, s * 0.5, MAT.magicStone);
+  } else if (kind === 'mrefinery') {
+    // 水晶精炼所：中央一根待炼巨晶，卸晶槽透出寒蓝晶光（对应矿厂的琥珀矿光）
+    taper(HULL, s * 1.76, s * 1.34, s * 1.6, s * 1.2, s * 0.56, 0, s * 0.28 + 3.4, 0, MAT.magicStone);
+    taper(HULL, s * 0.5, s * 0.5, s * 0.16, s * 0.16, s * 1.2, s * 0.42, s * 0.95, 0, MAT.crystal);
+    add(GLOW, new THREE.SphereGeometry(s * 0.1, 8, 6), s * 0.42, s * 1.62, 0, MAT.frostGlow);
+    // 加工石柱
+    taper(HULL, s * 0.6, s * 0.64, s * 0.46, s * 0.5, s * 0.9, -s * 0.5, s * 0.45 + 3.4, 0, MAT.magicStone);
+    add(GLOW, new THREE.BoxGeometry(s * 0.5, s * 0.06, s * 0.56), -s * 0.5, s * 0.74, 0, MAT.arcaneGlow);
+    // 卸晶槽
+    add(HULL, new THREE.BoxGeometry(s * 1.4, s * 0.1, s * 0.34), 0, s * 1.02, s * 0.44, MAT.magicStone);
+    add(GLOW, new THREE.BoxGeometry(s * 1.2, s * 0.09, s * 0.2), 0, s * 1.09, s * 0.44, MAT.frostGlow);
+    add(HULL, new THREE.CylinderGeometry(s * 0.08, s * 0.08, s * 0.7, 6), s * 0.9, s * 0.75, -s * 0.4, MAT.crystal);
+  } else if (kind === 'mtemple') {
+    // 奥术圣殿：四柱石亭，亭心悬浮符文石，正面一道发光奥术门（步兵自门中走出）
+    taper(HULL, s * 1.6, s * 1.28, s * 1.46, s * 1.14, s * 0.5, 0, s * 0.25 + 3.4, 0, MAT.magicStone);
+    [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
+      add(HULL, new THREE.CylinderGeometry(s * 0.09, s * 0.11, s * 0.9, 6),
+        q[0] * s * 0.6, s * 0.55 + 3.4, q[1] * s * 0.5, MAT.magicStone);
+      add(GLOW, new THREE.SphereGeometry(s * 0.06, 8, 6),
+        q[0] * s * 0.6, s * 1.04, q[1] * s * 0.5, MAT.arcaneGlow);
+    });
+    // 亭顶 + 亭心悬浮符文石
+    taper(TEAM, s * 1.4, s * 1.1, s * 1.0, s * 0.7, s * 0.42, 0, s * 1.16 + 3.4, 0, 1.0);
+    taper(GLOW, s * 0.3, s * 0.3, s * 0.06, s * 0.06, s * 0.62, 0, s * 0.78, 0, MAT.arcaneGlow);
+    // 正面奥术门
+    add(GLOW, new THREE.BoxGeometry(s * 0.06, s * 0.6, s * 0.5), s * 0.82, s * 0.42 + 3.4, 0, MAT.arcaneGlow);
+  } else if (kind === 'mcircle') {
+    // 召唤法阵：石台刻满召唤阵纹，一座竖立的巨型符文环内翻涌着奥术漩涡
+    taper(HULL, s * 1.82, s * 1.56, s * 1.66, s * 1.4, s * 0.6, 0, s * 0.3 + 3.4, 0, MAT.magicStone);
+    // 地面召唤阵纹
+    add(GLOW, new THREE.TorusGeometry(s * 0.9, s * 0.05, 6, 20), 0, s * 0.62, 0, MAT.arcaneGlow, ROT_X90);
+    add(GLOW, new THREE.BoxGeometry(s * 1.7, s * 0.04, s * 0.08), 0, s * 0.61, 0, MAT.arcaneGlow);
+    add(GLOW, new THREE.BoxGeometry(s * 0.08, s * 0.04, s * 1.7), 0, s * 0.61, 0, MAT.arcaneGlow);
+    // 竖立符文环（盘面朝 ±X，战车自漩涡中驶出）
+    add(HULL, new THREE.TorusGeometry(s * 0.7, s * 0.1, 6, 18), 0, s * 1.25, 0, MAT.magicStone,
+      new THREE.Matrix4().makeRotationY(Math.PI / 2));
+    add(GLOW, new THREE.CylinderGeometry(s * 0.58, s * 0.58, s * 0.06, 18), 0, s * 1.25, 0, MAT.arcaneGlow, ROT_Z90);
+    // 两侧水晶柱
+    [-1, 1].forEach(function (side) {
+      taper(HULL, s * 0.26, s * 0.26, s * 0.12, s * 0.12, s * 0.9, side * s * 0.98, s * 0.45 + 3.4, 0, MAT.crystal);
+      add(GLOW, new THREE.SphereGeometry(s * 0.07, 8, 6), side * s * 0.98, s * 0.94, 0, MAT.arcaneGlow);
+    });
+  } else if (kind === 'mtower') {
+    // 奥术塔：石座上水晶尖塔，塔顶悬浮的奥术晶核是可旋转瞄准的「头」
+    taper(HULL, s * 1.5, s * 1.5, s * 1.05, s * 1.05, s * 0.5, 0, s * 0.25 + 3.4, 0, MAT.magicStone);
+    taper(HULL, s * 0.5, s * 0.5, s * 0.22, s * 0.22, s * 1.3, 0, s * 0.85 + 3.4, 0, MAT.crystal);
+    add(GLOW, new THREE.TorusGeometry(s * 0.42, s * 0.035, 6, 14), 0, s * 0.72, 0, MAT.arcaneGlow, ROT_X90);
+    [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
+      add(GLOW, new THREE.BoxGeometry(s * 0.1, s * 0.04, s * 0.1),
+        q[0] * s * 0.6, s * 0.55, q[1] * s * 0.6, MAT.frostGlow);
+    });
   }
   return c.parts;
 }
@@ -736,6 +989,21 @@ function missileHeadParts(size) {
   return c.parts;
 }
 
+/** 奥术塔的可旋转头部：悬浮的晶簇指向开火方向（+X）。 */
+function arcaneHeadParts(size) {
+  const c = partCollector();
+  const s = size;
+  // 前指主晶（尖端朝 +X，与炮管同向）+ 后掠副晶 + 中段立环 + 尖端符珠
+  c.add(GLOW, new THREE.CylinderGeometry(s * 0.22, s * 0.03, s * 1.0, 6),
+    s * 0.2, 0, 0, MAT.arcaneGlow, ROT_Z90);
+  c.add(GLOW, new THREE.CylinderGeometry(s * 0.03, s * 0.22, s * 0.5, 6),
+    -s * 0.42, 0, 0, MAT.arcaneGlow, ROT_Z90);
+  c.add(HULL, new THREE.TorusGeometry(s * 0.34, s * 0.045, 6, 16),
+    -s * 0.08, 0, 0, MAT.crystal, new THREE.Matrix4().makeRotationY(Math.PI / 2));
+  c.add(GLOW, new THREE.SphereGeometry(s * 0.1, 8, 6), s * 0.72, 0, 0, MAT.frostGlow);
+  return c.parts;
+}
+
 /** 持续旋转的部件：指挥中心雷达、精炼厂转筒等。 */
 function spinnerParts(kind, size) {
   const s = size;
@@ -766,6 +1034,35 @@ function spinnerParts(kind, size) {
     c.add(GLOW, new THREE.TorusGeometry(s * 0.34, s * 0.03, 6, 14), 0, 0, 0, GLOW_HOT,
       new THREE.Matrix4().makeRotationX(1.2));
     return { parts: c.parts, y: size * 1.56, speed: -2.4 };
+  }
+  // ---- 秘法会：浮空符环与环绕碎晶 ----
+  if (kind === 'mpower') {
+    const c = partCollector();
+    // 绕悬浮法力球斜转的符环
+    c.add(GLOW, new THREE.TorusGeometry(s * 0.42, s * 0.03, 6, 16), 0, 0, 0, MAT.arcaneGlow,
+      new THREE.Matrix4().makeRotationX(1.2));
+    return { parts: c.parts, y: size * 1.5, speed: -2.2 };
+  }
+  if (kind === 'mrefinery') {
+    const c = partCollector();
+    // 绕待炼巨晶旋转的符文筒
+    c.add(GLOW, new THREE.TorusGeometry(s * 0.42, s * 0.045, 6, 14), 0, 0, 0, MAT.arcaneGlow, ROT_X90);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      c.add(GLOW, new THREE.BoxGeometry(s * 0.15, s * 0.04, s * 0.06),
+        Math.cos(a) * s * 0.42, 0, Math.sin(a) * s * 0.42, MAT.frostGlow);
+    }
+    return { parts: c.parts, y: size * 1.15, x: size * 0.42, speed: 1.2 };
+  }
+  if (kind === 'mhq') {
+    const c = partCollector();
+    // 缓慢环绕主堡顶晶的三枚碎晶
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      c.add(GLOW, new THREE.SphereGeometry(s * 0.07, 8, 6),
+        Math.cos(a) * s * 0.5, 0, Math.sin(a) * s * 0.5, MAT.arcaneGlow);
+    }
+    return { parts: c.parts, y: size * 2.0, speed: 0.7 };
   }
   return null;
 }
@@ -801,6 +1098,14 @@ function structureGeometries(kind, size) {
       team: head.length ? mergeParts(head) : null,
       hull: null,
       y: size * 0.82
+    };
+  }
+  if (kind === 'mtower') {
+    const head = arcaneHeadParts(size);
+    entry.head = {
+      team: head.length ? mergeParts(head) : null,
+      hull: null,
+      y: size * 1.6 + 3.4
     };
   }
   const spin = spinnerParts(kind, size);
@@ -875,7 +1180,9 @@ const UNIT_VISUAL_SCALE = {
   rifle: 1.75, rocket: 1.75, sniper: 1.75, tesla: 1.75, dog: 1.7,
   tank: 1.25, scout: 1.3, tank_destroyer: 1.25,
   artillery: 1.25, harvester: 1.16, mcv: 1.30, v3: 1.25,
-  overlord: 1.28, prism: 1.25
+  overlord: 1.28, prism: 1.25,
+  mage: 1.75, frost: 1.75, golem: 1.3, panther: 1.6, dragon: 1.3,
+  mharvester: 1.16, mmcv: 1.30
 };
 
 /* 共享的哈希值噪声：天空的云、水面的泡沫、地形的细节法线都用同一套，
@@ -2681,6 +2988,52 @@ export function createRenderer(canvas) {
       });
       return quad;
     }
+    /* ---- 秘法会 LOD ---- */
+    if (kind === 'mage' || kind === 'frost') {
+      const orb = kind === 'frost' ? MAT.frostGlow : MAT.arcaneGlow;
+      return infantry.concat([
+        cyl(0.4, 0.4, 12, 6, 5, 9, 2, MAT.gunmetal, ROT_Z90),
+        sph(1.3, 5, 10.6, 8, 2, orb)
+      ]);
+    }
+    if (kind === 'golem') {
+      return [
+        taperedBox(11, 9, 9, 7, 11, 0, 10, 0, MAT.magicStone),
+        box(4, 9, 4, 1, 9, 6, MAT.magicStone),
+        box(4, 9, 4, 1, 9, -6, MAT.magicStone),
+        sph(1.8, 6, 4.6, 11, 0, MAT.arcaneGlow)
+      ];
+    }
+    if (kind === 'panther') {
+      const quad = [box(17, 5, 5, 0, 6, 0, MAT.magicHide), box(5, 4, 4, 9, 8, 0, MAT.magicHide)];
+      [5.4, -5.4].forEach(function (px) {
+        [1.8, -1.8].forEach(function (pz) {
+          quad.push(box(1.6, 5, 1.6, px, 2.7, pz, MAT.magicHide));
+        });
+      });
+      return quad;
+    }
+    if (kind === 'dragon') {
+      return [
+        taperedBox(20, 12, 16, 9, 9, -1, 9, 0, MAT.scaleHide),
+        box(8, 4.5, 4.5, 12, 13, 0, MAT.scaleHide),
+        box(12, 0.8, 12, -2, 14, 9, MAT.scaleHide, 0.4),
+        box(12, 0.8, 12, -2, 14, -9, MAT.scaleHide, -0.4)
+      ];
+    }
+    if (kind === 'mharvester') {
+      return [
+        taperedBox(16, 14, 18, 16, 4, 0, 6, 0, MAT.darkSteel),
+        taperedBox(7, 7, 2.5, 2.5, 12, -2, 14, 0, MAT.crystal),
+        sph(2, 6, 0, 8.5, 0, MAT.arcaneGlow)
+      ];
+    }
+    if (kind === 'mmcv') {
+      return [
+        taperedBox(22, 16, 24, 18, 5, 0, 6, 0, MAT.magicStone),
+        cyl(9, 9, 2, 10, 0, 16, 0, MAT.crystal, ROT_Z90)
+      ];
+    }
     return infantry;
   }
 
@@ -2967,7 +3320,16 @@ export function createRenderer(canvas) {
     // 磁暴电弧：短促、近乎笔直的蓝白电光
     tesla: { len: 16, thick: 1.4, color: 0x86b8ff, arc: 0 },
     // 光棱聚焦光束：细长、笔直、亮青色，指哪打哪
-    laser: { len: 30, thick: 0.9, color: 0xa8f4ff, arc: 0 }
+    laser: { len: 30, thick: 0.9, color: 0xa8f4ff, arc: 0 },
+    // ---- 魔法弹道 ----
+    // 奥术弹：紫色流光，微微上飘
+    arcane: { len: 22, thick: 1.3, color: 0xc98aff, arc: 6 },
+    // 冰霜：冰蓝细棱，拖着寒气
+    frost: { len: 24, thick: 1.1, color: 0x9fe8ff, arc: 10 },
+    // 巨石：傀儡投掷，高弧线
+    boulder: { len: 20, thick: 2.6, color: 0xb09a7a, arc: 70 },
+    // 火球：巨龙喷吐，橙色高弧
+    fireball: { len: 26, thick: 2.8, color: 0xff7a2a, arc: 60 }
   };
 
   function ensureTracerMesh(needed) {
@@ -3944,8 +4306,8 @@ export function createRenderer(canvas) {
       let tracerCount = 0;
       for (let i = 0; i < projectiles.length; i++) {
         const p = projectiles[i];
-        // 军犬的扑咬是近战：不画弹道，命中反馈交给服务端的 impact 特效
-        if (p.kind === 'bite') continue;
+        // 近战（军犬扑咬 / 影豹爪击）不画弹道，命中反馈交给服务端的 impact 特效
+        if (p.kind === 'bite' || p.kind === 'claw') continue;
         const pdx = p.x - state.camX;
         const pdy = p.y - state.camY;
         if (!inViewportBounds(p.x, p.y)) continue;
