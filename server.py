@@ -1731,7 +1731,7 @@ def has_active_structure(game, player_id, kind):
 
 def construction_anchor_near(game, player_id, x, y):
     for structure in game["structures"]:
-        radius = BUILD_ANCHOR_RANGES.get(structure["kind"])
+        radius = BUILD_ANCHOR_RANGES.get(structure_role(structure["kind"]))
         if (is_friendly(game, structure["owner"], player_id) and structure["hp"] > 0
                 and structure["active"] and radius is not None):
             if math.hypot(structure["x"] - x, structure["y"] - y) <= radius:
@@ -2150,8 +2150,8 @@ def handle_game_command(room, player, payload):
     elif command == "setRally":
         structure_id = payload.get("structureId")
         structure = next((s for s in game["structures"] if s["id"] == structure_id and s["owner"] == player["id"] and s["hp"] > 0), None)
-        if not structure or structure["kind"] not in ("barracks", "factory"):
-            raise ValueError("只能为兵营或重装工厂设置集结点")
+        if not structure or structure_role(structure["kind"]) not in ("barracks", "factory"):
+            raise ValueError("只能为生产建筑设置集结点")
         rally_x = clamp(float(payload.get("x", 0)), 30, game["map"]["width"] - 30)
         rally_y = clamp(float(payload.get("y", 0)), 30, game["map"]["height"] - 30)
         structure["rally"] = (rally_x, rally_y)
@@ -3381,10 +3381,10 @@ def bot_place_prepared(room, bot, kind):
     game = room["game"]
     anchors = [s for s in game["structures"]
                if s["owner"] == bot["id"] and s["active"] and s["hp"] > 0
-               and s["kind"] in BUILD_ANCHOR_RANGES]
+               and structure_role(s["kind"]) in BUILD_ANCHOR_RANGES]
     random.shuffle(anchors)
     for anchor in anchors:
-        maximum = BUILD_ANCHOR_RANGES[anchor["kind"]] - 20
+        maximum = BUILD_ANCHOR_RANGES[structure_role(anchor["kind"])] - 20
         minimum = anchor["size"] + STRUCTURE_TYPES[kind]["size"] + 35
         for _ in range(18):
             angle = random.random() * math.pi * 2
@@ -3508,17 +3508,33 @@ def remove_destroyed(room):
     game["structures"] = [s for s in game["structures"] if s["hp"] > 0]
 
 
+def player_has_command(game, player_id):
+    """指挥体系还在：活着的总部建筑，或已折叠成的基地车/迁徙法阵。"""
+    for structure in game["structures"]:
+        if (structure["owner"] == player_id and structure["hp"] > 0
+                and structure_role(structure["kind"]) == "hq"):
+            return True
+    for unit in game["units"]:
+        if (unit["owner"] == player_id and unit["hp"] > 0
+                and unit_role(unit["kind"]) == "mcv"):
+            return True
+    return False
+
+
 def check_elimination_and_victory(room):
-    """淘汰与胜负判定。仍按 victoryClock 的 0.45s 节奏跑，不需要 20Hz 的精度。"""
+    """淘汰与胜负判定。仍按 victoryClock 的 0.45s 节奏跑，不需要 20Hz 的精度。
+
+    规则与开局提示一致：摧毁指挥中心（含魔法主堡）即淘汰。折叠成基地车
+    不算失去指挥——否则开局就能把主堡收起然后立刻战败。
+    """
     game = room["game"]
     for player in room["players"].values():
         if player["eliminated"]:
             continue
-        has_structure = any(s["owner"] == player["id"] for s in game["structures"])
-        if not has_structure:
+        if not player_has_command(game, player["id"]):
             player["eliminated"] = True
             game["units"] = [u for u in game["units"] if u["owner"] != player["id"]]
-            add_chat(room, "作战系统", "%s 的所有建筑已被摧毁，彻底战败。" % player["name"], True)
+            add_chat(room, "作战系统", "%s 的指挥中心已被摧毁，彻底战败。" % player["name"], True)
 
     alive = [p for p in room["players"].values() if not p["eliminated"]]
     if game["elapsed"] > 15 and len(alive) <= 1:

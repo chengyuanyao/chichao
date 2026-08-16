@@ -15,7 +15,7 @@ import { createRenderer } from './render3d.js';
     barracks: { name: '步兵营', cost: 700, build: 10, icon: '♟', size: 42, requires: ['power'], desc: '训练步兵单位' },
     factory: { name: '重装工厂', cost: 1600, build: 18, icon: '▰', size: 58, requires: ['refinery', 'power'], desc: '生产装甲单位' },
     turret: { name: '哨戒炮塔', cost: 950, build: 12, icon: '⌖', size: 30, requires: ['power'], desc: '自动攻击附近敌军' },
-    missile: { name: '导弹炮塔', cost: 1500, build: 16, icon: '⊿', size: 34, requires: ['barracks', 'power'], desc: '远程高伤大溅射，冷却慢' },
+    missile: { name: '导弹炮塔', cost: 1200, build: 16, icon: '⊿', size: 34, requires: ['barracks', 'power'], desc: '远程高伤大溅射，冷却慢' },
     repair: { name: '战地维修厂', cost: 1250, build: 15, icon: '✚', size: 50, requires: ['factory', 'power'], desc: '维修受损装甲载具' },
     // ---- 秘法会（魔法阵营，faction=magic）独立经济与军事建筑 ----
     mpower: { name: '法力塔', cost: 600, build: 8, icon: '✦', size: 40, requires: ['mhq'], faction: 'magic', desc: '提供 120 电力' },
@@ -25,8 +25,26 @@ import { createRenderer } from './render3d.js';
     mtower: { name: '奥术塔', cost: 950, build: 12, icon: '✵', size: 30, requires: ['mpower'], faction: 'magic', desc: '自动攻击附近敌军（魔法）' }
   };
 
+  // 与 server.BUILD_ANCHOR_RANGES 一样按 role 索引；魔法主堡/法力塔等换皮
+  // 建筑通过 STRUCTURE_ROLES 映射到同一半径，否则鬼影永远是红的。
   var BUILD_ANCHOR_RANGES = { hq: 360, power: 220, refinery: 250, barracks: 220, factory: 270, repair: 240 };
   var ENEMY_BUILD_EXCLUSION = 440;
+
+  var STRUCTURE_ROLES = {
+    hq: 'hq', mhq: 'hq',
+    power: 'power', mpower: 'power',
+    refinery: 'refinery', mrefinery: 'refinery',
+    barracks: 'barracks', mtemple: 'barracks',
+    factory: 'factory', mcircle: 'factory',
+    repair: 'repair',
+    turret: 'defense', missile: 'defense', mtower: 'defense'
+  };
+  var UNIT_ROLES = {
+    harvester: 'harvester', mharvester: 'harvester',
+    mcv: 'mcv', mmcv: 'mcv'
+  };
+  function structureRole(kind) { return STRUCTURE_ROLES[kind] || null; }
+  function unitRole(kind) { return UNIT_ROLES[kind] || null; }
 
   var UNITS = {
     rifle: { name: '突击兵', cost: 180, icon: '♟', producer: 'barracks', desc: '灵活的基础步兵', damageType: 'bullet' },
@@ -36,7 +54,7 @@ import { createRenderer } from './render3d.js';
     tank: { name: '先锋坦克', cost: 780, icon: '▰', producer: 'factory', desc: '主力装甲单位，克建筑', damageType: 'shell' },
     scout: { name: '猎犬战车', cost: 460, icon: '◆', producer: 'factory', desc: '高速侦察战车', damageType: 'bullet' },
     artillery: { name: '攻城炮', cost: 960, icon: '◉', producer: 'factory', desc: '极远溅射，克建筑/重甲', damageType: 'siege' },
-    tank_destroyer: { name: '坦克歼击车', cost: 720, icon: '◭', producer: 'factory', desc: '专杀坦克，×2.1反重甲', damageType: 'ap' },
+    tank_destroyer: { name: '坦克歼击车', cost: 1050, icon: '◭', producer: 'factory', desc: '专杀坦克，×2.1反重甲', damageType: 'ap' },
     v3: { name: '东风快递', cost: 2000, icon: '⊹', producer: 'factory', desc: '超远程导弹打击，大溅射', damageType: 'missile' },
     overlord: { name: '天启坦克', cost: 1700, icon: '⬟', producer: 'factory', requires: ['repair'], desc: '超重型主战，双管重炮抗线 · 需维修厂', damageType: 'shell' },
     tesla: { name: '磁暴步兵', cost: 650, icon: '⚡', producer: 'barracks', requires: ['factory'], desc: '动力甲反甲步兵，电弧专电载具 · 需工厂', damageType: 'tesla' },
@@ -61,11 +79,18 @@ import { createRenderer } from './render3d.js';
     factory: '重装工厂',
     repair: '战地维修厂',
     turret: '哨戒炮塔',
-    missile: '导弹炮塔'
+    missile: '导弹炮塔',
+    mhq: '魔法主堡',
+    mpower: '法力塔',
+    mrefinery: '水晶精炼所',
+    mtemple: '奥术圣殿',
+    mcircle: '召唤法阵',
+    mtower: '奥术塔'
   };
 
   var STRUCTURE_ICONS = {
-    hq: '★', power: 'ϟ', refinery: '◆', barracks: '♟', factory: '▰', repair: '✚', turret: '⌖', missile: '⊿'
+    hq: '★', power: 'ϟ', refinery: '◆', barracks: '♟', factory: '▰', repair: '✚', turret: '⌖', missile: '⊿',
+    mhq: '★', mpower: '✦', mrefinery: '◈', mtemple: '✠', mcircle: '⬡', mtower: '✵'
   };
 
   /* -------------------- 肖像绘制器 --------------------
@@ -1881,7 +1906,7 @@ import { createRenderer } from './render3d.js';
       lastHudOverlayAt = -Infinity;
       camera.yaw = 0;
       var hq = roomState.game.structures.find(function (s) {
-        return s.owner === session.playerId && s.kind === 'hq';
+        return s.owner === session.playerId && structureRole(s.kind) === 'hq';
       });
       camera.x = hq ? hq.x : roomState.game.map.width / 2;
       camera.y = hq ? hq.y : roomState.game.map.height / 2;
@@ -1908,7 +1933,7 @@ import { createRenderer } from './render3d.js';
     var units = roomState.game.units;
     var harvesters = 0;
     for (var i = 0; i < units.length; i++) {
-      if (units[i].owner === me.id && units[i].kind === 'harvester') { harvesters++; }
+      if (units[i].owner === me.id && unitRole(units[i].kind) === 'harvester') { harvesters++; }
     }
     var buildings = roomState.game.structures.filter(function (s) {
       return s.owner === me.id;
@@ -1958,7 +1983,7 @@ import { createRenderer } from './render3d.js';
       strikeBtn.classList.toggle('ready', charges > 0);
     }
 
-    var ownHQ = roomState.game.structures.find(function (s) { return s.owner === me.id && s.kind === 'hq' && s.active; });
+    var ownHQ = roomState.game.structures.find(function (s) { return s.owner === me.id && structureRole(s.kind) === 'hq' && s.active; });
     var gameScreenEl = document.querySelector('.game-screen');
     if (ownHQ && ownHQ.hp / ownHQ.maxHp < 0.30) {
       var pulse = Math.sin(elapsed * 4) * 0.5 + 0.5;
@@ -2293,7 +2318,7 @@ import { createRenderer } from './render3d.js';
     var units = roomState.game.units.filter(function (unit) { return selectedUnits.has(unit.id); });
     var deployBtn = $('#deployBtn');
     if (deployBtn) {
-      var hasMcv = units.some(function (u) { return u.kind === 'mcv' && u.owner === session.playerId; });
+      var hasMcv = units.some(function (u) { return unitRole(u.kind) === 'mcv' && u.owner === session.playerId; });
       deployBtn.classList.toggle('hidden', !hasMcv);
     }
     if (units.length) {
@@ -2305,7 +2330,7 @@ import { createRenderer } from './render3d.js';
       var rankLabels = ['', ' ★ 老兵', ' ★★ 精英', ' ★★★ 王牌'];
       var detail = one && one.repairing ?
         '维修中 · 生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) :
-        (one && one.kind === 'harvester' ?
+        (one && unitRole(one.kind) === 'harvester' ?
         '载矿 ' + Math.floor(one.cargo) + ' / ' + Math.floor(one.capacity) :
         (one ? '生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) + rankLabels[rank] : '混合编队'));
       // 混编时用主导兵种的肖像打底，右下角标注编队规模
@@ -2343,9 +2368,9 @@ import { createRenderer } from './render3d.js';
       } else if (structure.active && structure.kind === 'repair') {
         activeText = '维修系统待命 · 右键派遣载具';
       }
-      var sell = structure.owner === session.playerId && structure.kind !== 'hq' ?
+      var sell = structure.owner === session.playerId && structureRole(structure.kind) !== 'hq' ?
         '<button class="sell-button" id="sellSelectedBtn">出售</button>' : '<span></span>';
-      var packBtn = structure.owner === session.playerId && structure.kind === 'hq' && structure.packable ?
+      var packBtn = structure.owner === session.playerId && structureRole(structure.kind) === 'hq' && structure.packable ?
         '<button class="sell-button" id="packSelectedBtn" style="color:#6dd897;border-color:rgba(109,216,151,.4)">折叠</button>' : '';
       var structureInfoKey = 's|' + structure.id + ':' + Math.ceil(structure.hp) + ':' +
         activeText + ':' + (structure.packable ? 1 : 0);
@@ -2353,7 +2378,7 @@ import { createRenderer } from './render3d.js';
       selectionInfo.dataset.key = structureInfoKey;
       selectionInfo.innerHTML =
         '<div class="selected-summary"><div class="selected-portrait"></div>' +
-        '<div><strong>' + STRUCTURE_NAMES[structure.kind] + '</strong><small>' + activeText + '</small>' +
+        '<div><strong>' + (STRUCTURE_NAMES[structure.kind] || structure.kind) + '</strong><small>' + activeText + '</small>' +
         '<div class="health-track"><i style="width:' + Math.max(0, structure.hp / structure.maxHp * 100) + '%"></i></div></div>' +
         packBtn + sell + '</div>';
       selectionInfo.querySelector('.selected-portrait')
@@ -2777,7 +2802,7 @@ import { createRenderer } from './render3d.js';
     var best = null;
     var bestDist = Infinity;
     roomState.game.structures.forEach(function (s) {
-      var radius = BUILD_ANCHOR_RANGES[s.kind];
+      var radius = BUILD_ANCHOR_RANGES[structureRole(s.kind)];
       if (!radius || !isFriendly(s.owner) || !s.active || s.hp <= 0) { return; }
       var dist = Math.hypot(s.x - x, s.y - y);
       if (dist < bestDist) {
@@ -2946,7 +2971,7 @@ import { createRenderer } from './render3d.js';
       return false;
     }
     var nearOwn = roomState.game.structures.some(function (s) {
-      var radius = BUILD_ANCHOR_RANGES[s.kind];
+      var radius = BUILD_ANCHOR_RANGES[structureRole(s.kind)];
       return isFriendly(s.owner) && s.active && s.hp > 0 && radius &&
         Math.hypot(s.x - x, s.y - y) <= radius;
     });
@@ -3189,7 +3214,7 @@ import { createRenderer } from './render3d.js';
     });
     // 建筑：3-6px 队伍色方块 + 1px 黑描边（先铺大一号的黑块，代价最低）
     roomState.game.structures.forEach(function (structure) {
-      var size = structure.kind === 'hq' ? 6 :
+      var size = structureRole(structure.kind) === 'hq' ? 6 :
         (structure.size >= 52 ? 5 : (structure.size <= 32 ? 3 : 4));
       var px = structure.x * sx;
       var py = structure.y * sy;
@@ -3441,7 +3466,7 @@ import { createRenderer } from './render3d.js';
     if (selectedStructureId && !selectedUnits.size) {
       var prod = roomState.game.structures.find(function (s) {
         return s.id === selectedStructureId && s.owner === session.playerId
-          && (s.kind === 'barracks' || s.kind === 'factory');
+          && (structureRole(s.kind) === 'barracks' || structureRole(s.kind) === 'factory');
       });
       if (prod) {
         sendAction('command', {
@@ -3560,7 +3585,7 @@ import { createRenderer } from './render3d.js';
       return;
     }
     var hq = roomState.game.structures.find(function (s) {
-      return s.owner === session.playerId && s.kind === 'hq';
+      return s.owner === session.playerId && structureRole(s.kind) === 'hq';
     });
     if (hq) {
       camera.x = hq.x;
@@ -3938,7 +3963,7 @@ import { createRenderer } from './render3d.js';
     } else if (event.code === 'KeyU') {
       event.preventDefault();
       if (selectedStructureId && roomState && roomState.game) {
-        var hq = roomState.game.structures.find(function (s) { return s.id === selectedStructureId && s.kind === 'hq' && s.owner === session.playerId && s.packable; });
+        var hq = roomState.game.structures.find(function (s) { return s.id === selectedStructureId && structureRole(s.kind) === 'hq' && s.owner === session.playerId && s.packable; });
         if (hq) {
           sendAction('command', { command: 'undeploy', structureId: hq.id }).then(function () {
             selectedStructureId = null;
@@ -4104,7 +4129,7 @@ import { createRenderer } from './render3d.js';
   $('#strikeBtn').addEventListener('click', function () { setCommandMode('strike'); });
   $('#deployBtn').addEventListener('click', function () {
     if (!selectedUnits.size || !roomState || !roomState.game) { return; }
-    var mcvIds = roomState.game.units.filter(function (u) { return selectedUnits.has(u.id) && u.kind === 'mcv' && u.owner === session.playerId; }).map(function (u) { return u.id; });
+    var mcvIds = roomState.game.units.filter(function (u) { return selectedUnits.has(u.id) && unitRole(u.kind) === 'mcv' && u.owner === session.playerId; }).map(function (u) { return u.id; });
     if (!mcvIds.length) { return; }
     sendAction('command', {
       command: 'deploy',

@@ -88,7 +88,7 @@ def main():
     assert alpha["cash"] > cash_before_harvest
 
     for s in game["structures"]:
-        if s["owner"] == beta["id"]:
+        if s["owner"] == beta["id"] and server.structure_role(s["kind"]) == "hq":
             s["hp"] = 0
     tick_for(room, 1.0)
     assert beta["eliminated"] is True

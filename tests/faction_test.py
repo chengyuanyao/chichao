@@ -8,10 +8,13 @@
    5) 基地车展开/折叠的阵营映射（mmcv <-> mhq）
    6) 独立经济：浮游晶簇把水晶运回精炼所结算资金
    7) 魔法 AI：按 role 决策，只建/产本阵营（圣殿/法阵/法师/傀儡…）
+   8) 魔法可在主堡旁放置圣殿（建造锚点按 role，不是写死 tech kind）
+   9) 摧毁总部即淘汰；折叠成基地车不算失去指挥
 """
 
 from __future__ import print_function
 
+import math
 import os
 import sys
 import time
@@ -204,6 +207,76 @@ def main():
     # 也绝不能偷偷排进科技建筑
     assert not b.get("buildQueue") or b["buildQueue"][0]["kind"] in server.MAGIC_STRUCTURES, b["buildQueue"]
     print("  魔法 AI 生产的全是魔法兵种: %s PASS" % sorted(set(i["kind"] for i in produced)))
+
+    print("\n=== Test 8: 魔法可在主堡旁放置圣殿 ===")
+    room, a, b = make_room("FAC08", magic_b=True)
+    game = room["game"]
+    b["cash"] = 99999
+    mhq = next(s for s in game["structures"] if s["owner"] == b["id"] and s["kind"] == "mhq")
+    assert server.construction_anchor_near(game, b["id"], mhq["x"] + 80, mhq["y"] + 80), \
+        "mhq 应按 hq role 提供建造锚点"
+    assert not server.construction_anchor_near(game, b["id"], mhq["x"] + 2000, mhq["y"] + 2000), \
+        "远离主堡不应有锚点"
+
+    placed = None
+    for radius in (150, 180, 210, 250, 300):
+        for deg in range(0, 360, 15):
+            rad = math.radians(deg)
+            x = mhq["x"] + math.cos(rad) * radius
+            y = mhq["y"] + math.sin(rad) * radius
+            try:
+                placed = server.place_structure(room, b["id"], "mtemple", x, y, free=True)
+                break
+            except ValueError:
+                continue
+        if placed:
+            break
+    assert placed is not None and placed["kind"] == "mtemple", "应能在魔法主堡旁放下奥术圣殿"
+    print("  place_structure mtemple 靠近 mhq: PASS")
+
+    # 队列就绪后 AI 也必须能落地，否则魔法电脑永远卡在「建筑已就绪」
+    b["isBot"] = True
+    b["buildQueue"] = [{
+        "id": "c-ready", "kind": "mtower",
+        "remaining": 0.0, "total": 12.0, "ready": True,
+    }]
+    assert server.bot_place_prepared(room, b, "mtower"), "魔法 AI 应按 role 找到锚点并放置奥术塔"
+    assert any(s["owner"] == b["id"] and s["kind"] == "mtower" for s in game["structures"])
+    print("  bot_place_prepared mtower: PASS")
+
+    server.handle_game_command(room, b, {
+        "command": "setRally", "structureId": placed["id"],
+        "x": placed["x"] + 80, "y": placed["y"] + 40,
+    })
+    assert placed.get("rally"), "奥术圣殿应能设集结点"
+    print("  圣殿集结点: PASS")
+
+    print("\n=== Test 9: 摧毁总部即淘汰（折叠基地车除外）===")
+    room, a, b = make_room("FAC09", magic_b=True)
+    game = room["game"]
+    leftover = [s for s in game["structures"] if s["owner"] == b["id"] and s["kind"] != "mhq"]
+    assert leftover, "开局除主堡外应还有法力塔/精炼所"
+    for s in game["structures"]:
+        if s["owner"] == b["id"] and s["kind"] == "mhq":
+            s["hp"] = 0
+    server.remove_destroyed_and_check(room)
+    assert b["eliminated"] is True, "只拆主堡、留下其他建筑也应淘汰"
+    assert not a["eliminated"]
+    print("  拆 mhq 即淘汰（留下 mpower/mrefinery）: PASS")
+
+    room, a, b = make_room("FAC10", magic_b=True)
+    game = room["game"]
+    mhq = next(s for s in game["structures"] if s["owner"] == b["id"] and s["kind"] == "mhq")
+    server.issue_undeploy(game, b["id"], mhq["id"])
+    assert any(u["owner"] == b["id"] and u["kind"] == "mmcv" and u["hp"] > 0 for u in game["units"])
+    server.remove_destroyed_and_check(room)
+    assert b["eliminated"] is False, "折叠主堡成迁徙法阵不应立刻战败"
+    for u in game["units"]:
+        if u["owner"] == b["id"] and server.unit_role(u["kind"]) == "mcv":
+            u["hp"] = 0
+    server.remove_destroyed_and_check(room)
+    assert b["eliminated"] is True, "主堡与迁徙法阵都没了才淘汰"
+    print("  折叠保命 / 再拆迁徙法阵才淘汰: PASS")
 
     print("\n=== 阵营对抗测试全部通过 ===")
 
