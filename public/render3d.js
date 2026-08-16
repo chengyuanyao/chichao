@@ -944,6 +944,19 @@ function structureParts(kind, size) {
       taper(HULL, s * 0.26, s * 0.26, s * 0.12, s * 0.12, s * 0.9, side * s * 0.98, s * 0.45 + 3.4, 0, MAT.crystal);
       add(GLOW, new THREE.SphereGeometry(s * 0.07, 8, 6), side * s * 0.98, s * 0.94, 0, MAT.arcaneGlow);
     });
+  } else if (kind === 'mspring') {
+    // 圣泉：石砌泉盆 + 寒蓝圣水 + 中央悬浮修复晶，对位维修厂的停机坪十字
+    taper(HULL, s * 1.6, s * 1.4, s * 1.5, s * 1.3, s * 0.4, 0, s * 0.2 + 3.4, 0, MAT.magicStone);
+    add(GLOW, new THREE.CylinderGeometry(s * 0.62, s * 0.7, s * 0.12, 16), 0, s * 0.48, 0, MAT.frostGlow);
+    add(GLOW, new THREE.TorusGeometry(s * 0.72, s * 0.04, 6, 18), 0, s * 0.52, 0, MAT.arcaneGlow, ROT_X90);
+    add(GLOW, new THREE.BoxGeometry(s * 0.72, s * 0.04, s * 0.16), 0, s * 0.44, 0, MAT.frostGlow);
+    add(GLOW, new THREE.BoxGeometry(s * 0.16, s * 0.04, s * 0.72), 0, s * 0.44, 0, MAT.frostGlow);
+    taper(GLOW, s * 0.22, s * 0.22, s * 0.05, s * 0.05, s * 0.55, 0, s * 0.95, 0, MAT.arcaneGlow);
+    add(GLOW, new THREE.SphereGeometry(s * 0.1, 10, 6), 0, s * 1.28, 0, MAT.frostGlow);
+    [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
+      taper(HULL, s * 0.16, s * 0.16, s * 0.08, s * 0.08, s * 0.5,
+        q[0] * s * 0.62, s * 0.3 + 3.4, q[1] * s * 0.56, MAT.crystal);
+    });
   } else if (kind === 'mtower') {
     // 奥术塔：石座上水晶尖塔，塔顶悬浮的奥术晶核是可旋转瞄准的「头」
     taper(HULL, s * 1.5, s * 1.5, s * 1.05, s * 1.05, s * 0.5, 0, s * 0.25 + 3.4, 0, MAT.magicStone);
@@ -1063,6 +1076,12 @@ function spinnerParts(kind, size) {
         Math.cos(a) * s * 0.5, 0, Math.sin(a) * s * 0.5, MAT.arcaneGlow);
     }
     return { parts: c.parts, y: size * 2.0, speed: 0.7 };
+  }
+  if (kind === 'mspring') {
+    const c = partCollector();
+    c.add(GLOW, new THREE.TorusGeometry(s * 0.36, s * 0.03, 6, 14), 0, 0, 0, MAT.arcaneGlow,
+      new THREE.Matrix4().makeRotationX(1.2));
+    return { parts: c.parts, y: size * 1.28, speed: -1.8 };
   }
   return null;
 }

@@ -13,6 +13,7 @@ from __future__ import print_function
 import os
 import random
 import sys
+import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -111,7 +112,64 @@ def main():
             "unit escaped narrow_standoff bounds: %s" % ((unit["x"], unit["y"]),)
     print("  Small-map bounds respected: PASS")
 
-    print("multiroom tests ok: 5 tests passed")
+    # --- Test 6: rooms no longer share one global sim lock ---
+    lock_a = server.room_lock(small)
+    lock_b = server.room_lock(large)
+    assert lock_a is not lock_b
+    assert lock_a is not server.LOCK
+    saved = dict(server.ROOMS)
+    try:
+        server.ROOMS.clear()
+        server.ROOMS[small["id"]] = small
+        server.ROOMS[large["id"]] = large
+        held = threading.Event()
+        release = threading.Event()
+
+        def hold_small():
+            with lock_a:
+                held.set()
+                release.wait(2.0)
+
+        blocker = threading.Thread(target=hold_small)
+        blocker.start()
+        assert held.wait(1.0), "room A lock holder did not start"
+        t0 = time.time()
+        with lock_b:
+            server.tick_game(large, 0.05)
+        elapsed = time.time() - t0
+        release.set()
+        blocker.join(2.0)
+        assert elapsed < 0.2, "room B blocked by room A lock: %.3fs" % elapsed
+
+        # Holding the registry LOCK must not block a room-B tick/snapshot.
+        registry_held = threading.Event()
+        registry_release = threading.Event()
+
+        def hold_registry():
+            with server.LOCK:
+                registry_held.set()
+                registry_release.wait(2.0)
+
+        registry_blocker = threading.Thread(target=hold_registry)
+        registry_blocker.start()
+        assert registry_held.wait(1.0)
+        t1 = time.time()
+        with lock_b:
+            server.tick_game(large, 0.05)
+            viewer = next(iter(large["players"]))
+            server.public_room(large, viewer_id=viewer, full=False)
+        registry_elapsed = time.time() - t1
+        registry_release.set()
+        registry_blocker.join(2.0)
+        assert registry_elapsed < 0.2, (
+            "room B still waits on the global registry lock: %.3fs" % registry_elapsed)
+        assert small.get("lock") is not large.get("lock")
+    finally:
+        server.ROOMS.clear()
+        server.ROOMS.update(saved)
+    print("  Per-room sim locks (A does not block B): PASS")
+
+    print("multiroom tests ok: 6 tests passed")
 
 
 if __name__ == "__main__":

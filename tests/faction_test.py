@@ -88,7 +88,7 @@ def main():
         except ValueError as exc:
             assert "阵营" in str(exc), str(exc)
     # 科技不能建/产魔法
-    for bad in ("mtemple", "mcircle", "mtower"):
+    for bad in ("mtemple", "mcircle", "mtower", "mspring"):
         try:
             server.queue_structure(room, a["id"], bad)
             raise AssertionError("科技不该能建 %s" % bad)

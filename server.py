@@ -25,6 +25,22 @@ from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from catalog import (
+    FACTION_BUILDINGS,
+    FACTION_LOADOUT,
+    MAGIC_STRUCTURES,
+    MAGIC_UNITS,
+    PUBLIC_CATALOG,
+    STRUCTURE_TYPES,
+    UNIT_TYPES,
+    VEHICLE_KINDS,
+    faction_buildings,
+    faction_loadout,
+    public_catalog,
+    structure_role,
+    unit_role,
+)
+
 
 VERSION = "2.0.0"
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -39,12 +55,33 @@ STARTED_AT = time.time()
 # 测试），局域网其他玩家访问会被拒。确需从别的机器用时设环境变量 IFL_CHEATS=1 放开。
 CHEATS_OPEN = os.environ.get("IFL_CHEATS", "").strip().lower() in ("1", "true", "on")
 
+# LOCK 只保护房间表（创建/加入/列表/回收）。每个房间另有自己的 RLock，
+# 对局 A 的 tick/快照/指令不再挡住对局 B。
 LOCK = threading.RLock()
 ROOMS = {}
 MAX_ROOMS = 32
 MIN_TEAM = 0
 MAX_TEAM = 4
 RUNNING = True
+
+
+def room_lock(room):
+    """Return the per-room sim lock, creating one if a test-built room lacks it."""
+    lock = room.get("lock")
+    if lock is None:
+        lock = threading.RLock()
+        room["lock"] = lock
+    return lock
+
+
+def tick_all_rooms(dt):
+    """Tick every live room under its own lock so matches do not hitch each other."""
+    with LOCK:
+        rooms = list(ROOMS.values())
+    for room in rooms:
+        with room_lock(room):
+            tick_game(room, dt)
+
 
 # 静态资源内存缓存：路径 -> ((mtime, size), (content, content_type, last_modified))。
 # 用独立的小锁，不为读个文件去抢全局 LOCK（那会卡住 20Hz 模拟线程）。
@@ -298,7 +335,6 @@ MAPS = {
 }
 COMBAT_CELL_SIZE = 256.0
 SEPARATION_CELL_SIZE = 64.0
-VEHICLE_KINDS = frozenset(("tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv", "v3", "overlord", "prism"))
 REPAIR_RATE = 105.0
 REPAIR_COST_PER_HP = 0.35
 REPAIR_DOCKS_PER_RING = 8
@@ -364,329 +400,7 @@ DAMAGE_MULTIPLIER = {
     "magic":   {"infantry": 1.20, "light": 1.30, "heavy": 1.60, "structure": 0.60, "arcane": 1.00},
 }
 
-UNIT_TYPES = {
-    "rifle": {
-        "name": "突击兵", "cost": 180, "hp": 110, "speed": 110.4,
-        "damage": 13.0, "range": 125.0, "cooldown": 0.62,
-        "size": 10.0, "build": 3.0, "producer": "barracks",
-        "projectile": "bullet", "projectileSpeed": 680.0, "splash": 0.0,
-        "sight": 350.0, "armor": "infantry", "damageType": "bullet",
-    },
-    "rocket": {
-        "name": "火箭兵", "cost": 340, "hp": 95, "speed": 92.4,
-        "damage": 38.0, "range": 205.0, "cooldown": 1.2,
-        "size": 11.0, "build": 5.0, "producer": "barracks",
-        "projectile": "rocket", "projectileSpeed": 285.0, "splash": 42.0,
-        "sight": 390.0, "armor": "infantry", "damageType": "rocket",
-    },
-    "sniper": {
-        "name": "狙击手", "cost": 420, "hp": 75, "speed": 90.0,
-        "damage": 55.0, "range": 310.0, "cooldown": 1.6,
-        "size": 10.0, "build": 6.0, "producer": "barracks",
-        "projectile": "sniper", "projectileSpeed": 1200.0, "splash": 0.0,
-        "sight": 480.0, "armor": "infantry", "damageType": "sniper",
-    },
-    # 军犬：红色警戒式近战特种兵。全场最速，扑咬对步兵一击必杀（克制表 ×4），
-    # 但对载具/建筑零伤害；便宜的肉盾与侦察兵，专咬成群步兵。
-    "dog": {
-        "name": "军犬", "cost": 120, "hp": 55, "speed": 146.4,
-        "damage": 60.0, "range": 30.0, "cooldown": 0.8,
-        "size": 8.0, "build": 2.5, "producer": "barracks",
-        "projectile": "bite", "projectileSpeed": 1000.0, "splash": 0.0,
-        "sight": 400.0, "armor": "infantry", "damageType": "bite",
-    },
-    "tank": {
-        "name": "先锋坦克", "cost": 780, "hp": 620, "speed": 75.6,
-        "damage": 68.0, "range": 180.0, "cooldown": 1.38,
-        "size": 20.0, "build": 8.0, "producer": "factory",
-        "projectile": "shell", "projectileSpeed": 390.0, "splash": 51.0,
-        "sight": 440.0, "armor": "heavy", "damageType": "shell",
-    },
-    "scout": {
-        "name": "猎犬战车", "cost": 460, "hp": 260, "speed": 129.6,
-        "damage": 20.0, "range": 145.0, "cooldown": 0.72,
-        "size": 16.0, "build": 6.0, "producer": "factory",
-        "projectile": "bullet", "projectileSpeed": 720.0, "splash": 0.0,
-        "sight": 620.0, "armor": "light", "damageType": "bullet",
-    },
-    "harvester": {
-        "name": "采矿车", "cost": 920, "hp": 680, "speed": 63.6,
-        "damage": 0.0, "range": 0.0, "cooldown": 0.0,
-        "size": 22.0, "build": 9.0, "producer": "factory",
-        "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
-        "capacity": 850.0, "harvestRate": 145.0, "sight": 330.0,
-        "armor": "heavy", "damageType": "none",
-    },
-    "artillery": {
-        "name": "攻城炮", "cost": 960, "hp": 300, "speed": 50.4,
-        "damage": 85.0, "range": 340.0, "cooldown": 2.2,
-        "size": 22.0, "build": 10.0, "producer": "factory",
-        "projectile": "siege", "projectileSpeed": 260.0, "splash": 55.0,
-        "sight": 290.0, "armor": "heavy", "damageType": "siege",
-    },
-    "tank_destroyer": {
-        "name": "坦克歼击车", "cost": 1050, "hp": 320, "speed": 66.0,
-        "damage": 78.0, "range": 230.0, "cooldown": 1.7,
-        "size": 18.0, "build": 8.0, "producer": "factory",
-        "projectile": "ap", "projectileSpeed": 800.0, "splash": 0.0,
-        "sight": 410.0, "armor": "heavy", "damageType": "ap",
-    },
-    "mcv": {
-        "name": "基地车", "cost": 2500, "hp": 900, "speed": 45.6,
-        "damage": 0.0, "range": 0.0, "cooldown": 0.0,
-        "size": 24.0, "build": 14.0, "producer": "factory",
-        "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
-        "sight": 320.0, "armor": "heavy", "damageType": "none",
-        "canDeploy": True, "deploysInto": "hq",
-    },
-    "v3": {
-        "name": "东风快递", "cost": 2000, "hp": 260, "speed": 38.4,
-        "damage": 200.0, "range": 500.0, "cooldown": 5.0,
-        "size": 22.0, "build": 18.0, "producer": "factory",
-        "projectile": "missile", "projectileSpeed": 160.0, "splash": 100.0,
-        "sight": 310.0, "armor": "light", "damageType": "missile",
-    },
-    # ---- 高级兵种：靠 requires 卡在二级科技后，贵在单兵质量而非数量 ----
-    "overlord": {
-        "name": "天启坦克", "cost": 1700, "hp": 1500, "speed": 57.6,
-        "damage": 120.0, "range": 195.0, "cooldown": 1.6,
-        "size": 24.0, "build": 16.0, "producer": "factory",
-        "requires": ["repair"],
-        "projectile": "shell", "projectileSpeed": 400.0, "splash": 30.0,
-        "sight": 450.0, "armor": "heavy", "damageType": "shell",
-    },
-    "tesla": {
-        "name": "磁暴步兵", "cost": 650, "hp": 190, "speed": 81.6,
-        "damage": 26.0, "range": 150.0, "cooldown": 0.5,
-        "size": 11.0, "build": 7.0, "producer": "barracks",
-        "requires": ["factory"],
-        "projectile": "tesla", "projectileSpeed": 900.0, "splash": 0.0,
-        "sight": 380.0, "armor": "infantry", "damageType": "tesla",
-    },
-    "prism": {
-        "name": "光棱坦克", "cost": 1450, "hp": 360, "speed": 67.2,
-        "damage": 100.0, "range": 305.0, "cooldown": 1.8,
-        "size": 19.0, "build": 13.0, "producer": "factory",
-        "requires": ["repair"],
-        "projectile": "laser", "projectileSpeed": 1400.0, "splash": 0.0,
-        "sight": 480.0, "armor": "light", "damageType": "laser",
-    },
-    # ==================== 魔法阵营「秘法会」（faction=magic） ====================
-    # 独立经济：自己的主堡/法力塔/精炼所/采矿/基地车，数值与科技对位、只换皮换名。
-    "mharvester": {
-        "name": "浮游晶簇", "cost": 920, "hp": 680, "speed": 63.6,
-        "damage": 0.0, "range": 0.0, "cooldown": 0.0,
-        "size": 22.0, "build": 9.0, "producer": "mcircle",
-        "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
-        "capacity": 850.0, "harvestRate": 145.0, "sight": 330.0,
-        "armor": "light", "damageType": "none",
-    },
-    "mmcv": {
-        "name": "迁徙法阵", "cost": 2500, "hp": 900, "speed": 45.6,
-        "damage": 0.0, "range": 0.0, "cooldown": 0.0,
-        "size": 24.0, "build": 14.0, "producer": "mcircle",
-        "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
-        "sight": 320.0, "armor": "light", "damageType": "none",
-        "canDeploy": True, "deploysInto": "mhq",
-    },
-    # ---- 军事：奥术圣殿(步兵) / 召唤法阵(构装与魔兽) ----
-    # 奥术法师：远程魔法弹，熔重甲的反坦克答案；魔导甲怕磁暴/狙击/子弹。
-    "mage": {
-        "name": "奥术法师", "cost": 500, "hp": 90, "speed": 78.0,
-        "damage": 42.0, "range": 220.0, "cooldown": 1.1,
-        "size": 10.0, "build": 5.0, "producer": "mtemple",
-        "projectile": "arcane", "projectileSpeed": 800.0, "splash": 0.0,
-        "sight": 410.0, "armor": "arcane", "damageType": "magic",
-    },
-    # 冰霜女巫：伤害低但命中挂减速，是魔法阵营的控制/拉扯核心。
-    "frost": {
-        "name": "冰霜女巫", "cost": 550, "hp": 85, "speed": 74.0,
-        "damage": 16.0, "range": 205.0, "cooldown": 1.3,
-        "size": 10.0, "build": 6.0, "producer": "mtemple",
-        "projectile": "frost", "projectileSpeed": 700.0, "splash": 40.0,
-        "sight": 420.0, "armor": "arcane", "damageType": "magic",
-        "slow": {"mult": 0.45, "duration": 2.5},
-    },
-    # 岩石傀儡：构装前排，高血慢速，投掷巨石溅射，踩步兵/轻型。
-    "golem": {
-        "name": "岩石傀儡", "cost": 850, "hp": 760, "speed": 52.0,
-        "damage": 52.0, "range": 130.0, "cooldown": 1.2,
-        "size": 20.0, "build": 9.0, "producer": "mcircle",
-        "projectile": "boulder", "projectileSpeed": 420.0, "splash": 34.0,
-        "sight": 360.0, "armor": "arcane", "damageType": "magic",
-    },
-    # 影豹：全场最快的魔法兽，近战扑击(爪击瞬发)，侧翼包抄/切后排。
-    "panther": {
-        "name": "影豹", "cost": 420, "hp": 180, "speed": 132.0,
-        "damage": 26.0, "range": 34.0, "cooldown": 0.7,
-        "size": 12.0, "build": 5.0, "producer": "mcircle",
-        "projectile": "claw", "projectileSpeed": 1000.0, "splash": 0.0,
-        "sight": 520.0, "armor": "arcane", "damageType": "magic",
-    },
-    # 秘法巨龙：魔法阵营的重炮，远程大火球大溅射，压轴质量兵种。
-    "dragon": {
-        "name": "秘法巨龙", "cost": 1600, "hp": 900, "speed": 60.0,
-        "damage": 95.0, "range": 260.0, "cooldown": 1.7,
-        "size": 24.0, "build": 15.0, "producer": "mcircle",
-        "projectile": "fireball", "projectileSpeed": 520.0, "splash": 60.0,
-        "sight": 460.0, "armor": "arcane", "damageType": "magic",
-    },
-}
-
 DEFAULT_MAP = "north_conflict"
-
-STRUCTURE_TYPES = {
-    "hq": {
-        "name": "指挥中心", "cost": 0, "hp": 2400, "size": 58.0,
-        "build": 0.0, "deploy": 0.0, "power": 35, "requires": [], "sight": 650.0,
-        "armor": "structure", "packsInto": "mcv",
-    },
-    "power": {
-        "name": "磁能电站", "cost": 600, "hp": 760, "size": 40.0,
-        "build": 8.0, "deploy": 2.2, "power": 120, "requires": ["hq"], "sight": 350.0,
-        "armor": "structure",
-    },
-    "refinery": {
-        "name": "矿石精炼厂", "cost": 1400, "hp": 1350, "size": 52.0,
-        "build": 14.0, "deploy": 3.2, "power": -30, "requires": ["hq"], "sight": 390.0,
-        "armor": "structure",
-    },
-    "barracks": {
-        "name": "步兵营", "cost": 700, "hp": 900, "size": 42.0,
-        "build": 10.0, "deploy": 2.8, "power": -20, "requires": ["power"], "sight": 410.0,
-        "armor": "structure",
-    },
-    "factory": {
-        "name": "重装工厂", "cost": 1600, "hp": 1600, "size": 58.0,
-        "build": 18.0, "deploy": 4.2, "power": -45, "requires": ["refinery", "power"], "sight": 460.0,
-        "armor": "structure",
-    },
-    "repair": {
-        "name": "战地维修厂", "cost": 1250, "hp": 1280, "size": 50.0,
-        "build": 15.0, "deploy": 3.6, "power": -35,
-        "requires": ["factory", "power"], "sight": 440.0,
-        "armor": "structure",
-    },
-    "turret": {
-        "name": "哨戒炮塔", "cost": 950, "hp": 1300, "size": 30.0,
-        "build": 12.0, "deploy": 3.0, "power": -25, "requires": ["power"], "sight": 560.0,
-        "damage": 62.0, "range": 280.0, "cooldown": 0.70,
-        "projectile": "shell", "projectileSpeed": 460.0, "splash": 51.0,
-        "armor": "structure", "damageType": "shell",
-    },
-    "missile": {
-        "name": "导弹炮塔", "cost": 1200, "hp": 1050, "size": 34.0,
-        "build": 16.0, "deploy": 3.5, "power": -30, "requires": ["barracks", "power"],
-        "sight": 580.0, "damage": 90.0, "range": 360.0, "cooldown": 1.6,
-        "projectile": "shell", "projectileSpeed": 420.0, "splash": 45.0,
-        "armor": "structure", "damageType": "shell",
-    },
-    # ==================== 魔法阵营「秘法会」建筑（faction=magic） ====================
-    # 与科技对位：主堡=hq / 法力塔=power / 精炼所=refinery / 圣殿=barracks /
-    # 法阵=factory / 奥术塔=defense。role 字段让经济逻辑跨阵营复用。
-    "mhq": {
-        "name": "魔法主堡", "cost": 0, "hp": 2400, "size": 58.0,
-        "build": 0.0, "deploy": 0.0, "power": 35, "requires": [], "sight": 650.0,
-        "armor": "structure", "packsInto": "mmcv",
-    },
-    "mpower": {
-        "name": "法力塔", "cost": 600, "hp": 760, "size": 40.0,
-        "build": 8.0, "deploy": 2.2, "power": 120, "requires": ["mhq"], "sight": 350.0,
-        "armor": "structure",
-    },
-    "mrefinery": {
-        "name": "水晶精炼所", "cost": 1400, "hp": 1350, "size": 52.0,
-        "build": 14.0, "deploy": 3.2, "power": -30, "requires": ["mhq"], "sight": 390.0,
-        "armor": "structure",
-    },
-    "mtemple": {
-        "name": "奥术圣殿", "cost": 700, "hp": 900, "size": 42.0,
-        "build": 10.0, "deploy": 2.8, "power": -20, "requires": ["mpower"], "sight": 410.0,
-        "armor": "structure",
-    },
-    "mcircle": {
-        "name": "召唤法阵", "cost": 1600, "hp": 1600, "size": 58.0,
-        "build": 18.0, "deploy": 4.2, "power": -45, "requires": ["mrefinery", "mpower"], "sight": 460.0,
-        "armor": "structure",
-    },
-    "mtower": {
-        "name": "奥术塔", "cost": 950, "hp": 1300, "size": 30.0,
-        "build": 12.0, "deploy": 3.0, "power": -25, "requires": ["mpower"], "sight": 560.0,
-        "damage": 55.0, "range": 300.0, "cooldown": 0.9,
-        "projectile": "arcane", "projectileSpeed": 700.0, "splash": 30.0,
-        "armor": "structure", "damageType": "magic",
-    },
-}
-
-# ---- 阵营与角色分类 ----
-# faction：tech(钢铁军团) / magic(秘法会)，建造与生产按 player["faction"] 校验。
-# role：跨阵营的功能角色。经济逻辑（出生配置、采矿返回、精炼厂赠车、基地车
-# 展开、出售保护、bot 寻目标）一律按 role 判定而不是写死 kind —— 魔法阵营出
-# 同 role 的换皮建筑即可整套复用。新增兵种/建筑 = 加定义 + 在下面登记 role。
-MAGIC_STRUCTURES = frozenset(("mhq", "mpower", "mrefinery", "mtemple", "mcircle", "mtower"))
-MAGIC_UNITS = frozenset(("mharvester", "mmcv", "mage", "frost", "golem", "panther", "dragon"))
-
-_STRUCTURE_ROLES = {
-    "hq": "hq", "mhq": "hq",
-    "power": "power", "mpower": "power",
-    "refinery": "refinery", "mrefinery": "refinery",
-    "barracks": "barracks", "mtemple": "barracks",
-    "factory": "factory", "mcircle": "factory",
-    "repair": "repair",
-    "turret": "defense", "missile": "defense", "mtower": "defense",
-}
-_UNIT_ROLES = {
-    "harvester": "harvester", "mharvester": "harvester",
-    "mcv": "mcv", "mmcv": "mcv",
-}
-
-for _kind, _def in STRUCTURE_TYPES.items():
-    _def["role"] = _STRUCTURE_ROLES.get(_kind)
-    _def["faction"] = "magic" if _kind in MAGIC_STRUCTURES else "tech"
-for _kind, _def in UNIT_TYPES.items():
-    _def["role"] = _UNIT_ROLES.get(_kind)
-    _def["faction"] = "magic" if _kind in MAGIC_UNITS else "tech"
-
-
-def structure_role(kind):
-    return STRUCTURE_TYPES.get(kind, {}).get("role")
-
-
-def unit_role(kind):
-    return UNIT_TYPES.get(kind, {}).get("role")
-
-
-def public_catalog():
-    """Presentation fields the client HUD needs. Python tables are the source."""
-    buildings = {}
-    for kind, definition in STRUCTURE_TYPES.items():
-        buildings[kind] = {
-            "name": definition["name"],
-            "cost": int(definition["cost"]),
-            "build": definition.get("build", 0),
-            "size": definition.get("size", 40),
-            "requires": list(definition.get("requires") or []),
-            "faction": definition.get("faction", "tech"),
-            "role": definition.get("role"),
-        }
-    units = {}
-    for kind, definition in UNIT_TYPES.items():
-        units[kind] = {
-            "name": definition["name"],
-            "cost": int(definition["cost"]),
-            "build": definition.get("build", 0),
-            "size": definition.get("size", 10),
-            "producer": definition.get("producer"),
-            "requires": list(definition.get("requires") or []),
-            "faction": definition.get("faction", "tech"),
-            "role": definition.get("role"),
-            "canDeploy": bool(definition.get("canDeploy")),
-            "damageType": definition.get("damageType"),
-        }
-    return {"buildings": buildings, "units": units}
-
-
-PUBLIC_CATALOG = public_catalog()
 
 
 def clamp_team(value):
@@ -700,34 +414,6 @@ def clamp_team(value):
 def ensure_room_capacity():
     if len(ROOMS) >= MAX_ROOMS:
         raise ValueError("服务器房间已满")
-
-
-# 各阵营的出生与经济基础 kind。start_game 出生配置、精炼厂赠车都从这里取，
-# 日后要加第三个阵营只需在 UNIT/STRUCTURE 表加定义、在这里登记一行。
-FACTION_LOADOUT = {
-    "tech": {"hq": "hq", "power": "power", "refinery": "refinery",
-             "harvester": "harvester", "mcv": "mcv", "infantry": "rifle", "armor": "tank"},
-    "magic": {"hq": "mhq", "power": "mpower", "refinery": "mrefinery",
-              "harvester": "mharvester", "mcv": "mmcv", "infantry": "mage", "armor": "golem"},
-}
-
-
-def faction_loadout(faction):
-    return FACTION_LOADOUT.get(faction, FACTION_LOADOUT["tech"])
-
-
-# AI 按 role 取的建造 kind（role→具体建筑）。魔法换皮复用同一套决策：
-# 圣殿=兵营 / 法阵=工厂 / 奥术塔=防御塔；魔法没有维修厂，也不造导弹塔。
-FACTION_BUILDINGS = {
-    "tech": {"power": "power", "barracks": "barracks", "refinery": "refinery",
-             "factory": "factory", "repair": "repair", "defense": "turret"},
-    "magic": {"power": "mpower", "barracks": "mtemple", "refinery": "mrefinery",
-              "factory": "mcircle", "defense": "mtower"},
-}
-
-
-def faction_buildings(faction):
-    return FACTION_BUILDINGS.get(faction, FACTION_BUILDINGS["tech"])
 
 
 def now():
@@ -2016,7 +1702,7 @@ def issue_attack(game, player_id, unit_ids, target_id):
 
 def issue_repair(game, player_id, unit_ids, structure_id):
     repair_bay = find_entity(game, structure_id)
-    if (not repair_bay or repair_bay.get("kind") != "repair"
+    if (not repair_bay or structure_role(repair_bay.get("kind")) != "repair"
             or repair_bay["owner"] != player_id or not repair_bay.get("active")):
         raise ValueError("请选择己方已启用的维修厂")
     selected = [
@@ -3026,7 +2712,7 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
 def tick_repair_unit(room, unit, dt, entity_index, power_cache, terrain):
     game = room["game"]
     repair_bay = find_entity(game, unit.get("repairTargetId"), entity_index)
-    if (not repair_bay or repair_bay.get("kind") != "repair"
+    if (not repair_bay or structure_role(repair_bay.get("kind")) != "repair"
             or repair_bay["owner"] != unit["owner"]
             or not repair_bay.get("active")):
         clear_repair_order(unit)
@@ -3483,7 +3169,8 @@ def tick_bots(room):
                     queue_structure(room, bot["id"], fb["refinery"])
                 elif "factory" not in roles and bot["cash"] >= STRUCTURE_TYPES[fb["factory"]]["cost"]:
                     queue_structure(room, bot["id"], fb["factory"])
-                elif (not magic and "factory" in roles and "repair" not in roles
+                elif ("factory" in roles and "repair" not in roles
+                      and fb.get("repair")
                       and random.random() < 0.30
                       and bot["cash"] >= STRUCTURE_TYPES[fb["repair"]]["cost"]):
                     queue_structure(room, bot["id"], fb["repair"])
@@ -3812,13 +3499,12 @@ def game_loop():
         current = time.time()
         dt = min(0.12, max(0.001, current - previous))
         previous = current
-        with LOCK:
-            for room in list(ROOMS.values()):
-                tick_game(room, dt)
-            cleanup_clock += dt
-            if cleanup_clock > 30:
-                cleanup_clock = 0
-                cutoff = now() - 60 * 60 * 3
+        tick_all_rooms(dt)
+        cleanup_clock += dt
+        if cleanup_clock > 30:
+            cleanup_clock = 0
+            cutoff = now() - 60 * 60 * 3
+            with LOCK:
                 stale = []
                 for room_id, room in ROOMS.items():
                     humans = [p for p in room["players"].values() if not p["isBot"]]
@@ -3937,9 +3623,10 @@ class GameHandler(BaseHTTPRequestHandler):
             token = (query.get("token") or [""])[0]
             with LOCK:
                 room, player = authenticate(room_id, player_id, token)
-                if not room or not player:
-                    self.send_json(403, {"ok": False, "error": "会话已失效"})
-                    return
+            if not room or not player:
+                self.send_json(403, {"ok": False, "error": "会话已失效"})
+                return
+            with room_lock(room):
                 payload = {"ok": True, "room": public_room(room, viewer_id=player["id"])}
             self.send_json(200, payload)
         elif path == "/api/events":
@@ -3958,8 +3645,10 @@ class GameHandler(BaseHTTPRequestHandler):
                 self.send_json(400, {"ok": False, "error": "金额无效"})
                 return
             with LOCK:
-                found = False
-                for room in ROOMS.values():
+                rooms = list(ROOMS.values())
+            found = False
+            for room in rooms:
+                with room_lock(room):
                     for player in room["players"].values():
                         if player["name"] == player_name:
                             # 随机减去 [0, 请求金额] 之间的一笔；现金最低减到 0，不变负
@@ -3968,10 +3657,10 @@ class GameHandler(BaseHTTPRequestHandler):
                             found = True
                             self.send_json(200, {"ok": True, "name": player_name, "removed": removed, "cash": player["cash"]})
                             break
-                    if found:
-                        break
-                if not found:
-                    self.send_json(404, {"ok": False, "error": "玩家 " + player_name + " 未找到"})
+                if found:
+                    break
+            if not found:
+                self.send_json(404, {"ok": False, "error": "玩家 " + player_name + " 未找到"})
         else:
             self.serve_static(path)
 
@@ -4010,6 +3699,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 "players": {player["id"]: player}, "chat": [], "game": None,
                 "createdAt": now(),
                 "selectedMap": selected_map,
+                "lock": threading.RLock(),
             }
             ROOMS[room_id] = room
             add_chat(room, "作战系统", "%s 创建了房间。" % player["name"], True)
@@ -4022,6 +3712,7 @@ class GameHandler(BaseHTTPRequestHandler):
             room = ROOMS.get(room_id)
             if not room:
                 raise ValueError("房间不存在")
+        with room_lock(room):
             if room["status"] != "lobby":
                 raise ValueError("该房间已开始战斗")
             room_map = MAPS.get(room.get("selectedMap", DEFAULT_MAP), MAPS[DEFAULT_MAP])
@@ -4039,6 +3730,12 @@ class GameHandler(BaseHTTPRequestHandler):
         action = data.get("action")
         payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
         with LOCK:
+            room, player = authenticate(data.get("roomId"), data.get("playerId"), data.get("token"))
+        if not room or not player:
+            self.send_json(403, {"ok": False, "error": "会话已失效"})
+            return
+        drop_empty = False
+        with room_lock(room):
             room, player = authenticate(data.get("roomId"), data.get("playerId"), data.get("token"))
             if not room or not player:
                 self.send_json(403, {"ok": False, "error": "会话已失效"})
@@ -4188,19 +3885,18 @@ class GameHandler(BaseHTTPRequestHandler):
                     room["players"].pop(player["id"], None)
                     add_chat(room, "作战系统", "%s 离开了房间。" % name, True)
                     if not any(not p["isBot"] for p in room["players"].values()):
-                        ROOMS.pop(room["id"], None)
+                        drop_empty = True
                     elif room["hostId"] == player["id"]:
                         room["hostId"] = next(p["id"] for p in room["players"].values() if not p["isBot"])
                 else:
                     player["connections"] = 0
                     player["lastSeen"] = 0
-                self.send_json(200, {"ok": True})
-                return
             else:
                 raise ValueError("未知操作")
             # 指令可能在两个模拟 tick 之间直接改变建筑/队列；REST 响应必须看到
             # 新状态，不能复用刚才 SSE 建出的旧快照。
-            invalidate_game_snapshot(room.get("game"))
+            if action != "leave":
+                invalidate_game_snapshot(room.get("game"))
             # 战斗中的指令响应只回动态数据。地图、地形、矿点布局、视距表一局
             # 之内不变，客户端在首帧就缓存好了；过去每条移动指令都附一份 full
             # 快照，客户端收到后会把整个 3D 世界推倒重建 —— 两万顶点的地形
@@ -4208,6 +3904,14 @@ class GameHandler(BaseHTTPRequestHandler):
             in_battle = action == "command" and room["status"] == "playing"
             response = {"ok": True, "room": public_room(
                 room, viewer_id=player["id"], full=not in_battle)}
+        if drop_empty:
+            with LOCK:
+                live = ROOMS.get(room["id"])
+                if live is room and not any(not p["isBot"] for p in room["players"].values()):
+                    ROOMS.pop(room["id"], None)
+        if action == "leave":
+            self.send_json(200, {"ok": True})
+            return
         self.send_json(200, response)
 
     def handle_events(self, query):
@@ -4216,9 +3920,10 @@ class GameHandler(BaseHTTPRequestHandler):
         token = (query.get("token") or [""])[0]
         with LOCK:
             room, player = authenticate(room_id, player_id, token)
-            if not room or not player:
-                self.send_json(403, {"ok": False, "error": "会话已失效"})
-                return
+        if not room or not player:
+            self.send_json(403, {"ok": False, "error": "会话已失效"})
+            return
+        with room_lock(room):
             player["connections"] += 1
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -4234,18 +3939,18 @@ class GameHandler(BaseHTTPRequestHandler):
             first_frame = True
             full_game_uid = None
             while RUNNING:
-                with LOCK:
-                    room, player = authenticate(room_id, player_id, token)
-                    if not room or not player:
+                with room_lock(room):
+                    live, player = authenticate(room_id, player_id, token)
+                    if not live or not player:
                         break
-                    game = room.get("game")
+                    game = live.get("game")
                     game_uid = game.get("uid") if game else None
                     # A stream opened in the lobby must send the static block
                     # again once the match actually starts.
                     full = first_frame or (game_uid is not None
                                            and game_uid != full_game_uid)
-                    snapshot = public_room(room, viewer_id=player["id"], full=full)
-                    status = room["status"]
+                    snapshot = public_room(live, viewer_id=player["id"], full=full)
+                    status = live["status"]
                 # Encoding stays outside the lock so it never blocks the sim.
                 payload = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
                 message = ("event: state\ndata: %s\n\n" % payload).encode("utf-8")
@@ -4258,10 +3963,10 @@ class GameHandler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
         finally:
-            with LOCK:
-                room = ROOMS.get(str(room_id).upper())
-                if room and player_id in room["players"]:
-                    room["players"][player_id]["connections"] = max(0, room["players"][player_id]["connections"] - 1)
+            with room_lock(room):
+                if player_id in room["players"]:
+                    room["players"][player_id]["connections"] = max(
+                        0, room["players"][player_id]["connections"] - 1)
 
     def serve_static(self, path):
         if path == "/":

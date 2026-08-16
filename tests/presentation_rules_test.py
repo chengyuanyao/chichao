@@ -153,9 +153,18 @@ def main():
     bat = read("start-game.bat")
     assert bat.find("py.exe") < bat.find("Python36")
 
-    # 秘法会没有维修厂：客户端必须藏维修按钮，不能只靠点下去报错。
+    # 秘法会有圣泉（role=repair）：维修按钮按阵营换文案，不再整阵营隐藏。
     assert "function isOwnMagicFaction" in app
-    assert "repairBtn.classList.toggle('hidden', isMagic)" in app
+    assert "repairBtn.classList.toggle('hidden', isMagic)" not in app
+    assert "structureRole(structure.kind) === 'repair'" in app
+    assert "structureRole(target.kind) === 'repair'" in app
+    assert catalog["buildings"]["mspring"]["role"] == "repair"
+    assert catalog["buildings"]["mspring"]["faction"] == "magic"
+    assert catalog["buildings"]["mspring"]["cost"] == server.STRUCTURE_TYPES["repair"]["cost"]
+    assert catalog["units"]["golem"]["repairable"] is True
+    assert catalog["units"]["dragon"]["repairable"] is True
+    assert catalog["units"]["mharvester"]["repairable"] is True
+    assert catalog["units"]["mage"]["repairable"] is False
 
     assert server.select_lan_ips(
         ["127.0.0.1", "192.168.1.5", "10.18.0.2", "10.0.0.1"]
