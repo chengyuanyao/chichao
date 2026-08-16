@@ -94,6 +94,17 @@ def main():
             raise AssertionError("科技不该能建 %s" % bad)
         except ValueError as exc:
             assert "阵营" in str(exc), str(exc)
+    # place_structure 也要挡跨阵营，不能只靠 queue_structure
+    try:
+        server.place_structure(room, b["id"], "turret", 800, 800, free=True)
+        raise AssertionError("魔法不该能放置科技炮塔")
+    except ValueError as exc:
+        assert "阵营" in str(exc), str(exc)
+    try:
+        server.place_structure(room, a["id"], "mtower", 800, 800, free=True)
+        raise AssertionError("科技不该能放置奥术塔")
+    except ValueError as exc:
+        assert "阵营" in str(exc), str(exc)
     # 魔法有圣殿就能出法师；科技给兵营也产不出法师
     give(game, b["id"], "mtemple")
     server.queue_unit(room, b["id"], "mage")

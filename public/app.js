@@ -9,84 +9,144 @@ import { createRenderer } from './render3d.js';
   var SESSION_KEY = 'steel-front-lan-session';
   var NAME_KEY = 'steel-front-commander-name';
 
-  var BUILDINGS = {
-    power: { name: '磁能电站', cost: 600, build: 8, icon: 'ϟ', size: 40, requires: ['hq'], desc: '提供 120 电力' },
-    refinery: { name: '矿石精炼厂', cost: 1400, build: 14, icon: '◆', size: 52, requires: ['hq'], desc: '接收采矿车资源' },
-    barracks: { name: '步兵营', cost: 700, build: 10, icon: '♟', size: 42, requires: ['power'], desc: '训练步兵单位' },
-    factory: { name: '重装工厂', cost: 1600, build: 18, icon: '▰', size: 58, requires: ['refinery', 'power'], desc: '生产装甲单位' },
-    turret: { name: '哨戒炮塔', cost: 950, build: 12, icon: '⌖', size: 30, requires: ['power'], desc: '自动攻击附近敌军' },
-    missile: { name: '导弹炮塔', cost: 1200, build: 16, icon: '⊿', size: 34, requires: ['barracks', 'power'], desc: '远程高伤大溅射，冷却慢' },
-    repair: { name: '战地维修厂', cost: 1250, build: 15, icon: '✚', size: 50, requires: ['factory', 'power'], desc: '维修受损装甲载具' },
-    // ---- 秘法会（魔法阵营，faction=magic）独立经济与军事建筑 ----
-    mpower: { name: '法力塔', cost: 600, build: 8, icon: '✦', size: 40, requires: ['mhq'], faction: 'magic', desc: '提供 120 电力' },
-    mrefinery: { name: '水晶精炼所', cost: 1400, build: 14, icon: '◈', size: 52, requires: ['mhq'], faction: 'magic', desc: '接收浮游晶簇的水晶' },
-    mtemple: { name: '奥术圣殿', cost: 700, build: 10, icon: '✠', size: 42, requires: ['mpower'], faction: 'magic', desc: '训练奥术步兵' },
-    mcircle: { name: '召唤法阵', cost: 1600, build: 18, icon: '⬡', size: 58, requires: ['mrefinery', 'mpower'], faction: 'magic', desc: '召唤构装体与魔兽' },
-    mtower: { name: '奥术塔', cost: 950, build: 12, icon: '✵', size: 30, requires: ['mpower'], faction: 'magic', desc: '自动攻击附近敌军（魔法）' }
+  // 造价/名称/角色/前置只信服务端目录（/api/catalog 与首帧 snapshot.catalog）。
+  // 这里只留卡片图标和说明，避免再抄一份会漂移的数字表。
+  var BUILDING_VFX = {
+    power: { icon: 'ϟ', desc: '提供 120 电力' },
+    refinery: { icon: '◆', desc: '接收采矿车资源' },
+    barracks: { icon: '♟', desc: '训练步兵单位' },
+    factory: { icon: '▰', desc: '生产装甲单位' },
+    turret: { icon: '⌖', desc: '自动攻击附近敌军' },
+    missile: { icon: '⊿', desc: '远程高伤大溅射，冷却慢' },
+    repair: { icon: '✚', desc: '维修受损装甲载具' },
+    mpower: { icon: '✦', desc: '提供 120 法力' },
+    mrefinery: { icon: '◈', desc: '接收浮游晶簇的水晶' },
+    mtemple: { icon: '✠', desc: '训练奥术法师' },
+    mcircle: { icon: '⬡', desc: '召唤构装体与魔兽' },
+    mtower: { icon: '✵', desc: '自动攻击附近敌军（魔法）' }
   };
+  var UNIT_VFX = {
+    rifle: { icon: '♟', desc: '灵活的基础步兵' },
+    rocket: { icon: '↟', desc: '远程反装甲单位，克重甲' },
+    sniper: { icon: '⌖', desc: '超远狙杀步兵，无力反甲' },
+    dog: { icon: '♞', desc: '全场最速近战，扑咬步兵与法师，对载具/建筑无效' },
+    tank: { icon: '▰', desc: '主力装甲单位，克建筑' },
+    scout: { icon: '◆', desc: '高速侦察战车' },
+    artillery: { icon: '◉', desc: '极远溅射，克建筑/重甲' },
+    tank_destroyer: { icon: '◭', desc: '专杀坦克，×2.1反重甲' },
+    v3: { icon: '⊹', desc: '超远程导弹打击，大溅射' },
+    overlord: { icon: '⬟', desc: '超重型主战，双管重炮抗线 · 需维修厂' },
+    tesla: { icon: '⚡', desc: '动力甲反甲步兵，电弧专电载具 · 需工厂' },
+    prism: { icon: '✦', desc: '远程聚焦光束，点杀轻型与建筑 · 需维修厂' },
+    harvester: { icon: '▣', desc: '自动采集矿石' },
+    mcv: { icon: '⬢', desc: '可展开为新指挥中心' },
+    mage: { icon: '✦', desc: '远程奥术弹，熔重甲的反坦克手' },
+    frost: { icon: '❄', desc: '命中减速敌军，控制拉扯核心' },
+    golem: { icon: '⛰', desc: '构装前排，高血投石溅射' },
+    panther: { icon: '♞', desc: '全场最快魔兽，近战侧翼包抄' },
+    dragon: { icon: '✹', desc: '重型远程火球，大溅射压轴' },
+    mharvester: { icon: '◈', desc: '自动采集水晶' },
+    mmcv: { icon: '⬡', desc: '可展开为魔法主堡' }
+  };
+
+  var BUILDINGS = {};
+  var UNITS = {};
+  var STRUCTURE_NAMES = {};
+  var STRUCTURE_ROLES = {};
+  var UNIT_ROLES = {};
+
+  function applyCatalog(catalog) {
+    if (!catalog || !catalog.buildings || !catalog.units) { return; }
+    Object.keys(catalog.buildings).forEach(function (kind) {
+      var src = catalog.buildings[kind];
+      var vfx = BUILDING_VFX[kind] || {};
+      BUILDINGS[kind] = {
+        name: src.name,
+        cost: src.cost,
+        build: src.build,
+        size: src.size,
+        requires: src.requires || [],
+        faction: src.faction || 'tech',
+        role: src.role || null,
+        icon: vfx.icon || '■',
+        desc: vfx.desc || ''
+      };
+      STRUCTURE_NAMES[kind] = src.name;
+      if (src.role) { STRUCTURE_ROLES[kind] = src.role; }
+    });
+    Object.keys(catalog.units).forEach(function (kind) {
+      var src = catalog.units[kind];
+      var vfx = UNIT_VFX[kind] || {};
+      UNITS[kind] = {
+        name: src.name,
+        cost: src.cost,
+        build: src.build,
+        size: src.size,
+        producer: src.producer,
+        requires: src.requires || [],
+        faction: src.faction || 'tech',
+        role: src.role || null,
+        canDeploy: !!src.canDeploy,
+        damageType: src.damageType,
+        icon: vfx.icon || '▲',
+        desc: vfx.desc || ''
+      };
+      if (src.role) { UNIT_ROLES[kind] = src.role; }
+    });
+  }
+
+  var catalogPromise = fetch('/api/catalog').then(function (response) {
+    return response.json();
+  }).then(applyCatalog).catch(function () {});
 
   // 与 server.BUILD_ANCHOR_RANGES 一样按 role 索引；魔法主堡/法力塔等换皮
   // 建筑通过 STRUCTURE_ROLES 映射到同一半径，否则鬼影永远是红的。
   var BUILD_ANCHOR_RANGES = { hq: 360, power: 220, refinery: 250, barracks: 220, factory: 270, repair: 240 };
   var ENEMY_BUILD_EXCLUSION = 440;
 
-  var STRUCTURE_ROLES = {
-    hq: 'hq', mhq: 'hq',
-    power: 'power', mpower: 'power',
-    refinery: 'refinery', mrefinery: 'refinery',
-    barracks: 'barracks', mtemple: 'barracks',
-    factory: 'factory', mcircle: 'factory',
-    repair: 'repair',
-    turret: 'defense', missile: 'defense', mtower: 'defense'
-  };
-  var UNIT_ROLES = {
-    harvester: 'harvester', mharvester: 'harvester',
-    mcv: 'mcv', mmcv: 'mcv'
-  };
   function structureRole(kind) { return STRUCTURE_ROLES[kind] || null; }
   function unitRole(kind) { return UNIT_ROLES[kind] || null; }
 
-  var UNITS = {
-    rifle: { name: '突击兵', cost: 180, icon: '♟', producer: 'barracks', desc: '灵活的基础步兵', damageType: 'bullet' },
-    rocket: { name: '火箭兵', cost: 340, icon: '↟', producer: 'barracks', desc: '远程反装甲单位，克重甲', damageType: 'rocket' },
-    sniper: { name: '狙击手', cost: 420, icon: '⌖', producer: 'barracks', desc: '超远狙杀步兵，无力反甲', damageType: 'sniper' },
-    dog: { name: '军犬', cost: 120, icon: '♞', producer: 'barracks', desc: '全场最速近战，扑咬步兵与法师，对载具/建筑无效', damageType: 'bite' },
-    tank: { name: '先锋坦克', cost: 780, icon: '▰', producer: 'factory', desc: '主力装甲单位，克建筑', damageType: 'shell' },
-    scout: { name: '猎犬战车', cost: 460, icon: '◆', producer: 'factory', desc: '高速侦察战车', damageType: 'bullet' },
-    artillery: { name: '攻城炮', cost: 960, icon: '◉', producer: 'factory', desc: '极远溅射，克建筑/重甲', damageType: 'siege' },
-    tank_destroyer: { name: '坦克歼击车', cost: 1050, icon: '◭', producer: 'factory', desc: '专杀坦克，×2.1反重甲', damageType: 'ap' },
-    v3: { name: '东风快递', cost: 2000, icon: '⊹', producer: 'factory', desc: '超远程导弹打击，大溅射', damageType: 'missile' },
-    overlord: { name: '天启坦克', cost: 1700, icon: '⬟', producer: 'factory', requires: ['repair'], desc: '超重型主战，双管重炮抗线 · 需维修厂', damageType: 'shell' },
-    tesla: { name: '磁暴步兵', cost: 650, icon: '⚡', producer: 'barracks', requires: ['factory'], desc: '动力甲反甲步兵，电弧专电载具 · 需工厂', damageType: 'tesla' },
-    prism: { name: '光棱坦克', cost: 1450, icon: '✦', producer: 'factory', requires: ['repair'], desc: '远程聚焦光束，点杀轻型与建筑 · 需维修厂', damageType: 'laser' },
-    harvester: { name: '采矿车', cost: 920, icon: '▣', producer: 'factory', desc: '自动采集矿石' },
-    mcv: { name: '基地车', cost: 2500, icon: '⬢', producer: 'factory', desc: '可展开为新指挥中心', canDeploy: true },
-    // ---- 秘法会（魔法阵营，faction=magic）----
-    mage: { name: '奥术法师', cost: 500, icon: '✦', producer: 'mtemple', faction: 'magic', desc: '远程奥术弹，熔重甲的反坦克手', damageType: 'magic' },
-    frost: { name: '冰霜女巫', cost: 550, icon: '❄', producer: 'mtemple', faction: 'magic', desc: '命中减速敌军，控制拉扯核心', damageType: 'magic' },
-    golem: { name: '岩石傀儡', cost: 850, icon: '⛰', producer: 'mcircle', faction: 'magic', desc: '构装前排，高血投石溅射', damageType: 'magic' },
-    panther: { name: '影豹', cost: 420, icon: '♞', producer: 'mcircle', faction: 'magic', desc: '全场最快魔兽，近战侧翼包抄', damageType: 'magic' },
-    dragon: { name: '秘法巨龙', cost: 1600, icon: '✹', producer: 'mcircle', faction: 'magic', desc: '重型远程火球，大溅射压轴', damageType: 'magic' },
-    mharvester: { name: '浮游晶簇', cost: 920, icon: '◈', producer: 'mcircle', faction: 'magic', desc: '自动采集水晶' },
-    mmcv: { name: '迁徙法阵', cost: 2500, icon: '⬡', producer: 'mcircle', faction: 'magic', desc: '可展开为魔法主堡', canDeploy: true }
+  var FACTION_COPY = {
+    tech: {
+      infantryTab: '步兵',
+      vehicleTab: '载具',
+      power: '电力',
+      powerLoad: '电力负载',
+      harvester: '采矿车',
+      hq: '指挥中心',
+      mcv: '基地车'
+    },
+    magic: {
+      infantryTab: '圣殿',
+      vehicleTab: '法阵',
+      power: '法力',
+      powerLoad: '法力负载',
+      harvester: '晶簇',
+      hq: '魔法主堡',
+      mcv: '迁徙法阵'
+    }
   };
 
-  var STRUCTURE_NAMES = {
-    hq: '指挥中心',
-    power: '磁能电站',
-    refinery: '矿石精炼厂',
-    barracks: '步兵营',
-    factory: '重装工厂',
-    repair: '战地维修厂',
-    turret: '哨戒炮塔',
-    missile: '导弹炮塔',
-    mhq: '魔法主堡',
-    mpower: '法力塔',
-    mrefinery: '水晶精炼所',
-    mtemple: '奥术圣殿',
-    mcircle: '召唤法阵',
-    mtower: '奥术塔'
-  };
+  function factionCopy() {
+    return FACTION_COPY[isOwnMagicFaction() ? 'magic' : 'tech'];
+  }
+
+  function applyFactionHud() {
+    var copy = factionCopy();
+    var infantryTab = document.querySelector('.command-tab[data-tab="infantry"]');
+    var vehicleTab = document.querySelector('.command-tab[data-tab="vehicles"]');
+    if (infantryTab) { infantryTab.textContent = copy.infantryTab; }
+    if (vehicleTab) { vehicleTab.textContent = copy.vehicleTab; }
+    var powerLabel = $('#powerLabel');
+    if (powerLabel) { powerLabel.textContent = copy.power; }
+    var powerColumn = document.querySelector('.power-column');
+    if (powerColumn) { powerColumn.title = copy.powerLoad; }
+    var harvesterLabel = $('#statHarvesterLabel');
+    if (harvesterLabel) { harvesterLabel.textContent = copy.harvester; }
+    var powerLoadLabel = $('#statPowerLabel');
+    if (powerLoadLabel) { powerLoadLabel.textContent = copy.powerLoad; }
+  }
 
   var STRUCTURE_ICONS = {
     hq: '★', power: 'ϟ', refinery: '◆', barracks: '♟', factory: '▰', repair: '✚', turret: '⌖', missile: '⊿',
@@ -1479,8 +1539,8 @@ import { createRenderer } from './render3d.js';
    * 补回快照里被省略的静态数据。
    *
    * 服务端只在每条 SSE 流的首帧（以及每次 REST 拉取）发送地图、地形、
-   * 矿脉布局和视距表；之后每帧只带矿脉余量 `ore`。这里把缓存的静态部分
-   * 贴回去，让后面的代码仍然看到一个完整的 game 对象。
+   * 矿脉布局、视距表和建造目录；之后每帧只带矿脉余量 `ore`。这里把缓存
+   * 的静态部分贴回去，让后面的代码仍然看到一个完整的 game 对象。
    *
    * 返回这一帧是否可用于渲染：还没收到过任何 full 帧就先来了增量帧的话，
    * 手上没有地图与地形，补不出完整对象，只能整帧丢弃等下一帧。
@@ -1488,6 +1548,7 @@ import { createRenderer } from './render3d.js';
   function hydrateGame(game, mapConfig) {
     if (!game) { return true; }
     if (game.full) {
+      if (game.catalog) { applyCatalog(game.catalog); }
       var byId = {};
       (game.resources || []).forEach(function (r) { byId[r.id] = r; });
       matchStatic = {
@@ -1916,7 +1977,7 @@ import { createRenderer } from './render3d.js';
       camera.x = hq ? hq.x : roomState.game.map.width / 2;
       camera.y = hq ? hq.y : roomState.game.map.height / 2;
       camera.zoom = 1.0;   // 开局视角更贴近基地
-      toast('战斗开始：保护指挥中心，摧毁所有敌方总部', 'success');
+      toast('战斗开始：保护' + factionCopy().hq + '，摧毁所有敌方总部', 'success');
       sound('start');
     }
     resizeCanvas();
@@ -1990,6 +2051,7 @@ import { createRenderer } from './render3d.js';
 
     // 秘法会没有维修厂，隐藏维修按钮和 R 键提示，避免点下去只看到「没有可用的战地维修厂」。
     var isMagic = isOwnMagicFaction();
+    applyFactionHud();
     var repairBtn = $('#repairBtn');
     if (repairBtn) {
       repairBtn.classList.toggle('hidden', isMagic);
@@ -2118,7 +2180,7 @@ import { createRenderer } from './render3d.js';
     commandMode = null;
     canvas.classList.add('command-mode');
     buildCursorLabel.classList.remove('hidden');
-    buildCursorLabel.textContent = '部署：' + BUILDINGS[kind].name + ' · 右键取消';
+    buildCursorLabel.textContent = '部署：' + (BUILDINGS[kind] || {}).name + ' · 右键取消';
     if (!automatic) {
       toast('建筑已就绪，请在基地控制区内选择位置');
     }
@@ -2135,7 +2197,7 @@ import { createRenderer } from './render3d.js';
     if (item.ready && item.id !== lastReadyBuildId) {
       lastReadyBuildId = item.id;
       activateBuildMode(item.kind, true);
-      toast(BUILDINGS[item.kind].name + ' 已生产完成，等待部署', 'success');
+      toast(((BUILDINGS[item.kind] || {}).name || item.kind) + ' 已生产完成，等待部署', 'success');
       sound('complete');
     }
   }
@@ -2159,12 +2221,12 @@ import { createRenderer } from './render3d.js';
         activateBuildMode(kind, false);
       } else {
         toast(item.ready ? '请先部署已完成的建筑' :
-          BUILDINGS[item.kind].name + ' 还需 ' + Math.ceil(item.remaining) + ' 秒');
+          ((BUILDINGS[item.kind] || {}).name || item.kind) + ' 还需 ' + Math.ceil(item.remaining) + ' 秒');
       }
       return;
     }
     sendAction('command', { command: 'prepareBuild', structureType: kind }).then(function () {
-      toast(BUILDINGS[kind].name + ' 开始生产');
+      toast(((BUILDINGS[kind] || {}).name || kind) + ' 开始生产');
       sound('confirm');
     }).catch(function () {});
   }
@@ -2209,6 +2271,7 @@ import { createRenderer } from './render3d.js';
     if (activeTab === 'buildings') {
       definitions = {};
       Object.keys(BUILDINGS).forEach(function (key) {
+        if (BUILDINGS[key].role === 'hq') { return; }
         if (sameFaction(BUILDINGS[key])) { definitions[key] = BUILDINGS[key]; }
       });
     } else if (activeTab === 'infantry') {
@@ -2341,7 +2404,7 @@ import { createRenderer } from './render3d.js';
       var totalHp = units.reduce(function (sum, unit) { return sum + unit.hp; }, 0);
       var totalMax = units.reduce(function (sum, unit) { return sum + unit.maxHp; }, 0);
       var one = units.length === 1 ? units[0] : null;
-      var label = one ? UNITS[one.kind].name : units.length + ' 个作战单位';
+      var label = one ? ((UNITS[one.kind] || {}).name || one.kind) : units.length + ' 个作战单位';
       var rank = one ? unitRank(one.kills || 0) : 0;
       var rankLabels = ['', ' ★ 老兵', ' ★★ 精英', ' ★★★ 王牌'];
       var detail = one && one.repairing ?
@@ -2379,7 +2442,7 @@ import { createRenderer } from './render3d.js';
         activeText = '中立矿区守卫 · 清除全部守军后解锁矿脉';
       }
       if (structure.queue.length) {
-        activeText = '生产 ' + UNITS[structure.queue[0].kind].name + ' · ' +
+        activeText = '生产 ' + ((UNITS[structure.queue[0].kind] || {}).name || structure.queue[0].kind) + ' · ' +
           Math.floor((1 - structure.queue[0].remaining / structure.queue[0].total) * 100) + '%';
       } else if (structure.active && structure.kind === 'repair') {
         activeText = '维修系统待命 · 右键派遣载具';
@@ -2414,7 +2477,7 @@ import { createRenderer } from './render3d.js';
           sendAction('command', { command: 'undeploy', structureId: structure.id }).then(function () {
             selectedStructureId = null;
             renderSelectionInfo();
-            toast('指挥中心已折叠为基地车', 'success');
+            toast(factionCopy().hq + '已折叠为' + factionCopy().mcv, 'success');
             sound('confirm');
           }).catch(function (err) {
             toast(err.message || '折叠失败', 'error');
@@ -3440,7 +3503,7 @@ import { createRenderer } from './render3d.js';
       });
       cancelModes();
       lastReadyBuildId = null;
-      toast(BUILDINGS[kind].name + ' 已部署，施工阶段可被攻击', 'success');
+      toast(((BUILDINGS[kind] || {}).name || kind) + ' 已部署，施工阶段可被攻击', 'success');
       sound('confirm');
     } catch (_error) {}
   }
@@ -3788,7 +3851,7 @@ import { createRenderer } from './render3d.js';
     $('#resultEmblem').textContent = won ? '★' : '✕';
     $('#resultKicker').textContent = won ? 'MISSION ACCOMPLISHED' : 'MISSION FAILED';
     $('#resultTitle').textContent = won ? '战斗胜利' : '战线失守';
-    $('#resultText').textContent = won ? '敌方指挥体系已经瓦解，战区控制权已确认。' : '你的指挥中心已被摧毁，部队退出战区。';
+    $('#resultText').textContent = won ? '敌方指挥体系已经瓦解，战区控制权已确认。' : '你的' + factionCopy().hq + '已被摧毁，部队退出战区。';
     $('#resultStats').innerHTML =
       '<div><span>击毁单位</span><strong>' + (me ? me.kills : 0) + '</strong></div>' +
       '<div><span>损失单位</span><strong>' + (me ? me.unitsLost : 0) + '</strong></div>' +
@@ -3986,7 +4049,7 @@ import { createRenderer } from './render3d.js';
           sendAction('command', { command: 'undeploy', structureId: hq.id }).then(function () {
             selectedStructureId = null;
             renderSelectionInfo();
-            toast('指挥中心已折叠为基地车', 'success');
+            toast(factionCopy().hq + '已折叠为' + factionCopy().mcv, 'success');
             sound('confirm');
           }).catch(function (err) { toast(err.message || '折叠失败', 'error'); });
         }
@@ -4152,7 +4215,7 @@ import { createRenderer } from './render3d.js';
     sendAction('command', {
       command: 'deploy',
       unitIds: mcvIds
-    }).then(function () { toast('基地车已展开为新指挥中心', 'success'); sound('confirm'); })
+    }).then(function () { toast(factionCopy().mcv + '已展开为新' + factionCopy().hq, 'success'); sound('confirm'); })
       .catch(function (err) { toast(err.message || '展开失败', 'error'); });
   });
   $('#counterToggle').addEventListener('click', function () {
@@ -4212,7 +4275,9 @@ import { createRenderer } from './render3d.js';
   // index.html only reports errors that happen before the lobby is usable.
   window.__ironFrontBooted = true;
   playerNameInput.value = localStorage.getItem(NAME_KEY) || ('指挥官' + String(Math.floor(Math.random() * 900 + 100)));
-  restoreSession().then(function (restored) {
+  catalogPromise.then(function () {
+    return restoreSession();
+  }).then(function (restored) {
     if (!restored) {
       setScreen('home');
     }

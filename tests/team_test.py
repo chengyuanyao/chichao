@@ -224,6 +224,16 @@ def main():
 
     print("  Solo + Team mix: PASS")
 
+    print("\n=== Test 8: setTeam clamp ===")
+    assert server.clamp_team(-3) == 0
+    assert server.clamp_team(0) == 0
+    assert server.clamp_team(4) == 4
+    assert server.clamp_team(99) == 4
+    assert server.clamp_team("2") == 2
+    assert server.clamp_team("nope") == 0
+    assert server.clamp_team(None) == 0
+    print("  clamp_team 0-4: PASS")
+
     print("\n=== All team tests passed! ===")
 
 
