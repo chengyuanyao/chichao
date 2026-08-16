@@ -2818,9 +2818,18 @@ def nearest_enemy_structure(game, owner, x, y, max_distance, spatial_index=None)
     return best
 
 
+# 军犬自动索敌：步兵甲 + 魔导甲。bite 对载具/建筑是 ×0，追上去白送；
+# 法师/女巫是 arcane，点选能咬但旧扫描只认 infantry，会从法师身边走过。
+DOG_PREY_ARMOR = frozenset(("infantry", "arcane"))
+
+
+def is_dog_prey(kind):
+    return UNIT_TYPES.get(kind, {}).get("armor") in DOG_PREY_ARMOR
+
+
 def nearest_enemy_infantry(game, owner, x, y, max_distance, spatial_index=None):
-    """军犬专用：只扑步兵。克制表里 bite 对载具/建筑全是 ×0，追上去也是白送，
-    所以自动索敌时干脆只看装甲为 infantry 的敌方单位（含敌方军犬）。"""
+    """军犬专用：只扑步兵与魔导。克制表里 bite 对载具/建筑全是 ×0，追上去也是白送，
+    所以自动索敌时看装甲为 infantry 或 arcane 的敌方单位（步兵、军犬、法师、女巫等）。"""
     best = None
     best_dist_sq = max_distance * max_distance
     candidates = (spatial_candidates(
@@ -2829,7 +2838,7 @@ def nearest_enemy_infantry(game, owner, x, y, max_distance, spatial_index=None):
     for entity in candidates:
         if not entity["id"].startswith("u"):
             continue
-        if UNIT_TYPES.get(entity.get("kind"), {}).get("armor") != "infantry":
+        if not is_dog_prey(entity.get("kind")):
             continue
         if is_friendly(game, entity["owner"], owner) or entity["hp"] <= 0:
             continue
@@ -3804,12 +3813,26 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
     allow_reuse_address = True
 
 
+# SSE / 状态拉取把 session token 放在查询串里。默认 access log 会打印整条
+# requestline，等于把口令写进窗口和日志。去掉 ? 之后的内容即可。
+_LOG_QUERY_RE = re.compile(r"\?[^ ]*")
+
+
+def sanitize_access_log(message):
+    return _LOG_QUERY_RE.sub("", message)
+
+
 class GameHandler(BaseHTTPRequestHandler):
     server_version = "SteelFrontLAN/%s" % VERSION
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):
-        sys.stdout.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), fmt % args))
+        try:
+            message = fmt % args
+        except Exception:
+            message = "%s %r" % (fmt, args)
+        message = sanitize_access_log(message)
+        sys.stdout.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), message))
         sys.stdout.flush()
 
     def send_json(self, status, payload):

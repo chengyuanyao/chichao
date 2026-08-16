@@ -130,6 +130,30 @@ def main():
     assert 'BUILD_ANCHOR_RANGES.get(structure_role(structure["kind"]))' in server_src
     assert "def player_has_command(" in server_src
 
+    # 大厅/文档不能再写已删除的火焰兵，也不能只提 Windows bat。
+    index = read("public/index.html")
+    readme = read("README.md")
+    assert "火焰兵" not in index and "火焰克步兵" not in index
+    assert "火焰兵" not in readme
+    assert "钢铁军团" in readme and "秘法会" in readme
+    assert "start-game.sh" in readme
+    assert os.path.isfile(os.path.join(ROOT, "start-game.sh"))
+    starter = read("start-game.sh")
+    assert "python3" in starter and "server.py" in starter
+    bat = read("start-game.bat")
+    assert bat.find("py.exe") < bat.find("Python36")
+
+    # 秘法会没有维修厂：客户端必须藏维修按钮，不能只靠点下去报错。
+    assert "function isOwnMagicFaction" in app
+    assert "repairBtn.classList.toggle('hidden', isMagic)" in app
+
+    # SSE/GET 查询串里的 session token 不能进 access log。
+    leaked = '"GET /api/events?roomId=R1&playerId=P1&token=SECRETTOKEN HTTP/1.1" 200 -'
+    cleaned = server.sanitize_access_log(leaked)
+    assert "SECRETTOKEN" not in cleaned
+    assert "?" not in cleaned
+    assert "/api/events" in cleaned
+
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog costs match")
 
 
