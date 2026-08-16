@@ -170,10 +170,10 @@ def main():
 
     print("\n=== Test 6: Team victory condition ===")
     # 2v2: team A (a1, a2), team B (b1, b2)
-    # Eliminate b1 (all structures)
+    # Eliminate b1 by destroying the HQ (leftover buildings do not keep them alive)
     game2["elapsed"] = 20  # satisfy the elapsed > 15 victory check
     for s in game2["structures"]:
-        if s["owner"] == team_b1["id"]:
+        if s["owner"] == team_b1["id"] and server.structure_role(s["kind"]) == "hq":
             s["hp"] = 0
 
     # Also need to eliminate a1/a2's structures for clean test
@@ -184,9 +184,9 @@ def main():
     assert team_b2["eliminated"] is False, "b2 should still be alive"
     assert room2["status"] != "finished", "game should continue (b2 alive)"
 
-    # Eliminate b2 (all structures)
+    # Eliminate b2 by destroying the HQ
     for s in game2["structures"]:
-        if s["owner"] == team_b2["id"]:
+        if s["owner"] == team_b2["id"] and server.structure_role(s["kind"]) == "hq":
             s["hp"] = 0
     tick_for(room2, 1.0)
     assert team_b2["eliminated"] is True, "b2 should be eliminated"
@@ -211,10 +211,10 @@ def main():
     assert not server.is_friendly(game3, mix_a["id"], mix_c["id"])
     assert not server.is_friendly(game3, mix_b["id"], mix_c["id"])
 
-    # Solo player eliminated -> team should win
+    # Solo player eliminated by HQ loss -> team should win
     game3["elapsed"] = 20
     for s in game3["structures"]:
-        if s["owner"] == mix_c["id"]:
+        if s["owner"] == mix_c["id"] and server.structure_role(s["kind"]) == "hq":
             s["hp"] = 0
     tick_for(room3, 1.0)
     assert mix_c["eliminated"] is True

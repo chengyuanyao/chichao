@@ -6,6 +6,7 @@ from __future__ import print_function
 
 import os
 import random
+import re
 import sys
 import time
 
@@ -98,7 +99,38 @@ def main():
     assert {map_id: (map_def["width"], map_def["height"])
             for map_id, map_def in server.MAPS.items()} == expected_sizes
 
-    print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys")
+    # 建造卡显示的造价必须等于服务端扣款，否则会出现「卡片买得起、点下去资金不足」。
+    def catalog_costs(source, var_name):
+        block = re.search(r"var %s = \{([\s\S]*?)\n  \};" % var_name, source)
+        assert block, "missing %s catalog" % var_name
+        return {
+            kind: int(cost)
+            for kind, cost in re.findall(
+                r"^\s{4}(\w+):\s*\{[^\n]*\bcost:\s*(\d+)", block.group(1), re.M)
+        }
+
+    building_costs = catalog_costs(app, "BUILDINGS")
+    unit_costs = catalog_costs(app, "UNITS")
+    assert building_costs and unit_costs
+    for kind, cost in building_costs.items():
+        assert kind in server.STRUCTURE_TYPES, kind
+        assert cost == server.STRUCTURE_TYPES[kind]["cost"], (
+            kind, cost, server.STRUCTURE_TYPES[kind]["cost"])
+    for kind, cost in unit_costs.items():
+        assert kind in server.UNIT_TYPES, kind
+        assert cost == server.UNIT_TYPES[kind]["cost"], (
+            kind, cost, server.UNIT_TYPES[kind]["cost"])
+
+    # 客户端建造锚点、空格回基地、展开/折叠必须走 role，不能写死 hq/mcv。
+    assert "function structureRole(kind)" in app
+    assert "function unitRole(kind)" in app
+    assert "BUILD_ANCHOR_RANGES[structureRole(s.kind)]" in app
+    assert "mhq: '魔法主堡'" in app
+    server_src = read("server.py")
+    assert 'BUILD_ANCHOR_RANGES.get(structure_role(structure["kind"]))' in server_src
+    assert "def player_has_command(" in server_src
+
+    print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog costs match")
 
 
 if __name__ == "__main__":
