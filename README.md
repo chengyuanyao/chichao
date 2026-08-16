@@ -167,7 +167,8 @@ netsh int ipv4 show excludedportrange protocol=tcp
 ## 测试
 
 ```
-python3 tests/<name>_test.py          # 纯逻辑测试，直接跑
+python3 run_tests.py                  # 全部离线测试（跳过需已启动服务器的 integration）
+python3 tests/<name>_test.py          # 单个纯逻辑测试
 python3 tests/integration_test.py http://127.0.0.1:18081  # 需要服务器已启动
 ```
 

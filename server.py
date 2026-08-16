@@ -41,6 +41,9 @@ CHEATS_OPEN = os.environ.get("IFL_CHEATS", "").strip().lower() in ("1", "true", 
 
 LOCK = threading.RLock()
 ROOMS = {}
+MAX_ROOMS = 32
+MIN_TEAM = 0
+MAX_TEAM = 4
 RUNNING = True
 
 # 静态资源内存缓存：路径 -> ((mtime, size), (content, content_type, last_modified))。
@@ -653,6 +656,52 @@ def unit_role(kind):
     return UNIT_TYPES.get(kind, {}).get("role")
 
 
+def public_catalog():
+    """Presentation fields the client HUD needs. Python tables are the source."""
+    buildings = {}
+    for kind, definition in STRUCTURE_TYPES.items():
+        buildings[kind] = {
+            "name": definition["name"],
+            "cost": int(definition["cost"]),
+            "build": definition.get("build", 0),
+            "size": definition.get("size", 40),
+            "requires": list(definition.get("requires") or []),
+            "faction": definition.get("faction", "tech"),
+            "role": definition.get("role"),
+        }
+    units = {}
+    for kind, definition in UNIT_TYPES.items():
+        units[kind] = {
+            "name": definition["name"],
+            "cost": int(definition["cost"]),
+            "build": definition.get("build", 0),
+            "size": definition.get("size", 10),
+            "producer": definition.get("producer"),
+            "requires": list(definition.get("requires") or []),
+            "faction": definition.get("faction", "tech"),
+            "role": definition.get("role"),
+            "canDeploy": bool(definition.get("canDeploy")),
+            "damageType": definition.get("damageType"),
+        }
+    return {"buildings": buildings, "units": units}
+
+
+PUBLIC_CATALOG = public_catalog()
+
+
+def clamp_team(value):
+    try:
+        team = int(value)
+    except (TypeError, ValueError):
+        return MIN_TEAM
+    return clamp(team, MIN_TEAM, MAX_TEAM)
+
+
+def ensure_room_capacity():
+    if len(ROOMS) >= MAX_ROOMS:
+        raise ValueError("服务器房间已满")
+
+
 # 各阵营的出生与经济基础 kind。start_game 出生配置、精炼厂赠车都从这里取，
 # 日后要加第三个阵营只需在 UNIT/STRUCTURE 表加定义、在这里登记一行。
 FACTION_LOADOUT = {
@@ -1097,6 +1146,7 @@ def public_game(game, viewer_id=None, full=True):
             "units": {k: v.get("sight", 350.0) for k, v in UNIT_TYPES.items()},
             "structures": {k: v.get("sight", 350.0) for k, v in STRUCTURE_TYPES.items()},
         }
+        result["catalog"] = PUBLIC_CATALOG
     return result
 
 
@@ -1770,6 +1820,8 @@ def place_structure(room, player_id, kind, x, y, free=False):
     if kind not in STRUCTURE_TYPES or structure_role(kind) == "hq":
         raise ValueError("未知建筑")
     definition = STRUCTURE_TYPES[kind]
+    if definition.get("faction", "tech") != player.get("faction", "tech"):
+        raise ValueError("你的阵营无法建造该建筑")
     map_w = game["map"]["width"]
     map_h = game["map"]["height"]
     x = clamp(float(x), definition["size"] + 12, map_w - definition["size"] - 12)
@@ -3873,6 +3925,8 @@ class GameHandler(BaseHTTPRequestHandler):
             with LOCK:
                 payload = {"ok": True, "version": VERSION, "uptime": int(now() - STARTED_AT), "rooms": len(ROOMS), "port": PORT}
             self.send_json(200, payload)
+        elif path == "/api/catalog":
+            self.send_json(200, PUBLIC_CATALOG)
         elif path == "/api/rooms":
             with LOCK:
                 payload = {"rooms": room_list(), "serverTime": now()}
@@ -3943,6 +3997,7 @@ class GameHandler(BaseHTTPRequestHandler):
 
     def create_room(self, data):
         with LOCK:
+            ensure_room_capacity()
             room_id = new_room_code()
             player = create_human(data.get("playerName"), COLORS[0])
             selected_map = data.get("mapId", DEFAULT_MAP)
@@ -4028,7 +4083,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 target = room["players"].get(target_id)
                 if not target:
                     raise ValueError("玩家不存在")
-                target["team"] = int(payload.get("team", 0))
+                target["team"] = clamp_team(payload.get("team", 0))
             elif action == "setFaction":
                 if room["status"] != "lobby":
                     raise ValueError("战斗已经开始")
@@ -4247,31 +4302,58 @@ def shutdown_handler(_signum, _frame):
     RUNNING = False
 
 
-def lan_address():
-    """本机局域网地址，优先 10.18 网段，供其他玩家连接。"""
+def select_lan_ips(candidates):
+    """Drop loopback; keep first-seen order within rank (10.18, other 10.x, rest)."""
+    ranked = []
+    seen = set()
+    for ip in candidates:
+        if not ip or ip in seen or ip.startswith("127.") or ip.startswith("0."):
+            continue
+        seen.add(ip)
+        if ip.startswith("10.18."):
+            rank = 0
+        elif ip.startswith("10."):
+            rank = 1
+        else:
+            rank = 2
+        ranked.append((rank, len(ranked), ip))
+    ranked.sort()
+    return [item[2] for item in ranked]
+
+
+def collect_local_ipv4s():
+    found = []
     try:
-        hostname = socket.gethostname()
-        ips = socket.gethostbyname_ex(hostname)[2]
-        # 10.18 最优先
-        for ip in ips:
-            if ip.startswith("10.18."):
-                return ip
-        # 其它 10.x 段次之
-        for ip in ips:
-            if ip.startswith("10."):
-                return ip
+        found.extend(socket.gethostbyname_ex(socket.gethostname())[2])
     except OSError:
         pass
-    # 回退：UDP 探测 10.x 方向路由（不发送数据，只读本地出口地址）
-    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        probe.settimeout(0.2)
-        probe.connect(("10.255.255.255", 1))
-        return probe.getsockname()[0]
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            found.append(info[4][0])
     except OSError:
-        return None
-    finally:
-        probe.close()
+        pass
+    for probe_host in ("10.255.255.255", "192.168.255.255", "8.8.8.8"):
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            probe.settimeout(0.2)
+            probe.connect((probe_host, 1))
+            found.append(probe.getsockname()[0])
+        except OSError:
+            pass
+        finally:
+            probe.close()
+    return found
+
+
+def lan_addresses():
+    """All non-loopback IPv4s, 10.18 preferred but others still listed."""
+    return select_lan_ips(collect_local_ipv4s())
+
+
+def lan_address():
+    """本机局域网地址，优先 10.18 网段，供其他玩家连接。"""
+    ips = lan_addresses()
+    return ips[0] if ips else None
 
 
 def explain_bind_failure(exc, host, port):
@@ -4336,9 +4418,11 @@ def main():
     print("=" * 58)
     print("  赤潮：钢铁前线 LAN 服务器 v%s" % VERSION)
     print("  本机访问:   http://127.0.0.1:%d" % PORT)
-    lan_ip = lan_address()
-    if lan_ip:
-        print("  局域网地址: http://%s:%d   <- 发这个给队友" % (lan_ip, PORT))
+    lan_ips = lan_addresses()
+    if lan_ips:
+        print("  局域网地址: http://%s:%d   <- 优先发给队友" % (lan_ips[0], PORT))
+        for extra in lan_ips[1:]:
+            print("              http://%s:%d" % (extra, PORT))
     else:
         print("  监听地址:   %s:%d（未能探测到局域网 IP）" % (HOST, PORT))
     print("  按 Ctrl+C 停止")

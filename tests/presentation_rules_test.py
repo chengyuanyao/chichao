@@ -99,33 +99,43 @@ def main():
     assert {map_id: (map_def["width"], map_def["height"])
             for map_id, map_def in server.MAPS.items()} == expected_sizes
 
-    # 建造卡显示的造价必须等于服务端扣款，否则会出现「卡片买得起、点下去资金不足」。
-    def catalog_costs(source, var_name):
-        block = re.search(r"var %s = \{([\s\S]*?)\n  \};" % var_name, source)
-        assert block, "missing %s catalog" % var_name
-        return {
-            kind: int(cost)
-            for kind, cost in re.findall(
-                r"^\s{4}(\w+):\s*\{[^\n]*\bcost:\s*(\d+)", block.group(1), re.M)
-        }
-
-    building_costs = catalog_costs(app, "BUILDINGS")
-    unit_costs = catalog_costs(app, "UNITS")
-    assert building_costs and unit_costs
-    for kind, cost in building_costs.items():
+    # 建造卡造价/名称/角色只信服务端目录，避免客户端再抄一份数字表。
+    catalog = server.public_catalog()
+    assert catalog["buildings"] and catalog["units"]
+    for kind, entry in catalog["buildings"].items():
         assert kind in server.STRUCTURE_TYPES, kind
-        assert cost == server.STRUCTURE_TYPES[kind]["cost"], (
-            kind, cost, server.STRUCTURE_TYPES[kind]["cost"])
-    for kind, cost in unit_costs.items():
+        assert entry["cost"] == server.STRUCTURE_TYPES[kind]["cost"], (
+            kind, entry["cost"], server.STRUCTURE_TYPES[kind]["cost"])
+        assert entry["name"] == server.STRUCTURE_TYPES[kind]["name"]
+        assert entry["role"] == server.STRUCTURE_TYPES[kind]["role"]
+        assert entry["faction"] == server.STRUCTURE_TYPES[kind]["faction"]
+    for kind, entry in catalog["units"].items():
         assert kind in server.UNIT_TYPES, kind
-        assert cost == server.UNIT_TYPES[kind]["cost"], (
-            kind, cost, server.UNIT_TYPES[kind]["cost"])
+        assert entry["cost"] == server.UNIT_TYPES[kind]["cost"], (
+            kind, entry["cost"], server.UNIT_TYPES[kind]["cost"])
+        assert entry["name"] == server.UNIT_TYPES[kind]["name"]
+        assert entry["role"] == server.UNIT_TYPES[kind]["role"]
+        assert entry["faction"] == server.UNIT_TYPES[kind]["faction"]
+    assert catalog["buildings"]["mhq"]["name"] == "魔法主堡"
+    view = server.public_game(room["game"], alpha["id"], full=True)
+    assert view["catalog"]["buildings"]["power"]["cost"] == server.STRUCTURE_TYPES["power"]["cost"]
+    assert view["catalog"]["units"]["mage"]["name"] == "奥术法师"
+
+    assert "function applyCatalog" in app
+    assert "/api/catalog" in app
+    for var_name in ("BUILDING_VFX", "UNIT_VFX"):
+        block = re.search(r"var %s = \{([\s\S]*?)\n  \};" % var_name, app)
+        assert block, "missing %s" % var_name
+        assert "cost:" not in block.group(1), "%s must not hardcode costs" % var_name
+    assert "var FACTION_COPY" in app
+    assert "infantryTab: '圣殿'" in app
+    assert "vehicleTab: '法阵'" in app
+    assert "function applyFactionHud" in app
 
     # 客户端建造锚点、空格回基地、展开/折叠必须走 role，不能写死 hq/mcv。
     assert "function structureRole(kind)" in app
     assert "function unitRole(kind)" in app
     assert "BUILD_ANCHOR_RANGES[structureRole(s.kind)]" in app
-    assert "mhq: '魔法主堡'" in app
     server_src = read("server.py")
     assert 'BUILD_ANCHOR_RANGES.get(structure_role(structure["kind"]))' in server_src
     assert "def player_has_command(" in server_src
@@ -147,6 +157,23 @@ def main():
     assert "function isOwnMagicFaction" in app
     assert "repairBtn.classList.toggle('hidden', isMagic)" in app
 
+    assert server.select_lan_ips(
+        ["127.0.0.1", "192.168.1.5", "10.18.0.2", "10.0.0.1"]
+    ) == ["10.18.0.2", "10.0.0.1", "192.168.1.5"]
+    saved_rooms = dict(server.ROOMS)
+    try:
+        server.ROOMS.clear()
+        for index in range(server.MAX_ROOMS):
+            server.ROOMS["X%02d" % index] = {"id": "X%02d" % index}
+        try:
+            server.ensure_room_capacity()
+            raise AssertionError("room cap should fire")
+        except ValueError as error:
+            assert "满" in str(error)
+    finally:
+        server.ROOMS.clear()
+        server.ROOMS.update(saved_rooms)
+
     # SSE/GET 查询串里的 session token 不能进 access log。
     leaked = '"GET /api/events?roomId=R1&playerId=P1&token=SECRETTOKEN HTTP/1.1" 200 -'
     cleaned = server.sanitize_access_log(leaked)
@@ -154,7 +181,7 @@ def main():
     assert "?" not in cleaned
     assert "/api/events" in cleaned
 
-    print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog costs match")
+    print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 
 
 if __name__ == "__main__":
