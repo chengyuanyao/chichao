@@ -50,7 +50,7 @@ import { createRenderer } from './render3d.js';
     rifle: { name: '突击兵', cost: 180, icon: '♟', producer: 'barracks', desc: '灵活的基础步兵', damageType: 'bullet' },
     rocket: { name: '火箭兵', cost: 340, icon: '↟', producer: 'barracks', desc: '远程反装甲单位，克重甲', damageType: 'rocket' },
     sniper: { name: '狙击手', cost: 420, icon: '⌖', producer: 'barracks', desc: '超远狙杀步兵，无力反甲', damageType: 'sniper' },
-    dog: { name: '军犬', cost: 120, icon: '♞', producer: 'barracks', desc: '全场最速近战，扑咬步兵一击必杀，对载具/建筑无效', damageType: 'bite' },
+    dog: { name: '军犬', cost: 120, icon: '♞', producer: 'barracks', desc: '全场最速近战，扑咬步兵与法师，对载具/建筑无效', damageType: 'bite' },
     tank: { name: '先锋坦克', cost: 780, icon: '▰', producer: 'factory', desc: '主力装甲单位，克建筑', damageType: 'shell' },
     scout: { name: '猎犬战车', cost: 460, icon: '◆', producer: 'factory', desc: '高速侦察战车', damageType: 'bullet' },
     artillery: { name: '攻城炮', cost: 960, icon: '◉', producer: 'factory', desc: '极远溅射，克建筑/重甲', damageType: 'siege' },
@@ -1466,6 +1466,11 @@ import { createRenderer } from './render3d.js';
     return roomState.players.find(function (player) { return player.id === session.playerId; }) || null;
   }
 
+  function isOwnMagicFaction() {
+    var me = ownPlayer();
+    return !!(me && (me.faction || 'tech') === 'magic');
+  }
+
   function playerById(id) {
     return roomState ? roomState.players.find(function (player) { return player.id === id; }) : null;
   }
@@ -1981,6 +1986,17 @@ import { createRenderer } from './render3d.js';
       var charges = me.strikeCharges || 0;
       strikeBtn.classList.toggle('hidden', charges <= 0);
       strikeBtn.classList.toggle('ready', charges > 0);
+    }
+
+    // 秘法会没有维修厂，隐藏维修按钮和 R 键提示，避免点下去只看到「没有可用的战地维修厂」。
+    var isMagic = isOwnMagicFaction();
+    var repairBtn = $('#repairBtn');
+    if (repairBtn) {
+      repairBtn.classList.toggle('hidden', isMagic);
+    }
+    var repairHint = $('#repairHint');
+    if (repairHint) {
+      repairHint.classList.toggle('hidden', isMagic);
     }
 
     var ownHQ = roomState.game.structures.find(function (s) { return s.owner === me.id && structureRole(s.kind) === 'hq' && s.active; });
@@ -3517,7 +3533,7 @@ import { createRenderer } from './render3d.js';
   }
 
   function repairSelectedAtNearestBay() {
-    if (!roomState || !roomState.game) {
+    if (!roomState || !roomState.game || isOwnMagicFaction()) {
       return;
     }
     var vehicles = selectedDamagedVehicles();
@@ -3959,7 +3975,9 @@ import { createRenderer } from './render3d.js';
       stopSelected();
     } else if (event.code === 'KeyR') {
       event.preventDefault();
-      repairSelectedAtNearestBay();
+      if (!isOwnMagicFaction()) {
+        repairSelectedAtNearestBay();
+      }
     } else if (event.code === 'KeyU') {
       event.preventDefault();
       if (selectedStructureId && roomState && roomState.game) {

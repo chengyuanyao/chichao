@@ -19,7 +19,6 @@ set "GAME_PORT=18081"
 if not "%~1"=="" set "GAME_PORT=%~1"
 set "PORT=%GAME_PORT%"
 set "PYTHONIOENCODING=utf-8"
-set "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python36\python.exe"
 
 echo.
 echo ==========================================================
@@ -31,13 +30,16 @@ echo   Change port:   start-game.bat 8090
 echo ==========================================================
 echo.
 
-if exist "%PYTHON_EXE%" goto run_known_python
-
+rem 优先用 Windows Python Launcher / PATH 上的 python，避免锁死到本机
+rem 某次安装留下的 Python 3.6 绝对路径。找不到时再回退到那个路径。
 where py.exe >nul 2>nul
 if not errorlevel 1 goto run_python_launcher
 
 where python.exe >nul 2>nul
 if not errorlevel 1 goto run_path_python
+
+set "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python36\python.exe"
+if exist "%PYTHON_EXE%" goto run_known_python
 
 echo [ERROR] Python 3 was not found.
 echo Install Python 3 and enable "Add Python to PATH", then retry.

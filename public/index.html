@@ -19,7 +19,7 @@
       <header class="brand-block">
         <div class="eyebrow"><span class="live-dot"></span> LAN COMMAND NETWORK</div>
         <h1><span data-text="赤潮">赤潮</span><b data-text="钢铁前线">钢铁前线</b></h1>
-        <p>原创局域网即时战略 · 建造基地 · 采集矿石 · 摧毁敌军指挥中心</p>
+        <p>原创局域网即时战略 · 钢铁军团 vs 秘法会 · 摧毁敌军总部</p>
       </header>
 
       <div class="home-grid">
@@ -136,7 +136,7 @@
               <div><span>玩家上限</span><strong id="mapMaxPlayersDisplay">6</strong></div>
               <div><span>初始资金</span><strong>$ 6,800</strong></div>
               <div><span>胜利条件</span><strong>摧毁总部</strong></div>
-              <div><span>兵种克制</span><strong>火焰克步兵·攻城克建筑</strong></div>
+              <div><span>兵种克制</span><strong>军犬克步兵·魔能熔重甲</strong></div>
             </div>
             <!-- display:none 必须留在行内：app.js 用 style.display='' 清空行内值来显示它 -->
             <div id="mapSelectHost" style="display:none;">
@@ -258,7 +258,7 @@
                 <tr><td class="ct-attacker">♟ 突击兵</td><td class="ct-arrow">→</td><td class="ct-target">基础·对步兵×1.0</td><td class="ct-mult">—</td></tr>
                 <tr><td class="ct-attacker">↟ 火箭兵</td><td class="ct-arrow">→</td><td class="ct-target">重甲/建筑</td><td class="ct-mult">×1.5</td></tr>
                 <tr><td class="ct-attacker">⌖ 狙击手</td><td class="ct-arrow">→</td><td class="ct-target">步兵</td><td class="ct-mult">×2.2</td></tr>
-                <tr><td class="ct-attacker">♞ 军犬</td><td class="ct-arrow">→</td><td class="ct-target">步兵·近战扑咬</td><td class="ct-mult">×4.0</td></tr>
+                <tr><td class="ct-attacker">♞ 军犬</td><td class="ct-arrow">→</td><td class="ct-target">步兵/法师·近战扑咬</td><td class="ct-mult">×4.0</td></tr>
                 <tr><td class="ct-attacker">⚡ 磁暴步兵</td><td class="ct-arrow">→</td><td class="ct-target">载具·轻型/重甲 · 需工厂</td><td class="ct-mult">×1.4</td></tr>
                 <tr><td class="ct-head" colspan="4">工厂 · 载具</td></tr>
                 <tr><td class="ct-attacker">▰ 坦克</td><td class="ct-arrow">→</td><td class="ct-target">建筑</td><td class="ct-mult">×1.2</td></tr>
@@ -281,7 +281,7 @@
                 <span class="ct-weak">弱</span> 歼击车打步兵仅×0.25<br>
                 <span class="ct-weak">弱</span> 狙击/突击打建筑仅×0.1/×0.3<br>
                 <span class="ct-weak">弱</span> 突击/猎犬打坦克仅×0.35<br>
-                <span class="ct-weak">弱</span> 军犬咬不动载具/建筑（×0）<br>
+                <span class="ct-weak">弱</span> 军犬咬不动载具/建筑（×0），可咬法师<br>
                 <span class="ct-strong">送</span> 建造精炼厂附赠一辆矿车<br>
                 <span class="ct-strong">展</span> 基地车可展开为新指挥中心
               </div>
@@ -299,7 +299,7 @@
         <div class="control-legend">
           <span><kbd>左键</kbd> 选择</span>
           <span><kbd>右键</kbd> 移动 / 攻击</span>
-          <span><kbd>R</kbd> 维修载具</span>
+          <span id="repairHint"><kbd>R</kbd> 维修载具</span>
           <span><kbd>Q</kbd> 攻击移动</span>
           <span><kbd>空格</kbd> 返回基地</span>
         </div>
