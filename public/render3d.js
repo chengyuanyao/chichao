@@ -759,28 +759,29 @@ function addStructureFoundation(c, kind, s) {
   const add = c.add;
   const taper = c.taper;
   if (MAGIC_STRUCTURE_KINDS[kind]) {
-    taper(HULL, s * 1.58, s * 1.58, s * 1.44, s * 1.44, 2.6, 0, 1.3, 0, MAT.slate);
-    add(HULL, new THREE.BoxGeometry(s * 1.48, 0.85, s * 1.48), 0, 2.8, 0, MAT.marble);
-    add(GLOW, new THREE.TorusGeometry(s * 0.70, s * 0.026, 6, 20), 0, 3.28, 0, MAT.arcaneGlow, ROT_X90);
+    // 只在建筑正下方留一块青石台，外围是符文石圈，尘土从圈里露出来。
+    taper(HULL, s * 1.18, s * 1.18, s * 1.06, s * 1.06, 3.2, 0, 1.6, 0, MAT.slate);
+    add(HULL, new THREE.TorusGeometry(s * 0.82, s * 0.08, 6, 16), 0, 1.2, 0, MAT.marble, ROT_X90);
+    add(GLOW, new THREE.TorusGeometry(s * 0.70, s * 0.022, 6, 20), 0, 1.55, 0, MAT.arcaneGlow, ROT_X90);
     [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
-      taper(HULL, s * 0.11, s * 0.11, s * 0.045, s * 0.045, s * 0.22,
-        q[0] * s * 0.66, 3.45, q[1] * s * 0.66, MAT.crystal);
-      add(GLOW, new THREE.SphereGeometry(s * 0.04, 6, 5),
-        q[0] * s * 0.66, 3.45 + s * 0.13, q[1] * s * 0.66, MAT.arcaneGlow);
+      taper(HULL, s * 0.10, s * 0.10, s * 0.04, s * 0.04, s * 0.28,
+        q[0] * s * 0.78, 1.7, q[1] * s * 0.78, MAT.crystal);
+      add(GLOW, new THREE.SphereGeometry(s * 0.035, 6, 5),
+        q[0] * s * 0.78, 1.7 + s * 0.16, q[1] * s * 0.78, MAT.arcaneGlow);
     });
     return;
   }
-  taper(HULL, s * 1.60, s * 1.60, s * 1.46, s * 1.46, 2.5, 0, 1.25, 0, MAT.concreteDark);
-  add(HULL, new THREE.BoxGeometry(s * 1.50, 0.95, s * 1.50), 0, 2.8, 0, MAT.plate);
-  add(HULL, new THREE.BoxGeometry(s * 1.42, 0.16, s * 0.055), 0, 3.32, s * 0.58, MAT.rivet);
-  add(HULL, new THREE.BoxGeometry(s * 1.42, 0.16, s * 0.055), 0, 3.32, -s * 0.58, MAT.rivet);
-  add(HULL, new THREE.BoxGeometry(s * 0.055, 0.16, s * 1.42), s * 0.58, 3.32, 0, MAT.rivet);
-  add(HULL, new THREE.BoxGeometry(s * 0.055, 0.16, s * 1.42), -s * 0.58, 3.32, 0, MAT.rivet);
+  // 钢铁军团：建筑正下方一块暗混凝土台，外围钢坎吃尘土，不再是整块浅灰大方板。
+  taper(HULL, s * 1.18, s * 1.18, s * 1.06, s * 1.06, 3.2, 0, 1.6, 0, MAT.concreteDark);
+  add(HULL, new THREE.BoxGeometry(s * 1.58, 0.85, s * 0.10), 0, 0.7, s * 0.80, MAT.plate);
+  add(HULL, new THREE.BoxGeometry(s * 1.58, 0.85, s * 0.10), 0, 0.7, -s * 0.80, MAT.plate);
+  add(HULL, new THREE.BoxGeometry(s * 0.10, 0.85, s * 1.58), s * 0.80, 0.7, 0, MAT.plate);
+  add(HULL, new THREE.BoxGeometry(s * 0.10, 0.85, s * 1.58), -s * 0.80, 0.7, 0, MAT.plate);
   [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
-    add(HULL, new THREE.BoxGeometry(s * 0.16, 0.32, s * 0.055),
-      q[0] * s * 0.68, 3.38, q[1] * s * 0.68, MAT.warnYellow);
-    add(HULL, new THREE.BoxGeometry(s * 0.055, 0.32, s * 0.16),
-      q[0] * s * 0.68, 3.38, q[1] * s * 0.68, MAT.warnYellow);
+    add(HULL, new THREE.BoxGeometry(s * 0.16, 0.36, s * 0.05),
+      q[0] * s * 0.80, 1.05, q[1] * s * 0.80, MAT.warnYellow);
+    add(HULL, new THREE.BoxGeometry(s * 0.05, 0.36, s * 0.16),
+      q[0] * s * 0.80, 1.05, q[1] * s * 0.80, MAT.warnYellow);
   });
 }
 
@@ -798,13 +799,16 @@ function structureParts(kind, size) {
       s * 0.74, s * 0.18 + 3.4, 0, MAT.darkSteel);
     taper(HULL, s * 0.40, s * 0.72, s * 0.30, s * 0.58, s * 0.36,
       -s * 0.74, s * 0.18 + 3.4, 0, MAT.darkSteel);
-    taper(TEAM, s * 0.82, s * 0.82, s * 0.58, s * 0.58, s * 1.08, 0, s * 0.96 + 3.4, 0, 1.0);
-    add(HULL, new THREE.BoxGeometry(s * 0.90, s * 0.07, s * 0.90), 0, s * 1.52, 0, MAT.steel);
-    add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.22, s * 0.36), 0, s * 1.64, 0, MAT.darkSteel);
-    [0.72, 1.12].forEach(function (h) {
-      add(GLOW, new THREE.BoxGeometry(s * 0.86, s * 0.055, s * 0.72), 0, s * h, 0, GLOW_SOFT);
-      add(GLOW, new THREE.BoxGeometry(s * 0.72, s * 0.055, s * 0.86), 0, s * h, 0, GLOW_SOFT);
+    taper(HULL, s * 0.82, s * 0.82, s * 0.58, s * 0.58, s * 1.08, 0, s * 0.96 + 3.4, 0, MAT.steel);
+    add(TEAM, new THREE.BoxGeometry(s * 0.70, s * 0.16, s * 0.08), 0, s * 1.10, s * 0.40, 1.0);
+    add(TEAM, new THREE.BoxGeometry(s * 0.70, s * 0.16, s * 0.08), 0, s * 1.10, -s * 0.40, 1.0);
+    add(HULL, new THREE.BoxGeometry(s * 0.90, s * 0.07, s * 0.90), 0, s * 1.52, 0, MAT.darkSteel);
+    add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.22, s * 0.36), 0, s * 1.64, 0, MAT.gunmetal);
+    [0.78, 1.18].forEach(function (h) {
+      add(HULL, new THREE.BoxGeometry(s * 0.78, s * 0.06, s * 0.64), 0, s * h, 0, MAT.glass);
+      add(HULL, new THREE.BoxGeometry(s * 0.64, s * 0.06, s * 0.78), 0, s * h, 0, MAT.glass);
     });
+    add(GLOW, new THREE.BoxGeometry(s * 0.12, s * 0.04, s * 0.12), 0, s * 1.72, 0, GLOW_HOT);
     [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
       taper(HULL, s * 0.26, s * 0.26, s * 0.18, s * 0.18, s * 0.42,
         q[0] * s * 0.58, s * 0.21 + 3.4, q[1] * s * 0.58, MAT.concreteDark);
@@ -912,11 +916,13 @@ function structureParts(kind, size) {
     // 魔法主堡：三级石砌金字塔 + 收束法塔 + 飞扶壁，塔顶巨晶是远距剪影。
     taper(HULL, s * 1.44, s * 1.44, s * 1.18, s * 1.18, s * 0.26, 0, s * 0.13 + 3.4, 0, MAT.slate);
     taper(HULL, s * 1.14, s * 1.14, s * 0.88, s * 0.88, s * 0.30, 0, s * 0.41 + 3.4, 0, MAT.magicStone);
-    taper(TEAM, s * 0.72, s * 0.72, s * 0.42, s * 0.42, s * 1.02, 0, s * 1.04 + 3.4, 0, 1.0);
+    taper(HULL, s * 0.72, s * 0.72, s * 0.42, s * 0.42, s * 1.02, 0, s * 1.04 + 3.4, 0, MAT.magicStone);
+    add(TEAM, new THREE.BoxGeometry(s * 0.10, s * 0.70, s * 0.04), s * 0.36, s * 1.10, 0, 1.0);
+    add(TEAM, new THREE.BoxGeometry(s * 0.10, s * 0.70, s * 0.04), -s * 0.36, s * 1.10, 0, 1.0);
     add(HULL, new THREE.BoxGeometry(s * 0.80, s * 0.06, s * 0.80), 0, s * 1.56, 0, MAT.bronze);
-    [0.78, 1.16].forEach(function (h) {
-      add(GLOW, new THREE.BoxGeometry(s * 0.76, s * 0.05, s * 0.64), 0, s * h, 0, MAT.arcaneGlow);
-      add(GLOW, new THREE.BoxGeometry(s * 0.64, s * 0.05, s * 0.76), 0, s * h, 0, MAT.arcaneGlow);
+    [0.82, 1.20].forEach(function (h) {
+      add(HULL, new THREE.BoxGeometry(s * 0.62, s * 0.05, s * 0.50), 0, s * h, 0, MAT.crystal);
+      add(HULL, new THREE.BoxGeometry(s * 0.50, s * 0.05, s * 0.62), 0, s * h, 0, MAT.crystal);
     });
     [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
       taper(HULL, s * 0.22, s * 0.22, s * 0.08, s * 0.08, s * 0.78,
@@ -3705,8 +3711,8 @@ export function createRenderer(canvas) {
     }
     const pad = new THREE.Mesh(buildingPadGeo, buildingPadMat);
     // 尘土围裙略大于新地基，让建筑坐进 #7 的踩实土而不是压住一整块灰板。
-    pad.scale.set(structure.size * 1.28, 1, structure.size * 1.28);
-    pad.position.y = 0.55;
+    pad.scale.set(structure.size * 1.12, 1, structure.size * 1.12);
+    pad.position.y = 0.42;
     pad.receiveShadow = true;
     pad.renderOrder = 1;
     group.add(pad);
