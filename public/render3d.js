@@ -1216,12 +1216,12 @@ export const MAP_DISPLAY_THEMES = {
   },
   arid: {
     id: 'arid',
-    grass: [0.50, 0.42, 0.24],
-    lush: [0.42, 0.38, 0.20],
-    dry: [0.64, 0.50, 0.28],
-    dirt: [0.52, 0.38, 0.20],
-    packed: [0.48, 0.38, 0.24],
-    rock: [0.54, 0.46, 0.36],
+    grass: [0.58, 0.44, 0.24],
+    lush: [0.48, 0.38, 0.20],
+    dry: [0.70, 0.52, 0.28],
+    dirt: [0.56, 0.38, 0.18],
+    packed: [0.52, 0.38, 0.22],
+    rock: [0.56, 0.46, 0.34],
     road: 0x7a6848,
     skirt: 0x6a5a3a,
     pad: 0x6a5840,
@@ -1641,10 +1641,10 @@ export function createRenderer(canvas) {
           '    tdPatch += 0.45 * fmNoise(tdW * 0.011 + vec2(17.0, 9.0));\n' +
           '    float tdGrit = fmNoise(tdW * 0.085);\n' +
           '    float tdBlade = abs(sin(tdW.x * 0.31 + tdW.y * 0.07 + tdPatch * 5.0));\n' +
-          '    diffuseColor.rgb = mix(diffuseColor.rgb, uDryTint, smoothstep(0.52, 0.86, tdPatch) * 0.38);\n' +
-          '    diffuseColor.rgb = mix(diffuseColor.rgb, uDirtTint, smoothstep(0.64, 0.92, tdGrit) * 0.22);\n' +
-          '    diffuseColor.rgb *= mix(0.90, 1.08, tdBlade);\n' +
-          '    diffuseColor.rgb = mix(diffuseColor.rgb, uGrassTint, 0.08);\n' +
+          '    diffuseColor.rgb = mix(diffuseColor.rgb, uDryTint, smoothstep(0.48, 0.84, tdPatch) * 0.48);\n' +
+          '    diffuseColor.rgb = mix(diffuseColor.rgb, uDirtTint, smoothstep(0.58, 0.90, tdGrit) * 0.30);\n' +
+          '    diffuseColor.rgb *= mix(0.88, 1.10, tdBlade);\n' +
+          '    diffuseColor.rgb = mix(diffuseColor.rgb, uGrassTint, 0.05);\n' +
           '  }')
         .replace('#include <normal_fragment_begin>',
           '#include <normal_fragment_begin>\n' +
