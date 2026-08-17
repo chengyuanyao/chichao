@@ -23,7 +23,8 @@ import { createRenderer } from './render3d.js';
     mrefinery: { icon: '◈', desc: '接收浮游晶簇的水晶' },
     mtemple: { icon: '✠', desc: '训练奥术法师' },
     mcircle: { icon: '⬡', desc: '召唤构装体与魔兽' },
-    mtower: { icon: '✵', desc: '自动攻击附近敌军（魔法）' }
+    mtower: { icon: '✵', desc: '自动攻击附近敌军（魔法）' },
+    mspring: { icon: '✚', desc: '修复受损构装、巨龙与晶簇' }
   };
   var UNIT_VFX = {
     rifle: { icon: '♟', desc: '灵活的基础步兵' },
@@ -88,6 +89,7 @@ import { createRenderer } from './render3d.js';
         role: src.role || null,
         canDeploy: !!src.canDeploy,
         damageType: src.damageType,
+        repairable: !!src.repairable,
         icon: vfx.icon || '▲',
         desc: vfx.desc || ''
       };
@@ -115,7 +117,13 @@ import { createRenderer } from './render3d.js';
       powerLoad: '电力负载',
       harvester: '采矿车',
       hq: '指挥中心',
-      mcv: '基地车'
+      mcv: '基地车',
+      repairBtn: '维修载具',
+      repairTitle: '前往最近维修厂 (R)',
+      repairHint: '维修载具',
+      repairNeed: '没有可用的战地维修厂',
+      repairSelect: '请选择受损的坦克、战车或采矿车',
+      repairSent: '辆载具已前往维修厂'
     },
     magic: {
       infantryTab: '圣殿',
@@ -124,7 +132,13 @@ import { createRenderer } from './render3d.js';
       powerLoad: '法力负载',
       harvester: '晶簇',
       hq: '魔法主堡',
-      mcv: '迁徙法阵'
+      mcv: '迁徙法阵',
+      repairBtn: '修复构装',
+      repairTitle: '前往最近圣泉 (R)',
+      repairHint: '修复构装',
+      repairNeed: '没有可用的圣泉',
+      repairSelect: '请选择受损的傀儡、巨龙或晶簇',
+      repairSent: '个单位已前往圣泉'
     }
   };
 
@@ -146,11 +160,18 @@ import { createRenderer } from './render3d.js';
     if (harvesterLabel) { harvesterLabel.textContent = copy.harvester; }
     var powerLoadLabel = $('#statPowerLabel');
     if (powerLoadLabel) { powerLoadLabel.textContent = copy.powerLoad; }
+    var repairBtn = $('#repairBtn');
+    if (repairBtn) {
+      repairBtn.title = copy.repairTitle;
+      repairBtn.innerHTML = '<span>✚</span>' + copy.repairBtn;
+    }
+    var repairHint = $('#repairHint');
+    if (repairHint) { repairHint.innerHTML = '<kbd>R</kbd> ' + copy.repairHint; }
   }
 
   var STRUCTURE_ICONS = {
     hq: '★', power: 'ϟ', refinery: '◆', barracks: '♟', factory: '▰', repair: '✚', turret: '⌖', missile: '⊿',
-    mhq: '★', mpower: '✦', mrefinery: '◈', mtemple: '✠', mcircle: '⬡', mtower: '✵'
+    mhq: '★', mpower: '✦', mrefinery: '◈', mtemple: '✠', mcircle: '⬡', mspring: '✚', mtower: '✵'
   };
 
   /* -------------------- 肖像绘制器 --------------------
@@ -183,7 +204,7 @@ import { createRenderer } from './render3d.js';
   var P_ROBE = '#4a3a5e';
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
-    mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mtower: 1,
+    mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1,
     mage: 1, frost: 1, golem: 1, panther: 1, dragon: 1, mharvester: 1, mmcv: 1
   };
 
@@ -720,6 +741,20 @@ import { createRenderer } from './render3d.js';
       c.beginPath(); c.ellipse(48, 29, 9, 16, 0, 0, Math.PI * 2); c.stroke();
       pCirc(c, 48, 29, 6, P_ARCANE);
       pCirc(c, 48, 29, 2.4, '#f2e6ff');
+    },
+    mspring: function (c) {
+      pShadow(c, 48, 60, 28);
+      // 石砌泉盆 + 泉心寒蓝圣水，对位维修厂的龙门剪影
+      pPoly(c, [[22, 56], [74, 56], [66, 44], [30, 44]], P_STONE);
+      pPoly(c, [[74, 56], [58, 56], [55, 44], [66, 44]], 'rgba(10,10,6,.24)');
+      pCirc(c, 48, 42, 11, P_FROST);
+      pCirc(c, 48, 42, 6, '#d6efff');
+      pCirc(c, 48, 40, 2.2, '#ffffff');
+      c.strokeStyle = P_ARCANE; c.lineWidth = 1.6;
+      c.beginPath(); c.ellipse(48, 42, 14, 5, 0, 0, Math.PI * 2); c.stroke();
+      pLine(c, 48, 42, 48, 22, 2, P_FROST);
+      pCirc(c, 48, 20, 3.2, P_ARCANE);
+      pCirc(c, 48, 20, 1.4, '#f2e6ff');
     },
     mtower: function (c) {
       pShadow(c, 48, 59, 18);
@@ -2049,16 +2084,14 @@ import { createRenderer } from './render3d.js';
       strikeBtn.classList.toggle('ready', charges > 0);
     }
 
-    // 秘法会没有维修厂，隐藏维修按钮和 R 键提示，避免点下去只看到「没有可用的战地维修厂」。
-    var isMagic = isOwnMagicFaction();
     applyFactionHud();
     var repairBtn = $('#repairBtn');
     if (repairBtn) {
-      repairBtn.classList.toggle('hidden', isMagic);
+      repairBtn.classList.remove('hidden');
     }
     var repairHint = $('#repairHint');
     if (repairHint) {
-      repairHint.classList.toggle('hidden', isMagic);
+      repairHint.classList.remove('hidden');
     }
 
     var ownHQ = roomState.game.structures.find(function (s) { return s.owner === me.id && structureRole(s.kind) === 'hq' && s.active; });
@@ -2444,8 +2477,9 @@ import { createRenderer } from './render3d.js';
       if (structure.queue.length) {
         activeText = '生产 ' + ((UNITS[structure.queue[0].kind] || {}).name || structure.queue[0].kind) + ' · ' +
           Math.floor((1 - structure.queue[0].remaining / structure.queue[0].total) * 100) + '%';
-      } else if (structure.active && structure.kind === 'repair') {
-        activeText = '维修系统待命 · 右键派遣载具';
+      } else if (structure.active && structureRole(structure.kind) === 'repair') {
+        activeText = isOwnMagicFaction() ?
+          '圣泉待命 · 右键派遣构装' : '维修系统待命 · 右键派遣载具';
       }
       var sell = structure.owner === session.playerId && structureRole(structure.kind) !== 'hq' ?
         '<button class="sell-button" id="sellSelectedBtn">出售</button>' : '<span></span>';
@@ -3564,7 +3598,7 @@ import { createRenderer } from './render3d.js';
         unitIds: Array.from(selectedUnits),
         targetId: target.id
       }).then(function () { sound('attack'); }).catch(function () {});
-    } else if (target && isFriendly(target.owner) && target.kind === 'repair' && selectedUnits.size) {
+    } else if (target && isFriendly(target.owner) && structureRole(target.kind) === 'repair' && selectedUnits.size) {
       issueRepairCommand(target);
     } else {
       issueGroundCommand(worldX, worldY);
@@ -3572,16 +3606,17 @@ import { createRenderer } from './render3d.js';
   }
 
   function selectedDamagedVehicles() {
-    var vehicleKinds = { tank: true, scout: true, harvester: true, artillery: true, tank_destroyer: true, mcv: true, v3: true, overlord: true, prism: true };
     return roomState.game.units.filter(function (unit) {
-      return selectedUnits.has(unit.id) && vehicleKinds[unit.kind] && unit.hp < unit.maxHp - 0.1;
+      var def = UNITS[unit.kind] || {};
+      return selectedUnits.has(unit.id) && def.repairable && unit.hp < unit.maxHp - 0.1;
     });
   }
 
   function issueRepairCommand(repairBay) {
     var vehicles = selectedDamagedVehicles();
+    var copy = factionCopy();
     if (!vehicles.length) {
-      toast('请选择受损的坦克、战车或采矿车', 'error');
+      toast(copy.repairSelect, 'error');
       sound('error');
       return;
     }
@@ -3590,26 +3625,27 @@ import { createRenderer } from './render3d.js';
       unitIds: vehicles.map(function (unit) { return unit.id; }),
       structureId: repairBay.id
     }).then(function () {
-      toast(vehicles.length + ' 辆载具已前往维修厂', 'success');
+      toast(vehicles.length + ' ' + copy.repairSent, 'success');
       sound('repair');
     }).catch(function () {});
   }
 
   function repairSelectedAtNearestBay() {
-    if (!roomState || !roomState.game || isOwnMagicFaction()) {
+    if (!roomState || !roomState.game) {
       return;
     }
+    var copy = factionCopy();
     var vehicles = selectedDamagedVehicles();
     if (!vehicles.length) {
-      toast('请选择受损的坦克、战车或采矿车', 'error');
+      toast(copy.repairSelect, 'error');
       sound('error');
       return;
     }
     var bays = roomState.game.structures.filter(function (structure) {
-      return structure.owner === session.playerId && structure.kind === 'repair' && structure.active;
+      return structure.owner === session.playerId && structureRole(structure.kind) === 'repair' && structure.active;
     });
     if (!bays.length) {
-      toast('没有可用的战地维修厂', 'error');
+      toast(copy.repairNeed, 'error');
       sound('error');
       return;
     }
@@ -4038,9 +4074,7 @@ import { createRenderer } from './render3d.js';
       stopSelected();
     } else if (event.code === 'KeyR') {
       event.preventDefault();
-      if (!isOwnMagicFaction()) {
-        repairSelectedAtNearestBay();
-      }
+      repairSelectedAtNearestBay();
     } else if (event.code === 'KeyU') {
       event.preventDefault();
       if (selectedStructureId && roomState && roomState.game) {
