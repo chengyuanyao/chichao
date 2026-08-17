@@ -179,6 +179,8 @@ const MAT = {
   bronze: [0.46, 0.30, 0.16],       // 符文铜饰
   robe: [0.22, 0.16, 0.32],         // 法师袍（不跟团队色走）
   cloth: [0.20, 0.22, 0.18],        // 步兵布甲
+  sandbag: [0.40, 0.34, 0.22],      // 沙袋/夯土
+  canvas: [0.38, 0.30, 0.18],       // 帐篷布 / 旗帜衬
   arcaneGlow: [1.55, 0.72, 2.35],   // 奥术紫（略压，避免辉光洗成白团）
   frostGlow: [1.05, 1.85, 2.35],    // 冰霜蓝
   fireGlow: [2.45, 1.15, 0.42],     // 龙火橙
@@ -240,36 +242,43 @@ const GLOW_HOT = 2.6;
 function infantryParts(weapon) {
   const body = [
     // 躯干走橄榄布甲，团队色只留给肩章与胸牌 —— 远看不再是一整块荧光机器人。
-    taperedBox(7.8, 5.6, 6.5, 4.7, 8.6, 0, 7.3, 0, MAT.olive),
-    box(4.2, 2.4, 9.2, -0.1, 10.6, 0, 0.95),           // 肩章（团队色）
-    box(3.4, 3.2, 4.6, 1.6, 8.2, 0, 0.85),             // 胸牌
-    taperedBox(5.6, 5.2, 4.2, 4.0, 3.6, 0.3, 13.4, 0, MAT.sandArmor),  // 头盔
-    box(5.8, 0.7, 5.4, 0.2, 15.0, 0, MAT.darkSteel),   // 盔檐
-    box(1.0, 2.4, 1.0, -1.4, 16.2, 0, MAT.gunmetal),   // 盔 comms
-    box(2.5, 6.0, 2.5, -0.6, 3.0, 2.8, MAT.cloth),     // 腿
-    box(2.5, 6.0, 2.5, -0.6, 3.0, -2.8, MAT.cloth),
-    box(3.3, 2.0, 3.3, -0.6, 0.9, 2.8, MAT.rubber),    // 靴
-    box(3.3, 2.0, 3.3, -0.6, 0.9, -2.8, MAT.rubber),
-    box(3.8, 5.4, 6.2, -3.7, 8.6, 0, MAT.olive)        // 背包
+    taperedBox(7.2, 5.2, 6.0, 4.4, 7.4, 0.2, 8.2, 0, MAT.olive),
+    box(6.2, 2.2, 4.8, 0.1, 4.8, 0, MAT.cloth),        // 骨盆，把胸和腿连成人形
+    box(4.4, 2.2, 9.0, -0.1, 11.4, 0, 0.95),           // 肩章（团队色）
+    box(3.2, 2.8, 4.2, 1.8, 8.8, 0, 0.85),             // 胸牌
+    sph(2.7, 7, 0.4, 13.8, 0, MAT.sandArmor),          // 头
+    taperedBox(5.2, 4.8, 3.6, 3.4, 2.2, 0.4, 15.4, 0, MAT.sandArmor),
+    box(5.6, 0.6, 5.2, 0.3, 14.6, 0, MAT.darkSteel),   // 盔檐
+    box(1.0, 2.2, 1.0, -1.2, 16.6, 0, MAT.gunmetal),   // 盔 comms
+    box(2.4, 5.2, 2.6, -0.3, 2.7, 2.5, MAT.cloth),     // 腿
+    box(2.4, 5.2, 2.6, -0.3, 2.7, -2.5, MAT.cloth),
+    box(3.2, 1.8, 3.2, -0.1, 0.8, 2.5, MAT.rubber),    // 靴
+    box(3.2, 1.8, 3.2, -0.1, 0.8, -2.5, MAT.rubber),
+    box(3.6, 5.0, 5.4, -3.6, 9.0, 0, MAT.olive),       // 背包
+    // 步兵有持枪手臂，远看是人不是积木
+    box(2.2, 2.2, 4.8, 1.0, 9.8, 4.4, MAT.olive),      // 左上臂
+    box(4.2, 1.7, 1.7, 3.2, 8.6, 4.4, MAT.olive),      // 左前臂
+    box(2.2, 2.2, 4.8, 1.0, 9.8, -4.4, MAT.olive),     // 右上臂
+    box(5.0, 1.7, 1.7, 3.6, 8.4, -3.4, MAT.olive)      // 右前臂（持枪）
   ];
   const glow = [
-    box(0.7, 1.4, 3.2, 2.5, 13.5, 0, GLOW_HOT),        // 面罩
-    box(2.2, 0.5, 0.5, -3.7, 11.4, 0, GLOW_SOFT)       // 背包指示灯
+    box(0.7, 1.4, 2.8, 2.6, 13.8, 0, GLOW_HOT),        // 面罩
+    box(2.2, 0.5, 0.5, -3.6, 11.6, 0, GLOW_SOFT)       // 背包指示灯
   ];
 
   if (weapon === 'rifle') {
-    body.push(box(10, 1.4, 1.4, 4.8, 8.2, 1.9, MAT.gunmetal));
-    body.push(box(2.6, 2.4, 0.9, 1.6, 8.2, 1.9, MAT.darkSteel));
-    glow.push(box(1.0, 0.5, 0.5, 9.4, 8.2, 1.9, GLOW_SOFT));
+    body.push(box(10, 1.3, 1.3, 5.2, 8.2, -3.2, MAT.gunmetal));
+    body.push(box(2.4, 2.2, 0.8, 2.0, 8.4, -3.2, MAT.darkSteel));
+    glow.push(box(1.0, 0.5, 0.5, 9.8, 8.2, -3.2, GLOW_SOFT));
   } else if (weapon === 'rocket') {
-    body.push(cyl(1.9, 1.9, 13, 8, 4.0, 9.6, 1.6, MAT.olive, ROT_Z90));
-    body.push(cyl(2.6, 1.8, 2.6, 8, -2.6, 9.6, 1.6, MAT.gunmetal, ROT_Z90));
-    glow.push(cyl(1.4, 1.4, 0.8, 8, -3.6, 9.6, 1.6, MAT.exhaust, ROT_Z90));
+    body.push(cyl(1.9, 1.9, 13, 8, 4.0, 9.6, -2.8, MAT.olive, ROT_Z90));
+    body.push(cyl(2.6, 1.8, 2.6, 8, -2.6, 9.6, -2.8, MAT.gunmetal, ROT_Z90));
+    glow.push(cyl(1.4, 1.4, 0.8, 8, -3.6, 9.6, -2.8, MAT.exhaust, ROT_Z90));
   } else if (weapon === 'sniper') {
-    body.push(box(14.0, 1.1, 1.1, 6.4, 8.8, 1.6, MAT.gunmetal));
-    body.push(box(2.6, 1.8, 1.1, 2.4, 9.9, 1.6, MAT.darkSteel));
-    body.push(box(3.4, 0.7, 0.7, 12.4, 8.2, 1.6, MAT.darkSteel));
-    glow.push(box(0.9, 0.6, 0.6, 3.6, 9.9, 1.6, GLOW_HOT));
+    body.push(box(14.0, 1.1, 1.1, 6.8, 8.8, -3.0, MAT.gunmetal));
+    body.push(box(2.6, 1.8, 1.1, 2.6, 9.9, -3.0, MAT.darkSteel));
+    body.push(box(3.4, 0.7, 0.7, 12.8, 8.2, -3.0, MAT.darkSteel));
+    glow.push(box(0.9, 0.6, 0.6, 3.8, 9.9, -3.0, GLOW_HOT));
   } else if (weapon === 'tesla') {
     // 动力甲比普通步兵壮一圈：加宽肩甲 + 加厚胸甲
     body.push(box(4.4, 2.6, 10.6, -0.2, 11.2, 0, 0.5));
@@ -349,18 +358,22 @@ const UNIT_BUILDERS = {
   mage: function () {
     // 长袍法师：暗紫袍是固有色，团队色只在肩饰与帽沿，远看是施法者不是蓝盒子。
     const body = [
-      taperedBox(8.0, 8.0, 4.2, 4.2, 10.2, 0, 6.4, 0, MAT.robe),
-      box(4.0, 1.8, 7.2, 0, 11.8, 0, 0.9),                    // 肩饰（团队色）
-      sph(2.4, 8, 0, 14.0, 0, MAT.sandArmor),                 // 头
-      taperedBox(3.4, 3.4, 1.0, 1.0, 3.2, 0, 16.0, 0, MAT.robe),
-      box(3.6, 0.5, 3.6, 0, 14.8, 0, 0.75),                   // 帽沿
-      cyl(0.45, 0.45, 13.5, 6, 5.0, 8.2, 2.4, MAT.bronze, ROT_Z90)
+      taperedBox(9.4, 9.4, 4.0, 4.0, 11.0, 0, 6.2, 0, MAT.robe),
+      box(4.2, 1.8, 7.4, 0, 12.0, 0, 0.9),                    // 肩饰（团队色）
+      sph(2.5, 8, 0, 14.4, 0, MAT.sandArmor),                 // 头
+      taperedBox(3.6, 3.6, 0.8, 0.8, 3.6, 0, 16.6, 0, MAT.robe),
+      box(4.0, 0.5, 4.0, 0, 15.2, 0, 0.75),                   // 帽沿
+      cyl(0.45, 0.45, 14.0, 6, 5.4, 8.4, 2.8, MAT.bronze, ROT_Z90),
+      box(2.0, 2.0, 4.6, 1.0, 10.8, 4.2, MAT.robe),           // 左袖
+      box(2.0, 2.0, 4.6, 1.0, 10.8, -3.4, MAT.robe),          // 右袖
+      box(4.4, 1.6, 1.6, 3.8, 8.6, 2.8, MAT.robe)             // 持杖前臂
     ];
     return {
       body: body,
       glow: [
-        sph(1.7, 7, 11.4, 8.2, 2.4, MAT.arcaneGlow),
-        box(2.4, 0.55, 0.55, 0, 12.8, 0, MAT.arcaneGlow)
+        sph(1.8, 7, 12.0, 8.4, 2.8, MAT.arcaneGlow),
+        box(2.4, 0.55, 0.55, 0, 13.0, 0, MAT.arcaneGlow),
+        cyl(3.2, 3.2, 0.35, 10, 0, 1.2, 0, MAT.arcaneGlow)    // 脚下符环
       ]
     };
   },
@@ -368,19 +381,23 @@ const UNIT_BUILDERS = {
   frost: function () {
     // 冰霜女巫：冰蓝袍 + 冰晶头冠，杖顶寒球比法师更细长
     const body = [
-      taperedBox(7.8, 7.8, 4.0, 4.0, 10.2, 0, 6.4, 0, MAT.robe),
-      box(3.6, 1.6, 6.8, 0, 11.8, 0, 0.85),
-      sph(2.3, 8, 0, 14.0, 0, MAT.sandArmor),
-      box(0.55, 2.2, 0.55, 0, 16.4, 1.3, MAT.crystal),
-      box(0.55, 2.8, 0.55, 0, 16.8, 0, MAT.crystal),
-      box(0.55, 2.2, 0.55, 0, 16.4, -1.3, MAT.crystal),
-      cyl(0.38, 0.38, 13.5, 6, 5.0, 8.4, 2.4, MAT.gunmetal, ROT_Z90)
+      taperedBox(9.0, 9.0, 3.8, 3.8, 11.0, 0, 6.2, 0, MAT.robe),
+      box(3.8, 1.6, 7.0, 0, 12.0, 0, 0.85),
+      sph(2.4, 8, 0, 14.4, 0, MAT.sandArmor),
+      box(0.55, 2.2, 0.55, 0, 16.8, 1.3, MAT.crystal),
+      box(0.55, 2.8, 0.55, 0, 17.2, 0, MAT.crystal),
+      box(0.55, 2.2, 0.55, 0, 16.8, -1.3, MAT.crystal),
+      cyl(0.38, 0.38, 14.0, 6, 5.4, 8.6, 2.8, MAT.gunmetal, ROT_Z90),
+      box(2.0, 2.0, 4.4, 1.0, 10.8, 4.0, MAT.robe),
+      box(2.0, 2.0, 4.4, 1.0, 10.8, -3.2, MAT.robe),
+      box(4.2, 1.5, 1.5, 3.6, 8.6, 2.8, MAT.robe)
     ];
     return {
       body: body,
       glow: [
-        sph(1.6, 7, 11.4, 8.4, 2.4, MAT.frostGlow),
-        sph(0.7, 5, 0, 18.4, 0, MAT.frostGlow)
+        sph(1.7, 7, 12.0, 8.6, 2.8, MAT.frostGlow),
+        sph(0.7, 5, 0, 18.8, 0, MAT.frostGlow),
+        cyl(3.0, 3.0, 0.3, 10, 0, 1.2, 0, MAT.frostGlow)
       ]
     };
   },
@@ -388,14 +405,17 @@ const UNIT_BUILDERS = {
   golem: function () {
     // 岩石傀儡：厚重岩躯 + 巨石双臂 + 水晶拳，胸口一颗奥术核心
     const body = [
-      taperedBox(12, 10, 8.6, 7.2, 12, 0, 10.4, 0, MAT.magicStone),
-      taperedBox(5.2, 5.0, 3.4, 3.2, 4.2, 3.2, 17.2, 0, MAT.slate),
-      box(4.6, 9.4, 4.6, 1.0, 9.2, 6.6, MAT.magicStone),
-      box(4.6, 9.4, 4.6, 1.0, 9.2, -6.6, MAT.magicStone),
-      taperedBox(4.2, 4.2, 3.2, 3.2, 4.2, 2.2, 4.2, 6.8, MAT.crystal),
-      taperedBox(4.2, 4.2, 3.2, 3.2, 4.2, 2.2, 4.2, -6.8, MAT.crystal),
-      box(4.2, 6.4, 4.6, 0, 3.1, 3.1, MAT.slate),
-      box(4.2, 6.4, 4.6, 0, 3.1, -3.1, MAT.slate)
+      taperedBox(12.4, 10.4, 8.4, 7.0, 12.2, 0, 10.6, 0, MAT.magicStone),
+      taperedBox(5.4, 5.2, 3.2, 3.0, 4.4, 3.2, 17.6, 0, MAT.slate),
+      sph(2.0, 6, 4.4, 18.4, 0, MAT.slate),
+      box(5.0, 9.6, 5.0, 1.0, 9.4, 6.8, MAT.magicStone),
+      box(5.0, 9.6, 5.0, 1.0, 9.4, -6.8, MAT.magicStone),
+      taperedBox(4.6, 4.6, 2.8, 2.8, 4.4, 2.4, 4.2, 7.0, MAT.crystal),
+      taperedBox(4.6, 4.6, 2.8, 2.8, 4.4, 2.4, 4.2, -7.0, MAT.crystal),
+      box(4.4, 6.6, 4.8, 0, 3.2, 3.2, MAT.slate),
+      box(4.4, 6.6, 4.8, 0, 3.2, -3.2, MAT.slate),
+      taperedBox(3.2, 3.2, 1.4, 1.4, 3.6, -3.4, 14.2, 3.4, MAT.crystal),
+      taperedBox(3.2, 3.2, 1.4, 1.4, 3.6, -3.4, 14.2, -3.4, MAT.crystal)
     ];
     return {
       body: body,
@@ -794,15 +814,26 @@ function structureParts(kind, size) {
 
   if (kind === 'hq') {
     // 指挥中心：矮宽地堡 + 两侧翼楼 + 收束主塔，不再是三层灰方块。
-    taper(HULL, s * 1.40, s * 1.18, s * 1.26, s * 1.06, s * 0.40, 0, s * 0.20 + 3.4, 0, MAT.concrete);
-    taper(HULL, s * 0.40, s * 0.72, s * 0.30, s * 0.58, s * 0.36,
-      s * 0.74, s * 0.18 + 3.4, 0, MAT.darkSteel);
-    taper(HULL, s * 0.40, s * 0.72, s * 0.30, s * 0.58, s * 0.36,
-      -s * 0.74, s * 0.18 + 3.4, 0, MAT.darkSteel);
-    taper(HULL, s * 0.82, s * 0.82, s * 0.58, s * 0.58, s * 1.08, 0, s * 0.96 + 3.4, 0, MAT.steel);
+    // 正面闸门朝 +Z（默认相机从南往北看），主塔加四棱斜顶，翼楼是独立碉堡。
+    taper(HULL, s * 1.46, s * 1.22, s * 1.28, s * 1.04, s * 0.38, 0, s * 0.19 + 3.4, 0, MAT.concrete);
+    taper(HULL, s * 0.44, s * 0.38, s * 0.34, s * 0.12, s * 0.22, 0, s * 0.11 + 3.4, s * 0.70, MAT.darkSteel);
+    add(HULL, new THREE.BoxGeometry(s * 0.26, s * 0.28, s * 0.06), 0, s * 0.22 + 3.4, s * 0.64, MAT.gunmetal);
+    add(GLOW, new THREE.BoxGeometry(s * 0.04, s * 0.20, s * 0.04), s * 0.09, s * 0.22 + 3.4, s * 0.68, GLOW_HOT);
+    add(GLOW, new THREE.BoxGeometry(s * 0.04, s * 0.20, s * 0.04), -s * 0.09, s * 0.22 + 3.4, s * 0.68, GLOW_HOT);
+    taper(HULL, s * 0.38, s * 0.78, s * 0.26, s * 0.58, s * 0.42,
+      s * 0.78, s * 0.21 + 3.4, 0, MAT.darkSteel);
+    taper(HULL, s * 0.38, s * 0.78, s * 0.26, s * 0.58, s * 0.42,
+      -s * 0.78, s * 0.21 + 3.4, 0, MAT.darkSteel);
+    add(HULL, new THREE.BoxGeometry(s * 0.06, s * 0.10, s * 0.36), s * 0.94, s * 0.28 + 3.4, 0, MAT.glass);
+    add(HULL, new THREE.BoxGeometry(s * 0.06, s * 0.10, s * 0.36), -s * 0.94, s * 0.28 + 3.4, 0, MAT.glass);
+    add(HULL, new THREE.BoxGeometry(s * 0.16, s * 0.10, s * 0.20), s * 0.28, s * 0.42 + 3.4, -s * 0.40, MAT.rivet);
+    add(HULL, new THREE.BoxGeometry(s * 0.16, s * 0.10, s * 0.20), -s * 0.28, s * 0.42 + 3.4, -s * 0.40, MAT.rivet);
+    add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.12, s * 0.36), 0, s * 0.08 + 3.4, s * 0.86, MAT.sandbag);
+    taper(HULL, s * 0.86, s * 0.86, s * 0.50, s * 0.50, s * 1.04, 0, s * 0.94 + 3.4, 0, MAT.steel);
+    add(HULL, new THREE.ConeGeometry(s * 0.42, s * 0.30, 4), 0, s * 1.60 + 3.4, 0, MAT.darkSteel,
+      new THREE.Matrix4().makeRotationY(Math.PI / 4));
     add(TEAM, new THREE.BoxGeometry(s * 0.70, s * 0.16, s * 0.08), 0, s * 1.10, s * 0.40, 1.0);
     add(TEAM, new THREE.BoxGeometry(s * 0.70, s * 0.16, s * 0.08), 0, s * 1.10, -s * 0.40, 1.0);
-    add(HULL, new THREE.BoxGeometry(s * 0.90, s * 0.07, s * 0.90), 0, s * 1.52, 0, MAT.darkSteel);
     add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.22, s * 0.36), 0, s * 1.64, 0, MAT.gunmetal);
     [0.78, 1.18].forEach(function (h) {
       add(HULL, new THREE.BoxGeometry(s * 0.78, s * 0.06, s * 0.64), 0, s * h, 0, MAT.glass);
@@ -810,8 +841,8 @@ function structureParts(kind, size) {
     });
     add(GLOW, new THREE.BoxGeometry(s * 0.12, s * 0.04, s * 0.12), 0, s * 1.72, 0, GLOW_HOT);
     [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
-      taper(HULL, s * 0.26, s * 0.26, s * 0.18, s * 0.18, s * 0.42,
-        q[0] * s * 0.58, s * 0.21 + 3.4, q[1] * s * 0.58, MAT.concreteDark);
+      taper(HULL, s * 0.26, s * 0.26, s * 0.16, s * 0.16, s * 0.44,
+        q[0] * s * 0.58, s * 0.22 + 3.4, q[1] * s * 0.58, MAT.concreteDark);
       add(HULL, new THREE.CylinderGeometry(s * 0.04, s * 0.05, s * 0.28, 6),
         q[0] * s * 0.58, s * 0.52, q[1] * s * 0.58, MAT.gunmetal);
     });
@@ -839,6 +870,9 @@ function structureParts(kind, size) {
     });
     add(GLOW, new THREE.BoxGeometry(s * 0.86, s * 0.05, s * 0.08), 0, s * 1.48, 0, MAT.teslaArc);
     add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.32, s * 0.22), 0, s * 0.42, -s * 0.48, MAT.steel);
+    add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.22, s * 0.28), 0, s * 0.36 + 3.4, s * 0.58, MAT.rivet);
+    add(HULL, new THREE.CylinderGeometry(s * 0.04, s * 0.04, s * 0.40, 6),
+      0, s * 0.48 + 3.4, s * 0.38, MAT.copper, ROT_Z90);
   } else if (kind === 'refinery') {
     taper(HULL, s * 1.48, s * 1.18, s * 1.34, s * 1.06, s * 0.42, 0, s * 0.21 + 3.4, 0, MAT.concrete);
     add(TEAM, new THREE.CylinderGeometry(s * 0.40, s * 0.48, s * 1.05, 12), s * 0.40, s * 0.88, 0);
@@ -859,6 +893,7 @@ function structureParts(kind, size) {
     add(HULL, new THREE.CylinderGeometry(s * 0.62, s * 0.62, s * 1.36, 3), 0, s * 0.72, 0, MAT.olive,
       new THREE.Matrix4().makeRotationZ(Math.PI / 2));
     add(HULL, new THREE.BoxGeometry(s * 0.12, s * 0.40, s * 0.50), s * 0.70, s * 0.24 + 3.4, 0, MAT.gunmetal);
+    add(HULL, new THREE.BoxGeometry(s * 0.28, s * 0.32, s * 0.08), 0, s * 0.22 + 3.4, s * 0.54, MAT.darkSteel);
     add(GLOW, new THREE.BoxGeometry(s * 0.05, s * 0.40, s * 0.05), s * 0.74, s * 0.24 + 3.4, s * 0.26, GLOW_HOT);
     add(GLOW, new THREE.BoxGeometry(s * 0.05, s * 0.40, s * 0.05), s * 0.74, s * 0.24 + 3.4, -s * 0.26, GLOW_HOT);
     add(GLOW, new THREE.BoxGeometry(s * 1.10, s * 0.05, s * 0.96), 0, s * 0.50, 0, GLOW_SOFT);
@@ -914,9 +949,17 @@ function structureParts(kind, size) {
      */
   } else if (kind === 'mhq') {
     // 魔法主堡：三级石砌金字塔 + 收束法塔 + 飞扶壁，塔顶巨晶是远距剪影。
+    // 主堡顶是石穹加晶刺，不是叠方块；正面奥术门朝 +Z。
     taper(HULL, s * 1.44, s * 1.44, s * 1.18, s * 1.18, s * 0.26, 0, s * 0.13 + 3.4, 0, MAT.slate);
     taper(HULL, s * 1.14, s * 1.14, s * 0.88, s * 0.88, s * 0.30, 0, s * 0.41 + 3.4, 0, MAT.magicStone);
-    taper(HULL, s * 0.72, s * 0.72, s * 0.42, s * 0.42, s * 1.02, 0, s * 1.04 + 3.4, 0, MAT.magicStone);
+    taper(HULL, s * 0.72, s * 0.72, s * 0.38, s * 0.38, s * 0.92, 0, s * 0.98 + 3.4, 0, MAT.magicStone);
+    add(HULL, new THREE.SphereGeometry(s * 0.36, 10, 7), 0, s * 1.58, 0, MAT.marble);
+    add(HULL, new THREE.BoxGeometry(s * 0.28, s * 0.34, s * 0.08), 0, s * 0.22 + 3.4, s * 0.74, MAT.slate);
+    add(GLOW, new THREE.BoxGeometry(s * 0.16, s * 0.26, s * 0.04), 0, s * 0.22 + 3.4, s * 0.78, MAT.arcaneGlow);
+    add(HULL, new THREE.CylinderGeometry(s * 0.025, s * 0.03, s * 0.88, 6), s * 0.72, s * 0.68, s * 0.52, MAT.bronze);
+    add(HULL, new THREE.CylinderGeometry(s * 0.025, s * 0.03, s * 0.88, 6), -s * 0.72, s * 0.68, s * 0.52, MAT.bronze);
+    add(TEAM, new THREE.BoxGeometry(s * 0.22, s * 0.38, s * 0.03), s * 0.84, s * 0.70, s * 0.52, 1.0);
+    add(TEAM, new THREE.BoxGeometry(s * 0.22, s * 0.38, s * 0.03), -s * 0.84, s * 0.70, s * 0.52, 1.0);
     add(TEAM, new THREE.BoxGeometry(s * 0.10, s * 0.70, s * 0.04), s * 0.36, s * 1.10, 0, 1.0);
     add(TEAM, new THREE.BoxGeometry(s * 0.10, s * 0.70, s * 0.04), -s * 0.36, s * 1.10, 0, 1.0);
     add(HULL, new THREE.BoxGeometry(s * 0.80, s * 0.06, s * 0.80), 0, s * 1.56, 0, MAT.bronze);
@@ -932,7 +975,7 @@ function structureParts(kind, size) {
       add(GLOW, new THREE.SphereGeometry(s * 0.055, 7, 5),
         q[0] * s * 0.62, s * 0.82, q[1] * s * 0.62, MAT.arcaneGlow);
     });
-    taper(GLOW, s * 0.28, s * 0.28, s * 0.04, s * 0.04, s * 0.88, 0, s * 2.18, 0, MAT.arcaneGlow);
+    taper(GLOW, s * 0.22, s * 0.22, s * 0.03, s * 0.03, s * 0.72, 0, s * 2.12, 0, MAT.arcaneGlow);
     add(GLOW, new THREE.TorusGeometry(s * 0.46, s * 0.035, 6, 18), 0, s * 2.08, 0, MAT.arcaneGlow, ROT_X90);
   } else if (kind === 'mpower') {
     // 法力塔：两根收束晶柱托一颗中心法力球，剪影是双尖塔不是叠盒子。
@@ -948,6 +991,7 @@ function structureParts(kind, size) {
     });
     add(GLOW, new THREE.SphereGeometry(s * 0.28, 12, 8), 0, s * 1.58, 0, MAT.arcaneGlow);
     add(GLOW, new THREE.TorusGeometry(s * 0.40, s * 0.028, 6, 16), 0, s * 1.58, 0, MAT.frostGlow, ROT_X90);
+    add(HULL, new THREE.CylinderGeometry(s * 0.16, s * 0.20, s * 0.22, 8), 0, s * 0.36 + 3.4, 0, MAT.bronze);
   } else if (kind === 'mrefinery') {
     taper(HULL, s * 1.46, s * 1.16, s * 1.32, s * 1.04, s * 0.40, 0, s * 0.20 + 3.4, 0, MAT.magicStone);
     taper(HULL, s * 0.42, s * 0.42, s * 0.12, s * 0.12, s * 1.18, s * 0.38, s * 0.92, 0, MAT.crystal);
@@ -971,6 +1015,8 @@ function structureParts(kind, size) {
     taper(HULL, s * 0.86, s * 0.62, s * 0.36, s * 0.22, s * 0.22, 0, s * 1.32 + 3.4, 0, MAT.bronze);
     taper(GLOW, s * 0.24, s * 0.24, s * 0.05, s * 0.05, s * 0.52, 0, s * 0.78, 0, MAT.arcaneGlow);
     add(GLOW, new THREE.BoxGeometry(s * 0.05, s * 0.52, s * 0.42), s * 0.70, s * 0.38 + 3.4, 0, MAT.arcaneGlow);
+    add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.30, s * 0.08), 0, s * 0.22 + 3.4, s * 0.56, MAT.slate);
+    add(GLOW, new THREE.BoxGeometry(s * 0.12, s * 0.22, s * 0.04), 0, s * 0.22 + 3.4, s * 0.60, MAT.arcaneGlow);
   } else if (kind === 'mcircle') {
     taper(HULL, s * 1.50, s * 1.30, s * 1.36, s * 1.16, s * 0.42, 0, s * 0.21 + 3.4, 0, MAT.magicStone);
     add(GLOW, new THREE.TorusGeometry(s * 0.78, s * 0.04, 6, 20), 0, s * 0.56, 0, MAT.arcaneGlow, ROT_X90);
@@ -1321,11 +1367,11 @@ const BRIDGE_RENDER_SPAN = 2.0;
  * 视距看步兵只有几个像素，根本认不出兵种。这里按兵种放大到能辨识的比例。
  */
 const UNIT_VISUAL_SCALE = {
-  rifle: 1.95, rocket: 1.95, sniper: 1.95, tesla: 1.95, dog: 1.85,
+  rifle: 2.15, rocket: 2.15, sniper: 2.15, tesla: 2.15, dog: 1.85,
   tank: 1.28, scout: 1.34, tank_destroyer: 1.28,
   artillery: 1.28, harvester: 1.16, mcv: 1.30, v3: 1.28,
   overlord: 1.30, prism: 1.28,
-  mage: 1.95, frost: 1.95, golem: 1.38, panther: 1.7, dragon: 1.34,
+  mage: 2.15, frost: 2.15, golem: 1.42, panther: 1.7, dragon: 1.34,
   mharvester: 1.16, mmcv: 1.30
 };
 
@@ -1585,9 +1631,11 @@ export function createRenderer(canvas) {
             // 世界空间金属拉丝 / 石面斑驳：共享材质，不给每座建筑单独贴图。
             '  if (gEmissive < 0.04) {\n' +
             '    float gStreak = armyHash(vec2(vArmyWorld.x * 0.55 + vArmyWorld.z * 0.08, vArmyWorld.y * 0.9));\n' +
+            '    float gStreak2 = armyHash(vec2(vArmyWorld.x * 1.8, vArmyWorld.y * 2.2 + vArmyWorld.z * 0.4));\n' +
             '    float gBlotch = armyHash(floor(vArmyWorld.xz * 0.22));\n' +
-            '    float gMetal = mix(0.90, 1.08, gStreak);\n' +
-            '    float gStone = mix(0.88, 1.06, gBlotch);\n' +
+            '    float gBlotch2 = armyHash(floor(vArmyWorld.xz * 0.58 + vArmyWorld.y * 0.35));\n' +
+            '    float gMetal = mix(0.80, 1.16, gStreak * 0.65 + gStreak2 * 0.35);\n' +
+            '    float gStone = mix(0.78, 1.14, gBlotch * 0.55 + gBlotch2 * 0.45);\n' +
             '    float gHue = gBase.b - gBase.r;\n' +
             '    diffuseColor.rgb *= mix(gMetal, gStone, smoothstep(-0.04, 0.10, gHue));\n' +
             '  }')
@@ -1614,7 +1662,7 @@ export function createRenderer(canvas) {
             '    gl_FragColor.rgb = mix(gl_FragColor.rgb, gBase * gPulse, gEmissive);\n' +
             '  }');
     };
-    material.customProgramCacheKey = function () { return 'teamOrOwn3'; };
+    material.customProgramCacheKey = function () { return 'teamOrOwn4'; };
     return material;
   }
 
@@ -1970,7 +2018,7 @@ export function createRenderer(canvas) {
   }
 
   let buildingPadMat = null;
-  const buildingPadGeo = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2);
+  const buildingPadGeo = new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2);
   let buildingPadTex = null;
 
   function makeBuildingPadTexture() {
@@ -1985,20 +2033,24 @@ export function createRenderer(canvas) {
       for (let x = 0; x < size; x++) {
         const dx = (x + 0.5) / size * 2 - 1;
         const dy = (y + 0.5) / size * 2 - 1;
-        const r = Math.hypot(dx, dy);
-        const ang = Math.atan2(dy, dx);
-        const wobble = 0.07 * Math.sin(ang * 6.0 + r * 11.0);
-        const edge = r + wobble;
-        let a = 1 - Math.max(0, (edge - 0.38) / 0.62);
+        // 圆角方垫：贴住方形钢坎/石台，不再是一块金属圆盘。
+        const ax = Math.abs(dx), ay = Math.abs(dy);
+        const rad = 0.22;
+        const ox = Math.max(ax - (1 - rad), 0);
+        const oy = Math.max(ay - (1 - rad), 0);
+        const inside = Math.max(ax, ay) < (1 - rad);
+        const edge = inside ? Math.max(ax, ay) * 0.55 : 0.55 + Math.hypot(ox, oy) / rad;
+        const wobble = 0.05 * Math.sin(dx * 9.0 + dy * 7.0) * Math.cos(dy * 5.0);
+        let a = 1 - Math.max(0, (edge + wobble - 0.52) / 0.48);
         if (a < 0) a = 0;
         a = a * a * (3 - 2 * a);
         const grit = (Math.sin(x * 0.41 + y * 0.17) * Math.cos(y * 0.33) + 1) * 0.5;
-        const lum = 0.62 + grit * 0.28;
+        const lum = 0.58 + grit * 0.32;
         const i = (y * size + x) * 4;
         d[i] = lum * 255;
-        d[i + 1] = lum * 228;
-        d[i + 2] = lum * 186;
-        d[i + 3] = a * 200;
+        d[i + 1] = lum * 220;
+        d[i + 2] = lum * 176;
+        d[i + 3] = a * 188;
       }
     }
     ctx.putImageData(img, 0, 0);
@@ -3300,12 +3352,14 @@ export function createRenderer(canvas) {
    */
   function simpleUnitParts(kind) {
     const infantry = [
-      taperedBox(7.4, 5.2, 5.6, 4.2, 10, 0, 7.2, 0, MAT.olive),
-      box(4, 2.2, 8.4, -0.2, 10.4, 0, 0.95),
-      box(3, 5, 7, -2.5, 8, 0, MAT.olive)
+      taperedBox(7.2, 5.2, 5.6, 4.2, 8.4, 0.2, 8.0, 0, MAT.olive),
+      box(4.2, 2.2, 8.6, -0.2, 11.2, 0, 0.95),
+      sph(2.6, 6, 0.4, 13.6, 0, MAT.sandArmor),
+      box(2.2, 2.2, 4.6, 1.0, 9.6, 4.2, MAT.olive),
+      box(2.2, 2.2, 4.6, 1.0, 9.6, -4.2, MAT.olive)
     ];
     if (kind === 'rifle') {
-      return infantry.concat([box(12, 1.5, 1.5, 5, 9, 2, MAT.gunmetal)]);
+      return infantry.concat([box(12, 1.5, 1.5, 5.2, 8.4, -3.0, MAT.gunmetal)]);
     }
     if (kind === 'rocket') {
       return infantry.concat([cyl(2.2, 2.2, 14, 6, 4, 10, 1.5, MAT.olive, ROT_Z90)]);
@@ -3410,10 +3464,11 @@ export function createRenderer(canvas) {
     if (kind === 'mage' || kind === 'frost') {
       const orb = kind === 'frost' ? MAT.frostGlow : MAT.arcaneGlow;
       return [
-        taperedBox(8, 8, 4.2, 4.2, 10, 0, 6.4, 0, MAT.robe),
-        box(4, 1.8, 7, 0, 11.8, 0, 0.9),
-        cyl(0.45, 0.45, 13, 6, 5, 8.2, 2.4, MAT.bronze, ROT_Z90),
-        sph(1.6, 6, 11.4, 8.2, 2.4, orb)
+        taperedBox(9.2, 9.2, 4.0, 4.0, 11, 0, 6.2, 0, MAT.robe),
+        box(4, 1.8, 7, 0, 12.0, 0, 0.9),
+        box(2.0, 2.0, 4.4, 1.0, 10.6, 4.0, MAT.robe),
+        cyl(0.45, 0.45, 13, 6, 5.2, 8.4, 2.6, MAT.bronze, ROT_Z90),
+        sph(1.7, 6, 11.8, 8.4, 2.6, orb)
       ];
     }
     if (kind === 'golem') {
@@ -3711,7 +3766,7 @@ export function createRenderer(canvas) {
     }
     const pad = new THREE.Mesh(buildingPadGeo, buildingPadMat);
     // 尘土围裙略大于新地基，让建筑坐进 #7 的踩实土而不是压住一整块灰板。
-    pad.scale.set(structure.size * 0.92, 1, structure.size * 0.92);
+    pad.scale.set(structure.size * 0.86, 1, structure.size * 0.86);
     pad.position.y = 0.42;
     pad.receiveShadow = true;
     pad.renderOrder = 1;
