@@ -160,6 +160,9 @@ const MAT = {
   rust: [0.34, 0.20, 0.12],
   concrete: [0.44, 0.43, 0.40],
   concreteDark: [0.27, 0.27, 0.25],
+  // 装甲板 / 铆钉条：比混凝土更冷，给钢铁军团甲板一层金属感
+  plate: [0.34, 0.36, 0.39],
+  rivet: [0.16, 0.16, 0.18],
   glass: [0.16, 0.24, 0.29],
   warnYellow: [0.66, 0.54, 0.12],
   copper: [0.48, 0.30, 0.15],
@@ -171,9 +174,14 @@ const MAT = {
   magicHide: [0.30, 0.22, 0.38],    // 影豹暗紫皮
   scaleHide: [0.30, 0.36, 0.24],    // 巨龙鳞皮
   crystal: [0.55, 0.40, 0.75],      // 水晶体
-  arcaneGlow: [1.7, 0.95, 2.7],     // 奥术紫（自发光）
-  frostGlow: [1.2, 2.1, 2.7],       // 冰霜蓝（自发光）
-  fireGlow: [2.7, 1.3, 0.5],        // 龙火橙（自发光）
+  slate: [0.28, 0.27, 0.32],        // 圣所青石
+  marble: [0.50, 0.48, 0.54],       // 浅色石面
+  bronze: [0.46, 0.30, 0.16],       // 符文铜饰
+  robe: [0.22, 0.16, 0.32],         // 法师袍（不跟团队色走）
+  cloth: [0.20, 0.22, 0.18],        // 步兵布甲
+  arcaneGlow: [1.55, 0.72, 2.35],   // 奥术紫（略压，避免辉光洗成白团）
+  frostGlow: [1.05, 1.85, 2.35],    // 冰霜蓝
+  fireGlow: [2.45, 1.15, 0.42],     // 龙火橙
   // 自发光（分量 > 1）
   exhaust: [2.4, 0.95, 0.28],
   furnace: [2.6, 1.35, 0.35],
@@ -181,6 +189,10 @@ const MAT = {
   hazard: [2.6, 0.5, 0.35],
   teslaArc: [0.55, 1.65, 2.6],
   prismGlow: [1.5, 2.3, 2.4]
+};
+
+const MAGIC_STRUCTURE_KINDS = {
+  mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1
 };
 
 const ROT_X90 = new THREE.Matrix4().makeRotationX(Math.PI / 2);
@@ -227,19 +239,22 @@ const GLOW_HOT = 2.6;
 
 function infantryParts(weapon) {
   const body = [
-    // 躯干做成上窄下宽的护甲块
-    taperedBox(7.6, 5.4, 6.4, 4.6, 8.4, 0, 7.2, 0, 0.9),
-    box(3.0, 2.2, 8.6, -0.2, 10.4, 0, 0.55),           // 肩甲横梁
-    taperedBox(5.4, 5.0, 4.4, 4.2, 4.0, 0.2, 13.2, 0, 1.05),  // 头盔
-    box(2.4, 5.8, 2.4, -0.6, 3.0, 2.7, MAT.olive),     // 腿
-    box(2.4, 5.8, 2.4, -0.6, 3.0, -2.7, MAT.olive),
-    box(3.2, 2.0, 3.2, -0.6, 0.9, 2.7, MAT.rubber),    // 靴
-    box(3.2, 2.0, 3.2, -0.6, 0.9, -2.7, MAT.rubber),
-    box(3.6, 5.2, 6.0, -3.6, 8.6, 0, MAT.olive)        // 背包
+    // 躯干走橄榄布甲，团队色只留给肩章与胸牌 —— 远看不再是一整块荧光机器人。
+    taperedBox(7.8, 5.6, 6.5, 4.7, 8.6, 0, 7.3, 0, MAT.olive),
+    box(4.2, 2.4, 9.2, -0.1, 10.6, 0, 0.95),           // 肩章（团队色）
+    box(3.4, 3.2, 4.6, 1.6, 8.2, 0, 0.85),             // 胸牌
+    taperedBox(5.6, 5.2, 4.2, 4.0, 3.6, 0.3, 13.4, 0, MAT.sandArmor),  // 头盔
+    box(5.8, 0.7, 5.4, 0.2, 15.0, 0, MAT.darkSteel),   // 盔檐
+    box(1.0, 2.4, 1.0, -1.4, 16.2, 0, MAT.gunmetal),   // 盔 comms
+    box(2.5, 6.0, 2.5, -0.6, 3.0, 2.8, MAT.cloth),     // 腿
+    box(2.5, 6.0, 2.5, -0.6, 3.0, -2.8, MAT.cloth),
+    box(3.3, 2.0, 3.3, -0.6, 0.9, 2.8, MAT.rubber),    // 靴
+    box(3.3, 2.0, 3.3, -0.6, 0.9, -2.8, MAT.rubber),
+    box(3.8, 5.4, 6.2, -3.7, 8.6, 0, MAT.olive)        // 背包
   ];
   const glow = [
-    box(0.7, 1.5, 3.6, 2.4, 13.4, 0, GLOW_HOT),        // 面罩
-    box(2.2, 0.5, 0.5, -3.6, 11.2, 0, GLOW_SOFT)       // 背包指示灯
+    box(0.7, 1.4, 3.2, 2.5, 13.5, 0, GLOW_HOT),        // 面罩
+    box(2.2, 0.5, 0.5, -3.7, 11.4, 0, GLOW_SOFT)       // 背包指示灯
   ];
 
   if (weapon === 'rifle') {
@@ -332,39 +347,40 @@ const UNIT_BUILDERS = {
 
   /* ==================== 秘法会（魔法阵营）模型 ==================== */
   mage: function () {
-    // 长袍法师：锥形袍 + 兜帽 + 前举法杖，杖顶一颗奥术紫法球
+    // 长袍法师：暗紫袍是固有色，团队色只在肩饰与帽沿，远看是施法者不是蓝盒子。
     const body = [
-      taperedBox(7.2, 7.2, 4.6, 4.6, 9.5, 0, 6.2, 0, 0.85),   // 长袍
-      box(3.4, 2.0, 6.4, 0, 11.4, 0, 0.55),                   // 肩甲
-      sph(2.3, 8, 0, 13.8, 0, 0.9),                           // 头
-      taperedBox(3.0, 3.0, 1.2, 1.2, 2.8, 0, 15.6, 0, 0.7),   // 兜帽尖
-      cyl(0.4, 0.4, 12, 6, 4.6, 8.0, 2.2, MAT.gunmetal, ROT_Z90) // 法杖
+      taperedBox(8.0, 8.0, 4.2, 4.2, 10.2, 0, 6.4, 0, MAT.robe),
+      box(4.0, 1.8, 7.2, 0, 11.8, 0, 0.9),                    // 肩饰（团队色）
+      sph(2.4, 8, 0, 14.0, 0, MAT.sandArmor),                 // 头
+      taperedBox(3.4, 3.4, 1.0, 1.0, 3.2, 0, 16.0, 0, MAT.robe),
+      box(3.6, 0.5, 3.6, 0, 14.8, 0, 0.75),                   // 帽沿
+      cyl(0.45, 0.45, 13.5, 6, 5.0, 8.2, 2.4, MAT.bronze, ROT_Z90)
     ];
     return {
       body: body,
       glow: [
-        sph(1.4, 6, 10.6, 8.0, 2.2, MAT.arcaneGlow),          // 杖顶法球
-        box(2.0, 0.6, 0.6, 0, 12.6, 0, GLOW_SOFT)             // 头巾符带
+        sph(1.7, 7, 11.4, 8.2, 2.4, MAT.arcaneGlow),
+        box(2.4, 0.55, 0.55, 0, 12.8, 0, MAT.arcaneGlow)
       ]
     };
   },
 
   frost: function () {
-    // 冰霜女巫：长袍 + 冰晶头冠 + 冰霜法杖，通体冰蓝
+    // 冰霜女巫：冰蓝袍 + 冰晶头冠，杖顶寒球比法师更细长
     const body = [
-      taperedBox(7.0, 7.0, 4.4, 4.4, 9.5, 0, 6.2, 0, 0.8),
-      box(3.2, 1.8, 6.2, 0, 11.4, 0, 0.5),
-      sph(2.2, 8, 0, 13.8, 0, 0.9),
-      box(0.5, 2.0, 0.5, 0, 16.0, 1.2, MAT.crystal),          // 冰晶头冠
-      box(0.5, 2.4, 0.5, 0, 16.3, 0, MAT.crystal),
-      box(0.5, 2.0, 0.5, 0, 16.0, -1.2, MAT.crystal),
-      cyl(0.35, 0.35, 12, 6, 4.6, 8.2, 2.2, MAT.gunmetal, ROT_Z90)
+      taperedBox(7.8, 7.8, 4.0, 4.0, 10.2, 0, 6.4, 0, MAT.robe),
+      box(3.6, 1.6, 6.8, 0, 11.8, 0, 0.85),
+      sph(2.3, 8, 0, 14.0, 0, MAT.sandArmor),
+      box(0.55, 2.2, 0.55, 0, 16.4, 1.3, MAT.crystal),
+      box(0.55, 2.8, 0.55, 0, 16.8, 0, MAT.crystal),
+      box(0.55, 2.2, 0.55, 0, 16.4, -1.3, MAT.crystal),
+      cyl(0.38, 0.38, 13.5, 6, 5.0, 8.4, 2.4, MAT.gunmetal, ROT_Z90)
     ];
     return {
       body: body,
       glow: [
-        sph(1.3, 6, 10.6, 8.2, 2.2, MAT.frostGlow),           // 冰霜法球
-        sph(0.6, 5, 0, 17.8, 0, MAT.frostGlow)                // 冠顶寒光
+        sph(1.6, 7, 11.4, 8.4, 2.4, MAT.frostGlow),
+        sph(0.7, 5, 0, 18.4, 0, MAT.frostGlow)
       ]
     };
   },
@@ -372,14 +388,14 @@ const UNIT_BUILDERS = {
   golem: function () {
     // 岩石傀儡：厚重岩躯 + 巨石双臂 + 水晶拳，胸口一颗奥术核心
     const body = [
-      taperedBox(11, 9, 9, 7, 11, 0, 10, 0, MAT.magicStone),  // 躯干
-      sph(2.6, 7, 3.4, 15.4, 0, MAT.magicStone),              // 头
-      box(4.2, 9, 4.2, 1.0, 9.0, 6.2, MAT.magicStone),        // 巨石手臂
-      box(4.2, 9, 4.2, 1.0, 9.0, -6.2, MAT.magicStone),
-      box(3.6, 4.0, 3.6, 2.0, 4.0, 6.4, MAT.crystal),         // 水晶拳
-      box(3.6, 4.0, 3.6, 2.0, 4.0, -6.4, MAT.crystal),
-      box(4.0, 6, 4.4, 0, 3, 3.0, MAT.magicStone),            // 腿
-      box(4.0, 6, 4.4, 0, 3, -3.0, MAT.magicStone)
+      taperedBox(12, 10, 8.6, 7.2, 12, 0, 10.4, 0, MAT.magicStone),
+      taperedBox(5.2, 5.0, 3.4, 3.2, 4.2, 3.2, 17.2, 0, MAT.slate),
+      box(4.6, 9.4, 4.6, 1.0, 9.2, 6.6, MAT.magicStone),
+      box(4.6, 9.4, 4.6, 1.0, 9.2, -6.6, MAT.magicStone),
+      taperedBox(4.2, 4.2, 3.2, 3.2, 4.2, 2.2, 4.2, 6.8, MAT.crystal),
+      taperedBox(4.2, 4.2, 3.2, 3.2, 4.2, 2.2, 4.2, -6.8, MAT.crystal),
+      box(4.2, 6.4, 4.6, 0, 3.1, 3.1, MAT.slate),
+      box(4.2, 6.4, 4.6, 0, 3.1, -3.1, MAT.slate)
     ];
     return {
       body: body,
@@ -735,132 +751,157 @@ function partCollector() {
   return { parts: parts, add: add, taper: taper };
 }
 
+/**
+ * 阵营地基：比旧版大方台小一圈，让 #7 的尘土垫露出来。
+ * 钢铁军团是钢板甲板 + 黄黑警示角；秘法会是青石台 + 符文环，不再用四角青灯。
+ */
+function addStructureFoundation(c, kind, s) {
+  const add = c.add;
+  const taper = c.taper;
+  if (MAGIC_STRUCTURE_KINDS[kind]) {
+    taper(HULL, s * 1.58, s * 1.58, s * 1.44, s * 1.44, 2.6, 0, 1.3, 0, MAT.slate);
+    add(HULL, new THREE.BoxGeometry(s * 1.48, 0.85, s * 1.48), 0, 2.8, 0, MAT.marble);
+    add(GLOW, new THREE.TorusGeometry(s * 0.70, s * 0.026, 6, 20), 0, 3.28, 0, MAT.arcaneGlow, ROT_X90);
+    [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
+      taper(HULL, s * 0.11, s * 0.11, s * 0.045, s * 0.045, s * 0.22,
+        q[0] * s * 0.66, 3.45, q[1] * s * 0.66, MAT.crystal);
+      add(GLOW, new THREE.SphereGeometry(s * 0.04, 6, 5),
+        q[0] * s * 0.66, 3.45 + s * 0.13, q[1] * s * 0.66, MAT.arcaneGlow);
+    });
+    return;
+  }
+  taper(HULL, s * 1.60, s * 1.60, s * 1.46, s * 1.46, 2.5, 0, 1.25, 0, MAT.concreteDark);
+  add(HULL, new THREE.BoxGeometry(s * 1.50, 0.95, s * 1.50), 0, 2.8, 0, MAT.plate);
+  add(HULL, new THREE.BoxGeometry(s * 1.42, 0.16, s * 0.055), 0, 3.32, s * 0.58, MAT.rivet);
+  add(HULL, new THREE.BoxGeometry(s * 1.42, 0.16, s * 0.055), 0, 3.32, -s * 0.58, MAT.rivet);
+  add(HULL, new THREE.BoxGeometry(s * 0.055, 0.16, s * 1.42), s * 0.58, 3.32, 0, MAT.rivet);
+  add(HULL, new THREE.BoxGeometry(s * 0.055, 0.16, s * 1.42), -s * 0.58, 3.32, 0, MAT.rivet);
+  [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
+    add(HULL, new THREE.BoxGeometry(s * 0.16, 0.32, s * 0.055),
+      q[0] * s * 0.68, 3.38, q[1] * s * 0.68, MAT.warnYellow);
+    add(HULL, new THREE.BoxGeometry(s * 0.055, 0.32, s * 0.16),
+      q[0] * s * 0.68, 3.38, q[1] * s * 0.68, MAT.warnYellow);
+  });
+}
+
 function structureParts(kind, size) {
   const c = partCollector();
   const add = c.add;
   const taper = c.taper;
   const s = size;
-
-  // 共用地基：混凝土台 + 四角警示灯，让建筑「坐」在地上而不是浮着
-  taper(HULL, s * 2.1, s * 2.1, s * 1.95, s * 1.95, 3.4, 0, 1.7, 0, MAT.concrete);
-  add(HULL, new THREE.BoxGeometry(s * 2.16, 1.2, s * 2.16), 0, 3.5, 0, MAT.concreteDark);
-  [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
-    add(GLOW, new THREE.BoxGeometry(s * 0.16, 0.9, s * 0.16),
-      q[0] * s * 0.95, 4.0, q[1] * s * 0.95, GLOW_SOFT);
-  });
+  addStructureFoundation(c, kind, s);
 
   if (kind === 'hq') {
-    taper(HULL, s * 1.72, s * 1.72, s * 1.5, s * 1.5, s * 0.62, 0, s * 0.31 + 3.4, 0, MAT.concrete);
-    // 主塔
-    taper(TEAM, s * 1.02, s * 1.02, s * 0.86, s * 0.86, s * 0.92, 0, s * 1.08 + 3.4, 0, 1.0);
-    add(TEAM, new THREE.BoxGeometry(s * 1.12, s * 0.08, s * 1.12), 0, s * 1.56, 0, 0.55);
-    // 环绕窗带
-    [0.78, 1.22].forEach(function (h) {
-      add(GLOW, new THREE.BoxGeometry(s * 1.05, s * 0.07, s * 0.9), 0, s * h, 0, GLOW_SOFT);
-      add(GLOW, new THREE.BoxGeometry(s * 0.9, s * 0.07, s * 1.05), 0, s * h, 0, GLOW_SOFT);
+    // 指挥中心：矮宽地堡 + 两侧翼楼 + 收束主塔，不再是三层灰方块。
+    taper(HULL, s * 1.40, s * 1.18, s * 1.26, s * 1.06, s * 0.40, 0, s * 0.20 + 3.4, 0, MAT.concrete);
+    taper(HULL, s * 0.40, s * 0.72, s * 0.30, s * 0.58, s * 0.36,
+      s * 0.74, s * 0.18 + 3.4, 0, MAT.darkSteel);
+    taper(HULL, s * 0.40, s * 0.72, s * 0.30, s * 0.58, s * 0.36,
+      -s * 0.74, s * 0.18 + 3.4, 0, MAT.darkSteel);
+    taper(TEAM, s * 0.82, s * 0.82, s * 0.58, s * 0.58, s * 1.08, 0, s * 0.96 + 3.4, 0, 1.0);
+    add(HULL, new THREE.BoxGeometry(s * 0.90, s * 0.07, s * 0.90), 0, s * 1.52, 0, MAT.steel);
+    add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.22, s * 0.36), 0, s * 1.64, 0, MAT.darkSteel);
+    [0.72, 1.12].forEach(function (h) {
+      add(GLOW, new THREE.BoxGeometry(s * 0.86, s * 0.055, s * 0.72), 0, s * h, 0, GLOW_SOFT);
+      add(GLOW, new THREE.BoxGeometry(s * 0.72, s * 0.055, s * 0.86), 0, s * h, 0, GLOW_SOFT);
     });
-    // 四角碉堡
     [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
-      taper(HULL, s * 0.34, s * 0.34, s * 0.26, s * 0.26, s * 0.56,
-        q[0] * s * 0.7, s * 0.28 + 3.4, q[1] * s * 0.7, MAT.concreteDark);
-      add(GLOW, new THREE.BoxGeometry(s * 0.2, s * 0.05, s * 0.2),
-        q[0] * s * 0.7, s * 0.58, q[1] * s * 0.7, GLOW_HOT);
+      taper(HULL, s * 0.26, s * 0.26, s * 0.18, s * 0.18, s * 0.42,
+        q[0] * s * 0.58, s * 0.21 + 3.4, q[1] * s * 0.58, MAT.concreteDark);
+      add(HULL, new THREE.CylinderGeometry(s * 0.04, s * 0.05, s * 0.28, 6),
+        q[0] * s * 0.58, s * 0.52, q[1] * s * 0.58, MAT.gunmetal);
     });
-    // 桅杆
-    add(HULL, new THREE.CylinderGeometry(s * 0.06, s * 0.09, s * 0.5, 8), 0, s * 1.78, 0, 0.7);
+    add(HULL, new THREE.CylinderGeometry(s * 0.045, s * 0.07, s * 0.62, 8), 0, s * 1.92, 0, MAT.steel);
+    add(HULL, new THREE.BoxGeometry(s * 0.28, s * 0.04, s * 0.04), s * 0.16, s * 2.16, 0, MAT.darkSteel);
   } else if (kind === 'power') {
-    taper(HULL, s * 1.62, s * 1.28, s * 1.45, s * 1.14, s * 0.5, 0, s * 0.25 + 3.4, 0, MAT.concrete);
+    taper(HULL, s * 1.46, s * 1.16, s * 1.30, s * 1.02, s * 0.38, 0, s * 0.19 + 3.4, 0, MAT.concrete);
+    add(HULL, new THREE.BoxGeometry(s * 0.72, s * 0.28, s * 0.70), 0, s * 0.38 + 3.4, s * 0.42, MAT.darkSteel);
     [-1, 1].forEach(function (side) {
-      // 磁能塔：三段收束 + 顶部线圈
-      taper(TEAM, s * 0.5, s * 0.5, s * 0.36, s * 0.36, s * 1.05,
-        side * s * 0.44, s * 0.52 + 3.4, 0, 1.0);
-      add(HULL, new THREE.TorusGeometry(s * 0.3, s * 0.055, 6, 12),
-        side * s * 0.44, s * 1.14, 0, MAT.copper, ROT_X90);
-      add(HULL, new THREE.TorusGeometry(s * 0.24, s * 0.05, 6, 12),
-        side * s * 0.44, s * 1.36, 0, MAT.copper, ROT_X90);
-      add(GLOW, new THREE.SphereGeometry(s * 0.16, 10, 6),
-        side * s * 0.44, s * 1.56, 0, GLOW_HOT);
-      add(GLOW, new THREE.CylinderGeometry(s * 0.05, s * 0.05, s * 0.5, 6),
-        side * s * 0.44, s * 1.3, 0, GLOW_SOFT);
+      // 磁能塔：绝缘柱 + 多层铜线圈，剪影是双塔不是方盒。
+      taper(HULL, s * 0.36, s * 0.36, s * 0.22, s * 0.22, s * 0.72,
+        side * s * 0.42, s * 0.36 + 3.4, 0, MAT.concreteDark);
+      taper(TEAM, s * 0.22, s * 0.22, s * 0.14, s * 0.14, s * 0.55,
+        side * s * 0.42, s * 0.98 + 3.4, 0, 1.0);
+      add(HULL, new THREE.TorusGeometry(s * 0.28, s * 0.048, 6, 12),
+        side * s * 0.42, s * 1.08, 0, MAT.copper, ROT_X90);
+      add(HULL, new THREE.TorusGeometry(s * 0.24, s * 0.042, 6, 12),
+        side * s * 0.42, s * 1.26, 0, MAT.copper, ROT_X90);
+      add(HULL, new THREE.TorusGeometry(s * 0.20, s * 0.036, 6, 12),
+        side * s * 0.42, s * 1.42, 0, MAT.copper, ROT_X90);
+      add(GLOW, new THREE.SphereGeometry(s * 0.14, 10, 6),
+        side * s * 0.42, s * 1.62, 0, MAT.teslaArc);
+      add(GLOW, new THREE.CylinderGeometry(s * 0.04, s * 0.04, s * 0.55, 6),
+        side * s * 0.42, s * 1.32, 0, GLOW_SOFT);
     });
-    // 母线
-    add(GLOW, new THREE.BoxGeometry(s * 0.9, s * 0.06, s * 0.1), 0, s * 1.46, 0, GLOW_SOFT);
-    add(HULL, new THREE.BoxGeometry(s * 0.5, s * 0.4, s * 0.6), 0, s * 0.42, s * 0.5, MAT.darkSteel);
+    add(GLOW, new THREE.BoxGeometry(s * 0.86, s * 0.05, s * 0.08), 0, s * 1.48, 0, MAT.teslaArc);
+    add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.32, s * 0.22), 0, s * 0.42, -s * 0.48, MAT.steel);
   } else if (kind === 'refinery') {
-    taper(HULL, s * 1.76, s * 1.34, s * 1.6, s * 1.2, s * 0.56, 0, s * 0.28 + 3.4, 0, MAT.concrete);
-    // 主储罐
-    add(TEAM, new THREE.CylinderGeometry(s * 0.4, s * 0.48, s * 1.0, 12), s * 0.42, s * 0.85, 0);
-    add(HULL, new THREE.ConeGeometry(s * 0.44, s * 0.5, 12), s * 0.42, s * 1.6, 0, MAT.rust);
-    add(HULL, new THREE.CylinderGeometry(s * 0.06, s * 0.06, s * 0.3, 6), s * 0.42, s * 1.95, 0, MAT.steel);
-    add(GLOW, new THREE.SphereGeometry(s * 0.05, 8, 6), s * 0.42, s * 2.1, 0, GLOW_HOT);
-    add(GLOW, new THREE.TorusGeometry(s * 0.46, s * 0.035, 6, 14), s * 0.42, s * 1.1, 0, GLOW_SOFT, ROT_X90);
-    // 加工塔
-    taper(HULL, s * 0.66, s * 0.7, s * 0.54, s * 0.58, s * 0.86, -s * 0.5, s * 0.43 + 3.4, 0, MAT.steel);
-    add(GLOW, new THREE.BoxGeometry(s * 0.6, s * 0.06, s * 0.66), -s * 0.5, s * 0.72, 0, GLOW_SOFT);
-    // 卸矿槽（矿石的琥珀色辉光）
-    add(HULL, new THREE.BoxGeometry(s * 1.4, s * 0.1, s * 0.34), 0, s * 1.02, s * 0.44, MAT.rust);
-    add(GLOW, new THREE.BoxGeometry(s * 1.2, s * 0.09, s * 0.2), 0, s * 1.09, s * 0.44, MAT.oreGlow);
-    add(HULL, new THREE.CylinderGeometry(s * 0.08, s * 0.08, s * 0.7, 6), s * 0.9, s * 0.75, -s * 0.4, MAT.steel);
+    taper(HULL, s * 1.48, s * 1.18, s * 1.34, s * 1.06, s * 0.42, 0, s * 0.21 + 3.4, 0, MAT.concrete);
+    add(TEAM, new THREE.CylinderGeometry(s * 0.40, s * 0.48, s * 1.05, 12), s * 0.40, s * 0.88, 0);
+    add(HULL, new THREE.ConeGeometry(s * 0.44, s * 0.48, 12), s * 0.40, s * 1.64, 0, MAT.rust);
+    add(HULL, new THREE.CylinderGeometry(s * 0.055, s * 0.055, s * 0.28, 6), s * 0.40, s * 1.98, 0, MAT.steel);
+    add(GLOW, new THREE.SphereGeometry(s * 0.05, 8, 6), s * 0.40, s * 2.14, 0, GLOW_HOT);
+    add(GLOW, new THREE.TorusGeometry(s * 0.46, s * 0.032, 6, 14), s * 0.40, s * 1.12, 0, GLOW_SOFT, ROT_X90);
+    taper(HULL, s * 0.58, s * 0.62, s * 0.46, s * 0.50, s * 0.82, -s * 0.46, s * 0.41 + 3.4, 0, MAT.steel);
+    add(GLOW, new THREE.BoxGeometry(s * 0.52, s * 0.055, s * 0.58), -s * 0.46, s * 0.70, 0, GLOW_SOFT);
+    add(HULL, new THREE.BoxGeometry(s * 1.28, s * 0.09, s * 0.30), 0, s * 0.98, s * 0.42, MAT.rust);
+    add(GLOW, new THREE.BoxGeometry(s * 1.10, s * 0.08, s * 0.18), 0, s * 1.05, s * 0.42, MAT.oreGlow);
+    add(HULL, new THREE.CylinderGeometry(s * 0.07, s * 0.07, s * 0.64, 6), s * 0.86, s * 0.72, -s * 0.38, MAT.steel);
+    add(HULL, new THREE.CylinderGeometry(s * 0.05, s * 0.05, s * 0.50, 6),
+      s * 0.18, s * 0.70, -s * 0.36, MAT.darkSteel, ROT_Z90);
   } else if (kind === 'barracks') {
-    taper(TEAM, s * 1.66, s * 1.3, s * 1.5, s * 1.16, s * 0.56, 0, s * 0.28 + 3.4, 0, 1.0);
-    // 三棱柱屋顶
-    add(HULL, new THREE.CylinderGeometry(s * 0.7, s * 0.7, s * 1.66, 3), 0, s * 0.7, 0, MAT.olive,
+    taper(HULL, s * 1.42, s * 1.12, s * 1.28, s * 1.00, s * 0.40, 0, s * 0.20 + 3.4, 0, MAT.concrete);
+    add(TEAM, new THREE.BoxGeometry(s * 1.22, s * 0.36, s * 0.92), 0, s * 0.42 + 3.4, 0, 1.0);
+    add(HULL, new THREE.CylinderGeometry(s * 0.62, s * 0.62, s * 1.36, 3), 0, s * 0.72, 0, MAT.olive,
       new THREE.Matrix4().makeRotationZ(Math.PI / 2));
-    // 大门 + 门框灯
-    add(HULL, new THREE.BoxGeometry(s * 0.12, s * 0.44, s * 0.56), s * 0.82, s * 0.25 + 3.4, 0, MAT.gunmetal);
-    add(GLOW, new THREE.BoxGeometry(s * 0.06, s * 0.44, s * 0.06), s * 0.86, s * 0.25 + 3.4, s * 0.3, GLOW_HOT);
-    add(GLOW, new THREE.BoxGeometry(s * 0.06, s * 0.44, s * 0.06), s * 0.86, s * 0.25 + 3.4, -s * 0.3, GLOW_HOT);
-    // 侧窗带
-    add(GLOW, new THREE.BoxGeometry(s * 1.3, s * 0.06, s * 1.2), 0, s * 0.52, 0, GLOW_SOFT);
-    add(HULL, new THREE.BoxGeometry(s * 0.3, s * 0.3, s * 0.3), -s * 0.56, s * 1.06, 0, MAT.darkSteel);
-    add(HULL, new THREE.CylinderGeometry(s * 0.03, s * 0.04, s * 0.5, 6), -s * 0.56, s * 1.4, 0, MAT.steel);
+    add(HULL, new THREE.BoxGeometry(s * 0.12, s * 0.40, s * 0.50), s * 0.70, s * 0.24 + 3.4, 0, MAT.gunmetal);
+    add(GLOW, new THREE.BoxGeometry(s * 0.05, s * 0.40, s * 0.05), s * 0.74, s * 0.24 + 3.4, s * 0.26, GLOW_HOT);
+    add(GLOW, new THREE.BoxGeometry(s * 0.05, s * 0.40, s * 0.05), s * 0.74, s * 0.24 + 3.4, -s * 0.26, GLOW_HOT);
+    add(GLOW, new THREE.BoxGeometry(s * 1.10, s * 0.05, s * 0.96), 0, s * 0.50, 0, GLOW_SOFT);
+    add(HULL, new THREE.CylinderGeometry(s * 0.025, s * 0.03, s * 0.72, 6), -s * 0.58, s * 1.18, 0, MAT.steel);
+    add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.12, s * 0.02), -s * 0.46, s * 1.42, 0, MAT.hazard);
   } else if (kind === 'factory') {
-    taper(HULL, s * 1.82, s * 1.56, s * 1.64, s * 1.4, s * 0.72, 0, s * 0.36 + 3.4, 0, MAT.concrete);
-    add(TEAM, new THREE.BoxGeometry(s * 1.55, s * 0.14, s * 1.34), 0, s * 0.83, 0, 1.0);
-    // 拱形屋顶
-    add(HULL, new THREE.CylinderGeometry(s * 0.66, s * 0.66, s * 1.5, 8, 1, false, 0, Math.PI),
-      0, s * 0.86, 0, MAT.steel, new THREE.Matrix4().makeRotationZ(Math.PI / 2));
-    // 出车口：门洞发光
-    add(HULL, new THREE.BoxGeometry(s * 0.16, s * 0.6, s * 1.1), s * 0.92, s * 0.3 + 3.4, 0, MAT.gunmetal);
-    add(GLOW, new THREE.BoxGeometry(s * 0.06, s * 0.52, s * 0.9), s * 0.99, s * 0.3 + 3.4, 0, MAT.furnace);
-    add(HULL, new THREE.BoxGeometry(s * 1.1, s * 0.07, s * 0.6), s * 1.4, 3.6, 0, MAT.warnYellow);
-    // 烟囱
+    taper(HULL, s * 1.52, s * 1.32, s * 1.38, s * 1.18, s * 0.52, 0, s * 0.26 + 3.4, 0, MAT.concrete);
+    add(TEAM, new THREE.BoxGeometry(s * 1.28, s * 0.12, s * 1.10), 0, s * 0.78, 0, 1.0);
+    add(HULL, new THREE.CylinderGeometry(s * 0.58, s * 0.58, s * 1.28, 8, 1, false, 0, Math.PI),
+      0, s * 0.82, 0, MAT.steel, new THREE.Matrix4().makeRotationZ(Math.PI / 2));
+    add(HULL, new THREE.BoxGeometry(s * 0.14, s * 0.52, s * 0.96), s * 0.78, s * 0.28 + 3.4, 0, MAT.gunmetal);
+    add(GLOW, new THREE.BoxGeometry(s * 0.05, s * 0.46, s * 0.80), s * 0.84, s * 0.28 + 3.4, 0, MAT.furnace);
+    add(HULL, new THREE.BoxGeometry(s * 0.92, s * 0.06, s * 0.50), s * 1.18, 3.55, 0, MAT.warnYellow);
     for (let i = -1; i <= 1; i++) {
-      add(HULL, new THREE.CylinderGeometry(s * 0.1, s * 0.13, s * 0.66, 6),
-        i * s * 0.4, s * 1.2, -s * 0.42, MAT.rust);
-      add(GLOW, new THREE.CylinderGeometry(s * 0.08, s * 0.08, s * 0.06, 6),
-        i * s * 0.4, s * 1.53, -s * 0.42, MAT.furnace);
+      add(HULL, new THREE.CylinderGeometry(s * 0.09, s * 0.12, s * 0.70, 6),
+        i * s * 0.34, s * 1.16, -s * 0.40, MAT.rust);
+      add(GLOW, new THREE.CylinderGeometry(s * 0.07, s * 0.07, s * 0.055, 6),
+        i * s * 0.34, s * 1.52, -s * 0.40, MAT.furnace);
     }
-    add(GLOW, new THREE.BoxGeometry(s * 1.5, s * 0.06, s * 0.08), 0, s * 0.63, s * 0.7, GLOW_SOFT);
-    add(GLOW, new THREE.BoxGeometry(s * 1.5, s * 0.06, s * 0.08), 0, s * 0.63, -s * 0.7, GLOW_SOFT);
+    add(GLOW, new THREE.BoxGeometry(s * 1.22, s * 0.05, s * 0.07), 0, s * 0.58, s * 0.58, GLOW_SOFT);
+    add(GLOW, new THREE.BoxGeometry(s * 1.22, s * 0.05, s * 0.07), 0, s * 0.58, -s * 0.58, GLOW_SOFT);
   } else if (kind === 'repair') {
-    taper(HULL, s * 1.6, s * 1.4, s * 1.5, s * 1.3, s * 0.34, 0, s * 0.17 + 3.4, 0, MAT.concrete);
-    // 龙门架
+    taper(HULL, s * 1.42, s * 1.24, s * 1.32, s * 1.14, s * 0.28, 0, s * 0.14 + 3.4, 0, MAT.concrete);
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (q) {
-      add(HULL, new THREE.BoxGeometry(s * 0.15, s * 0.95, s * 0.15),
-        q[0] * s * 0.64, s * 0.5, q[1] * s * 0.58, MAT.warnYellow);
+      add(HULL, new THREE.BoxGeometry(s * 0.13, s * 0.98, s * 0.13),
+        q[0] * s * 0.58, s * 0.52, q[1] * s * 0.52, MAT.warnYellow);
     });
     [-1, 1].forEach(function (side) {
-      add(TEAM, new THREE.BoxGeometry(s * 1.5, s * 0.14, s * 0.2), 0, s * 1.0, side * s * 0.58);
-      add(GLOW, new THREE.BoxGeometry(s * 1.36, s * 0.05, s * 0.07), 0, s * 0.93, side * s * 0.58, GLOW_SOFT);
+      add(TEAM, new THREE.BoxGeometry(s * 1.32, s * 0.12, s * 0.16), 0, s * 1.02, side * s * 0.52);
+      add(GLOW, new THREE.BoxGeometry(s * 1.18, s * 0.045, s * 0.06), 0, s * 0.95, side * s * 0.52, GLOW_SOFT);
     });
-    add(TEAM, new THREE.BoxGeometry(s * 0.34, s * 0.3, s * 1.26), 0, s * 1.02, 0, 0.9);
-    // 停机坪十字
-    add(GLOW, new THREE.BoxGeometry(s * 0.72, s * 0.04, s * 0.16), 0, s * 0.36, 0, GLOW_HOT);
-    add(GLOW, new THREE.BoxGeometry(s * 0.16, s * 0.04, s * 0.72), 0, s * 0.36, 0, GLOW_HOT);
-    add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.5, s * 0.36), -s * 0.66, s * 0.42, 0, MAT.darkSteel);
+    add(TEAM, new THREE.BoxGeometry(s * 0.30, s * 0.26, s * 1.12), 0, s * 1.04, 0, 0.9);
+    add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.10, s * 1.12), 0, s * 1.18, 0, MAT.steel);
+    add(GLOW, new THREE.BoxGeometry(s * 0.68, s * 0.035, s * 0.14), 0, s * 0.34, 0, GLOW_HOT);
+    add(GLOW, new THREE.BoxGeometry(s * 0.14, s * 0.035, s * 0.68), 0, s * 0.34, 0, GLOW_HOT);
+    add(HULL, new THREE.BoxGeometry(s * 0.32, s * 0.46, s * 0.32), -s * 0.60, s * 0.40, 0, MAT.darkSteel);
   } else if (kind === 'turret') {
-    taper(HULL, s * 1.5, s * 1.5, s * 1.05, s * 1.05, s * 0.42, 0, s * 0.21 + 3.4, 0, MAT.concrete);
-    add(TEAM, new THREE.CylinderGeometry(s * 0.5, s * 0.56, s * 0.2, 10), 0, s * 0.62, 0);
-    add(GLOW, new THREE.TorusGeometry(s * 0.5, s * 0.035, 6, 14), 0, s * 0.58, 0, GLOW_SOFT, ROT_X90);
+    taper(HULL, s * 1.28, s * 1.28, s * 0.92, s * 0.92, s * 0.36, 0, s * 0.18 + 3.4, 0, MAT.concrete);
+    add(TEAM, new THREE.CylinderGeometry(s * 0.46, s * 0.52, s * 0.18, 10), 0, s * 0.58, 0);
+    add(GLOW, new THREE.TorusGeometry(s * 0.46, s * 0.03, 6, 14), 0, s * 0.54, 0, GLOW_SOFT, ROT_X90);
   } else if (kind === 'missile') {
-    taper(HULL, s * 1.6, s * 1.6, s * 1.15, s * 1.15, s * 0.46, 0, s * 0.23 + 3.4, 0, MAT.concrete);
-    add(TEAM, new THREE.CylinderGeometry(s * 0.55, s * 0.6, s * 0.22, 10), 0, s * 0.66, 0);
-    add(GLOW, new THREE.TorusGeometry(s * 0.54, s * 0.035, 6, 14), 0, s * 0.62, 0, GLOW_SOFT, ROT_X90);
-    // 底座上的状态灯
+    taper(HULL, s * 1.34, s * 1.34, s * 0.98, s * 0.98, s * 0.38, 0, s * 0.19 + 3.4, 0, MAT.concrete);
+    add(TEAM, new THREE.CylinderGeometry(s * 0.50, s * 0.55, s * 0.20, 10), 0, s * 0.62, 0);
+    add(GLOW, new THREE.TorusGeometry(s * 0.50, s * 0.03, 6, 14), 0, s * 0.58, 0, GLOW_SOFT, ROT_X90);
     [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
-      add(GLOW, new THREE.BoxGeometry(s * 0.1, s * 0.04, s * 0.1),
-        q[0] * s * 0.6, s * 0.75, q[1] * s * 0.6, GLOW_HOT);
+      add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.04, s * 0.08),
+        q[0] * s * 0.52, s * 0.70, q[1] * s * 0.52, MAT.warnYellow);
     });
     /* ---------------- 秘法会（魔法阵营）建筑 ----------------
      * 与工业风的钢铁军团对应位同尺寸、同功能，但用「浮空水晶 + 符文环 +
@@ -868,103 +909,95 @@ function structureParts(kind, size) {
      * frostGlow），不随团队色变 —— 远远一看发光色相就能分清两个阵营。
      */
   } else if (kind === 'mhq') {
-    // 魔法主堡：石砌阶梯圣城 + 高耸法塔，塔顶悬浮一枚巨型水晶
-    taper(HULL, s * 1.72, s * 1.72, s * 1.5, s * 1.5, s * 0.62, 0, s * 0.31 + 3.4, 0, MAT.magicStone);
-    taper(TEAM, s * 0.98, s * 0.98, s * 0.6, s * 0.6, s * 1.1, 0, s * 1.12 + 3.4, 0, 1.0);
-    add(TEAM, new THREE.BoxGeometry(s * 1.06, s * 0.08, s * 1.06), 0, s * 1.5, 0, 0.55);
-    // 奥术窗带
-    [0.78, 1.18].forEach(function (h) {
-      add(GLOW, new THREE.BoxGeometry(s * 0.95, s * 0.07, s * 0.82), 0, s * h, 0, MAT.arcaneGlow);
-      add(GLOW, new THREE.BoxGeometry(s * 0.82, s * 0.07, s * 0.95), 0, s * h, 0, MAT.arcaneGlow);
+    // 魔法主堡：三级石砌金字塔 + 收束法塔 + 飞扶壁，塔顶巨晶是远距剪影。
+    taper(HULL, s * 1.44, s * 1.44, s * 1.18, s * 1.18, s * 0.26, 0, s * 0.13 + 3.4, 0, MAT.slate);
+    taper(HULL, s * 1.14, s * 1.14, s * 0.88, s * 0.88, s * 0.30, 0, s * 0.41 + 3.4, 0, MAT.magicStone);
+    taper(TEAM, s * 0.72, s * 0.72, s * 0.42, s * 0.42, s * 1.02, 0, s * 1.04 + 3.4, 0, 1.0);
+    add(HULL, new THREE.BoxGeometry(s * 0.80, s * 0.06, s * 0.80), 0, s * 1.56, 0, MAT.bronze);
+    [0.78, 1.16].forEach(function (h) {
+      add(GLOW, new THREE.BoxGeometry(s * 0.76, s * 0.05, s * 0.64), 0, s * h, 0, MAT.arcaneGlow);
+      add(GLOW, new THREE.BoxGeometry(s * 0.64, s * 0.05, s * 0.76), 0, s * h, 0, MAT.arcaneGlow);
     });
-    // 四角水晶方尖碑
     [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
-      taper(HULL, s * 0.3, s * 0.3, s * 0.14, s * 0.14, s * 0.72,
-        q[0] * s * 0.68, s * 0.36 + 3.4, q[1] * s * 0.68, MAT.crystal);
-      add(GLOW, new THREE.SphereGeometry(s * 0.07, 8, 6),
-        q[0] * s * 0.68, s * 0.74, q[1] * s * 0.68, MAT.arcaneGlow);
+      taper(HULL, s * 0.22, s * 0.22, s * 0.08, s * 0.08, s * 0.78,
+        q[0] * s * 0.62, s * 0.39 + 3.4, q[1] * s * 0.62, MAT.crystal);
+      add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.36, s * 0.10),
+        q[0] * s * 0.38, s * 0.55, q[1] * s * 0.38, MAT.bronze);
+      add(GLOW, new THREE.SphereGeometry(s * 0.055, 7, 5),
+        q[0] * s * 0.62, s * 0.82, q[1] * s * 0.62, MAT.arcaneGlow);
     });
-    // 塔顶悬浮巨水晶 + 符环
-    taper(GLOW, s * 0.34, s * 0.34, s * 0.06, s * 0.06, s * 0.72, 0, s * 2.0, 0, MAT.arcaneGlow);
-    add(GLOW, new THREE.TorusGeometry(s * 0.5, s * 0.04, 6, 18), 0, s * 1.95, 0, MAT.arcaneGlow, ROT_X90);
+    taper(GLOW, s * 0.28, s * 0.28, s * 0.04, s * 0.04, s * 0.88, 0, s * 2.18, 0, MAT.arcaneGlow);
+    add(GLOW, new THREE.TorusGeometry(s * 0.46, s * 0.035, 6, 18), 0, s * 2.08, 0, MAT.arcaneGlow, ROT_X90);
   } else if (kind === 'mpower') {
-    // 法力塔：两根水晶塔相对而立，共同托起一颗悬浮法力球
-    taper(HULL, s * 1.6, s * 1.28, s * 1.44, s * 1.14, s * 0.5, 0, s * 0.25 + 3.4, 0, MAT.magicStone);
+    // 法力塔：两根收束晶柱托一颗中心法力球，剪影是双尖塔不是叠盒子。
+    taper(HULL, s * 1.40, s * 1.12, s * 1.24, s * 0.98, s * 0.36, 0, s * 0.18 + 3.4, 0, MAT.magicStone);
+    add(HULL, new THREE.BoxGeometry(s * 0.48, s * 0.28, s * 0.52), 0, s * 0.38 + 3.4, s * 0.40, MAT.slate);
     [-1, 1].forEach(function (side) {
-      taper(HULL, s * 0.42, s * 0.42, s * 0.18, s * 0.18, s * 1.15,
-        side * s * 0.46, s * 0.57 + 3.4, 0, MAT.crystal);
-      add(GLOW, new THREE.TorusGeometry(s * 0.3, s * 0.04, 6, 14),
-        side * s * 0.46, s * 1.16, 0, MAT.arcaneGlow, ROT_X90);
-      add(GLOW, new THREE.SphereGeometry(s * 0.12, 10, 6),
-        side * s * 0.46, s * 1.36, 0, MAT.arcaneGlow);
+      taper(HULL, s * 0.32, s * 0.32, s * 0.10, s * 0.10, s * 1.22,
+        side * s * 0.42, s * 0.61 + 3.4, 0, MAT.crystal);
+      add(GLOW, new THREE.TorusGeometry(s * 0.22, s * 0.032, 6, 14),
+        side * s * 0.42, s * 1.10, 0, MAT.arcaneGlow, ROT_X90);
+      add(GLOW, new THREE.SphereGeometry(s * 0.09, 8, 6),
+        side * s * 0.42, s * 1.38, 0, MAT.arcaneGlow);
     });
-    // 悬浮法力球 + 斜置符环
-    add(GLOW, new THREE.SphereGeometry(s * 0.3, 12, 8), 0, s * 1.5, 0, MAT.arcaneGlow);
-    add(GLOW, new THREE.TorusGeometry(s * 0.44, s * 0.03, 6, 16), 0, s * 1.5, 0, MAT.frostGlow, ROT_X90);
-    add(HULL, new THREE.BoxGeometry(s * 0.5, s * 0.4, s * 0.6), 0, s * 0.42, s * 0.5, MAT.magicStone);
+    add(GLOW, new THREE.SphereGeometry(s * 0.28, 12, 8), 0, s * 1.58, 0, MAT.arcaneGlow);
+    add(GLOW, new THREE.TorusGeometry(s * 0.40, s * 0.028, 6, 16), 0, s * 1.58, 0, MAT.frostGlow, ROT_X90);
   } else if (kind === 'mrefinery') {
-    // 水晶精炼所：中央一根待炼巨晶，卸晶槽透出寒蓝晶光（对应矿厂的琥珀矿光）
-    taper(HULL, s * 1.76, s * 1.34, s * 1.6, s * 1.2, s * 0.56, 0, s * 0.28 + 3.4, 0, MAT.magicStone);
-    taper(HULL, s * 0.5, s * 0.5, s * 0.16, s * 0.16, s * 1.2, s * 0.42, s * 0.95, 0, MAT.crystal);
-    add(GLOW, new THREE.SphereGeometry(s * 0.1, 8, 6), s * 0.42, s * 1.62, 0, MAT.frostGlow);
-    // 加工石柱
-    taper(HULL, s * 0.6, s * 0.64, s * 0.46, s * 0.5, s * 0.9, -s * 0.5, s * 0.45 + 3.4, 0, MAT.magicStone);
-    add(GLOW, new THREE.BoxGeometry(s * 0.5, s * 0.06, s * 0.56), -s * 0.5, s * 0.74, 0, MAT.arcaneGlow);
-    // 卸晶槽
-    add(HULL, new THREE.BoxGeometry(s * 1.4, s * 0.1, s * 0.34), 0, s * 1.02, s * 0.44, MAT.magicStone);
-    add(GLOW, new THREE.BoxGeometry(s * 1.2, s * 0.09, s * 0.2), 0, s * 1.09, s * 0.44, MAT.frostGlow);
-    add(HULL, new THREE.CylinderGeometry(s * 0.08, s * 0.08, s * 0.7, 6), s * 0.9, s * 0.75, -s * 0.4, MAT.crystal);
+    taper(HULL, s * 1.46, s * 1.16, s * 1.32, s * 1.04, s * 0.40, 0, s * 0.20 + 3.4, 0, MAT.magicStone);
+    taper(HULL, s * 0.42, s * 0.42, s * 0.12, s * 0.12, s * 1.18, s * 0.38, s * 0.92, 0, MAT.crystal);
+    taper(HULL, s * 0.22, s * 0.22, s * 0.07, s * 0.07, s * 0.72, s * 0.62, s * 0.72, s * 0.22, MAT.crystal);
+    add(GLOW, new THREE.SphereGeometry(s * 0.09, 8, 6), s * 0.38, s * 1.58, 0, MAT.frostGlow);
+    taper(HULL, s * 0.52, s * 0.56, s * 0.40, s * 0.44, s * 0.78, -s * 0.44, s * 0.39 + 3.4, 0, MAT.slate);
+    add(GLOW, new THREE.BoxGeometry(s * 0.44, s * 0.05, s * 0.48), -s * 0.44, s * 0.68, 0, MAT.arcaneGlow);
+    add(HULL, new THREE.BoxGeometry(s * 1.22, s * 0.08, s * 0.28), 0, s * 0.96, s * 0.40, MAT.magicStone);
+    add(GLOW, new THREE.BoxGeometry(s * 1.04, s * 0.07, s * 0.16), 0, s * 1.03, s * 0.40, MAT.frostGlow);
+    add(HULL, new THREE.CylinderGeometry(s * 0.07, s * 0.07, s * 0.62, 6), s * 0.82, s * 0.70, -s * 0.36, MAT.crystal);
   } else if (kind === 'mtemple') {
-    // 奥术圣殿：四柱石亭，亭心悬浮符文石，正面一道发光奥术门（步兵自门中走出）
-    taper(HULL, s * 1.6, s * 1.28, s * 1.46, s * 1.14, s * 0.5, 0, s * 0.25 + 3.4, 0, MAT.magicStone);
+    // 奥术圣殿：四柱石亭 + 两层飞檐，正面奥术门是训练出口。
+    taper(HULL, s * 1.40, s * 1.12, s * 1.26, s * 1.00, s * 0.36, 0, s * 0.18 + 3.4, 0, MAT.magicStone);
     [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
-      add(HULL, new THREE.CylinderGeometry(s * 0.09, s * 0.11, s * 0.9, 6),
-        q[0] * s * 0.6, s * 0.55 + 3.4, q[1] * s * 0.5, MAT.magicStone);
-      add(GLOW, new THREE.SphereGeometry(s * 0.06, 8, 6),
-        q[0] * s * 0.6, s * 1.04, q[1] * s * 0.5, MAT.arcaneGlow);
+      add(HULL, new THREE.CylinderGeometry(s * 0.08, s * 0.10, s * 0.92, 6),
+        q[0] * s * 0.52, s * 0.52 + 3.4, q[1] * s * 0.44, MAT.slate);
+      add(GLOW, new THREE.SphereGeometry(s * 0.05, 7, 5),
+        q[0] * s * 0.52, s * 1.02, q[1] * s * 0.44, MAT.arcaneGlow);
     });
-    // 亭顶 + 亭心悬浮符文石
-    taper(TEAM, s * 1.4, s * 1.1, s * 1.0, s * 0.7, s * 0.42, 0, s * 1.16 + 3.4, 0, 1.0);
-    taper(GLOW, s * 0.3, s * 0.3, s * 0.06, s * 0.06, s * 0.62, 0, s * 0.78, 0, MAT.arcaneGlow);
-    // 正面奥术门
-    add(GLOW, new THREE.BoxGeometry(s * 0.06, s * 0.6, s * 0.5), s * 0.82, s * 0.42 + 3.4, 0, MAT.arcaneGlow);
+    taper(TEAM, s * 1.22, s * 0.96, s * 0.86, s * 0.62, s * 0.28, 0, s * 1.08 + 3.4, 0, 1.0);
+    taper(HULL, s * 0.86, s * 0.62, s * 0.36, s * 0.22, s * 0.22, 0, s * 1.32 + 3.4, 0, MAT.bronze);
+    taper(GLOW, s * 0.24, s * 0.24, s * 0.05, s * 0.05, s * 0.52, 0, s * 0.78, 0, MAT.arcaneGlow);
+    add(GLOW, new THREE.BoxGeometry(s * 0.05, s * 0.52, s * 0.42), s * 0.70, s * 0.38 + 3.4, 0, MAT.arcaneGlow);
   } else if (kind === 'mcircle') {
-    // 召唤法阵：石台刻满召唤阵纹，一座竖立的巨型符文环内翻涌着奥术漩涡
-    taper(HULL, s * 1.82, s * 1.56, s * 1.66, s * 1.4, s * 0.6, 0, s * 0.3 + 3.4, 0, MAT.magicStone);
-    // 地面召唤阵纹
-    add(GLOW, new THREE.TorusGeometry(s * 0.9, s * 0.05, 6, 20), 0, s * 0.62, 0, MAT.arcaneGlow, ROT_X90);
-    add(GLOW, new THREE.BoxGeometry(s * 1.7, s * 0.04, s * 0.08), 0, s * 0.61, 0, MAT.arcaneGlow);
-    add(GLOW, new THREE.BoxGeometry(s * 0.08, s * 0.04, s * 1.7), 0, s * 0.61, 0, MAT.arcaneGlow);
-    // 竖立符文环（盘面朝 ±X，战车自漩涡中驶出）
-    add(HULL, new THREE.TorusGeometry(s * 0.7, s * 0.1, 6, 18), 0, s * 1.25, 0, MAT.magicStone,
+    taper(HULL, s * 1.50, s * 1.30, s * 1.36, s * 1.16, s * 0.42, 0, s * 0.21 + 3.4, 0, MAT.magicStone);
+    add(GLOW, new THREE.TorusGeometry(s * 0.78, s * 0.04, 6, 20), 0, s * 0.56, 0, MAT.arcaneGlow, ROT_X90);
+    add(GLOW, new THREE.TorusGeometry(s * 0.48, s * 0.028, 6, 16), 0, s * 0.56, 0, MAT.frostGlow, ROT_X90);
+    add(GLOW, new THREE.BoxGeometry(s * 1.46, s * 0.035, s * 0.06), 0, s * 0.55, 0, MAT.arcaneGlow);
+    add(GLOW, new THREE.BoxGeometry(s * 0.06, s * 0.035, s * 1.46), 0, s * 0.55, 0, MAT.arcaneGlow);
+    add(HULL, new THREE.TorusGeometry(s * 0.68, s * 0.09, 6, 18), 0, s * 1.22, 0, MAT.bronze,
       new THREE.Matrix4().makeRotationY(Math.PI / 2));
-    add(GLOW, new THREE.CylinderGeometry(s * 0.58, s * 0.58, s * 0.06, 18), 0, s * 1.25, 0, MAT.arcaneGlow, ROT_Z90);
-    // 两侧水晶柱
+    add(GLOW, new THREE.CylinderGeometry(s * 0.54, s * 0.54, s * 0.055, 18), 0, s * 1.22, 0, MAT.arcaneGlow, ROT_Z90);
     [-1, 1].forEach(function (side) {
-      taper(HULL, s * 0.26, s * 0.26, s * 0.12, s * 0.12, s * 0.9, side * s * 0.98, s * 0.45 + 3.4, 0, MAT.crystal);
-      add(GLOW, new THREE.SphereGeometry(s * 0.07, 8, 6), side * s * 0.98, s * 0.94, 0, MAT.arcaneGlow);
+      taper(HULL, s * 0.22, s * 0.22, s * 0.08, s * 0.08, s * 0.86, side * s * 0.86, s * 0.43 + 3.4, 0, MAT.crystal);
+      add(GLOW, new THREE.SphereGeometry(s * 0.06, 7, 5), side * s * 0.86, s * 0.90, 0, MAT.arcaneGlow);
     });
   } else if (kind === 'mspring') {
-    // 圣泉：石砌泉盆 + 寒蓝圣水 + 中央悬浮修复晶，对位维修厂的停机坪十字
-    taper(HULL, s * 1.6, s * 1.4, s * 1.5, s * 1.3, s * 0.4, 0, s * 0.2 + 3.4, 0, MAT.magicStone);
-    add(GLOW, new THREE.CylinderGeometry(s * 0.62, s * 0.7, s * 0.12, 16), 0, s * 0.48, 0, MAT.frostGlow);
-    add(GLOW, new THREE.TorusGeometry(s * 0.72, s * 0.04, 6, 18), 0, s * 0.52, 0, MAT.arcaneGlow, ROT_X90);
-    add(GLOW, new THREE.BoxGeometry(s * 0.72, s * 0.04, s * 0.16), 0, s * 0.44, 0, MAT.frostGlow);
-    add(GLOW, new THREE.BoxGeometry(s * 0.16, s * 0.04, s * 0.72), 0, s * 0.44, 0, MAT.frostGlow);
-    taper(GLOW, s * 0.22, s * 0.22, s * 0.05, s * 0.05, s * 0.55, 0, s * 0.95, 0, MAT.arcaneGlow);
-    add(GLOW, new THREE.SphereGeometry(s * 0.1, 10, 6), 0, s * 1.28, 0, MAT.frostGlow);
+    taper(HULL, s * 1.40, s * 1.22, s * 1.30, s * 1.12, s * 0.30, 0, s * 0.15 + 3.4, 0, MAT.magicStone);
+    add(HULL, new THREE.TorusGeometry(s * 0.62, s * 0.08, 6, 16), 0, s * 0.42, 0, MAT.slate, ROT_X90);
+    add(GLOW, new THREE.CylinderGeometry(s * 0.54, s * 0.60, s * 0.10, 16), 0, s * 0.44, 0, MAT.frostGlow);
+    add(GLOW, new THREE.TorusGeometry(s * 0.64, s * 0.032, 6, 18), 0, s * 0.50, 0, MAT.arcaneGlow, ROT_X90);
+    add(GLOW, new THREE.BoxGeometry(s * 0.62, s * 0.03, s * 0.12), 0, s * 0.40, 0, MAT.frostGlow);
+    add(GLOW, new THREE.BoxGeometry(s * 0.12, s * 0.03, s * 0.62), 0, s * 0.40, 0, MAT.frostGlow);
+    taper(GLOW, s * 0.18, s * 0.18, s * 0.04, s * 0.04, s * 0.52, 0, s * 0.92, 0, MAT.arcaneGlow);
+    add(GLOW, new THREE.SphereGeometry(s * 0.09, 10, 6), 0, s * 1.24, 0, MAT.frostGlow);
     [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
-      taper(HULL, s * 0.16, s * 0.16, s * 0.08, s * 0.08, s * 0.5,
-        q[0] * s * 0.62, s * 0.3 + 3.4, q[1] * s * 0.56, MAT.crystal);
+      taper(HULL, s * 0.14, s * 0.14, s * 0.06, s * 0.06, s * 0.46,
+        q[0] * s * 0.56, s * 0.28 + 3.4, q[1] * s * 0.50, MAT.crystal);
     });
   } else if (kind === 'mtower') {
-    // 奥术塔：石座上水晶尖塔，塔顶悬浮的奥术晶核是可旋转瞄准的「头」
-    taper(HULL, s * 1.5, s * 1.5, s * 1.05, s * 1.05, s * 0.5, 0, s * 0.25 + 3.4, 0, MAT.magicStone);
-    taper(HULL, s * 0.5, s * 0.5, s * 0.22, s * 0.22, s * 1.3, 0, s * 0.85 + 3.4, 0, MAT.crystal);
-    add(GLOW, new THREE.TorusGeometry(s * 0.42, s * 0.035, 6, 14), 0, s * 0.72, 0, MAT.arcaneGlow, ROT_X90);
+    taper(HULL, s * 1.28, s * 1.28, s * 0.90, s * 0.90, s * 0.38, 0, s * 0.19 + 3.4, 0, MAT.magicStone);
+    taper(HULL, s * 0.42, s * 0.42, s * 0.16, s * 0.16, s * 1.36, 0, s * 0.86 + 3.4, 0, MAT.crystal);
+    add(GLOW, new THREE.TorusGeometry(s * 0.36, s * 0.03, 6, 14), 0, s * 0.68, 0, MAT.arcaneGlow, ROT_X90);
     [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
-      add(GLOW, new THREE.BoxGeometry(s * 0.1, s * 0.04, s * 0.1),
-        q[0] * s * 0.6, s * 0.55, q[1] * s * 0.6, MAT.frostGlow);
+      add(GLOW, new THREE.SphereGeometry(s * 0.04, 6, 5),
+        q[0] * s * 0.48, s * 0.50, q[1] * s * 0.48, MAT.frostGlow);
     });
   }
   return c.parts;
@@ -1075,7 +1108,7 @@ function spinnerParts(kind, size) {
       c.add(GLOW, new THREE.SphereGeometry(s * 0.07, 8, 6),
         Math.cos(a) * s * 0.5, 0, Math.sin(a) * s * 0.5, MAT.arcaneGlow);
     }
-    return { parts: c.parts, y: size * 2.0, speed: 0.7 };
+    return { parts: c.parts, y: size * 2.18, speed: 0.7 };
   }
   if (kind === 'mspring') {
     const c = partCollector();
@@ -1282,11 +1315,11 @@ const BRIDGE_RENDER_SPAN = 2.0;
  * 视距看步兵只有几个像素，根本认不出兵种。这里按兵种放大到能辨识的比例。
  */
 const UNIT_VISUAL_SCALE = {
-  rifle: 1.75, rocket: 1.75, sniper: 1.75, tesla: 1.75, dog: 1.7,
-  tank: 1.25, scout: 1.3, tank_destroyer: 1.25,
-  artillery: 1.25, harvester: 1.16, mcv: 1.30, v3: 1.25,
-  overlord: 1.28, prism: 1.25,
-  mage: 1.75, frost: 1.75, golem: 1.3, panther: 1.6, dragon: 1.3,
+  rifle: 1.95, rocket: 1.95, sniper: 1.95, tesla: 1.95, dog: 1.85,
+  tank: 1.28, scout: 1.34, tank_destroyer: 1.28,
+  artillery: 1.28, harvester: 1.16, mcv: 1.30, v3: 1.28,
+  overlord: 1.30, prism: 1.28,
+  mage: 1.95, frost: 1.95, golem: 1.38, panther: 1.7, dragon: 1.34,
   mharvester: 1.16, mmcv: 1.30
 };
 
@@ -1510,25 +1543,48 @@ export function createRenderer(canvas) {
    */
   // 视空间的太阳方向：所有注入材质共享同一个 uniform 对象，逐帧只更新一次
   const sunDirViewUniform = { value: new THREE.Vector3(0.4, 0.8, 0.4) };
+  const armyTimeUniform = { value: 0 };
 
   function applyEmissiveByVertexColor(material) {
     material.onBeforeCompile = function (shader) {
       shader.uniforms.uSunDirView = sunDirViewUniform;
+      shader.uniforms.uArmyTime = armyTimeUniform;
       // three.js 的 <color_vertex> 已经把 instanceColor 乘进 vColor，
       // 所以另存一份未乘的原始顶点色，供固有色零件使用。
       shader.vertexShader = 'attribute float aTeam;\nvarying float vTeamMix;\n' +
-        'varying vec3 vOwnColor;\n' + shader.vertexShader.replace(
-          '#include <color_vertex>',
-          '#include <color_vertex>\n  vTeamMix = aTeam;\n  vOwnColor = color;');
+        'varying vec3 vOwnColor;\nvarying vec3 vArmyWorld;\n' + shader.vertexShader
+          .replace(
+            '#include <color_vertex>',
+            '#include <color_vertex>\n  vTeamMix = aTeam;\n  vOwnColor = color;')
+          .replace(
+            '#include <begin_vertex>',
+            '#include <begin_vertex>\n' +
+            '  {\n' +
+            '    vec4 armyWorld = vec4(transformed, 1.0);\n' +
+            '#ifdef USE_INSTANCING\n' +
+            '    armyWorld = instanceMatrix * armyWorld;\n' +
+            '#endif\n' +
+            '    vArmyWorld = (modelMatrix * armyWorld).xyz;\n' +
+            '  }');
       shader.fragmentShader = 'varying float vTeamMix;\nvarying vec3 vOwnColor;\n' +
-        'uniform vec3 uSunDirView;\n' +
+        'varying vec3 vArmyWorld;\nuniform vec3 uSunDirView;\nuniform float uArmyTime;\n' +
+        'float armyHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' +
         shader.fragmentShader
           .replace('#include <color_fragment>',
             '#include <color_fragment>\n' +
             // vTeamMix=0 走固有色，=1 走「团队色 × 明暗系数」
             '  diffuseColor.rgb = mix(vOwnColor, diffuseColor.rgb, vTeamMix);\n' +
             '  vec3 gBase = diffuseColor.rgb;\n' +
-            '  float gEmissive = clamp(max(max(gBase.r, gBase.g), gBase.b) - 1.0, 0.0, 1.0);')
+            '  float gEmissive = clamp(max(max(gBase.r, gBase.g), gBase.b) - 1.0, 0.0, 1.0);\n' +
+            // 世界空间金属拉丝 / 石面斑驳：共享材质，不给每座建筑单独贴图。
+            '  if (gEmissive < 0.04) {\n' +
+            '    float gStreak = armyHash(vec2(vArmyWorld.x * 0.55 + vArmyWorld.z * 0.08, vArmyWorld.y * 0.9));\n' +
+            '    float gBlotch = armyHash(floor(vArmyWorld.xz * 0.22));\n' +
+            '    float gMetal = mix(0.90, 1.08, gStreak);\n' +
+            '    float gStone = mix(0.88, 1.06, gBlotch);\n' +
+            '    float gHue = gBase.b - gBase.r;\n' +
+            '    diffuseColor.rgb *= mix(gMetal, gStone, smoothstep(-0.04, 0.10, gHue));\n' +
+            '  }')
           .replace('#include <normal_fragment_begin>',
             '#include <normal_fragment_begin>\n' +
             // 手绘式明暗：顶面提亮、底面压暗。参考画面里的单位像是被
@@ -1548,10 +1604,11 @@ export function createRenderer(canvas) {
             '    float gSpec = pow(max(dot(gN, gH), 0.0), 36.0);\n' +
             '    gl_FragColor.rgb += (vec3(0.42, 0.60, 0.78) * gRim * 0.34\n' +
             '      + vec3(1.0, 0.93, 0.78) * gSpec * 0.5) * (1.0 - gEmissive);\n' +
-            '    gl_FragColor.rgb = mix(gl_FragColor.rgb, gBase, gEmissive);\n' +
+            '    float gPulse = 0.86 + 0.14 * sin(uArmyTime * 2.1 + vArmyWorld.x * 0.03);\n' +
+            '    gl_FragColor.rgb = mix(gl_FragColor.rgb, gBase * gPulse, gEmissive);\n' +
             '  }');
     };
-    material.customProgramCacheKey = function () { return 'teamOrOwn2'; };
+    material.customProgramCacheKey = function () { return 'teamOrOwn3'; };
     return material;
   }
 
@@ -1907,7 +1964,42 @@ export function createRenderer(canvas) {
   }
 
   let buildingPadMat = null;
-  const buildingPadGeo = new THREE.CircleGeometry(1, 22).rotateX(-Math.PI / 2);
+  const buildingPadGeo = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2);
+  let buildingPadTex = null;
+
+  function makeBuildingPadTexture() {
+    if (buildingPadTex) return buildingPadTex;
+    const size = 128;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    const ctx = cv.getContext('2d');
+    const img = ctx.createImageData(size, size);
+    const d = img.data;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = (x + 0.5) / size * 2 - 1;
+        const dy = (y + 0.5) / size * 2 - 1;
+        const r = Math.hypot(dx, dy);
+        const ang = Math.atan2(dy, dx);
+        const wobble = 0.07 * Math.sin(ang * 6.0 + r * 11.0);
+        const edge = r + wobble;
+        let a = 1 - Math.max(0, (edge - 0.38) / 0.62);
+        if (a < 0) a = 0;
+        a = a * a * (3 - 2 * a);
+        const grit = (Math.sin(x * 0.41 + y * 0.17) * Math.cos(y * 0.33) + 1) * 0.5;
+        const lum = 0.62 + grit * 0.28;
+        const i = (y * size + x) * 4;
+        d[i] = lum * 255;
+        d[i + 1] = lum * 228;
+        d[i + 2] = lum * 186;
+        d[i + 3] = a * 200;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    buildingPadTex = new THREE.CanvasTexture(cv);
+    buildingPadTex.colorSpace = THREE.SRGBColorSpace;
+    return buildingPadTex;
+  }
 
   function applyWorldTheme(theme) {
     scene.fog.color.setHex(theme.fog);
@@ -3202,7 +3294,8 @@ export function createRenderer(canvas) {
    */
   function simpleUnitParts(kind) {
     const infantry = [
-      taperedBox(7, 5, 5.5, 4, 10, 0, 7, 0, 0.9),
+      taperedBox(7.4, 5.2, 5.6, 4.2, 10, 0, 7.2, 0, MAT.olive),
+      box(4, 2.2, 8.4, -0.2, 10.4, 0, 0.95),
       box(3, 5, 7, -2.5, 8, 0, MAT.olive)
     ];
     if (kind === 'rifle') {
@@ -3310,10 +3403,12 @@ export function createRenderer(canvas) {
     /* ---- 秘法会 LOD ---- */
     if (kind === 'mage' || kind === 'frost') {
       const orb = kind === 'frost' ? MAT.frostGlow : MAT.arcaneGlow;
-      return infantry.concat([
-        cyl(0.4, 0.4, 12, 6, 5, 9, 2, MAT.gunmetal, ROT_Z90),
-        sph(1.3, 5, 10.6, 8, 2, orb)
-      ]);
+      return [
+        taperedBox(8, 8, 4.2, 4.2, 10, 0, 6.4, 0, MAT.robe),
+        box(4, 1.8, 7, 0, 11.8, 0, 0.9),
+        cyl(0.45, 0.45, 13, 6, 5, 8.2, 2.4, MAT.bronze, ROT_Z90),
+        sph(1.6, 6, 11.4, 8.2, 2.4, orb)
+      ];
     }
     if (kind === 'golem') {
       return [
@@ -3604,12 +3699,14 @@ export function createRenderer(canvas) {
     if (!buildingPadMat) {
       buildingPadMat = applyFogMask(new THREE.MeshLambertMaterial({
         color: displayTheme(state.terrain && state.terrain.theme).pad,
-        transparent: true, opacity: 0.58
+        map: makeBuildingPadTexture(),
+        transparent: true, opacity: 0.82, depthWrite: false
       }));
     }
     const pad = new THREE.Mesh(buildingPadGeo, buildingPadMat);
-    pad.scale.set(structure.size * 1.85, 1, structure.size * 1.85);
-    pad.position.y = 1.15;
+    // 尘土围裙略大于新地基，让建筑坐进 #7 的踩实土而不是压住一整块灰板。
+    pad.scale.set(structure.size * 1.28, 1, structure.size * 1.28);
+    pad.position.y = 0.55;
     pad.receiveShadow = true;
     pad.renderOrder = 1;
     group.add(pad);
@@ -4590,6 +4687,9 @@ export function createRenderer(canvas) {
         node.teamMat.transparent = true;
       } else {
         if (node.buildProgress !== 1) {
+          if (node.buildProgress != null && node.buildProgress < 0.999) {
+            spawnEffect('complete', s.x, s.y);
+          }
           node.buildProgress = 1;
           node.group.scale.set(1, 1, 1);
           node.teamMat.transparent = false;
@@ -4768,6 +4868,7 @@ export function createRenderer(canvas) {
     // 天空流云、地面云影、视空间太阳方向：共享 uniform，一帧只算一次
     skyMaterial.uniforms.uTime.value = payload.time * 0.001;
     cloudTimeUniform.value = payload.time * 0.001;
+    armyTimeUniform.value = payload.time * 0.001;
     if (cameraChanged) {
       sunDirViewUniform.value.copy(SUN_DIR).transformDirection(camera.matrixWorldInverse);
     }
