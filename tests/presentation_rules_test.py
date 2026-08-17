@@ -190,6 +190,23 @@ def main():
     assert "?" not in cleaned
     assert "/api/events" in cleaned
 
+    # 战场地表必须按主题上色，并且片元细节着色器要真正接到地面材质上。
+    # 旧版 applyTerrainDetail 写了却没调用，开局就是一块荧光绿平板。
+    assert "export const MAP_DISPLAY_THEMES" in render
+    assert "applyTerrainDetail(applyFogMask" in render
+    assert "function makeProceduralGroundTexture" in render
+    assert "function tuftParts" in render
+    assert "function spawnWearAt" in render
+    for theme_id in ("grassland", "arid", "urban"):
+        assert ("  %s:" % theme_id) in render
+    assert server.MAPS["north_conflict"]["theme"] == "grassland"
+    assert server.MAPS["cliff_assault"]["theme"] == "arid"
+    assert server.MAPS["urban_siege"]["theme"] == "urban"
+    assert "function paintGrassBase(c, w, h, themeId)" in app
+    assert "paintTerrainFeatures(miniCtx, roomState.game.terrain, sx, sy)" in app
+    assert "shadowQuality: 'structures'" in app
+    assert "sceneryQuality: 'on'" in app
+
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 
 

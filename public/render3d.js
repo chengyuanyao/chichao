@@ -1182,6 +1182,92 @@ function structureGroup(kind, size, teamMaterial) {
 
 const GROUND_SEG = 1.0;       // 地形网格密度系数
 
+/**
+ * 每张地图的战场观感。服务端 theme 只是一个标签，真正上色、天空、雾、
+ * 小地图底色都走这里。北境不能和断崖强袭画成同一块网球场绿。
+ *
+ * 颜色刻意压在 0.7 以下：地面走 Lambert + 2.3 倍阳光，再给后处理留余量，
+ * 顶点色一旦把绿通道顶过 1.0 就会晒成荧光草坪。
+ */
+export const MAP_DISPLAY_THEMES = {
+  grassland: {
+    id: 'grassland',
+    grass: [0.34, 0.44, 0.24],
+    lush: [0.28, 0.42, 0.20],
+    dry: [0.50, 0.44, 0.26],
+    dirt: [0.40, 0.32, 0.20],
+    packed: [0.38, 0.33, 0.24],
+    rock: [0.46, 0.44, 0.40],
+    road: 0x6e6250,
+    skirt: 0x4a5638,
+    pad: 0x5a4e3a,
+    fog: 0x9ec8d8,
+    horizon: 0xf2e4c4,
+    mid: 0x9fd4ee,
+    zenith: 0x3f8fd6,
+    skyGround: 0x8fb2c0,
+    hemiSky: 0xaed9ff,
+    hemiGround: 0x55603a,
+    sun: 0xffedc2,
+    fill: 0x9ab4c4,
+    rim: 0xa8e2f2,
+    tex: [0.90, 1.00, 0.76],
+    minimap: { base: '#3f5234', dry: 'rgba(196,176,96,.14)', light: 'rgba(232,236,196,', dark: 'rgba(8,16,6,', road: '#8a7a55', mountain: '#a89f8a' }
+  },
+  arid: {
+    id: 'arid',
+    grass: [0.50, 0.42, 0.24],
+    lush: [0.42, 0.38, 0.20],
+    dry: [0.64, 0.50, 0.28],
+    dirt: [0.52, 0.38, 0.20],
+    packed: [0.48, 0.38, 0.24],
+    rock: [0.54, 0.46, 0.36],
+    road: 0x7a6848,
+    skirt: 0x6a5a3a,
+    pad: 0x6a5840,
+    fog: 0xc8b894,
+    horizon: 0xf0d8a8,
+    mid: 0xd4c4a0,
+    zenith: 0x6aa0c8,
+    skyGround: 0xb8a078,
+    hemiSky: 0xc8d8e8,
+    hemiGround: 0x6a5a38,
+    sun: 0xffe0a8,
+    fill: 0xc4b090,
+    rim: 0xe8d4a0,
+    tex: [1.00, 0.90, 0.68],
+    minimap: { base: '#6a5a38', dry: 'rgba(220,180,90,.16)', light: 'rgba(236,212,150,', dark: 'rgba(28,18,8,', road: '#9a8060', mountain: '#b8a078' }
+  },
+  urban: {
+    id: 'urban',
+    grass: [0.32, 0.36, 0.28],
+    lush: [0.28, 0.34, 0.26],
+    dry: [0.42, 0.40, 0.34],
+    dirt: [0.34, 0.32, 0.28],
+    packed: [0.36, 0.35, 0.32],
+    rock: [0.40, 0.39, 0.38],
+    road: 0x4a4844,
+    skirt: 0x3a3c38,
+    pad: 0x3e3c38,
+    fog: 0x8a9aaa,
+    horizon: 0xc8c4b8,
+    mid: 0x8aa8c0,
+    zenith: 0x3a5a78,
+    skyGround: 0x6a7080,
+    hemiSky: 0x9ab0c4,
+    hemiGround: 0x3a3c34,
+    sun: 0xf0e8d8,
+    fill: 0x8a9aaa,
+    rim: 0xa8c0d0,
+    tex: [0.88, 0.90, 0.86],
+    minimap: { base: '#3a3e38', dry: 'rgba(160,156,140,.14)', light: 'rgba(200,204,196,', dark: 'rgba(8,10,10,', road: '#6a6864', mountain: '#8a8680' }
+  }
+};
+
+function displayTheme(themeId) {
+  return MAP_DISPLAY_THEMES[themeId] || MAP_DISPLAY_THEMES.grassland;
+}
+
 // 相机拉到这个距离以外才换用可辨识的兵种剪影。单位数量不再触发全场
 // 硬切低模：InstancedMesh 的绘制调用本来就按兵种合批，数量阈值只会造成
 // 模型突然一起变成盒子，却没有省下任何 draw call。
@@ -1517,28 +1603,52 @@ export function createRenderer(canvas) {
     return material;
   }
 
+  // 地面片元着色用的主题色。所有地面材质共享，换图时只改这三个 Color。
+  const terrainDirtTint = { value: new THREE.Color(0.40, 0.32, 0.20) };
+  const terrainDryTint = { value: new THREE.Color(0.50, 0.44, 0.26) };
+  const terrainGrassTint = { value: new THREE.Color(0.34, 0.44, 0.24) };
+
   /**
    * 给地面材质再叠一层逐像素细节，与迷雾注入串联使用。
    *
-   * 顶点密度封顶 5 万面片，大地图上一格 40+ 世界单位，纯顶点法线的地面
-   * 在低角度阳光下是一整片均匀亮度 —— 平得像桌布。这里用带解析导数的
-   * 值噪声在片元里扰动法线，光照立刻碎成自然的明暗斑；再顺手把照片
-   * 纹理的土黄色偏压掉一半，色相交还给顶点色（草绿 / 金沙 / 灰岩）。
+   * 顶点密度封顶 5 万面片，大地图上一格 40+ 世界单位，纯顶点色的地面
+   * 在低角度阳光下是一整片均匀亮度 —— 平得像桌布。这里做三件事：
+   *   1) 程序化细节贴图只提供微粒明暗，色相仍交给顶点色；
+   *   2) 世界空间 FBM 在片元里混出土斑 / 枯草，近景才有「草皮」而不是色块；
+   *   3) 带解析导数的值噪声扰动法线，让阳光把地面碎成自然明暗。
    */
   function applyTerrainDetail(material) {
     const prevCompile = material.onBeforeCompile;
     material.onBeforeCompile = function (shader) {
       if (prevCompile) prevCompile(shader);
-      shader.fragmentShader = shader.fragmentShader
+      shader.uniforms.uDirtTint = terrainDirtTint;
+      shader.uniforms.uDryTint = terrainDryTint;
+      shader.uniforms.uGrassTint = terrainGrassTint;
+      shader.fragmentShader =
+        'uniform vec3 uDirtTint;\nuniform vec3 uDryTint;\nuniform vec3 uGrassTint;\n' +
+        shader.fragmentShader
         .replace('#include <map_fragment>',
           '  vec4 tdTex = texture2D(map, vMapUv);\n' +
-          '  tdTex.rgb = mix(vec3(dot(tdTex.rgb, vec3(0.333))), tdTex.rgb, 0.4);\n' +
-          '  tdTex.rgb = mix(vec3(0.52), tdTex.rgb, 0.55) * 1.16;\n' +
-          '  diffuseColor *= tdTex;')
+          '  float tdLum = dot(tdTex.rgb, vec3(0.30, 0.50, 0.20));\n' +
+          '  tdTex.rgb = mix(vec3(tdLum), tdTex.rgb, 0.28);\n' +
+          '  tdTex.rgb = mix(vec3(0.62), tdTex.rgb, 0.70);\n' +
+          '  diffuseColor.rgb *= tdTex.rgb;\n' +
+          // 片元里再混一层土斑/枯草：顶点色负责大色块，这里负责近景草皮。
+          // 必须写在 map_fragment，不能再碰 dithering_fragment —— 迷雾注入已经占用它。
+          '  {\n' +
+          '    vec2 tdW = vFogWorld.xz;\n' +
+          '    float tdPatch = fmNoise(tdW * 0.0048);\n' +
+          '    tdPatch += 0.45 * fmNoise(tdW * 0.011 + vec2(17.0, 9.0));\n' +
+          '    float tdGrit = fmNoise(tdW * 0.085);\n' +
+          '    float tdBlade = abs(sin(tdW.x * 0.31 + tdW.y * 0.07 + tdPatch * 5.0));\n' +
+          '    diffuseColor.rgb = mix(diffuseColor.rgb, uDryTint, smoothstep(0.52, 0.86, tdPatch) * 0.38);\n' +
+          '    diffuseColor.rgb = mix(diffuseColor.rgb, uDirtTint, smoothstep(0.64, 0.92, tdGrit) * 0.22);\n' +
+          '    diffuseColor.rgb *= mix(0.90, 1.08, tdBlade);\n' +
+          '    diffuseColor.rgb = mix(diffuseColor.rgb, uGrassTint, 0.08);\n' +
+          '  }')
         .replace('#include <normal_fragment_begin>',
           '#include <normal_fragment_begin>\n' +
           '  {\n' +
-          // iq 的带导数值噪声：同一次采样既给高度又给梯度
           '    vec2 tdP1 = vFogWorld.xz * 0.055;\n' +
           '    vec2 tdP2 = vFogWorld.xz * 0.21;\n' +
           '    vec2 tdI = floor(tdP1); vec2 tdF = fract(tdP1);\n' +
@@ -1555,17 +1665,15 @@ export function createRenderer(canvas) {
           '    tdC = fmHash(tdI + vec2(0.0, 1.0)); tdD = fmHash(tdI + vec2(1.0, 1.0));\n' +
           '    tdK1 = tdB - tdA; tdK2 = tdC - tdA; tdK3 = tdA - tdB - tdC + tdD;\n' +
           '    vec2 tdG2 = tdDu * (vec2(tdK1, tdK2) + tdK3 * tdU.yx);\n' +
-          '    vec2 tdGrad = tdG1 * 0.6 + tdG2 * 0.14;\n' +
-          // 远处渐隐：地平线附近的高频扰动只会闪烁。强度压低 —— 要的是
-          // 「阳光下起伏的草皮」，太强会变成一地霉斑。
+          '    vec2 tdGrad = tdG1 * 0.72 + tdG2 * 0.18;\n' +
           '    float tdFade = 1.0 - smoothstep(700.0, 1800.0, length(vViewPosition));\n' +
           '    normal = normalize(normal + (viewMatrix *\n' +
-          '      vec4(-tdGrad.x, 0.0, -tdGrad.y, 0.0)).xyz * (0.55 * tdFade));\n' +
+          '      vec4(-tdGrad.x, 0.0, -tdGrad.y, 0.0)).xyz * (0.70 * tdFade));\n' +
           '  }');
     };
     const prevKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function () {
-      return (prevKey ? prevKey.call(material) : '') + '+terraindetail';
+      return (prevKey ? prevKey.call(material) : '') + '+terraindetail3';
     };
     return material;
   }
@@ -1610,10 +1718,13 @@ export function createRenderer(canvas) {
    */
   const _ghCache = new Map();
   function rollingHeight(x, y) {
-    return Math.sin(x * 0.0016) * Math.cos(y * 0.0021) * 7
-      + Math.sin(x * 0.0007 + y * 0.0011) * 5
-      + Math.sin(x * 0.0068 + y * 0.0043) * 1.6
-      + Math.cos(x * 0.0121 - y * 0.0097) * 0.8;
+    // 纯装饰起伏：服务端寻路仍是 2D 平面。单位/建筑用 groundHeight() 贴地，
+    // 所以这里加高频噪声只会让草地「鼓」起来，不会改可行走区域。
+    return Math.sin(x * 0.0016) * Math.cos(y * 0.0021) * 10
+      + Math.sin(x * 0.0007 + y * 0.0011) * 7
+      + Math.sin(x * 0.0068 + y * 0.0043) * 2.6
+      + Math.cos(x * 0.0121 - y * 0.0097) * 1.5
+      + Math.sin(x * 0.028 + y * 0.019) * 0.8;
   }
 
   function groundHeight(x, y) {
@@ -1677,6 +1788,145 @@ export function createRenderer(canvas) {
     return tex;
   }
 
+  function mixGroundPhoto(procTex, photo, themeId) {
+    const size = 512;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(procTex.image, 0, 0, size, size);
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = 0.32;
+    ctx.drawImage(photo, 0, 0, size, size);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = procTex.anisotropy;
+    tex.userData.themeId = themeId;
+    return tex;
+  }
+
+  function spawnWearAt(x, y) {
+    const spawns = state.spawnPoints || [];
+    let best = 0;
+    for (let i = 0; i < spawns.length; i++) {
+      const d = Math.hypot(x - spawns[i][0], y - spawns[i][1]);
+      if (d < 320) {
+        const k = 1 - d / 320;
+        if (k * k > best) best = k * k;
+      }
+    }
+    return best;
+  }
+
+  function roadWearAt(x, y) {
+    const roads = (state.terrain && state.terrain.roads) || [];
+    let best = 0;
+    for (let i = 0; i < roads.length; i++) {
+      const r = roads[i];
+      const dx = r.x2 - r.x1;
+      const dy = r.y2 - r.y1;
+      const lenSq = dx * dx + dy * dy;
+      let t = lenSq < 1 ? 0 : ((x - r.x1) * dx + (y - r.y1) * dy) / lenSq;
+      t = Math.max(0, Math.min(1, t));
+      const dist = Math.hypot(x - (r.x1 + t * dx), y - (r.y1 + t * dy));
+      const band = r.width * 0.5 + 70;
+      if (dist < band) {
+        const k = 1 - dist / band;
+        if (k > best) best = k;
+      }
+    }
+    return best;
+  }
+
+  const proceduralGroundCache = new Map();
+
+  /**
+   * 程序化地表细节贴图。局域网客户端不该在开局再解码 3.5MB 照片；
+   * 这张 512 画布只提供无缝微粒，宏观颜色仍由顶点色和主题决定。
+   */
+  function makeProceduralGroundTexture(themeId) {
+    const cached = proceduralGroundCache.get(themeId);
+    if (cached) return cached;
+    const theme = displayTheme(themeId);
+    const size = 512;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    const ctx = cv.getContext('2d');
+    const img = ctx.createImageData(size, size);
+    const d = img.data;
+    const hash = function (ix, iy) {
+      const n = Math.sin(ix * 127.1 + iy * 311.7) * 43758.5453;
+      return n - Math.floor(n);
+    };
+    const noise = function (x, y) {
+      const ix = Math.floor(x);
+      const iy = Math.floor(y);
+      const fx = x - ix;
+      const fy = y - iy;
+      const ux = fx * fx * (3 - 2 * fx);
+      const uy = fy * fy * (3 - 2 * fy);
+      const a = hash(ix, iy);
+      const b = hash(ix + 1, iy);
+      const c = hash(ix, iy + 1);
+      const e = hash(ix + 1, iy + 1);
+      return a + (b - a) * ux + (c - a) * uy + (a - b - c + e) * ux * uy;
+    };
+    const fbm = function (x, y) {
+      return noise(x, y) * 0.5
+        + noise(x * 2.07, y * 2.07) * 0.25
+        + noise(x * 4.19, y * 4.19) * 0.145
+        + noise(x * 8.3, y * 8.3) * 0.08;
+    };
+    const tr = theme.tex[0], tg = theme.tex[1], tb = theme.tex[2];
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n1 = fbm(x * 0.038, y * 0.038);
+        const n2 = fbm(x * 0.13 + 19, y * 0.13);
+        const grain = hash(x * 3.1, y * 5.7);
+        const streak = Math.abs(Math.sin((x * 0.85 + y * 0.18 + n1 * 10) * 0.35));
+        let lum = 0.56 + n1 * 0.22 + n2 * 0.10 + (grain - 0.5) * 0.08;
+        if (theme.id === 'grassland') lum += (streak - 0.5) * 0.06;
+        if (theme.id === 'arid') lum += (n2 - 0.45) * 0.08;
+        const i = (y * size + x) * 4;
+        d[i] = Math.max(0, Math.min(255, lum * tr * 255));
+        d[i + 1] = Math.max(0, Math.min(255, lum * tg * 255));
+        d[i + 2] = Math.max(0, Math.min(255, lum * tb * 255));
+        d[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    tex.userData.themeId = themeId;
+    proceduralGroundCache.set(themeId, tex);
+    return tex;
+  }
+
+  let buildingPadMat = null;
+  const buildingPadGeo = new THREE.CircleGeometry(1, 22).rotateX(-Math.PI / 2);
+
+  function applyWorldTheme(theme) {
+    scene.fog.color.setHex(theme.fog);
+    renderer.setClearColor(theme.fog);
+    skyMaterial.uniforms.uHorizon.value.setHex(theme.horizon);
+    skyMaterial.uniforms.uMid.value.setHex(theme.mid);
+    skyMaterial.uniforms.uZenith.value.setHex(theme.zenith);
+    skyMaterial.uniforms.uGround.value.setHex(theme.skyGround);
+    hemi.color.setHex(theme.hemiSky);
+    hemi.groundColor.setHex(theme.hemiGround);
+    sun.color.setHex(theme.sun);
+    fill.color.setHex(theme.fill);
+    rim.color.setHex(theme.rim);
+    terrainDirtTint.value.set(theme.dirt[0], theme.dirt[1], theme.dirt[2]);
+    terrainDryTint.value.set(theme.dry[0], theme.dry[1], theme.dry[2]);
+    terrainGrassTint.value.set(theme.grass[0], theme.grass[1], theme.grass[2]);
+    if (buildingPadMat) buildingPadMat.color.setHex(theme.pad);
+  }
+
   function buildTerrain() {
     const buildStarted = performance.now();
     heightField = null;
@@ -1695,6 +1945,12 @@ export function createRenderer(canvas) {
 
     const mw = state.map.width;
     const mh = state.map.height;
+    const theme = displayTheme(state.terrain && state.terrain.theme);
+    applyWorldTheme(theme);
+    if (!groundTexture || groundTexture.userData.themeId !== theme.id) {
+      groundTexture = makeProceduralGroundTexture(theme.id);
+    }
+    groundTexture.repeat.set(mw / 280, mh / 280);
     // 网格密度按面积自适应：最细 26 世界单位一格（60 太粗，一条 120 宽的河
     // 只跨两格，河床边缘全是折线），但总面片数封顶约 5 万，免得大地图上顶点
     // 数失控。这是一次性构建的静态几何，一个 draw call。
@@ -1717,38 +1973,40 @@ export function createRenderer(canvas) {
       heights[i] = height;
       pos.setY(i, height);
 
-      // 地表分层着色。参考 Apple/Google 地图的「干净地表」：色相聚拢成柔和的
-      // 鼠尾草绿、压小明度差，另叠一层随海拔的拓扑明暗（坡顶受光、谷底背光），
-      // 让大地形不靠噪点也有层次。河道仍是干涸沟壑，但沟底从黑泥抬成暖褐干沟。
+      // 地表分层：主题底色 + 草木斑 + 出生点踩实土 + 路肩脏土 + 山岩。
+      // 色值压在 0.7 以下，避免 Lambert×强阳光把草地晒成荧光网球场。
       const stone = Math.min(1, rock / 70);
-      // 沟壑带：越深越靠近沟底，色越干越暗
       const ravine = Math.min(1, depth * 1.4);
-      // 风化土岸沿：沟口那一圈浅色干土亮边
       const bank = Math.max(0, 1 - Math.abs(depth - 0.10) / 0.14) * (depth > 0.005 ? 1 : 0);
-      // 低频噪声决定草木茂盛程度，和撒草木用的是同一套噪声，色块和植被对得上
       const lush = clumpNoise(wx, wz);
-      // 归一化海拔 → 拓扑光影：坡顶微亮、谷底微暗，所有分区最后统一乘上
-      const topo = 1 + Math.max(-1, Math.min(1, height / 24)) * 0.08;
+      const stripe = 0.5 + 0.5 * Math.sin(wx * 0.0022 + lush * 2.4);
+      const wear = spawnWearAt(wx, wz);
+      const shoulder = roadWearAt(wx, wz);
+      const topo = 1 + Math.max(-1, Math.min(1, height / 24)) * 0.10;
 
-      // 柔和春绿：降一点峰值饱和、抬一点蓝，绿得不再「荧光」，更像鼠尾草
-      let r = 0.70 + lush * 0.12;
-      let g = 1.00 + lush * 0.30;
-      let b = 0.56 + lush * 0.12;
-      // 干土斑块：晒黄的草皮（收一点，别那么燥）
-      const dry = Math.max(0, 0.42 - lush) * 1.6;
-      r += dry * 0.30; g += dry * 0.03; b -= dry * 0.06;
-      // 风化土岸沿：绿地和沟壑之间的那道干土亮边
-      r = r * (1 - bank) + 0.80 * bank;
-      g = g * (1 - bank) + 0.64 * bank;
-      b = b * (1 - bank) + 0.42 * bank;
-      // 岩石：带一点暖意的灰，不是水泥灰
-      r = r * (1 - stone * 0.5) + stone * 0.62;
-      g = g * (1 - stone * 0.46) + stone * 0.60;
-      b = b * (1 - stone * 0.40) + stone * 0.57;
-      // 沟壑底：抬成暖褐干沟，不再是吸光的黑泥
-      r = r * (1 - ravine) + 0.46 * ravine;
-      g = g * (1 - ravine) + 0.38 * ravine;
-      b = b * (1 - ravine) + 0.27 * ravine;
+      let r = theme.grass[0] + (theme.lush[0] - theme.grass[0]) * lush;
+      let g = theme.grass[1] + (theme.lush[1] - theme.grass[1]) * lush;
+      let b = theme.grass[2] + (theme.lush[2] - theme.grass[2]) * lush;
+      const dry = Math.max(0, 0.46 - lush) * 1.7;
+      r += (theme.dry[0] - r) * dry;
+      g += (theme.dry[1] - g) * dry;
+      b += (theme.dry[2] - b) * dry;
+      r += (theme.lush[0] - r) * stripe * 0.16;
+      g += (theme.lush[1] - g) * stripe * 0.16;
+      b += (theme.lush[2] - b) * stripe * 0.16;
+      r = r * (1 - bank) + theme.dirt[0] * 1.15 * bank;
+      g = g * (1 - bank) + theme.dirt[1] * 1.05 * bank;
+      b = b * (1 - bank) + theme.dirt[2] * bank;
+      const packed = Math.max(wear * 0.85, shoulder * 0.72);
+      r = r * (1 - packed) + theme.packed[0] * packed;
+      g = g * (1 - packed) + theme.packed[1] * packed;
+      b = b * (1 - packed) + theme.packed[2] * packed;
+      r = r * (1 - stone * 0.72) + theme.rock[0] * stone;
+      g = g * (1 - stone * 0.72) + theme.rock[1] * stone;
+      b = b * (1 - stone * 0.72) + theme.rock[2] * stone;
+      r = r * (1 - ravine) + 0.42 * ravine;
+      g = g * (1 - ravine) + 0.34 * ravine;
+      b = b * (1 - ravine) + 0.24 * ravine;
       r *= topo; g *= topo; b *= topo;
       colors[i * 3] = r;
       colors[i * 3 + 1] = g;
@@ -1757,9 +2015,9 @@ export function createRenderer(canvas) {
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
 
-    const material = applyFogMask(new THREE.MeshLambertMaterial({
+    const material = applyTerrainDetail(applyFogMask(new THREE.MeshLambertMaterial({
       map: groundTexture, vertexColors: true
-    }));
+    })));
     const ground = new THREE.Mesh(geo, material);
     ground.position.set(mw / 2, 0, mh / 2);
     ground.receiveShadow = true;
@@ -1844,7 +2102,7 @@ export function createRenderer(canvas) {
     // 地图边界：一圈向外倾斜下沉的裙边，颜色贴近雾色，让边缘融进远景而
     // 不是留下一道生硬的黑边
     const edgeMat = applyFogMask(new THREE.MeshLambertMaterial({
-      color: 0x5c6a48, fog: true, side: THREE.DoubleSide
+      color: theme.skirt, fog: true, side: THREE.DoubleSide
     }));
     const skirt = 900;
     [[mw / 2, mh, mw + skirt * 2, skirt, 0],
@@ -1957,7 +2215,8 @@ export function createRenderer(canvas) {
     geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
     geo.computeVertexNormals();
     const material = applyFogMask(new THREE.MeshLambertMaterial({
-      color: 0x7d7160, vertexColors: true, side: THREE.DoubleSide,
+      color: displayTheme(state.terrain && state.terrain.theme).road,
+      vertexColors: true, side: THREE.DoubleSide,
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
     }));
     const mesh = new THREE.Mesh(geo, material);
@@ -2105,7 +2364,33 @@ export function createRenderer(canvas) {
     return parts;
   }
 
-  /** 这个点能不能长草木：水里、山上、路上、基地和矿区附近都不行。 */
+  /** 草丛：几根矮锥，用来打破基地周围那块光板。纯装饰，不挡路。 */
+  function tuftParts(scale, rand, theme) {
+    const parts = [];
+    const blades = 5;
+    for (let i = 0; i < blades; i++) {
+      const a = rand() * TAU;
+      const d = 2.8 * scale * rand();
+      const h = (4.5 + rand() * 5.5) * scale;
+      parts.push(scaled(SCATTER_GEO.cone, 1.15 * scale, h, 1.15 * scale,
+        Math.cos(a) * d, h * 0.5, Math.sin(a) * d,
+        theme.foliage[i % theme.foliage.length]));
+    }
+    parts.push(scaled(SCATTER_GEO.disc, 5.5 * scale, 1, 5.5 * scale,
+      0, 0.4, 0, [0.10, 0.12, 0.07]));
+    return parts;
+  }
+
+  function spawnClearance(x, y, spawnPoints) {
+    let best = Infinity;
+    for (let i = 0; i < spawnPoints.length; i++) {
+      const d = Math.hypot(x - spawnPoints[i][0], y - spawnPoints[i][1]);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  /** 这个点能不能长草木：水里、山上、路上、总部台基和矿区附近都不行。 */
   function scatterAllowed(x, y, spawnPoints, resources) {
     // 允许长到浅岸上：光秃秃的岸线不真实，芦苇和滩石能把水陆接起来
     if (riverDepthAt(x, y) > 0.34) return false;
@@ -2122,10 +2407,8 @@ export function createRenderer(canvas) {
       const cy = r.y1 + t * dy;
       if (Math.hypot(x - cx, y - cy) < r.width * 0.5 + 26) return false;
     }
-    for (let i = 0; i < spawnPoints.length; i++) {
-      const s = spawnPoints[i];
-      if (Math.hypot(x - s[0], y - s[1]) < 620) return false;   // 给基地留出空地
-    }
+    // 总部台基留空，但 150 以外允许草丛/碎石，避免开局就是一块网球场
+    if (spawnClearance(x, y, spawnPoints) < 150) return false;
     for (let i = 0; i < resources.length; i++) {
       const res = resources[i];
       if (Math.hypot(x - res.x, y - res.y) < res.radius + 90) return false;
@@ -2192,12 +2475,29 @@ export function createRenderer(canvas) {
           const kind = rand();
           const scale = 1.15 + rand() * 0.95;
           const nearRavine = riverDepthAt(jx, jy) > 0.04;
+          const nearBase = spawnClearance(jx, jy, spawnPoints) < 560;
+          const biome = (state.terrain && state.terrain.theme) || 'grassland';
           let items;
           if (nearRavine) {
             // 沟壑坡面不长草木，只有碎石
             items = pebbleParts(scale * 1.3, rand, theme);
-          } else if (kind < 0.62) items = pineParts(scale, rand, theme);
-          else if (kind < 0.86) items = bushParts(scale * 1.1, rand, theme);
+          } else if (nearBase) {
+            // 基地外围只撒草丛和碎石，松树留给野外
+            items = kind < 0.62 ? tuftParts(scale * 1.05, rand, theme)
+              : pebbleParts(scale * 1.15, rand, theme);
+          } else if (biome === 'arid') {
+            if (kind < 0.22) items = pineParts(scale * 0.85, rand, theme);
+            else if (kind < 0.50) items = bushParts(scale * 1.05, rand, theme);
+            else if (kind < 0.72) items = tuftParts(scale, rand, theme);
+            else items = pebbleParts(scale * 1.35, rand, theme);
+          } else if (biome === 'urban') {
+            if (kind < 0.16) items = pineParts(scale * 0.8, rand, theme);
+            else if (kind < 0.36) items = bushParts(scale, rand, theme);
+            else if (kind < 0.52) items = tuftParts(scale * 0.9, rand, theme);
+            else items = pebbleParts(scale * 1.45, rand, theme);
+          } else if (kind < 0.48) items = pineParts(scale, rand, theme);
+          else if (kind < 0.68) items = bushParts(scale * 1.1, rand, theme);
+          else if (kind < 0.86) items = tuftParts(scale, rand, theme);
           else items = pebbleParts(scale, rand, theme);
 
           const place = new THREE.Matrix4()
@@ -3301,6 +3601,18 @@ export function createRenderer(canvas) {
     const teamMat = applyEmissiveByVertexColor(
       new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true }));
     const group = structureGroup(structure.kind, structure.size, teamMat);
+    if (!buildingPadMat) {
+      buildingPadMat = applyFogMask(new THREE.MeshLambertMaterial({
+        color: displayTheme(state.terrain && state.terrain.theme).pad,
+        transparent: true, opacity: 0.58
+      }));
+    }
+    const pad = new THREE.Mesh(buildingPadGeo, buildingPadMat);
+    pad.scale.set(structure.size * 1.85, 1, structure.size * 1.85);
+    pad.position.y = 1.15;
+    pad.receiveShadow = true;
+    pad.renderOrder = 1;
+    group.add(pad);
     group.position.set(structure.x, 0, structure.y);
     worldRoot.add(group);
     node = {
@@ -4540,28 +4852,25 @@ export function createRenderer(canvas) {
       builtWorldKey = worldKey;
 
       const rebuild = function () { buildTerrain(); };
-      if (!groundTexture) {
-        groundTexture = textureLoader.load('/terrain-ground.png', function () {
+      // 地面细节贴图在本地画布生成，开局不再等待 /terrain-ground.png。
+      // 照片仍可作可选微粒：加载成功就叠一层去饱和颗粒，失败也不挡渲染。
+      const themeId = t.theme || 'grassland';
+      groundTexture = makeProceduralGroundTexture(themeId);
+      groundTexture.repeat.set(map.width / 280, map.height / 280);
+      if (!state._groundPhotoTried) {
+        state._groundPhotoTried = true;
+        textureLoader.load('/terrain-ground.png', function (photo) {
           try {
-            // 洗成干净细节贴图后再上地面；repeat 已在下面按地图尺寸设好，抄过来
-            const cleaned = cleanGroundTexture(groundTexture.image);
-            cleaned.wrapS = cleaned.wrapT = THREE.RepeatWrapping;
-            cleaned.anisotropy = groundTexture.anisotropy;
-            cleaned.repeat.copy(groundTexture.repeat);
-            groundTexture = cleaned;
+            const cleaned = cleanGroundTexture(photo.image);
+            const mixed = mixGroundPhoto(groundTexture, cleaned.image, themeId);
+            mixed.repeat.copy(groundTexture.repeat);
+            groundTexture = mixed;
+            if (state.map) rebuild();
           } catch (err) {
-            // 清洗失败就退回原图，地面照常渲染
-            groundTexture.colorSpace = THREE.SRGBColorSpace;
+            // 照片叠不上就继续用程序化贴图
           }
-          rebuild();
         });
-        groundTexture.wrapS = THREE.RepeatWrapping;
-        groundTexture.wrapT = THREE.RepeatWrapping;
-        groundTexture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-        groundTexture.colorSpace = THREE.SRGBColorSpace;
       }
-      // 重复更密：900 一贴在近景会被拉糊，看起来像低分辨率网格
-      groundTexture.repeat.set(map.width / 420, map.height / 420);
       rebuild();
       return true;
     },
