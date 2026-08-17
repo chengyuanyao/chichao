@@ -207,6 +207,20 @@ def main():
     assert "shadowQuality: 'structures'" in app
     assert "sceneryQuality: 'on'" in app
 
+    # 建筑/单位视觉第二轮：阵营地基、尘土围裙、共享金属/石面着色，不能退回灰方块。
+    assert "function addStructureFoundation(c, kind, s)" in render
+    assert "const MAGIC_STRUCTURE_KINDS = {" in render
+    assert "function makeBuildingPadTexture()" in render
+    assert "尘土围裙略大于新地基" in render
+    assert "指挥中心：矮宽地堡 + 两侧翼楼 + 收束主塔" in render
+    assert "法力塔：两根收束晶柱托一颗中心法力球" in render
+    assert "teamOrOwn4" in render
+    assert "armyTimeUniform" in render
+    assert "躯干走橄榄布甲" in render
+    assert "长袍法师：暗紫袍是固有色" in render
+    assert "步兵有持枪手臂，远看是人不是积木" in render
+    assert "主堡顶是石穹加晶刺，不是叠方块" in render
+
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 
 
