@@ -3711,7 +3711,7 @@ export function createRenderer(canvas) {
     }
     const pad = new THREE.Mesh(buildingPadGeo, buildingPadMat);
     // 尘土围裙略大于新地基，让建筑坐进 #7 的踩实土而不是压住一整块灰板。
-    pad.scale.set(structure.size * 1.12, 1, structure.size * 1.12);
+    pad.scale.set(structure.size * 0.92, 1, structure.size * 0.92);
     pad.position.y = 0.42;
     pad.receiveShadow = true;
     pad.renderOrder = 1;
