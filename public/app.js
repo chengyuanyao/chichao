@@ -1,4 +1,4 @@
-import { createRenderer } from './render3d.js';
+import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
 
 (function () {
   'use strict';
@@ -1014,8 +1014,8 @@ import { createRenderer } from './render3d.js';
   var mapSelectHost = $('#mapSelectHost');
   var mapSelectDropdown = $('#mapSelectDropdown');
   var BUILTIN_MAPS = {
-    north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
-    narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] }
+    north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, theme: 'grassland', spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
+    narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] }
   };
 
   // 地图目录只在大厅和首帧下发，缓存住供整局使用
@@ -1148,7 +1148,7 @@ import { createRenderer } from './render3d.js';
   }
 
   var SETTINGS_KEY = 'steel-front-settings';
-  var settings = { masterVolume: 70, sfxVolume: 80, particleQuality: 'low', fogQuality: 'low', shadowQuality: 'off', bloomQuality: 'off', sceneryQuality: 'off', projectileQuality: 'on' };
+  var settings = { masterVolume: 70, sfxVolume: 80, particleQuality: 'low', fogQuality: 'low', shadowQuality: 'structures', bloomQuality: 'off', sceneryQuality: 'on', projectileQuality: 'on' };
   // 性能模式硬参数
   var PERF_PARTICLE_BUDGET = { low: 60, medium: 150, high: 300 };
   var PERF_FOG_SCALE = { low: 14, medium: 9, high: 6 };
@@ -1156,12 +1156,20 @@ import { createRenderer } from './render3d.js';
     try {
       var saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
       if (saved) { Object.keys(settings).forEach(function (k) { if (saved[k] != null) settings[k] = saved[k]; }); }
+      // 旧默认把场景细节和阴影都关了，战场看起来像一块绿板。只升级一次。
+      if (saved && !saved.mapDisplayV2) {
+        if (settings.sceneryQuality === 'off') settings.sceneryQuality = 'on';
+        if (settings.shadowQuality === 'off') settings.shadowQuality = 'structures';
+        settings.mapDisplayV2 = 1;
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (_) {}
+      }
     } catch (_) {}
     // 2D 版本存的是 on/off；3D 版的阴影档位换成了 off/structures/all
-    if (settings.shadowQuality === 'on') { settings.shadowQuality = 'off'; }
+    if (settings.shadowQuality === 'on') { settings.shadowQuality = 'structures'; }
     if (['off', 'structures', 'all'].indexOf(settings.shadowQuality) < 0) {
-      settings.shadowQuality = 'off';
+      settings.shadowQuality = 'structures';
     }
+    settings.mapDisplayV2 = 1;
     applySettings();
   })();
 
@@ -1848,12 +1856,13 @@ import { createRenderer } from './render3d.js';
     var maps = getMaps();
     var full = (mapConfig.id && maps[mapConfig.id]) || mapConfig;
     var terrain = {
+      theme: full.theme || mapConfig.theme,
       rivers: full.rivers || mapConfig.rivers,
       mountains: full.mountains || mapConfig.mountains,
       roads: full.roads || mapConfig.roads,
       bridges: full.bridges || mapConfig.bridges
     };
-    paintGrassBase(ctx, w, h);
+    paintGrassBase(ctx, w, h, full.theme || mapConfig.theme);
     paintTerrainFeatures(ctx, terrain, sx, sy);
     // 矿脉数据若在目录里也一并点出来；没有就跳过
     var previewResources = full.resources || mapConfig.resources;
@@ -3121,19 +3130,24 @@ import { createRenderer } from './render3d.js';
 
   // 草地基底：整张贴图缩到 200px 只剩噪点，改成基色 + 分块明暗微变化，
   // 缩略图上反而更有“航拍草原”的质感。小地图和大厅地图预览共用。
-  function paintGrassBase(c, w, h) {
-    c.fillStyle = '#4a5d3a';
+  function mapDisplayTheme(themeId) {
+    return MAP_DISPLAY_THEMES[themeId] || MAP_DISPLAY_THEMES.grassland;
+  }
+
+  function paintGrassBase(c, w, h, themeId) {
+    var swatch = mapDisplayTheme(themeId).minimap;
+    c.fillStyle = swatch.base;
     c.fillRect(0, 0, w, h);
     var cell = 6;
     for (var iy = 0; iy * cell < h; iy++) {
       for (var ix = 0; ix * cell < w; ix++) {
         var v = cellHash(ix, iy);
         if (v > 0.94) {
-          c.fillStyle = 'rgba(200,190,120,.10)';           // 零星枯草斑
+          c.fillStyle = swatch.dry;
         } else if (v > 0.62) {
-          c.fillStyle = 'rgba(240,248,214,' + ((v - 0.62) * 0.16).toFixed(3) + ')';
+          c.fillStyle = swatch.light + ((v - 0.62) * 0.16).toFixed(3) + ')';
         } else if (v < 0.3) {
-          c.fillStyle = 'rgba(10,20,8,' + ((0.3 - v) * 0.3).toFixed(3) + ')';
+          c.fillStyle = swatch.dark + ((0.3 - v) * 0.3).toFixed(3) + ')';
         } else {
           continue;
         }
@@ -3149,6 +3163,7 @@ import { createRenderer } from './render3d.js';
     var rivers = terrain.rivers || [];
     var mountains = terrain.mountains || [];
     var bridges = terrain.bridges || [];
+    var swatch = mapDisplayTheme(terrain.theme).minimap;
     var i;
     // 道路垫底：路网是背景信息，河流才是需要抢视线的阻隔
     if (roads.length) {
@@ -3163,7 +3178,7 @@ import { createRenderer } from './render3d.js';
         c.moveTo(rd.x1 * sx, rd.y1 * sy);
         c.lineTo(rd.x2 * sx, rd.y2 * sy);
         c.stroke();
-        c.strokeStyle = '#8a7a55';
+        c.strokeStyle = swatch.road;
         c.lineWidth = Math.max(1.2, rd.width * sx);
         c.beginPath();
         c.moveTo(rd.x1 * sx, rd.y1 * sy);
@@ -3179,7 +3194,7 @@ import { createRenderer } from './render3d.js';
       var my = m.y * sy;
       var mr = Math.max(3, m.r * sx);
       var grad = c.createRadialGradient(mx, my, 1, mx, my, mr);
-      grad.addColorStop(0, '#a89f8a');
+      grad.addColorStop(0, swatch.mountain);
       grad.addColorStop(0.65, 'rgba(59,63,46,.85)');
       grad.addColorStop(1, 'rgba(59,63,46,0)');
       c.fillStyle = grad;
@@ -3254,7 +3269,8 @@ import { createRenderer } from './render3d.js';
     var height = minimap.height;
     // 缓存键要带上地形指纹：换地图但尺寸相同时，静态层必须重画
     var terrain = roomState.game.terrain || {};
-    var key = 'v3_' + map.width + 'x' + map.height +
+    var key = 'v4_' + map.width + 'x' + map.height +
+      '_' + (terrain.theme || '') +
       '_' + ((terrain.rivers || []).length) +
       '_' + ((terrain.mountains || []).length) +
       '_' + ((terrain.roads || []).length);
@@ -3264,7 +3280,7 @@ import { createRenderer } from './render3d.js';
     var c = minimapStaticCtx;
     var sx = width / map.width;
     var sy = height / map.height;
-    paintGrassBase(c, width, height);
+    paintGrassBase(c, width, height, terrain.theme);
     paintTerrainFeatures(c, roomState.game.terrain, sx, sy);
     // 轻暗角 + 1px 内描边：把小地图“装进”金属框，边界不再发虚
     var vg = c.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.45,
@@ -3363,8 +3379,13 @@ import { createRenderer } from './render3d.js';
     var fog = view3d.getFogCanvas();
     if (fog) {
       miniCtx.save();
-      miniCtx.globalAlpha = 0.92;
+      miniCtx.globalAlpha = 0.72;
       miniCtx.drawImage(fog, 0, 0, width, height);
+      miniCtx.restore();
+      // 未探索区仍要能读出山脉和公路，否则雷达就是一块黑盒子
+      miniCtx.save();
+      miniCtx.globalAlpha = 0.42;
+      paintTerrainFeatures(miniCtx, roomState.game.terrain, sx, sy);
       miniCtx.restore();
     }
     var alertNow = performance.now();
