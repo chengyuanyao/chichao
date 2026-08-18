@@ -163,8 +163,13 @@ def main():
     assert catalog["buildings"]["mspring"]["cost"] == server.STRUCTURE_TYPES["repair"]["cost"]
     assert catalog["units"]["golem"]["repairable"] is True
     assert catalog["units"]["dragon"]["repairable"] is True
+    assert catalog["units"]["warden"]["repairable"] is True
+    assert catalog["units"]["colossus"]["repairable"] is True
     assert catalog["units"]["mharvester"]["repairable"] is True
     assert catalog["units"]["mage"]["repairable"] is False
+    assert catalog["units"]["dragon"]["requires"] == ["mspring"]
+    assert catalog["units"]["warden"]["requires"] == ["mspring"]
+    assert catalog["units"]["colossus"]["requires"] == ["mspring"]
 
     assert server.select_lan_ips(
         ["127.0.0.1", "192.168.1.5", "10.18.0.2", "10.0.0.1"]
@@ -220,9 +225,13 @@ def main():
     assert "长袍法师：暗紫袍是固有色" in render
     assert "冰霜女巫：苍蓝袍 + 冰晶头冠" in render
     assert "秘法巨龙：拉长的翼展剪影" in render
+    assert "晶铠卫士：晶体铠甲前排" in render
+    assert "裂地晶兽：水晶攻城炮" in render
     assert "frostRobe:" in render
     assert "look: 'shard'" in render
     assert "look: 'fireball'" in render
+    assert "look: 'meteor'" in render
+    assert "look: 'crystal'" in render
     assert "function emitIdleAura" in render
     assert "步兵有持枪手臂，远看是人不是积木" in render
     assert "主堡顶是石穹加晶刺，不是叠方块" in render

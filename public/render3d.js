@@ -535,6 +535,61 @@ const UNIT_BUILDERS = {
     return { body: body, glow: glow };
   },
 
+  warden: function () {
+    // 晶铠卫士：晶体铠甲前排。盾 + 晶刃，远看是披甲构装而不是第二只岩石傀儡。
+    const body = [
+      taperedBox(11.2, 8.8, 7.6, 6.2, 11.4, 0, 10.4, 0, MAT.slate),
+      taperedBox(8.4, 7.0, 6.2, 5.2, 4.2, 0.6, 16.8, 0, MAT.crystal),
+      taperedBox(4.6, 4.4, 3.0, 2.8, 3.8, 2.4, 20.0, 0, MAT.magicStone),
+      sph(1.7, 6, 3.4, 20.6, 0, MAT.slate),
+      box(3.6, 7.4, 3.6, 1.2, 10.2, 5.6, MAT.crystal),
+      box(3.6, 7.4, 3.6, 1.2, 10.2, -5.6, MAT.crystal),
+      box(3.2, 6.2, 3.4, 0, 3.2, 2.8, MAT.slate),
+      box(3.2, 6.2, 3.4, 0, 3.2, -2.8, MAT.slate),
+      box(1.6, 12.0, 8.4, 2.2, 10.6, 7.8, MAT.crystal),
+      box(0.6, 10.4, 6.6, 3.0, 10.6, 7.8, 0.85),
+      cyl(0.42, 0.55, 16.4, 6, 6.2, 10.4, -3.4, MAT.bronze, ROT_Z90),
+      pyr(1.15, 4.2, 4, 15.4, 10.4, -3.4, MAT.crystal, ROT_Z90)
+    ];
+    return {
+      body: body,
+      glow: [
+        sph(1.55, 7, 4.2, 12.2, 0, MAT.arcaneGlow),
+        sph(0.55, 5, 4.4, 18.4, 0.9, MAT.arcaneGlow),
+        sph(0.55, 5, 4.4, 18.4, -0.9, MAT.arcaneGlow),
+        box(0.45, 8.8, 0.45, 3.2, 10.6, 7.8, MAT.arcaneGlow),
+        sph(0.85, 6, 17.2, 10.4, -3.4, MAT.arcaneGlow)
+      ]
+    };
+  },
+
+  colossus: function () {
+    // 裂地晶兽：水晶攻城炮。矮宽石座上架高仰角晶管，俯视是攻城兽不是大傀儡。
+    const barrel = new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.36);
+    const body = [
+      taperedBox(22, 16, 18, 13, 7.2, -1.2, 8.4, 0, MAT.magicStone),
+      taperedBox(12, 12, 9, 9, 6.4, -4.6, 14.6, 0, MAT.slate),
+      taperedBox(8.4, 8.0, 5.6, 5.2, 4.6, 2.2, 15.2, 0, MAT.crystal),
+      box(6.4, 5.2, 14.0, -12.4, 10.6, 0, MAT.slate),
+      box(4.2, 6.4, 3.4, -14.8, 6.4, 6.4, MAT.magicStone),
+      box(4.2, 6.4, 3.4, -14.8, 6.4, -6.4, MAT.magicStone),
+      cyl(1.7, 2.2, 26, 8, 12.4, 20.2, 0, MAT.crystal, barrel),
+      cyl(2.6, 2.6, 3.4, 8, 24.0, 24.6, 0, MAT.slate, barrel),
+      taperedBox(3.6, 3.6, 1.6, 1.6, 4.2, -6.8, 18.8, 4.2, MAT.crystal),
+      taperedBox(3.6, 3.6, 1.6, 1.6, 4.2, -6.8, 18.8, -4.2, MAT.crystal)
+    ];
+    return {
+      body: body,
+      glow: [
+        sph(2.1, 7, -3.2, 13.2, 0, MAT.arcaneGlow),
+        sph(1.35, 6, 26.4, 25.6, 0, MAT.arcaneGlow),
+        cyl(1.05, 1.05, 0.55, 8, 14.8, 21.2, 0, MAT.frostGlow, barrel),
+        box(12, 0.45, 0.45, -1.4, 5.2, 8.2, MAT.frostGlow),
+        box(12, 0.45, 0.45, -1.4, 5.2, -8.2, MAT.frostGlow)
+      ]
+    };
+  },
+
   mharvester: function () {
     // 浮游晶簇：悬浮底座上托着一簇水晶，底部悬浮光环（无履带，靠浮空）
     const body = [
@@ -1425,6 +1480,7 @@ const UNIT_VISUAL_SCALE = {
   artillery: 1.28, harvester: 1.16, mcv: 1.30, v3: 1.28,
   overlord: 1.30, prism: 1.28,
   mage: 2.15, frost: 2.15, golem: 1.42, panther: 1.7, dragon: 1.34,
+  warden: 1.40, colossus: 1.30,
   mharvester: 1.16, mmcv: 1.30
 };
 
@@ -3554,6 +3610,24 @@ export function createRenderer(canvas) {
         sph(1.6, 6, 26.6, 14.2, 0, MAT.fireGlow)
       ];
     }
+    if (kind === 'warden') {
+      return [
+        taperedBox(11, 8.6, 7.4, 6.0, 11, 0, 10.2, 0, MAT.slate),
+        taperedBox(8.2, 6.8, 6.0, 5.0, 4.0, 0.6, 16.6, 0, MAT.crystal),
+        box(1.6, 11.4, 8.0, 2.2, 10.4, 7.6, MAT.crystal),
+        cyl(0.45, 0.55, 15, 6, 6.0, 10.2, -3.2, MAT.bronze, ROT_Z90),
+        sph(1.5, 6, 4.2, 12.0, 0, MAT.arcaneGlow)
+      ];
+    }
+    if (kind === 'colossus') {
+      return [
+        taperedBox(22, 16, 18, 13, 7.2, -1.2, 8.4, 0, MAT.magicStone),
+        taperedBox(12, 12, 9, 9, 6.2, -4.6, 14.4, 0, MAT.slate),
+        cyl(1.8, 2.2, 26, 7, 12.2, 20.0, 0, MAT.crystal,
+          new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.36)),
+        sph(2.0, 6, -3.2, 13.0, 0, MAT.arcaneGlow)
+      ];
+    }
     if (kind === 'mharvester') {
       return [
         taperedBox(16, 14, 18, 16, 4, 0, 6, 0, MAT.darkSteel),
@@ -3887,7 +3961,11 @@ export function createRenderer(canvas) {
     // 巨石：傀儡投掷，高弧线
     boulder: { len: 20, thick: 2.6, color: 0xb09a7a, arc: 70, look: 'streak' },
     // 火球：巨龙喷吐，橙色高弧 + 光核
-    fireball: { len: 15, thick: 3.1, color: 0xff7a28, arc: 52, look: 'fireball' }
+    fireball: { len: 15, thick: 3.1, color: 0xff7a28, arc: 52, look: 'fireball' },
+    // 晶刃：卫士短促紫晶弹
+    crystal: { len: 20, thick: 1.15, color: 0xe0c4ff, arc: 10, look: 'crystal' },
+    // 晶陨：裂地高弧攻城弹
+    meteor: { len: 22, thick: 2.7, color: 0xc9a0ff, arc: 110, look: 'meteor' }
   };
 
   function ensureStyledMesh(existing, geo, needed) {
@@ -4294,6 +4372,54 @@ export function createRenderer(canvas) {
           life: 10, maxLife: 10, hold: true, r: 0.06, g: 0.03, b: 0.02
         });
         flashAt(x, y, 0xff7a2a);
+      } else if (kind === 'meteor') {
+        burst(fireLayer, 10, function () {
+          const a = rand() * TAU;
+          const sp = 90 + rand() * 160;
+          return {
+            x: x, y: 8, z: y,
+            vx: Math.cos(a) * sp, vy: 50 + rand() * 90, vz: Math.sin(a) * sp,
+            life: 0.32 + rand() * 0.24, maxLife: 0.56,
+            size: 7 + rand() * 6, grow: true,
+            r: 1.7, g: 0.62, b: 2.2
+          };
+        });
+        burst(fireLayer, 6, function () {
+          const a = rand() * TAU;
+          const sp = 140 + rand() * 160;
+          return {
+            x: x, y: 7, z: y,
+            vx: Math.cos(a) * sp, vy: 40 + rand() * 80, vz: Math.sin(a) * sp,
+            life: 0.2 + rand() * 0.16, maxLife: 0.36,
+            size: 3 + rand() * 3,
+            r: 2.1, g: 1.4, b: 2.4
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 12, growth: 88, alpha: 0.68,
+          life: 0.4, maxLife: 0.4, r: 0.85, g: 0.45, b: 1.2
+        });
+        scorchLayer.spawn({
+          x: x, y: y, radius: 26 + rand() * 8, growth: 0, alpha: 0.42,
+          life: 11, maxLife: 11, hold: true, r: 0.08, g: 0.04, b: 0.12
+        });
+        flashAt(x, y, 0xd6a6ff);
+      } else if (kind === 'crystal') {
+        burst(fireLayer, 7, function () {
+          const a = rand() * TAU;
+          const sp = 70 + rand() * 120;
+          return {
+            x: x, y: 6, z: y,
+            vx: Math.cos(a) * sp, vy: 40 + rand() * 70, vz: Math.sin(a) * sp,
+            life: 0.2 + rand() * 0.18, maxLife: 0.38,
+            size: 4 + rand() * 3,
+            r: 1.6, g: 0.7, b: 2.15
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 6, growth: 36, alpha: 0.48,
+          life: 0.24, maxLife: 0.24, r: 0.9, g: 0.5, b: 1.2
+        });
       } else if (kind === 'arcane') {
         burst(fireLayer, 7, function () {
           const a = rand() * TAU;
@@ -4758,6 +4884,20 @@ export function createRenderer(canvas) {
         life: 0.28, maxLife: 0.28, size: 3.4 + Math.random() * 3,
         r: 0.7, g: 1.4, b: 1.9
       });
+    } else if (look === 'crystal') {
+      emit(fireLayer, {
+        x: x, y: height, z: y,
+        vx: (Math.random() - 0.5) * 8, vy: 5 + Math.random() * 8, vz: (Math.random() - 0.5) * 8,
+        life: 0.24, maxLife: 0.24, size: 3.2 + Math.random() * 2.6,
+        r: 1.55, g: 0.7, b: 2.15
+      });
+    } else if (look === 'meteor') {
+      emit(fireLayer, {
+        x: x + (Math.random() - 0.5) * 6, y: height, z: y + (Math.random() - 0.5) * 6,
+        vx: (Math.random() - 0.5) * 14, vy: 6 + Math.random() * 12, vz: (Math.random() - 0.5) * 14,
+        life: 0.26, maxLife: 0.26, size: 5 + Math.random() * 4,
+        r: 1.7, g: 0.65, b: 2.2
+      });
     } else if (look === 'bolt') {
       emit(fireLayer, {
         x: x, y: height, z: y,
@@ -4778,9 +4918,11 @@ export function createRenderer(canvas) {
   function emitIdleAura(vis, dt, useSimple) {
     if (useSimple) return;
     const kind = vis.unit.kind;
-    if (kind !== 'frost' && kind !== 'dragon' && kind !== 'mage') return;
+    if (kind !== 'frost' && kind !== 'dragon' && kind !== 'mage'
+        && kind !== 'warden' && kind !== 'colossus') return;
     if (fireLayer.list.length > state.particleBudget * 0.5) return;
-    const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6 : 3.5;
+    const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6
+      : kind === 'colossus' ? 5 : kind === 'warden' ? 4 : 3.5;
     if (Math.random() > dt * rate) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
     const scale = UNIT_VISUAL_SCALE[kind] || 1;
@@ -4803,6 +4945,24 @@ export function createRenderer(canvas) {
         vz: Math.sin(vis.dir) * 16 + (Math.random() - 0.5) * 8,
         life: 0.28, maxLife: 0.28, size: 5 + Math.random() * 4,
         r: 2.2, g: 1.0, b: 0.28
+      });
+    } else if (kind === 'colossus') {
+      emit(fireLayer, {
+        x: vis.x + (Math.random() - 0.5) * 16,
+        y: gy + 8 + Math.random() * 10,
+        z: vis.y + (Math.random() - 0.5) * 16,
+        vx: (Math.random() - 0.5) * 6, vy: 10 + Math.random() * 8, vz: (Math.random() - 0.5) * 6,
+        life: 0.4, maxLife: 0.4, size: 3.6 + Math.random() * 3,
+        r: 1.55, g: 0.62, b: 2.15
+      });
+    } else if (kind === 'warden') {
+      emit(fireLayer, {
+        x: vis.x + (Math.random() - 0.5) * 8,
+        y: gy + 10 + Math.random() * 8,
+        z: vis.y + (Math.random() - 0.5) * 8,
+        vx: 0, vy: 11, vz: 0,
+        life: 0.36, maxLife: 0.36, size: 3.0,
+        r: 1.4, g: 0.7, b: 2.05
       });
     } else {
       emit(fireLayer, {
@@ -5126,6 +5286,18 @@ export function createRenderer(canvas) {
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len, style.thick * 0.7, style.thick * 0.7, style.color);
           writeTracer(shards, shardCount++, p.x, height + 1.4, p.y, yaw + 0.35, 6.2, 1.3, 1.3, 0x9fe8ff);
+        } else if (look === 'crystal') {
+          writeTracer(shards, shardCount++, p.x, height, p.y, yaw, 9.2, 2.0, 2.0, 0xf0d8ff);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick * 0.7, style.thick * 0.7, style.color);
+          writeTracer(shards, shardCount++, p.x, height + 1.2, p.y, yaw + 0.32, 6.0, 1.25, 1.25, 0xb46bff);
+        } else if (look === 'meteor') {
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 3.6, 3.6, 3.6, 0xe8d0ff);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(shards, shardCount++, p.x, height + 1.6, p.y, yaw, 8.4, 2.4, 2.4, 0xd6a6ff);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len * 1.45, style.thick * 0.42, style.thick * 0.42, 0xf2e6ff);
         } else if (look === 'bolt') {
           writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 2.15, 2.15, 2.15, 0xf0d0ff);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
