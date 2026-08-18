@@ -30,7 +30,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     rifle: { icon: '♟', desc: '灵活的基础步兵' },
     rocket: { icon: '↟', desc: '远程反装甲单位，克重甲' },
     sniper: { icon: '⌖', desc: '超远狙杀步兵，无力反甲' },
-    dog: { icon: '♞', desc: '全场最速近战，扑咬步兵与法师，对载具/建筑无效' },
+    dog: { icon: '♞', desc: '全场最速近战，扑咬步兵与法师，对载具/建筑/巨龙无效' },
     tank: { icon: '▰', desc: '主力装甲单位，克建筑' },
     scout: { icon: '◆', desc: '高速侦察战车' },
     artillery: { icon: '◉', desc: '极远溅射，克建筑/重甲' },

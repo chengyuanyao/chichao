@@ -395,7 +395,8 @@ DAMAGE_MULTIPLIER = {
     "tesla":   {"infantry": 0.80, "light": 1.40, "heavy": 1.30, "structure": 0.50, "arcane": 2.00},
     # 光棱坦克的聚焦光束：精准点杀伤，克轻型与建筑，打不动重甲与人群；也能切开魔导护甲
     "laser":   {"infantry": 0.45, "light": 1.50, "heavy": 0.85, "structure": 1.70, "arcane": 1.50},
-    # 军犬扑咬：一口一个步兵，对装甲和建筑完全无从下口（×0）；法师一样是肉
+    # 军犬扑咬：一口一个步兵，对装甲和建筑完全无从下口（×0）；法师一样是肉。
+    # 秘法巨龙甲种仍是 arcane，但算载具：apply_damage 里 bite 对 VEHICLE_KINDS 再乘 ×0。
     "bite":    {"infantry": 4.00, "light": 0.00, "heavy": 0.00, "structure": 0.00, "arcane": 1.50},
     # 奥术魔法：无视钢铁装甲熔重甲（法师是反坦克答案），但法术拆不动建筑
     "magic":   {"infantry": 1.20, "light": 1.30, "heavy": 1.60, "structure": 0.60, "arcane": 1.00},
@@ -2557,8 +2558,9 @@ def nearest_enemy_structure(game, owner, x, y, max_distance, spatial_index=None)
     return best
 
 
-# 军犬自动索敌：步兵甲 + 魔导甲。bite 对载具/建筑是 ×0，追上去白送；
-# 法师/女巫是 arcane，点选能咬但旧扫描只认 infantry，会从法师身边走过。
+# 军犬自动索敌：步兵甲 + 魔导甲，但载具除外。bite 对载具/建筑是 ×0，追上去白送；
+# 法师/女巫是 arcane 且不是载具，点选能咬但旧扫描只认 infantry，会从法师身边走过。
+# 秘法巨龙甲种也是 arcane，可它在 VEHICLE_KINDS，不当猎物、咬也不掉血。
 # 混甲构装（heavy/light）整件都不是猎物，军犬不会去扑晶铠/裂地晶兽。
 DOG_PREY_ARMOR = frozenset(("infantry", "arcane"))
 
@@ -2585,13 +2587,17 @@ def damage_armor_multiplier(damage_type, armor):
 
 
 def is_dog_prey(kind):
+    """步兵/魔导肉身才是猎物。载具（含秘法巨龙、构装）咬不动，不进索敌表。"""
+    if kind in VEHICLE_KINDS:
+        return False
     pieces = iter_armor(UNIT_TYPES.get(kind, {}).get("armor"))
     return bool(pieces) and all(piece in DOG_PREY_ARMOR for piece in pieces)
 
 
 def nearest_enemy_infantry(game, owner, x, y, max_distance, spatial_index=None):
-    """军犬专用：只扑步兵与魔导。克制表里 bite 对载具/建筑全是 ×0，追上去也是白送，
-    所以自动索敌时看装甲为 infantry 或 arcane 的敌方单位（步兵、军犬、法师、女巫等）。"""
+    """军犬专用：只扑步兵与魔导肉身。克制表里 bite 对载具/建筑全是 ×0，追上去也是白送，
+    所以自动索敌时看装甲为 infantry 或 arcane、且不是载具的敌方单位
+    （步兵、军犬、法师、女巫等；不含秘法巨龙）。"""
     best = None
     best_dist_sq = max_distance * max_distance
     candidates = (spatial_candidates(
@@ -2653,7 +2659,11 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
         elif target["id"].startswith("s"):
             target_def = STRUCTURE_TYPES.get(target.get("kind", ""), {})
         armor = target_def.get("armor", "structure") if target_def else "structure"
-        applied *= damage_armor_multiplier(damage_type, armor)
+        # 扑咬对载具（含秘法巨龙）是 ×0。巨龙甲种仍是 arcane，不走这层会被当成法师咬。
+        if damage_type == "bite" and target.get("kind") in VEHICLE_KINDS:
+            applied = 0.0
+        else:
+            applied *= damage_armor_multiplier(damage_type, armor)
     target["hp"] -= applied
     if target["id"].startswith("s") and not target.get("active", True):
         target["constructionDamage"] = target.get("constructionDamage", 0.0) + applied
@@ -3035,7 +3045,7 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                         combat_spatial)
                     if building:
                         target = building
-                # 军犬只扑步兵：对载具/建筑零伤害，追上去等于送死。
+                # 军犬只扑步兵/法师：对载具/建筑/巨龙零伤害，追上去等于送死。
                 # 覆盖自动索敌结果；玩家手点的目标（上面 find_entity）不受影响。
                 if unit["kind"] == "dog":
                     target = nearest_enemy_infantry(
