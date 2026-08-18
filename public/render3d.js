@@ -193,8 +193,8 @@ const MAT = {
   marble: [0.50, 0.48, 0.54],       // 浅色石面
   bronze: [0.46, 0.30, 0.16],       // 符文铜饰
   robe: [0.22, 0.16, 0.32],         // 法师袍（不跟团队色走）
-  frostRobe: [0.46, 0.60, 0.72],    // 冰霜袍：苍蓝灰，远看和法师暗紫分开
-  iceShard: [0.68, 0.86, 0.98],     // 不发光的冰棱
+  frostRobe: [0.50, 0.72, 0.88],    // 冰霜袍：偏饱和苍蓝，远看和法师暗紫分开
+  iceShard: [0.74, 0.90, 1.02],     // 冰棱（略亮，软件 GL 上也认得出来）
   dragonScale: [0.20, 0.28, 0.16],  // 更深的背鳞
   dragonBelly: [0.50, 0.36, 0.20],  // 暖色腹甲
   wingMembrane: [0.16, 0.12, 0.22], // 翼膜
@@ -406,16 +406,16 @@ const UNIT_BUILDERS = {
     const tipSide = new THREE.Matrix4().makeRotationX(1.15).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
     const body = [
       taperedBox(9.2, 9.2, 3.6, 3.6, 11.2, 0, 6.2, 0, MAT.frostRobe),
-      cyl(4.9, 5.3, 0.55, 10, 0, 1.05, 0, MAT.iceShard),      // 袍摆冻边
+      cyl(4.9, 5.3, 0.7, 10, 0, 1.05, 0, MAT.iceShard),       // 袍摆冻边
       box(4.0, 1.5, 7.2, 0, 12.1, 0, 0.72),                   // 肩饰（团队色）
-      box(2.4, 1.5, 3.6, 0.5, 12.9, 3.3, MAT.iceShard),       // 冰肩甲
-      box(2.4, 1.5, 3.6, 0.5, 12.9, -3.3, MAT.iceShard),
+      box(3.0, 1.8, 4.0, 0.5, 13.0, 3.5, MAT.iceShard),       // 冰肩甲
+      box(3.0, 1.8, 4.0, 0.5, 13.0, -3.5, MAT.iceShard),
       sph(2.35, 8, 0, 14.4, 0, [0.84, 0.92, 0.98]),           // 苍白面
-      taperedBox(3.8, 3.8, 0.7, 0.7, 2.6, 0, 16.2, 0, MAT.frostRobe),
-      pyr(0.72, 3.5, 4, 0, 17.7, 0, MAT.iceShard),            // 三枚冰晶头冠
-      pyr(0.55, 2.7, 4, 0.35, 17.1, 1.45, MAT.iceShard),
-      pyr(0.55, 2.7, 4, 0.35, 17.1, -1.45, MAT.iceShard),
-      cyl(0.28, 0.40, 15.2, 6, 5.8, 8.8, 2.8, MAT.iceShard, ROT_Z90),
+      taperedBox(4.0, 4.0, 0.8, 0.8, 2.8, 0, 16.3, 0, MAT.frostRobe),
+      pyr(1.05, 4.4, 4, 0, 18.2, 0, MAT.iceShard),            // 三枚冰晶头冠
+      pyr(0.78, 3.4, 4, 0.4, 17.5, 1.7, MAT.iceShard),
+      pyr(0.78, 3.4, 4, 0.4, 17.5, -1.7, MAT.iceShard),
+      cyl(0.34, 0.48, 15.2, 6, 5.8, 8.8, 2.8, MAT.iceShard, ROT_Z90),
       box(2.0, 2.0, 4.6, 1.0, 10.8, 4.0, MAT.frostRobe),
       box(2.0, 2.0, 4.6, 1.0, 10.8, -3.2, MAT.frostRobe),
       box(4.4, 1.5, 1.5, 3.8, 8.6, 2.8, MAT.frostRobe)
@@ -423,11 +423,11 @@ const UNIT_BUILDERS = {
     return {
       body: body,
       glow: [
-        sph(1.85, 8, 13.4, 8.8, 2.8, MAT.frostGlow),          // 杖头寒球
-        pyr(0.95, 3.1, 4, 13.4, 11.1, 2.8, MAT.frostGlow),
-        pyr(0.75, 2.3, 4, 13.4, 6.8, 2.8, MAT.frostGlow, tipDn),
-        pyr(0.62, 2.0, 4, 13.4, 8.8, 4.5, MAT.frostGlow, tipSide),
-        sph(0.5, 5, 0, 19.6, 0, MAT.frostGlow),               // 冠尖
+        sph(2.15, 8, 13.6, 8.8, 2.8, MAT.frostGlow),          // 杖头寒球
+        pyr(1.15, 3.6, 4, 13.6, 11.4, 2.8, MAT.frostGlow),
+        pyr(0.88, 2.6, 4, 13.6, 6.6, 2.8, MAT.frostGlow, tipDn),
+        pyr(0.74, 2.3, 4, 13.6, 8.8, 4.7, MAT.frostGlow, tipSide),
+        sph(0.65, 5, 0, 20.4, 0, MAT.frostGlow),              // 冠尖
         cyl(3.5, 3.5, 0.26, 12, 0, 1.18, 0, MAT.frostGlow),   // 脚下霜环
         sph(0.42, 5, 2.4, 3.1, 2.8, MAT.frostGlow),
         sph(0.36, 5, -1.8, 3.5, -2.6, MAT.frostGlow)
@@ -525,12 +525,12 @@ const UNIT_BUILDERS = {
       sph(1.05, 6, 2.2, 7.1, 0, MAT.arcaneGlow)
     ];
     [1, -1].forEach(function (side) {
-      body.push(boxOrient(16, 1.0, 1.35, -1.2, 13.5, side * 11.2, MAT.dragonScale, side * 0.18, side * 0.58, 0.22));
-      body.push(boxOrient(14, 0.8, 1.05, -8.4, 14.8, side * 20.2, MAT.dragonScale, side * 0.28, side * 0.92, 0.12));
-      body.push(boxOrient(10, 0.5, 0.7, -4.2, 13.1, side * 16.0, MAT.dragonScale, side * 0.08, side * 0.70, -0.04));
-      body.push(boxOrient(19, 0.22, 13.2, -3.0, 13.3, side * 14.6, MAT.wingMembrane, side * 0.20, side * 0.52, 0.10));
-      body.push(boxOrient(12, 0.18, 10.0, -10.2, 14.2, side * 21.4, MAT.wingMembrane, side * 0.26, side * 0.86, 0.06));
-      glow.push(boxOrient(13, 0.12, 0.34, -1.6, 13.7, side * 13.4, MAT.fireGlow, side * 0.20, side * 0.52, 0.10));
+      body.push(boxOrient(18, 1.05, 1.45, -1.6, 13.6, side * 12.4, MAT.dragonScale, side * 0.16, side * 0.52, 0.18));
+      body.push(boxOrient(16, 0.85, 1.15, -9.2, 15.0, side * 22.4, MAT.dragonScale, side * 0.24, side * 0.88, 0.10));
+      body.push(boxOrient(11, 0.55, 0.75, -4.6, 13.2, side * 17.2, MAT.dragonScale, side * 0.08, side * 0.66, -0.04));
+      body.push(boxOrient(22, 0.22, 15.0, -3.4, 13.4, side * 16.0, MAT.wingMembrane, side * 0.18, side * 0.48, 0.08));
+      body.push(boxOrient(14, 0.18, 11.4, -11.0, 14.4, side * 23.6, MAT.wingMembrane, side * 0.24, side * 0.82, 0.05));
+      glow.push(boxOrient(15, 0.14, 0.4, -2.0, 13.8, side * 14.6, MAT.fireGlow, side * 0.18, side * 0.48, 0.08));
     });
     return { body: body, glow: glow };
   },
@@ -3548,8 +3548,8 @@ export function createRenderer(canvas) {
         taperedBox(28, 11, 20, 8, 7.2, -2, 8.2, 0, MAT.scaleHide),
         taperedBox(7, 4, 5, 3, 4, 12.2, 12.0, 0, MAT.scaleHide),
         taperedBox(6.2, 4.2, 4.8, 3.0, 3.4, 20.4, 14.6, 0, MAT.scaleHide),
-        boxOrient(20, 0.28, 14, -2.4, 13.4, 14.2, MAT.wingMembrane, 0.20, 0.52, 0.10),
-        boxOrient(20, 0.28, 14, -2.4, 13.4, -14.2, MAT.wingMembrane, -0.20, -0.52, 0.10),
+        boxOrient(22, 0.28, 15.4, -2.8, 13.4, 16.0, MAT.wingMembrane, 0.18, 0.48, 0.08),
+        boxOrient(22, 0.28, 15.4, -2.8, 13.4, -16.0, MAT.wingMembrane, -0.18, -0.48, 0.08),
         taperedBox(10, 2.2, 5, 1.1, 2.0, -18.4, 7.5, 0, MAT.scaleHide),
         sph(1.6, 6, 26.6, 14.2, 0, MAT.fireGlow)
       ];
@@ -3852,10 +3852,17 @@ export function createRenderer(canvas) {
 
   /* -------------------- 弹道与特效 -------------------- */
 
-  const tracerGeo = new THREE.CylinderGeometry(0.9, 0.9, 1, 6).rotateZ(Math.PI / 2);
-  const tracerOrbGeo = new THREE.SphereGeometry(1, 8, 6);
-  const tracerShardGeo = new THREE.CylinderGeometry(0.04, 1.05, 1, 4).rotateZ(Math.PI / 2);
-  const tracerMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false });
+  function paintGeoWhite(geo) {
+    const n = geo.attributes.position.count;
+    const col = new Float32Array(n * 3);
+    col.fill(1);
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return geo;
+  }
+  const tracerGeo = paintGeoWhite(new THREE.CylinderGeometry(0.9, 0.9, 1, 6).rotateZ(Math.PI / 2));
+  const tracerOrbGeo = paintGeoWhite(new THREE.SphereGeometry(1, 8, 6));
+  const tracerShardGeo = paintGeoWhite(new THREE.CylinderGeometry(0.04, 1.05, 1, 4).rotateZ(Math.PI / 2));
+  const tracerMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, toneMapped: false });
   let tracerMesh = null;
   let tracerOrbMesh = null;
   let tracerShardMesh = null;
