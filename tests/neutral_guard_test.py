@@ -136,11 +136,18 @@ def check_leash(room):
         server.NEUTRAL_GUARD_POST_RADIUS
 
 
+def expected_public_camps(map_def):
+    bonus = sum(1 for resource in map_def.get("bonusResources") or ()
+                if resource.get("public", True))
+    return int(map_def.get("publicOreCount", 4)) + bonus
+
+
 def check_all_maps_spawn_camps():
     for index, map_id in enumerate(server.MAPS):
+        map_def = server.MAPS[map_id]
         room, _alpha = make_room(map_id, 7400 + index)
         game = room["game"]
-        assert len(game["neutralCamps"]) == 4, map_id
+        assert len(game["neutralCamps"]) == expected_public_camps(map_def), map_id
         for camp in game["neutralCamps"]:
             guards = camp_entities(game, camp)
             assert any(entity["id"].startswith("s") for entity in guards), map_id
