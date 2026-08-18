@@ -777,25 +777,28 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       pCirc(c, 48, 30, 5.5, P_OUT);
       pCirc(c, 46, 29.5, 1, P_ARCANE);
       pCirc(c, 50, 29.5, 1, P_ARCANE);
-      // 前举法杖 + 杖顶奥术法球
+      // 前举法杖 + 杖顶奥术法球 + 一缕紫光
       pLine(c, 60, 56, 70, 20, 2.6, P_DARK);
-      pCirc(c, 70, 18, 3.4, P_ARCANE);
+      pCirc(c, 70, 18, 3.6, P_ARCANE);
       pCirc(c, 70, 18, 1.6, '#f2e6ff');
+      pLine(c, 74, 16, 90, 12, 1.6, P_ARCANE);
     },
     frost: function (c) {
       pShadow(c, 48, 60, 20);
-      // 冰蓝长袍 + 苍白面容
-      pPoly(c, [[34, 60], [62, 60], [55, 30], [41, 30]], '#46586f');
-      pPoly(c, [[62, 60], [50, 60], [50, 30], [55, 30]], 'rgba(10,10,6,.28)');
+      // 苍蓝长袍 + 冻边 + 苍白面容
+      pPoly(c, [[34, 60], [62, 60], [55, 30], [41, 30]], '#6d8aa0');
+      pPoly(c, [[62, 60], [50, 60], [50, 30], [55, 30]], 'rgba(10,10,6,.22)');
+      pPoly(c, [[33, 60], [63, 60], [60, 54], [36, 54]], P_FROST);
       pCirc(c, 48, 30, 6, '#e9f3fb');
       // 冰晶头冠：三枚冰棱
       pPoly(c, [[42, 27], [44.5, 16], [47, 26]], P_FROST);
       pPoly(c, [[46, 26], [48, 13], [50, 26]], '#d6efff');
       pPoly(c, [[49, 26], [51.5, 16], [54, 27]], P_FROST);
-      // 冰霜法杖 + 杖顶冰晶
-      pLine(c, 60, 56, 70, 20, 2.6, P_DARK);
-      pPoly(c, [[70, 12], [73, 18], [70, 24], [67, 18]], P_FROST);
-      pCirc(c, 70, 18, 1.4, '#ffffff');
+      // 冰霜法杖 + 杖顶寒晶簇
+      pLine(c, 60, 56, 70, 20, 2.4, P_FROST);
+      pPoly(c, [[70, 10], [74, 18], [70, 26], [66, 18]], P_FROST);
+      pPoly(c, [[70, 8], [72, 15], [70, 16], [68, 15]], '#ffffff');
+      pCirc(c, 70, 18, 1.6, '#ffffff');
     },
     golem: function (c) {
       pShadow(c, 48, 61, 30);
@@ -830,22 +833,23 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     },
     dragon: function (c) {
       pShadow(c, 50, 61, 30);
-      // 长尾 + 躯干 + 腿
-      pLine(c, 28, 46, 10, 52, 3.5, '#31402a');
-      pPoly(c, [[24, 52], [62, 52], [58, 38], [30, 38]], '#3a4a2c');
-      pPoly(c, [[62, 52], [48, 52], [48, 38], [58, 38]], 'rgba(10,10,6,.25)');
-      pRect(c, 34, 50, 3.4, 11, '#31402a');
-      pRect(c, 52, 50, 3.4, 11, '#31402a');
-      // 后掠双翼
-      pPoly(c, [[34, 40], [50, 12], [56, 38]], '#46582f');
-      pPoly(c, [[40, 40], [60, 18], [58, 40]], '#2c3823');
+      // 长尾 + 扁长躯干 + 腿，俯视一眼是龙
+      pLine(c, 30, 48, 6, 54, 3.2, '#31402a');
+      pPoly(c, [[22, 52], [64, 50], [62, 38], [28, 40]], '#3a4a2c');
+      pPoly(c, [[64, 50], [48, 50], [48, 38], [62, 38]], 'rgba(10,10,6,.25)');
+      pRect(c, 32, 50, 3.2, 10, '#31402a');
+      pRect(c, 50, 49, 3.2, 11, '#31402a');
+      // 大后掠双翼
+      pPoly(c, [[28, 40], [46, 6], [58, 38]], '#46582f');
+      pPoly(c, [[36, 40], [68, 10], [62, 40]], '#2c3823');
+      pPoly(c, [[40, 38], [72, 20], [60, 40]], '#1e2618');
       // 长颈 + 头 + 水晶角
-      pLine(c, 58, 40, 72, 24, 5, '#3a4a2c');
-      pPoly(c, [[68, 26], [82, 22], [84, 27], [70, 30]], '#3a4a2c');
-      pPoly(c, [[70, 24], [73, 14], [75, 23]], P_CRYSTAL);
+      pLine(c, 60, 40, 76, 22, 5.2, '#3a4a2c');
+      pPoly(c, [[72, 24], [88, 18], [90, 25], [74, 30]], '#3a4a2c');
+      pPoly(c, [[74, 22], [77, 10], [80, 21]], P_CRYSTAL);
       // 口中龙火 + 眼
-      pPoly(c, [[84, 24], [94, 21], [86, 28]], P_FIRE);
-      pCirc(c, 76, 24, 1.5, '#ffd9a0');
+      pPoly(c, [[90, 20], [102, 16], [92, 27]], P_FIRE);
+      pCirc(c, 80, 22, 1.6, '#ffd9a0');
     },
     mharvester: function (c) {
       pShadow(c, 48, 60, 26);
@@ -4322,7 +4326,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
         terrain: roomState.game.terrain
       } : null;
     },
-    boom: function (type, x, y) { view3d.debugEffect(type || 'explosion', x, y); },
+    boom: function (type, x, y, kind) { view3d.debugEffect(type || 'explosion', x, y, kind); },
     cameraPos: function () { return { x: camera.x, y: camera.y, zoom: camera.zoom }; }
   };
 

@@ -218,6 +218,12 @@ def main():
     assert "armyTimeUniform" in render
     assert "躯干走橄榄布甲" in render
     assert "长袍法师：暗紫袍是固有色" in render
+    assert "冰霜女巫：苍蓝袍 + 冰晶头冠" in render
+    assert "秘法巨龙：拉长的翼展剪影" in render
+    assert "frostRobe:" in render
+    assert "look: 'shard'" in render
+    assert "look: 'fireball'" in render
+    assert "function emitIdleAura" in render
     assert "步兵有持枪手臂，远看是人不是积木" in render
     assert "主堡顶是石穹加晶刺，不是叠方块" in render
 
