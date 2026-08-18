@@ -144,6 +144,21 @@ function sph(r, seg, x, y, z, paint) {
   }, tint(paint));
 }
 
+/** 多轴旋转的方块：龙翼、冰棱这类斜置零件用，避免再叠一层 Group。 */
+function boxOrient(w, h, d, x, y, z, paint, rx, ry, rz) {
+  const m = new THREE.Matrix4();
+  if (rx) m.multiply(new THREE.Matrix4().makeRotationX(rx));
+  if (ry) m.multiply(new THREE.Matrix4().makeRotationY(ry));
+  if (rz) m.multiply(new THREE.Matrix4().makeRotationZ(rz));
+  m.setPosition(x, y, z);
+  return Object.assign({ geo: new THREE.BoxGeometry(w, h, d), matrix: m }, tint(paint));
+}
+
+/** 尖锥（冰棱 / 龙脊 / 喷火锥），默认沿 +Y；需要横置时传入 rot。 */
+function pyr(r, h, seg, x, y, z, paint, rot) {
+  return cyl(0.04, r, h, seg || 4, x, y, z, paint, rot);
+}
+
 /**
  * 军械配色表。零件按材质分色而不是统统跟着团队色走 ——
  * 履带是橡胶黑、炮管是枪铁灰、地基是混凝土，团队色只留给装甲板与灯带，
@@ -178,11 +193,16 @@ const MAT = {
   marble: [0.50, 0.48, 0.54],       // 浅色石面
   bronze: [0.46, 0.30, 0.16],       // 符文铜饰
   robe: [0.22, 0.16, 0.32],         // 法师袍（不跟团队色走）
+  frostRobe: [0.50, 0.72, 0.88],    // 冰霜袍：偏饱和苍蓝，远看和法师暗紫分开
+  iceShard: [0.74, 0.90, 1.02],     // 冰棱（略亮，软件 GL 上也认得出来）
+  dragonScale: [0.20, 0.28, 0.16],  // 更深的背鳞
+  dragonBelly: [0.50, 0.36, 0.20],  // 暖色腹甲
+  wingMembrane: [0.16, 0.12, 0.22], // 翼膜
   cloth: [0.20, 0.22, 0.18],        // 步兵布甲
   sandbag: [0.40, 0.34, 0.22],      // 沙袋/夯土
   canvas: [0.38, 0.30, 0.18],       // 帐篷布 / 旗帜衬
   arcaneGlow: [1.55, 0.72, 2.35],   // 奥术紫（略压，避免辉光洗成白团）
-  frostGlow: [1.05, 1.85, 2.35],    // 冰霜蓝
+  frostGlow: [1.15, 1.95, 2.45],    // 冰霜蓝
   fireGlow: [2.45, 1.15, 0.42],     // 龙火橙
   // 自发光（分量 > 1）
   exhaust: [2.4, 0.95, 0.28],
@@ -364,6 +384,7 @@ const UNIT_BUILDERS = {
       taperedBox(3.6, 3.6, 0.8, 0.8, 3.6, 0, 16.6, 0, MAT.robe),
       box(4.0, 0.5, 4.0, 0, 15.2, 0, 0.75),                   // 帽沿
       cyl(0.45, 0.45, 14.0, 6, 5.4, 8.4, 2.8, MAT.bronze, ROT_Z90),
+      cyl(0.72, 0.72, 0.45, 8, 8.4, 8.4, 2.8, MAT.bronze, ROT_Z90),
       box(2.0, 2.0, 4.6, 1.0, 10.8, 4.2, MAT.robe),           // 左袖
       box(2.0, 2.0, 4.6, 1.0, 10.8, -3.4, MAT.robe),          // 右袖
       box(4.4, 1.6, 1.6, 3.8, 8.6, 2.8, MAT.robe)             // 持杖前臂
@@ -371,7 +392,8 @@ const UNIT_BUILDERS = {
     return {
       body: body,
       glow: [
-        sph(1.8, 7, 12.0, 8.4, 2.8, MAT.arcaneGlow),
+        sph(2.05, 8, 12.3, 8.4, 2.8, MAT.arcaneGlow),
+        sph(0.65, 5, 10.4, 8.4, 2.8, MAT.arcaneGlow),
         box(2.4, 0.55, 0.55, 0, 13.0, 0, MAT.arcaneGlow),
         cyl(3.2, 3.2, 0.35, 10, 0, 1.2, 0, MAT.arcaneGlow)    // 脚下符环
       ]
@@ -379,25 +401,36 @@ const UNIT_BUILDERS = {
   },
 
   frost: function () {
-    // 冰霜女巫：冰蓝袍 + 冰晶头冠，杖顶寒球比法师更细长
+    // 冰霜女巫：苍蓝袍 + 冰晶头冠，杖顶寒晶簇，脚下霜环
+    const tipDn = new THREE.Matrix4().makeRotationZ(0.85);
+    const tipSide = new THREE.Matrix4().makeRotationX(1.15).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
     const body = [
-      taperedBox(9.0, 9.0, 3.8, 3.8, 11.0, 0, 6.2, 0, MAT.robe),
-      box(3.8, 1.6, 7.0, 0, 12.0, 0, 0.85),
-      sph(2.4, 8, 0, 14.4, 0, MAT.sandArmor),
-      box(0.55, 2.2, 0.55, 0, 16.8, 1.3, MAT.crystal),
-      box(0.55, 2.8, 0.55, 0, 17.2, 0, MAT.crystal),
-      box(0.55, 2.2, 0.55, 0, 16.8, -1.3, MAT.crystal),
-      cyl(0.38, 0.38, 14.0, 6, 5.4, 8.6, 2.8, MAT.gunmetal, ROT_Z90),
-      box(2.0, 2.0, 4.4, 1.0, 10.8, 4.0, MAT.robe),
-      box(2.0, 2.0, 4.4, 1.0, 10.8, -3.2, MAT.robe),
-      box(4.2, 1.5, 1.5, 3.6, 8.6, 2.8, MAT.robe)
+      taperedBox(9.2, 9.2, 3.6, 3.6, 11.2, 0, 6.2, 0, MAT.frostRobe),
+      cyl(4.9, 5.3, 0.7, 10, 0, 1.05, 0, MAT.iceShard),       // 袍摆冻边
+      box(4.0, 1.5, 7.2, 0, 12.1, 0, 0.72),                   // 肩饰（团队色）
+      box(3.0, 1.8, 4.0, 0.5, 13.0, 3.5, MAT.iceShard),       // 冰肩甲
+      box(3.0, 1.8, 4.0, 0.5, 13.0, -3.5, MAT.iceShard),
+      sph(2.35, 8, 0, 14.4, 0, [0.84, 0.92, 0.98]),           // 苍白面
+      taperedBox(4.0, 4.0, 0.8, 0.8, 2.8, 0, 16.3, 0, MAT.frostRobe),
+      pyr(1.05, 4.4, 4, 0, 18.2, 0, MAT.iceShard),            // 三枚冰晶头冠
+      pyr(0.78, 3.4, 4, 0.4, 17.5, 1.7, MAT.iceShard),
+      pyr(0.78, 3.4, 4, 0.4, 17.5, -1.7, MAT.iceShard),
+      cyl(0.34, 0.48, 15.2, 6, 5.8, 8.8, 2.8, MAT.iceShard, ROT_Z90),
+      box(2.0, 2.0, 4.6, 1.0, 10.8, 4.0, MAT.frostRobe),
+      box(2.0, 2.0, 4.6, 1.0, 10.8, -3.2, MAT.frostRobe),
+      box(4.4, 1.5, 1.5, 3.8, 8.6, 2.8, MAT.frostRobe)
     ];
     return {
       body: body,
       glow: [
-        sph(1.7, 7, 12.0, 8.6, 2.8, MAT.frostGlow),
-        sph(0.7, 5, 0, 18.8, 0, MAT.frostGlow),
-        cyl(3.0, 3.0, 0.3, 10, 0, 1.2, 0, MAT.frostGlow)
+        sph(2.15, 8, 13.6, 8.8, 2.8, MAT.frostGlow),          // 杖头寒球
+        pyr(1.15, 3.6, 4, 13.6, 11.4, 2.8, MAT.frostGlow),
+        pyr(0.88, 2.6, 4, 13.6, 6.6, 2.8, MAT.frostGlow, tipDn),
+        pyr(0.74, 2.3, 4, 13.6, 8.8, 4.7, MAT.frostGlow, tipSide),
+        sph(0.65, 5, 0, 20.4, 0, MAT.frostGlow),              // 冠尖
+        cyl(3.5, 3.5, 0.26, 12, 0, 1.18, 0, MAT.frostGlow),   // 脚下霜环
+        sph(0.42, 5, 2.4, 3.1, 2.8, MAT.frostGlow),
+        sph(0.36, 5, -1.8, 3.5, -2.6, MAT.frostGlow)
       ]
     };
   },
@@ -455,31 +488,51 @@ const UNIT_BUILDERS = {
   },
 
   dragon: function () {
-    // 秘法巨龙：长颈 + 后掠双翼 + 粗尾，口中衔一团龙火
+    // 秘法巨龙：拉长的翼展剪影，RTS 俯视角一眼是龙而不是大傀儡
     const body = [
-      taperedBox(20, 12, 16, 9, 9, -1, 9, 0, MAT.scaleHide),  // 主躯干
-      box(8, 4.5, 4.5, 10, 13, 0, MAT.scaleHide),             // 长颈
-      box(6, 4, 4, 15, 15, 0, MAT.scaleHide),                 // 头颅
-      box(3, 2, 2.4, 18.4, 14.4, 0, MAT.scaleHide),           // 吻
-      box(0.8, 2.6, 0.8, 13.4, 17.4, 1.4, MAT.crystal),       // 角
-      box(0.8, 2.6, 0.8, 13.4, 17.4, -1.4, MAT.crystal),
-      box(12, 0.8, 12, -2, 14, 9, MAT.scaleHide, 0.4),        // 后掠双翼
-      box(12, 0.8, 12, -2, 14, -9, MAT.scaleHide, -0.4),
-      box(10, 2.4, 2.4, -13, 8, 0, MAT.scaleHide)             // 尾
+      taperedBox(28, 11, 20, 8, 7.2, -2, 8.2, 0, MAT.scaleHide),
+      taperedBox(20, 7.4, 14, 5.0, 3.2, -1.2, 5.5, 0, MAT.dragonBelly),
+      box(8.4, 3.0, 8.0, 4.2, 12.2, 0, MAT.dragonScale),
+      taperedBox(7.4, 4.2, 5.4, 3.2, 4.0, 11.4, 11.5, 0, MAT.scaleHide),
+      taperedBox(6.2, 3.6, 4.6, 2.8, 3.4, 16.6, 13.4, 0, MAT.scaleHide),
+      taperedBox(6.6, 4.4, 5.0, 3.2, 3.6, 21.2, 14.8, 0, MAT.scaleHide),
+      taperedBox(4.4, 2.4, 2.4, 1.5, 1.7, 25.2, 14.2, 0, MAT.scaleHide),
+      box(3.8, 1.0, 2.2, 24.6, 13.1, 0, MAT.dragonScale),
+      pyr(0.55, 3.4, 4, 19.6, 17.6, 1.5, MAT.crystal),
+      pyr(0.55, 3.4, 4, 19.6, 17.6, -1.5, MAT.crystal),
+      box(2.4, 0.4, 2.8, 20.4, 16.4, 2.5, MAT.crystal),
+      box(2.4, 0.4, 2.8, 20.4, 16.4, -2.5, MAT.crystal),
+      pyr(0.7, 3.0, 4, 6.2, 13.0, 0, MAT.crystal),
+      pyr(0.62, 2.6, 4, 1.0, 12.7, 0, MAT.crystal),
+      pyr(0.52, 2.2, 4, -4.2, 12.2, 0, MAT.crystal),
+      pyr(0.42, 1.8, 4, -9.4, 11.4, 0, MAT.crystal),
+      taperedBox(8.4, 2.8, 5.4, 1.8, 2.5, -16.4, 7.6, 0, MAT.scaleHide),
+      taperedBox(7.2, 2.0, 4.0, 1.1, 1.9, -22.6, 7.2, 0, MAT.scaleHide),
+      taperedBox(6.0, 1.2, 2.4, 0.4, 1.3, -27.6, 7.4, 0, MAT.scaleHide),
+      box(0.45, 2.8, 3.8, -30.0, 8.5, 0, MAT.crystal),
+      box(2.6, 5.0, 2.6, 6.2, 3.1, 4.3, MAT.dragonScale),
+      box(2.6, 5.0, 2.6, 6.2, 3.1, -4.3, MAT.dragonScale),
+      box(2.4, 4.5, 2.4, -8.4, 2.9, 3.6, MAT.dragonScale),
+      box(2.4, 4.5, 2.4, -8.4, 2.9, -3.6, MAT.dragonScale),
+      box(3.5, 1.15, 2.4, 7.8, 1.0, 4.3, MAT.dragonScale),
+      box(3.5, 1.15, 2.4, 7.8, 1.0, -4.3, MAT.dragonScale)
     ];
-    [6, -6].forEach(function (px) {
-      [4, -4].forEach(function (pz) {
-        body.push(box(2.4, 6, 2.4, px, 3, pz, MAT.scaleHide));
-      });
+    const glow = [
+      sph(1.7, 7, 27.2, 14.3, 0, MAT.fireGlow),
+      cyl(0.15, 2.4, 5.8, 6, 30.2, 14.1, 0, MAT.fireGlow, ROT_Z90),
+      sph(0.85, 5, 22.2, 15.8, 1.55, MAT.fireGlow),
+      sph(0.85, 5, 22.2, 15.8, -1.55, MAT.fireGlow),
+      sph(1.05, 6, 2.2, 7.1, 0, MAT.arcaneGlow)
+    ];
+    [1, -1].forEach(function (side) {
+      body.push(boxOrient(18, 1.05, 1.45, -1.6, 13.6, side * 12.4, MAT.dragonScale, side * 0.16, side * 0.52, 0.18));
+      body.push(boxOrient(16, 0.85, 1.15, -9.2, 15.0, side * 22.4, MAT.dragonScale, side * 0.24, side * 0.88, 0.10));
+      body.push(boxOrient(11, 0.55, 0.75, -4.6, 13.2, side * 17.2, MAT.dragonScale, side * 0.08, side * 0.66, -0.04));
+      body.push(boxOrient(22, 0.22, 15.0, -3.4, 13.4, side * 16.0, MAT.wingMembrane, side * 0.18, side * 0.48, 0.08));
+      body.push(boxOrient(14, 0.18, 11.4, -11.0, 14.4, side * 23.6, MAT.wingMembrane, side * 0.24, side * 0.82, 0.05));
+      glow.push(boxOrient(15, 0.14, 0.4, -2.0, 13.8, side * 14.6, MAT.fireGlow, side * 0.18, side * 0.48, 0.08));
     });
-    return {
-      body: body,
-      glow: [
-        sph(1.0, 6, 20.0, 14.6, 0, MAT.fireGlow),             // 口中龙火
-        sph(0.7, 5, 16.4, 16.0, 1.4, MAT.fireGlow),           // 眼
-        sph(0.7, 5, 16.4, 16.0, -1.4, MAT.fireGlow)
-      ]
-    };
+    return { body: body, glow: glow };
   },
 
   mharvester: function () {
@@ -3463,12 +3516,14 @@ export function createRenderer(canvas) {
     /* ---- 秘法会 LOD ---- */
     if (kind === 'mage' || kind === 'frost') {
       const orb = kind === 'frost' ? MAT.frostGlow : MAT.arcaneGlow;
+      const robe = kind === 'frost' ? MAT.frostRobe : MAT.robe;
+      const shaft = kind === 'frost' ? MAT.iceShard : MAT.bronze;
       return [
-        taperedBox(9.2, 9.2, 4.0, 4.0, 11, 0, 6.2, 0, MAT.robe),
+        taperedBox(9.2, 9.2, 4.0, 4.0, 11, 0, 6.2, 0, robe),
         box(4, 1.8, 7, 0, 12.0, 0, 0.9),
-        box(2.0, 2.0, 4.4, 1.0, 10.6, 4.0, MAT.robe),
-        cyl(0.45, 0.45, 13, 6, 5.2, 8.4, 2.6, MAT.bronze, ROT_Z90),
-        sph(1.7, 6, 11.8, 8.4, 2.6, orb)
+        box(2.0, 2.0, 4.4, 1.0, 10.6, 4.0, robe),
+        cyl(0.45, 0.45, 13, 6, 5.2, 8.4, 2.6, shaft, ROT_Z90),
+        sph(1.8, 6, 12.0, 8.4, 2.6, orb)
       ];
     }
     if (kind === 'golem') {
@@ -3490,10 +3545,13 @@ export function createRenderer(canvas) {
     }
     if (kind === 'dragon') {
       return [
-        taperedBox(20, 12, 16, 9, 9, -1, 9, 0, MAT.scaleHide),
-        box(8, 4.5, 4.5, 12, 13, 0, MAT.scaleHide),
-        box(12, 0.8, 12, -2, 14, 9, MAT.scaleHide, 0.4),
-        box(12, 0.8, 12, -2, 14, -9, MAT.scaleHide, -0.4)
+        taperedBox(28, 11, 20, 8, 7.2, -2, 8.2, 0, MAT.scaleHide),
+        taperedBox(7, 4, 5, 3, 4, 12.2, 12.0, 0, MAT.scaleHide),
+        taperedBox(6.2, 4.2, 4.8, 3.0, 3.4, 20.4, 14.6, 0, MAT.scaleHide),
+        boxOrient(22, 0.28, 15.4, -2.8, 13.4, 16.0, MAT.wingMembrane, 0.18, 0.48, 0.08),
+        boxOrient(22, 0.28, 15.4, -2.8, 13.4, -16.0, MAT.wingMembrane, -0.18, -0.48, 0.08),
+        taperedBox(10, 2.2, 5, 1.1, 2.0, -18.4, 7.5, 0, MAT.scaleHide),
+        sph(1.6, 6, 26.6, 14.2, 0, MAT.fireGlow)
       ];
     }
     if (kind === 'mharvester') {
@@ -3794,47 +3852,76 @@ export function createRenderer(canvas) {
 
   /* -------------------- 弹道与特效 -------------------- */
 
-  const tracerGeo = new THREE.CylinderGeometry(0.9, 0.9, 1, 6).rotateZ(Math.PI / 2);
-  const tracerMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false });
+  function paintGeoWhite(geo) {
+    const n = geo.attributes.position.count;
+    const col = new Float32Array(n * 3);
+    col.fill(1);
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return geo;
+  }
+  const tracerGeo = paintGeoWhite(new THREE.CylinderGeometry(0.9, 0.9, 1, 6).rotateZ(Math.PI / 2));
+  const tracerOrbGeo = paintGeoWhite(new THREE.SphereGeometry(1, 8, 6));
+  const tracerShardGeo = paintGeoWhite(new THREE.CylinderGeometry(0.04, 1.05, 1, 4).rotateZ(Math.PI / 2));
+  const tracerMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, toneMapped: false });
   let tracerMesh = null;
+  let tracerOrbMesh = null;
+  let tracerShardMesh = null;
 
   const PROJECTILE_STYLE = {
-    bullet: { len: 16, thick: 0.8, color: 0xfff0b0, arc: 0 },
-    rocket: { len: 22, thick: 1.7, color: 0xff9a4a, arc: 34 },
-    shell: { len: 18, thick: 1.5, color: 0xffd07a, arc: 22 },
-    sniper: { len: 34, thick: 0.6, color: 0xbfe9ff, arc: 0 },
-    siege: { len: 24, thick: 2.4, color: 0xffb347, arc: 120 },
-    ap: { len: 26, thick: 1.0, color: 0xd8f0ff, arc: 6 },
-    missile: { len: 32, thick: 2.8, color: 0xff6633, arc: 140 },
-    // 磁暴电弧：短促、近乎笔直的蓝白电光
-    tesla: { len: 16, thick: 1.4, color: 0x86b8ff, arc: 0 },
+    bullet: { len: 16, thick: 0.8, color: 0xfff0b0, arc: 0, look: 'streak' },
+    rocket: { len: 22, thick: 1.7, color: 0xff9a4a, arc: 34, look: 'streak' },
+    shell: { len: 18, thick: 1.5, color: 0xffd07a, arc: 22, look: 'streak' },
+    sniper: { len: 34, thick: 0.6, color: 0xbfe9ff, arc: 0, look: 'streak' },
+    siege: { len: 24, thick: 2.4, color: 0xffb347, arc: 120, look: 'streak' },
+    ap: { len: 26, thick: 1.0, color: 0xd8f0ff, arc: 6, look: 'streak' },
+    missile: { len: 32, thick: 2.8, color: 0xff6633, arc: 140, look: 'streak' },
+    // 磁暴电弧：短促、近乎笔直的蓝白电光，叠两段错位闪电
+    tesla: { len: 13, thick: 1.15, color: 0x9ad0ff, arc: 0, look: 'arc' },
     // 光棱聚焦光束：细长、笔直、亮青色，指哪打哪
-    laser: { len: 30, thick: 0.9, color: 0xa8f4ff, arc: 0 },
+    laser: { len: 46, thick: 0.52, color: 0xb8f8ff, arc: 0, look: 'beam' },
     // ---- 魔法弹道 ----
-    // 奥术弹：紫色流光，微微上飘
-    arcane: { len: 22, thick: 1.3, color: 0xc98aff, arc: 6 },
-    // 冰霜：冰蓝细棱，拖着寒气
-    frost: { len: 24, thick: 1.1, color: 0x9fe8ff, arc: 10 },
+    // 奥术弹：紫色流光 + 亮核，微微上飘
+    arcane: { len: 28, thick: 1.05, color: 0xd6a6ff, arc: 8, look: 'bolt' },
+    // 冰霜：冰蓝棱晶，拖着寒气
+    frost: { len: 18, thick: 1.15, color: 0xc4f4ff, arc: 12, look: 'shard' },
     // 巨石：傀儡投掷，高弧线
-    boulder: { len: 20, thick: 2.6, color: 0xb09a7a, arc: 70 },
-    // 火球：巨龙喷吐，橙色高弧
-    fireball: { len: 26, thick: 2.8, color: 0xff7a2a, arc: 60 }
+    boulder: { len: 20, thick: 2.6, color: 0xb09a7a, arc: 70, look: 'streak' },
+    // 火球：巨龙喷吐，橙色高弧 + 光核
+    fireball: { len: 15, thick: 3.1, color: 0xff7a28, arc: 52, look: 'fireball' }
   };
 
-  function ensureTracerMesh(needed) {
-    if (tracerMesh && tracerMesh.instanceMatrix.count >= needed) return tracerMesh;
-    if (tracerMesh) {
-      worldRoot.remove(tracerMesh);
-      tracerMesh.dispose();
+  function ensureStyledMesh(existing, geo, needed) {
+    if (existing && existing.instanceMatrix.count >= needed) return existing;
+    if (existing) {
+      worldRoot.remove(existing);
+      existing.dispose();
     }
-    tracerMesh = new THREE.InstancedMesh(tracerGeo, tracerMaterial,
+    const mesh = new THREE.InstancedMesh(geo, tracerMaterial,
       Math.max(64, Math.ceil(needed * 1.6)));
-    tracerMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    tracerMesh.frustumCulled = false;
-    tracerMesh.count = 0;
-    worldRoot.add(tracerMesh);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    mesh.count = 0;
+    worldRoot.add(mesh);
+    return mesh;
+  }
+
+  function ensureTracerMesh(needed) {
+    tracerMesh = ensureStyledMesh(tracerMesh, tracerGeo, needed);
     return tracerMesh;
   }
+
+  function ensureTracerOrbMesh(needed) {
+    tracerOrbMesh = ensureStyledMesh(tracerOrbMesh, tracerOrbGeo, needed);
+    return tracerOrbMesh;
+  }
+
+  function ensureTracerShardMesh(needed) {
+    tracerShardMesh = ensureStyledMesh(tracerShardMesh, tracerShardGeo, needed);
+    return tracerShardMesh;
+  }
+
+  // 上一帧还在飞的弹道，用来给本帧服务端 impact 对上冰霜/火球等视觉种类。
+  let projectileHintPrev = [];
 
   /* -------------------- 粒子 -------------------- *
    *
@@ -4071,12 +4158,13 @@ export function createRenderer(canvas) {
     flashPool.push({ light: l, life: 0, maxLife: 0.3 });
   }
 
-  function flashAt(x, y) {
+  function flashAt(x, y, colorHex) {
     let best = flashPool[0];
     for (let i = 1; i < flashPool.length; i++) {
       if (flashPool[i].life < best.life) best = flashPool[i];
     }
     best.life = best.maxLife;
+    best.light.color.setHex(colorHex || 0xffa445);
     best.light.position.set(x, groundHeight(x, y) + 34, y);
     best.light.visible = true;
   }
@@ -4092,7 +4180,7 @@ export function createRenderer(canvas) {
     }
   }
 
-  function spawnEffect(type, x, y) {
+  function spawnEffect(type, x, y, kind) {
     const rand = Math.random;
     if (type === 'explosion') {
       // 火球：颜色写成 >1 的线性值，核心经辉光放大成光斑
@@ -4142,32 +4230,145 @@ export function createRenderer(canvas) {
         life: 14, maxLife: 14, hold: true, r: 0.05, g: 0.04, b: 0.03
       });
     } else if (type === 'impact') {
-      burst(fireLayer, 9, function () {
-        const a = rand() * TAU;
-        const sp = 90 + rand() * 150;
-        return {
-          x: x, y: 5, z: y,
-          vx: Math.cos(a) * sp, vy: 60 + rand() * 110, vz: Math.sin(a) * sp,
-          life: 0.2 + rand() * 0.22, maxLife: 0.42,
-          size: 4 + rand() * 4,
-          r: 1.0, g: 0.8, b: 0.4
-        };
-      });
-      burst(smokeLayer, 4, function () {
-        const a = rand() * TAU;
-        const grey = 0.2 + rand() * 0.1;
-        return {
-          x: x, y: 6, z: y,
-          vx: Math.cos(a) * 30, vy: 26 + rand() * 22, vz: Math.sin(a) * 30,
-          life: 0.5 + rand() * 0.4, maxLife: 0.9,
-          size: 11 + rand() * 8, grow: true, buoyancy: -0.1,
-          r: grey, g: grey, b: grey * 0.94
-        };
-      });
-      shockLayer.spawn({
-        x: x, y: y, radius: 6, growth: 34, alpha: 0.4,
-        life: 0.22, maxLife: 0.22, r: 1.0, g: 0.85, b: 0.5
-      });
+      if (kind === 'frost') {
+        burst(fireLayer, 8, function () {
+          const a = rand() * TAU;
+          const sp = 70 + rand() * 120;
+          return {
+            x: x, y: 6, z: y,
+            vx: Math.cos(a) * sp, vy: 40 + rand() * 80, vz: Math.sin(a) * sp,
+            life: 0.28 + rand() * 0.22, maxLife: 0.5,
+            size: 4 + rand() * 4,
+            r: 0.75, g: 1.45, b: 2.1
+          };
+        });
+        burst(smokeLayer, 3, function () {
+          const a = rand() * TAU;
+          return {
+            x: x, y: 5, z: y,
+            vx: Math.cos(a) * 18, vy: 16 + rand() * 14, vz: Math.sin(a) * 18,
+            life: 0.7 + rand() * 0.4, maxLife: 1.1,
+            size: 12 + rand() * 8, grow: true, buoyancy: -0.08,
+            r: 0.62, g: 0.78, b: 0.88
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 10, growth: 52, alpha: 0.62,
+          life: 0.48, maxLife: 0.48, r: 0.55, g: 0.92, b: 1.2
+        });
+        // 减速场暗示：地面留一圈淡青霜斑，比焦痕更冷、更短
+        scorchLayer.spawn({
+          x: x, y: y, radius: 22, growth: 8, alpha: 0.38,
+          life: 2.1, maxLife: 2.1, hold: true, r: 0.42, g: 0.68, b: 0.82
+        });
+        flashAt(x, y, 0x9fe8ff);
+      } else if (kind === 'fireball') {
+        burst(fireLayer, 8, function () {
+          const a = rand() * TAU;
+          const sp = 80 + rand() * 140;
+          return {
+            x: x, y: 8, z: y,
+            vx: Math.cos(a) * sp, vy: 50 + rand() * 90, vz: Math.sin(a) * sp,
+            life: 0.35 + rand() * 0.25, maxLife: 0.6,
+            size: 10 + rand() * 8, grow: true,
+            r: 2.3, g: 1.05, b: 0.28
+          };
+        });
+        burst(fireLayer, 5, function () {
+          const a = rand() * TAU;
+          const sp = 160 + rand() * 180;
+          return {
+            x: x, y: 7, z: y,
+            vx: Math.cos(a) * sp, vy: 80 + rand() * 120, vz: Math.sin(a) * sp,
+            life: 0.22 + rand() * 0.18, maxLife: 0.4,
+            size: 4 + rand() * 3,
+            r: 2.4, g: 1.8, b: 0.7
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 10, growth: 70, alpha: 0.7,
+          life: 0.36, maxLife: 0.36, r: 1.2, g: 0.55, b: 0.18
+        });
+        scorchLayer.spawn({
+          x: x, y: y, radius: 24 + rand() * 8, growth: 0, alpha: 0.46,
+          life: 10, maxLife: 10, hold: true, r: 0.06, g: 0.03, b: 0.02
+        });
+        flashAt(x, y, 0xff7a2a);
+      } else if (kind === 'arcane') {
+        burst(fireLayer, 7, function () {
+          const a = rand() * TAU;
+          const sp = 80 + rand() * 130;
+          return {
+            x: x, y: 6, z: y,
+            vx: Math.cos(a) * sp, vy: 50 + rand() * 90, vz: Math.sin(a) * sp,
+            life: 0.22 + rand() * 0.2, maxLife: 0.42,
+            size: 4 + rand() * 4,
+            r: 1.55, g: 0.55, b: 2.15
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 6, growth: 40, alpha: 0.5,
+          life: 0.26, maxLife: 0.26, r: 0.85, g: 0.4, b: 1.15
+        });
+      } else if (kind === 'tesla') {
+        burst(fireLayer, 7, function () {
+          const a = rand() * TAU;
+          const sp = 110 + rand() * 160;
+          return {
+            x: x, y: 8, z: y,
+            vx: Math.cos(a) * sp, vy: 20 + rand() * 50, vz: Math.sin(a) * sp,
+            life: 0.14 + rand() * 0.12, maxLife: 0.26,
+            size: 3 + rand() * 3,
+            r: 0.55, g: 1.35, b: 2.3
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 5, growth: 28, alpha: 0.45,
+          life: 0.16, maxLife: 0.16, r: 0.5, g: 0.85, b: 1.3
+        });
+      } else if (kind === 'laser') {
+        burst(fireLayer, 5, function () {
+          const a = rand() * TAU;
+          return {
+            x: x, y: 8, z: y,
+            vx: Math.cos(a) * 40, vy: 10, vz: Math.sin(a) * 40,
+            life: 0.12 + rand() * 0.08, maxLife: 0.2,
+            size: 6 + rand() * 4,
+            r: 0.85, g: 1.6, b: 1.8
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 4, growth: 22, alpha: 0.4,
+          life: 0.14, maxLife: 0.14, r: 0.7, g: 1.15, b: 1.25
+        });
+      } else {
+        burst(fireLayer, 9, function () {
+          const a = rand() * TAU;
+          const sp = 90 + rand() * 150;
+          return {
+            x: x, y: 5, z: y,
+            vx: Math.cos(a) * sp, vy: 60 + rand() * 110, vz: Math.sin(a) * sp,
+            life: 0.2 + rand() * 0.22, maxLife: 0.42,
+            size: 4 + rand() * 4,
+            r: 1.0, g: 0.8, b: 0.4
+          };
+        });
+        burst(smokeLayer, 4, function () {
+          const a = rand() * TAU;
+          const grey = 0.2 + rand() * 0.1;
+          return {
+            x: x, y: 6, z: y,
+            vx: Math.cos(a) * 30, vy: 26 + rand() * 22, vz: Math.sin(a) * 30,
+            life: 0.5 + rand() * 0.4, maxLife: 0.9,
+            size: 11 + rand() * 8, grow: true, buoyancy: -0.1,
+            r: grey, g: grey, b: grey * 0.94
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 6, growth: 34, alpha: 0.4,
+          life: 0.22, maxLife: 0.22, r: 1.0, g: 0.85, b: 0.5
+        });
+      }
     } else if (type === 'muzzle') {
       burst(fireLayer, 5, function () {
         const a = rand() * TAU;
@@ -4517,6 +4718,104 @@ export function createRenderer(canvas) {
       y >= viewportBounds.minY && y <= viewportBounds.maxY;
   }
 
+  function guessImpactKind(x, y, hints) {
+    let best = null;
+    let bestD = 130 * 130;
+    for (let i = 0; i < hints.length; i++) {
+      const p = hints[i];
+      const d1 = (p.tx - x) * (p.tx - x) + (p.ty - y) * (p.ty - y);
+      const d2 = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+      const d = d1 < d2 ? d1 : d2;
+      if (d < bestD) {
+        bestD = d;
+        best = p.kind;
+      }
+    }
+    return best;
+  }
+
+  function writeTracer(mesh, index, x, height, z, yaw, sx, sy, sz, colorHex) {
+    quat.setFromAxisAngle(upAxis, -yaw);
+    matrix.compose(vecPos.set(x, height, z), quat, vecScale.set(sx, sy, sz));
+    mesh.setMatrixAt(index, matrix);
+    tmpColor.setHex(colorHex);
+    mesh.setColorAt(index, tmpColor);
+  }
+
+  function emitProjectileTrail(look, x, height, y) {
+    if (fireLayer.list.length > state.particleBudget * 0.62) return;
+    if (look === 'fireball') {
+      emit(fireLayer, {
+        x: x + (Math.random() - 0.5) * 5, y: height, z: y + (Math.random() - 0.5) * 5,
+        vx: (Math.random() - 0.5) * 16, vy: 8 + Math.random() * 14, vz: (Math.random() - 0.5) * 16,
+        life: 0.22, maxLife: 0.22, size: 6 + Math.random() * 5,
+        r: 2.2, g: 0.95, b: 0.25
+      });
+    } else if (look === 'shard') {
+      emit(fireLayer, {
+        x: x, y: height, z: y,
+        vx: (Math.random() - 0.5) * 9, vy: 4 + Math.random() * 9, vz: (Math.random() - 0.5) * 9,
+        life: 0.28, maxLife: 0.28, size: 3.4 + Math.random() * 3,
+        r: 0.7, g: 1.4, b: 1.9
+      });
+    } else if (look === 'bolt') {
+      emit(fireLayer, {
+        x: x, y: height, z: y,
+        vx: (Math.random() - 0.5) * 7, vy: 6, vz: (Math.random() - 0.5) * 7,
+        life: 0.18, maxLife: 0.18, size: 3.1,
+        r: 1.5, g: 0.55, b: 2.1
+      });
+    } else if (look === 'arc') {
+      emit(fireLayer, {
+        x: x, y: height, z: y,
+        vx: (Math.random() - 0.5) * 28, vy: 4, vz: (Math.random() - 0.5) * 28,
+        life: 0.1, maxLife: 0.1, size: 2.6,
+        r: 0.55, g: 1.4, b: 2.3
+      });
+    }
+  }
+
+  function emitIdleAura(vis, dt, useSimple) {
+    if (useSimple) return;
+    const kind = vis.unit.kind;
+    if (kind !== 'frost' && kind !== 'dragon' && kind !== 'mage') return;
+    if (fireLayer.list.length > state.particleBudget * 0.5) return;
+    const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6 : 3.5;
+    if (Math.random() > dt * rate) return;
+    const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
+    const scale = UNIT_VISUAL_SCALE[kind] || 1;
+    if (kind === 'frost') {
+      emit(fireLayer, {
+        x: vis.x + (Math.random() - 0.5) * 12,
+        y: gy + 3 + Math.random() * 14,
+        z: vis.y + (Math.random() - 0.5) * 12,
+        vx: (Math.random() - 0.5) * 7, vy: 8 + Math.random() * 10, vz: (Math.random() - 0.5) * 7,
+        life: 0.5, maxLife: 0.5, size: 3.5 + Math.random() * 3,
+        r: 0.65, g: 1.35, b: 1.85
+      });
+    } else if (kind === 'dragon') {
+      const mx = vis.x + Math.cos(vis.dir) * 22 * scale * 0.55;
+      const mz = vis.y + Math.sin(vis.dir) * 22 * scale * 0.55;
+      emit(fireLayer, {
+        x: mx, y: gy + 16 * scale * 0.55, z: mz,
+        vx: Math.cos(vis.dir) * 16 + (Math.random() - 0.5) * 8,
+        vy: 6 + Math.random() * 10,
+        vz: Math.sin(vis.dir) * 16 + (Math.random() - 0.5) * 8,
+        life: 0.28, maxLife: 0.28, size: 5 + Math.random() * 4,
+        r: 2.2, g: 1.0, b: 0.28
+      });
+    } else {
+      emit(fireLayer, {
+        x: vis.x + (Math.random() - 0.5) * 7,
+        y: gy + 12 + Math.random() * 6,
+        z: vis.y + (Math.random() - 0.5) * 7,
+        vx: 0, vy: 14, vz: 0,
+        life: 0.35, maxLife: 0.35, size: 3.2,
+        r: 1.45, g: 0.52, b: 2.05
+      });
+    }
+  }
+
   function render(payload) {
     const game = payload.game;
     const dt = payload.dt;
@@ -4793,15 +5092,21 @@ export function createRenderer(canvas) {
 
     /* --- 弹道 --- */
     const projectiles = game.projectiles || [];
+    const projectileHints = [];
+    let tracerCount = 0;
+    let orbCount = 0;
+    let shardCount = 0;
     if (state.showProjectiles && projectiles.length) {
-      const tracers = ensureTracerMesh(projectiles.length);
-      let tracerCount = 0;
+      const tracers = ensureTracerMesh(projectiles.length * 4);
+      const orbs = ensureTracerOrbMesh(projectiles.length);
+      const shards = ensureTracerShardMesh(Math.max(8, projectiles.length));
       for (let i = 0; i < projectiles.length; i++) {
         const p = projectiles[i];
         // 近战（军犬扑咬 / 影豹爪击）不画弹道，命中反馈交给服务端的 impact 特效
         if (p.kind === 'bite' || p.kind === 'claw') continue;
-        const pdx = p.x - state.camX;
-        const pdy = p.y - state.camY;
+        projectileHints.push({
+          kind: p.kind, x: p.x, y: p.y, tx: p.targetX, ty: p.targetY
+        });
         if (!inViewportBounds(p.x, p.y)) continue;
         const style = PROJECTILE_STYLE[p.kind] || PROJECTILE_STYLE.bullet;
         const t = p.t == null ? 0.5 : p.t;
@@ -4809,28 +5114,73 @@ export function createRenderer(canvas) {
         const dx = p.targetX - p.x;
         const dy = p.targetY - p.y;
         const yaw = Math.atan2(dy, dx);
-        quat.setFromAxisAngle(upAxis, -yaw);
-        matrix.compose(
-          vecPos.set(p.x, height, p.y),
-          quat,
-          vecScale.set(style.len, style.thick, style.thick));
-        tracers.setMatrixAt(tracerCount, matrix);
-        tmpColor.setHex(style.color);
-        tracers.setColorAt(tracerCount, tmpColor);
-        tracerCount++;
+        const look = style.look || 'streak';
+        if (look === 'fireball') {
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 4.2, 4.2, 4.2, 0xffb060);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len * 1.7, style.thick * 0.45, style.thick * 0.45, 0xffc878);
+        } else if (look === 'shard') {
+          writeTracer(shards, shardCount++, p.x, height, p.y, yaw, 9.5, 2.1, 2.1, 0xe8fbff);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick * 0.7, style.thick * 0.7, style.color);
+          writeTracer(shards, shardCount++, p.x, height + 1.4, p.y, yaw + 0.35, 6.2, 1.3, 1.3, 0x9fe8ff);
+        } else if (look === 'bolt') {
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 2.15, 2.15, 2.15, 0xf0d0ff);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len * 1.55, style.thick * 0.42, style.thick * 0.42, 0xe0b8ff);
+        } else if (look === 'arc') {
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(tracers, tracerCount++, p.x + Math.sin(yaw) * 2.2, height + 1.6, p.y - Math.cos(yaw) * 2.2,
+            yaw + 0.28, style.len * 0.62, style.thick * 0.55, style.thick * 0.55, 0xd8f0ff);
+          writeTracer(tracers, tracerCount++, p.x - Math.sin(yaw) * 1.8, height - 1.2, p.y + Math.cos(yaw) * 1.8,
+            yaw - 0.22, style.len * 0.5, style.thick * 0.45, style.thick * 0.45, 0x86b8ff);
+        } else if (look === 'beam') {
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len * 0.72, style.thick * 2.1, style.thick * 2.1, 0xe8ffff);
+        } else {
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+        }
+        if (look !== 'streak' && Math.random() < dt * 18) {
+          emitProjectileTrail(look, p.x, height, p.y);
+        }
       }
       tracers.count = tracerCount;
       tracers.instanceMatrix.needsUpdate = true;
       if (tracers.instanceColor) tracers.instanceColor.needsUpdate = true;
-    } else if (tracerMesh) {
-      tracerMesh.count = 0;
+      orbs.count = orbCount;
+      orbs.instanceMatrix.needsUpdate = true;
+      if (orbs.instanceColor) orbs.instanceColor.needsUpdate = true;
+      shards.count = shardCount;
+      shards.instanceMatrix.needsUpdate = true;
+      if (shards.instanceColor) shards.instanceColor.needsUpdate = true;
+    } else {
+      if (tracerMesh) tracerMesh.count = 0;
+      if (tracerOrbMesh) tracerOrbMesh.count = 0;
+      if (tracerShardMesh) tracerShardMesh.count = 0;
     }
 
     /* --- 特效 --- */
     // app.js 已经按 id 去重过，这里收到的都是本帧新出现的
     const fresh = payload.newEffects || [];
     for (let i = 0; i < fresh.length; i++) {
-      spawnEffect(fresh[i].type, fresh[i].x, fresh[i].y);
+      const fx = fresh[i];
+      const fxKind = fx.type === 'impact' ? guessImpactKind(fx.x, fx.y, projectileHintPrev) : null;
+      spawnEffect(fx.type, fx.x, fx.y, fxKind);
+    }
+    projectileHintPrev = projectileHints;
+    if (!useSimple) {
+      for (let i = 0; i < snapshotVisuals.length; i++) {
+        const vis = snapshotVisuals[i];
+        if (vis.inRenderRange) emitIdleAura(vis, dt, useSimple);
+      }
     }
     updateEffects(dt);
 
@@ -5091,7 +5441,7 @@ export function createRenderer(canvas) {
     visualPosition: function (id) { return visual.get(id) || null; },
 
     /** 在指定点播放一次特效。仅调试/截图脚本使用，不影响任何对局状态。 */
-    debugEffect: function (type, x, y) { spawnEffect(type, x, y); },
+    debugEffect: function (type, x, y, kind) { spawnEffect(type, x, y, kind); },
 
     /** 某点的地表高度。HUD 叠加层要用它把血条摆到单位正上方。 */
     groundHeight: groundHeight,
@@ -5122,6 +5472,10 @@ export function createRenderer(canvas) {
       smokeLayer.list.length = 0;
       shockLayer.list.length = 0;
       scorchLayer.list.length = 0;
+      projectileHintPrev = [];
+      if (tracerMesh) tracerMesh.count = 0;
+      if (tracerOrbMesh) tracerOrbMesh.count = 0;
+      if (tracerShardMesh) tracerShardMesh.count = 0;
       const ids = [];
       structureNodes.forEach(function (_n, id) { ids.push(id); });
       ids.forEach(disposeStructure);
