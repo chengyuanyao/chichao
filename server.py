@@ -612,6 +612,39 @@ def player_power(room, player_id):
     return supply, usage
 
 
+def production_power_factor(room, player_id, brownout):
+    """Construction / training / repair slow down when supply < usage.
+
+    Fielded combat must not call this. Losing a plant may starve new
+    production; it must not stun the army that is already out.
+    """
+    supply, usage = player_power(room, player_id)
+    return 1.0 if supply >= usage else brownout
+
+
+def fielded_combat_multiplier(room, owner_id):
+    """Already-fielded units and remaining turrets fight at full effect.
+
+    「建筑被打掉后不影响作战」: destroying power plants, barracks,
+    factories, refineries, 圣泉, or other support buildings must not
+    scale damage, move speed, or fire rate of surviving combatants.
+    Brownout stays in production_power_factor only.
+    """
+    return 1.0
+
+
+def structure_blocks_combat_movement(structure):
+    """Wrecks and dead footprints never block combat movement.
+
+    Navigation is mountains/water only; live buildings also do not sit
+    on that grid. Any future footprint collision must still return
+    False once hp<=0 so a knocked-down building cannot seal a path.
+    """
+    if not structure or structure.get("hp", 0) <= 0:
+        return False
+    return False
+
+
 def public_player(room, player, viewer_id=None):
     supply, usage = player_power(room, player["id"])
     return {
@@ -2912,8 +2945,7 @@ def tick_repair_unit(room, unit, dt, entity_index, power_cache, terrain):
         return
     power_factor = power_cache.get(unit["owner"])
     if power_factor is None:
-        supply, usage = player_power(room, unit["owner"])
-        power_factor = 1.0 if supply >= usage else 0.35
+        power_factor = production_power_factor(room, unit["owner"], 0.35)
         power_cache[unit["owner"]] = power_factor
     missing = unit["maxHp"] - unit["hp"]
     affordable = player["cash"] / REPAIR_COST_PER_HP
@@ -3114,6 +3146,9 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
             spd_mult = 1.0
             cd_mult = 1.0
             heal_rate = 0.0
+        combat_mult = fielded_combat_multiplier(room, unit["owner"])
+        dam_mult *= combat_mult
+        spd_mult *= combat_mult
         if heal_rate > 0:
             unit["hp"] = min(unit["maxHp"], unit["hp"] + heal_rate * dt)
         unit["repairing"] = False
@@ -3218,8 +3253,7 @@ def tick_build_queues(room, dt):
         item = queue[0]
         if item.get("ready"):
             continue
-        supply, usage = player_power(room, player["id"])
-        production_rate = 1.0 if supply >= usage else 0.4
+        production_rate = production_power_factor(room, player["id"], 0.4)
         item["remaining"] = max(0.0, item["remaining"] - dt * production_rate)
         if item["remaining"] <= 0:
             item["ready"] = True
@@ -3232,8 +3266,7 @@ def tick_structures(room, dt, combat_spatial=None):
         if structure["hp"] <= 0:
             continue
         if not structure["active"]:
-            supply, usage = player_power(room, structure["owner"])
-            rate = 1.0 if supply >= usage else 0.55
+            rate = production_power_factor(room, structure["owner"], 0.55)
             structure["buildRemaining"] = max(0.0, structure["buildRemaining"] - dt * rate)
             progress = 1.0 - structure["buildRemaining"] / max(0.01, structure["buildTotal"])
             material_hp = structure["maxHp"] * clamp(progress, 0.22, 1.0)
@@ -3257,33 +3290,38 @@ def tick_structures(room, dt, combat_spatial=None):
             continue
 
         if structure["queue"]:
-            supply, usage = player_power(room, structure["owner"])
-            production_rate = 1.0 if supply >= usage else 0.35
-            item = structure["queue"][0]
-            item["remaining"] = max(0.0, item["remaining"] - dt * production_rate)
-            if item["remaining"] <= 0:
-                angle = random.random() * math.pi * 2
-                radius = structure["size"] + UNIT_TYPES[item["kind"]]["size"] + 16
-                unit = make_unit(item["kind"], structure["owner"],
-                                 structure["x"] + math.cos(angle) * radius,
-                                 structure["y"] + math.sin(angle) * radius)
-                game["units"].append(unit)
-                structure["queue"].pop(0)
-                game["effects"].append({"id": new_id("e"), "type": "complete", "x": unit["x"], "y": unit["y"], "ttl": 0.8})
-                if structure.get("rally"):
-                    unit["destX"], unit["destY"] = structure["rally"]
-                    unit["order"] = "move"
+            owner = room["players"].get(structure["owner"])
+            if owner and owner.get("eliminated"):
+                structure["queue"] = []
+            else:
+                production_rate = production_power_factor(room, structure["owner"], 0.35)
+                item = structure["queue"][0]
+                item["remaining"] = max(0.0, item["remaining"] - dt * production_rate)
+                if item["remaining"] <= 0:
+                    angle = random.random() * math.pi * 2
+                    radius = structure["size"] + UNIT_TYPES[item["kind"]]["size"] + 16
+                    unit = make_unit(item["kind"], structure["owner"],
+                                     structure["x"] + math.cos(angle) * radius,
+                                     structure["y"] + math.sin(angle) * radius)
+                    game["units"].append(unit)
+                    structure["queue"].pop(0)
+                    game["effects"].append({"id": new_id("e"), "type": "complete", "x": unit["x"], "y": unit["y"], "ttl": 0.8})
+                    if structure.get("rally"):
+                        unit["destX"], unit["destY"] = structure["rally"]
+                        unit["order"] = "move"
 
         if structure_role(structure["kind"]) == "defense":
             definition = STRUCTURE_TYPES[structure["kind"]]
             structure["cooldown"] = max(0.0, structure["cooldown"] - dt)
+            # 炮塔作战不看电力：电厂或友塔被拆后，剩下的塔照常开火。
+            combat_mult = fielded_combat_multiplier(room, structure["owner"])
             target = nearest_enemy(
                 game, structure["owner"], structure["x"], structure["y"],
                 definition["range"], combat_spatial)
-            if target:
+            if target and combat_mult > 0:
                 structure["dir"] = math.atan2(target["y"] - structure["y"], target["x"] - structure["x"])
                 if structure["cooldown"] <= 0:
-                    launch_projectile(game, structure, target, definition)
+                    launch_projectile(game, structure, target, definition, combat_mult)
                     structure["cooldown"] = definition["cooldown"]
 
 
@@ -3413,6 +3451,10 @@ def remove_destroyed(room):
     过去清理跟胜负判定一起按 0.45s 节奏走，于是阵亡单位会以 hp=0 在原地继续
     留在快照里近半秒，爆炸火球也要等清理周期到了才出现。死亡反馈本该即时；
     没东西死时两个列表推导直接早退，开销可忽略。
+
+    残骸当场删掉，不留寻路障碍：导航网格只有山/水，尸体也不占用格子。
+    只摘掉 hp<=0 的实体，不改还活着的单位的指令、目标或战斗属性——
+    工厂/电厂被拆不能把已经拉出来的部队冻住或清掉。
     """
     game = room["game"]
     destroyed_units = [u for u in game["units"] if u["hp"] <= 0]
@@ -3424,6 +3466,7 @@ def remove_destroyed(room):
             "id": new_id("e"), "type": "explosion", "x": entity["x"], "y": entity["y"],
             "ttl": 1.15 if entity in destroyed_structures else 0.75,
         })
+    # Surviving units keep orders/targets; only the corpses leave the lists.
     game["units"] = [u for u in game["units"] if u["hp"] > 0]
     game["structures"] = [s for s in game["structures"] if s["hp"] > 0]
 
@@ -3454,6 +3497,11 @@ def check_elimination_and_victory(room):
         if not player_has_command(game, player["id"]):
             player["eliminated"] = True
             game["units"] = [u for u in game["units"] if u["owner"] != player["id"]]
+            # Leftover producers stay as scenery (they do not keep the player
+            # alive) but must not finish queues into new combatants.
+            for structure in game["structures"]:
+                if structure["owner"] == player["id"]:
+                    structure["queue"] = []
             add_chat(room, "作战系统", "%s 的指挥中心已被摧毁，彻底战败。" % player["name"], True)
 
     alive = [p for p in room["players"].values() if not p["eliminated"]]
