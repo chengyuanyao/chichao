@@ -122,6 +122,27 @@ def main():
     assert (t1y < 1600) == (t2y < 1600), "teammates should be on same side in mixed mode"
     print("  Mixed solo + team: PASS")
 
+    print("\n=== Test 6: 5-player FFA on 赤金陨坑 ===")
+    crater_players = [
+        server.create_human("坑%d" % (i + 1), server.COLORS[i]) for i in range(5)
+    ]
+    room6 = {
+        "id": "SPN06", "name": "gold crater", "status": "lobby",
+        "hostId": crater_players[0]["id"],
+        "players": {p["id"]: p for p in crater_players},
+        "chat": [], "game": None, "createdAt": time.time(),
+        "selectedMap": "gold_crater",
+    }
+    server.start_game(room6)
+    crater_pts = set(server.MAPS["gold_crater"]["spawnPoints"])
+    used = set()
+    for player in crater_players:
+        hq = next(s for s in room6["game"]["structures"]
+                  if s["owner"] == player["id"] and s["kind"] == "hq")
+        used.add((hq["x"], hq["y"]))
+    assert used == crater_pts, (used, crater_pts)
+    print("  5P crater FFA: PASS")
+
     print("\n=== All spawn tests passed! ===")
 
 

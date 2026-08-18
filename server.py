@@ -332,6 +332,97 @@ MAPS = {
             {"x1": 6667, "y1": 5182, "x2": 7467, "y2": 4841, "width": 100},
         ],
     },
+    "gold_crater": {
+        "id": "gold_crater",
+        "name": "赤金陨坑",
+        "width": 10000,
+        "height": 6400,
+        "maxPlayers": 5,
+        "theme": "crater",
+        "briefing": (
+            "五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、"
+            "突击兵和火箭兵看守。外环公路稳妥，抄近路就得贴着陨石核走——"
+            "带着攻城炮拆塔，采矿车跟坦克一起发财。"
+        ),
+        # 正五边形：北、东北、东南、西南、西北。FFA 均势，2v2 时南北成对，
+        # 多出来的那位落在西北高地。
+        "spawnPoints": [
+            (5000, 750),
+            (7330, 2443),
+            (6440, 5182),
+            (3560, 5182),
+            (2670, 2443),
+        ],
+        "spawnLabels": ["北岗", "东北高地", "东南谷地", "西南谷地", "西北高地"],
+        "rivers": [],
+        "bridges": [],
+        # 五块山壁围出陨坑，正中一块陨石核把金库撕成环形巷战；
+        # 五条宽谷对准各家出生点，外圈再留口袋矿和抄近路。
+        "mountains": [
+            {"x": 5929, "y": 1922, "r": 500},
+            {"x": 6503, "y": 3688, "r": 500},
+            {"x": 5000, "y": 4780, "r": 500},
+            {"x": 3497, "y": 3688, "r": 500},
+            {"x": 4071, "y": 1922, "r": 500},
+            {"x": 5000, "y": 3200, "r": 250},
+            {"x": 6987, "y": 466, "r": 250},
+            {"x": 8215, "y": 4244, "r": 250},
+            {"x": 1785, "y": 4244, "r": 250},
+            {"x": 3013, "y": 466, "r": 250},
+            {"x": 320, "y": 3200, "r": 390},
+            {"x": 9680, "y": 3200, "r": 390},
+            {"x": 360, "y": 380, "r": 310},
+            {"x": 9640, "y": 380, "r": 310},
+            {"x": 360, "y": 6040, "r": 310},
+            {"x": 9640, "y": 6040, "r": 310},
+            {"x": 5000, "y": 6180, "r": 240},
+            {"x": 1750, "y": 1400, "r": 230},
+            {"x": 8250, "y": 1400, "r": 230},
+            {"x": 1750, "y": 5000, "r": 230},
+            {"x": 8250, "y": 5000, "r": 230},
+        ],
+        # 辐条进坑、坑内环路、外环绕行，再加两条贴核近路。
+        "roads": [
+            {"x1": 5000, "y1": 750, "x2": 5000, "y2": 2480, "width": 120},
+            {"x1": 7330, "y1": 2443, "x2": 5685, "y2": 2978, "width": 120},
+            {"x1": 6440, "y1": 5182, "x2": 5423, "y2": 3782, "width": 120},
+            {"x1": 3560, "y1": 5182, "x2": 4577, "y2": 3782, "width": 120},
+            {"x1": 2670, "y1": 2443, "x2": 4315, "y2": 2978, "width": 120},
+            {"x1": 5000, "y1": 2480, "x2": 5685, "y2": 2978, "width": 115},
+            {"x1": 5685, "y1": 2978, "x2": 5423, "y2": 3782, "width": 115},
+            {"x1": 5423, "y1": 3782, "x2": 4577, "y2": 3782, "width": 115},
+            {"x1": 4577, "y1": 3782, "x2": 4315, "y2": 2978, "width": 115},
+            {"x1": 4315, "y1": 2978, "x2": 5000, "y2": 2480, "width": 115},
+            {"x1": 5000, "y1": 750, "x2": 6575, "y2": 1032, "width": 110},
+            {"x1": 6575, "y1": 1032, "x2": 7330, "y2": 2443, "width": 110},
+            {"x1": 7330, "y1": 2443, "x2": 7549, "y2": 4028, "width": 110},
+            {"x1": 7549, "y1": 4028, "x2": 6440, "y2": 5182, "width": 110},
+            {"x1": 6440, "y1": 5182, "x2": 5000, "y2": 5880, "width": 110},
+            {"x1": 5000, "y1": 5880, "x2": 3560, "y2": 5182, "width": 110},
+            {"x1": 3560, "y1": 5182, "x2": 2451, "y2": 4028, "width": 110},
+            {"x1": 2451, "y1": 4028, "x2": 2670, "y2": 2443, "width": 110},
+            {"x1": 2670, "y1": 2443, "x2": 3425, "y2": 1032, "width": 110},
+            {"x1": 3425, "y1": 1032, "x2": 5000, "y2": 750, "width": 110},
+            {"x1": 4315, "y1": 2978, "x2": 5000, "y2": 2890, "width": 100},
+            {"x1": 5000, "y1": 2890, "x2": 5685, "y2": 2978, "width": 100},
+            {"x1": 4577, "y1": 3782, "x2": 5000, "y2": 3510, "width": 100},
+            {"x1": 5000, "y1": 3510, "x2": 5423, "y2": 3782, "width": 100},
+        ],
+        # 比默认图更肥：每家多一片保底矿，公共矿多两处随机点，
+        # 再加中庭头奖和五处邻里口袋矿（均走公共矿+守军）。
+        "homeOreAmounts": (26000, 19000, 17000, 21000),
+        "publicOreCount": 6,
+        "bonusResources": [
+            {"x": 5000, "y": 2740, "amount": 50000, "public": True},
+            {"x": 5390, "y": 3460, "amount": 38000, "public": True},
+            {"x": 4610, "y": 3460, "amount": 38000, "public": True},
+            {"x": 6481, "y": 1161, "amount": 26000, "public": True},
+            {"x": 7397, "y": 3979, "amount": 26000, "public": True},
+            {"x": 5000, "y": 5720, "amount": 26000, "public": True},
+            {"x": 2603, "y": 3979, "amount": 26000, "public": True},
+            {"x": 3519, "y": 1161, "amount": 26000, "public": True},
+        ],
+    },
 }
 COMBAT_CELL_SIZE = 256.0
 SEPARATION_CELL_SIZE = 64.0
@@ -846,10 +937,12 @@ PUBLIC_MAPS = {
         # 静态地形一并下发：大厅的地图预览按真实山脉与道路绘制；
         # 而不是一张假想图。地图目录只在大厅阶段发送，体积不敏感。
         "theme": m.get("theme", "grassland"),
+        "briefing": m.get("briefing", ""),
         "rivers": m.get("rivers", []),
         "bridges": m.get("bridges", []),
         "mountains": m.get("mountains", []),
         "roads": m.get("roads", []),
+        "resources": m.get("bonusResources", []),
     }
     for mid, m in MAPS.items()
 }
@@ -875,6 +968,8 @@ def public_room(room, include_game=True, viewer_id=None, full=True):
             "maxPlayers": room_map["maxPlayers"],
             "spawnLabels": room_map["spawnLabels"],
             "spawnPoints": room_map["spawnPoints"],
+            "theme": room_map.get("theme", "grassland"),
+            "briefing": room_map.get("briefing", ""),
         },
     }
     # The map catalogue only drives the lobby's map picker; re-sending it eight
@@ -1308,16 +1403,26 @@ def start_game(room):
     total_spawns = len(spawn_points)
 
     if not any_team and not has_explicit_spawn:
-        if total_spawns == 6:
-            spawns_by_count = {
+        spread_by_spawns = {
+            6: {
                 2: [0, 5],
                 3: [0, 2, 4],
                 4: [0, 2, 3, 5],
                 5: [0, 1, 2, 3, 5],
                 6: [0, 1, 2, 3, 4, 5],
-            }
+            },
+            # 赤金陨坑这类五出生点：2 人对角、3 人隔点、4 人空出北岗。
+            5: {
+                2: [0, 2],
+                3: [0, 2, 4],
+                4: [1, 2, 3, 4],
+                5: [0, 1, 2, 3, 4],
+            },
+        }
+        spread = spread_by_spawns.get(total_spawns)
+        if spread is not None:
             player_spawns = {}
-            assigned_indices = spawns_by_count.get(count, list(range(count)))
+            assigned_indices = spread.get(count, list(range(min(count, total_spawns))))
             for index, player in enumerate(players):
                 player_spawns[player["id"]] = assigned_indices[index] if index < len(assigned_indices) else 0
         else:
@@ -1425,12 +1530,37 @@ def start_game(room):
         home_ore_factor = min(0.20, 650.0 / center_dist)
         ore_x = x + center_dx * home_ore_factor
         ore_y = y + center_dy * home_ore_factor
-        add_resource(game, ore_x - toward_y * 62, ore_y + toward_x * 62, 22000)
-        add_resource(game, ore_x + toward_y * 58, ore_y - toward_x * 48, 16000)
-        add_resource(game, ore_x + toward_x * 110, ore_y + toward_y * 80, 14000)
+        # 默认三片保底矿；地图可用 homeOreAmounts 加片或加量，旧图数字不变。
+        home_amounts = list(room_map.get("homeOreAmounts") or (22000, 16000, 14000))
+        home_offsets = (
+            (-toward_y * 62, toward_x * 62),
+            (toward_y * 58, -toward_x * 48),
+            (toward_x * 110, toward_y * 80),
+            (-toward_x * 95, toward_y * 125),
+            (toward_x * 40, -toward_y * 105),
+        )
+        for index, amount in enumerate(home_amounts):
+            if index >= len(home_offsets):
+                break
+            dx, dy = home_offsets[index]
+            add_resource(game, ore_x + dx, ore_y + dy, amount)
+
+    # 地图可布置固定争夺矿（中庭头奖、口袋矿）。公共矿走同一套守军逻辑。
+    bonus_public = []
+    for bonus in room_map.get("bonusResources") or ():
+        resource = add_resource(
+            game, bonus["x"], bonus["y"], bonus.get("amount", 20000),
+            public=bool(bonus.get("public", True)))
+        if resource.get("public"):
+            bonus_public.append(resource)
+    if bonus_public:
+        bonus_rng = random.Random(int(game["map"]["seed"]) ^ 0xB0A05E)
+        for resource in bonus_public:
+            spawn_neutral_ore_camp(game, resource, bonus_rng)
+        refresh_neutral_camps(game)
 
     # 各家保留一片稳定的开局矿；其余争夺矿每局随机散布在出生区之外。
-    add_random_resources(game, 4, spawn_points)
+    add_random_resources(game, int(room_map.get("publicOreCount", 4)), spawn_points)
 
     room["game"] = game
     room["status"] = "playing"

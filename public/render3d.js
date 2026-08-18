@@ -1454,6 +1454,30 @@ export const MAP_DISPLAY_THEMES = {
     rim: 0xa8c0d0,
     tex: [0.88, 0.90, 0.86],
     minimap: { base: '#3a3e38', dry: 'rgba(160,156,140,.14)', light: 'rgba(200,204,196,', dark: 'rgba(8,10,10,', road: '#6a6864', mountain: '#8a8680' }
+  },
+  crater: {
+    id: 'crater',
+    grass: [0.52, 0.32, 0.20],
+    lush: [0.42, 0.26, 0.16],
+    dry: [0.66, 0.40, 0.22],
+    dirt: [0.48, 0.30, 0.18],
+    packed: [0.46, 0.32, 0.22],
+    rock: [0.50, 0.38, 0.32],
+    road: 0x6a5040,
+    skirt: 0x5a3a28,
+    pad: 0x5a4030,
+    fog: 0xb88870,
+    horizon: 0xf0c090,
+    mid: 0xc89068,
+    zenith: 0x4a6088,
+    skyGround: 0xa07058,
+    hemiSky: 0xd8b090,
+    hemiGround: 0x5a3828,
+    sun: 0xffd090,
+    fill: 0xc09070,
+    rim: 0xf0b080,
+    tex: [1.00, 0.78, 0.62],
+    minimap: { base: '#5a3a28', dry: 'rgba(220,140,70,.16)', light: 'rgba(236,180,120,', dark: 'rgba(24,10,6,', road: '#8a6850', mountain: '#a88870' }
   }
 };
 
@@ -2109,6 +2133,7 @@ export function createRenderer(canvas) {
         let lum = 0.56 + n1 * 0.22 + n2 * 0.10 + (grain - 0.5) * 0.08;
         if (theme.id === 'grassland') lum += (streak - 0.5) * 0.06;
         if (theme.id === 'arid') lum += (n2 - 0.45) * 0.08;
+        if (theme.id === 'crater') lum += (n2 - 0.40) * 0.10 + (streak - 0.5) * 0.04;
         const i = (y * size + x) * 4;
         d[i] = Math.max(0, Math.min(255, lum * tr * 255));
         d[i + 1] = Math.max(0, Math.min(255, lum * tg * 255));
@@ -2529,6 +2554,14 @@ export function createRenderer(canvas) {
       rock: [[0.42, 0.41, 0.40], [0.33, 0.32, 0.31]],
       reed: [[0.34, 0.42, 0.26], [0.42, 0.48, 0.30]],
       density: 0.7
+    },
+    crater: {
+      trunk: [0.30, 0.20, 0.14],
+      foliage: [[0.36, 0.28, 0.16], [0.42, 0.32, 0.18], [0.28, 0.22, 0.14]],
+      bush: [[0.40, 0.28, 0.16], [0.46, 0.32, 0.18]],
+      rock: [[0.48, 0.36, 0.28], [0.38, 0.28, 0.22]],
+      reed: [[0.50, 0.36, 0.20], [0.56, 0.40, 0.22]],
+      density: 0.5
     }
   };
 
@@ -2754,6 +2787,11 @@ export function createRenderer(canvas) {
             else if (kind < 0.36) items = bushParts(scale, rand, theme);
             else if (kind < 0.52) items = tuftParts(scale * 0.9, rand, theme);
             else items = pebbleParts(scale * 1.45, rand, theme);
+          } else if (biome === 'crater') {
+            if (kind < 0.12) items = pineParts(scale * 0.75, rand, theme);
+            else if (kind < 0.34) items = bushParts(scale * 0.95, rand, theme);
+            else if (kind < 0.55) items = tuftParts(scale * 0.9, rand, theme);
+            else items = pebbleParts(scale * 1.5, rand, theme);
           } else if (kind < 0.48) items = pineParts(scale, rand, theme);
           else if (kind < 0.68) items = bushParts(scale * 1.1, rand, theme);
           else if (kind < 0.86) items = tuftParts(scale, rand, theme);

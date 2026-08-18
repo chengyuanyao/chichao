@@ -88,6 +88,7 @@ def check_map(map_id, map_def):
         "urban_siege": (6400, 6400),
         "narrow_standoff": (4800, 3200),
         "valley_clash": (6400, 4800),
+        "gold_crater": (10000, 6400),
     }
     assert (width, height) == expected_sizes[map_id], \
         "%s: 地图尺寸意外变化 (%dx%d)" % (map_id, width, height)
@@ -166,6 +167,36 @@ def main():
     path_along_road = terrain.find_path(700, 1636, 8900, 1636)
     assert len(path_along_road) > 1, "沿路路径应当存在"
     print("  沿主干道寻路 %d 个航点" % len(path_along_road))
+
+    crater = server.MAPS["gold_crater"]
+    assert crater["maxPlayers"] == 5
+    assert len(crater["spawnPoints"]) == 5
+    assert crater["theme"] == "crater"
+    assert crater.get("publicOreCount", 4) > 4
+    assert len(crater.get("bonusResources") or []) >= 8
+    assert len(crater.get("homeOreAmounts") or ()) > 3
+
+    def ore_payload(map_id, n_players):
+        random.seed(88001)
+        players = [server.create_human("比%d" % i, server.COLORS[i % 6])
+                   for i in range(n_players)]
+        room = {
+            "id": "ORECMP", "name": map_id, "status": "lobby",
+            "hostId": players[0]["id"],
+            "players": {p["id"]: p for p in players},
+            "chat": [], "game": None, "createdAt": time.time(),
+            "selectedMap": map_id,
+        }
+        server.start_game(room)
+        resources = room["game"]["resources"]
+        return len(resources), sum(r["amount"] for r in resources)
+
+    north_n, north_amt = ore_payload("north_conflict", 5)
+    crater_n, crater_amt = ore_payload("gold_crater", 5)
+    assert crater_n > north_n, (crater_n, north_n)
+    assert crater_amt > north_amt, (crater_amt, north_amt)
+    print("  赤金陨坑 5人矿点 %d / 储量 %.0f  vs 北境 %d / %.0f" % (
+        crater_n, crater_amt, north_n, north_amt))
 
     print("map tests ok: %d 张地图通过" % len(server.MAPS))
 
