@@ -95,6 +95,7 @@ def main():
         "urban_siege": (6400, 6400),
         "narrow_standoff": (4800, 3200),
         "valley_clash": (6400, 4800),
+        "gold_crater": (10000, 6400),
     }
     assert {map_id: (map_def["width"], map_def["height"])
             for map_id, map_def in server.MAPS.items()} == expected_sizes
@@ -202,11 +203,14 @@ def main():
     assert "function makeProceduralGroundTexture" in render
     assert "function tuftParts" in render
     assert "function spawnWearAt" in render
-    for theme_id in ("grassland", "arid", "urban"):
+    for theme_id in ("grassland", "arid", "urban", "crater"):
         assert ("  %s:" % theme_id) in render
     assert server.MAPS["north_conflict"]["theme"] == "grassland"
     assert server.MAPS["cliff_assault"]["theme"] == "arid"
     assert server.MAPS["urban_siege"]["theme"] == "urban"
+    assert server.MAPS["gold_crater"]["theme"] == "crater"
+    assert "mapBriefingDisplay" in app
+    assert server.MAPS["gold_crater"].get("briefing")
     assert "function paintGrassBase(c, w, h, themeId)" in app
     assert "paintTerrainFeatures(miniCtx, roomState.game.terrain, sx, sy)" in app
     assert "shadowQuality: 'structures'" in app

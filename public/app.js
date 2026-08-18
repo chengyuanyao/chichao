@@ -1044,6 +1044,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var lobbyChatForm = $('#lobbyChatForm');
   var lobbyChatInput = $('#lobbyChatInput');
   var mapNameDisplay = $('#mapNameDisplay');
+  var mapBriefingDisplay = $('#mapBriefingDisplay');
   var mapSizeDisplay = $('#mapSizeDisplay');
   var mapMaxPlayersDisplay = $('#mapMaxPlayersDisplay');
   var mapSpawnPreviews = $('#mapSpawnPreviews');
@@ -1051,7 +1052,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var mapSelectDropdown = $('#mapSelectDropdown');
   var BUILTIN_MAPS = {
     north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, theme: 'grassland', spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
-    narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] }
+    narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
+    gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]] }
   };
 
   // 地图目录只在大厅和首帧下发，缓存住供整局使用
@@ -1729,6 +1731,13 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     mapNameDisplay.textContent = mapConfig.name;
     mapSizeDisplay.textContent = mapConfig.width + ' \u00d7 ' + mapConfig.height;
     mapMaxPlayersDisplay.textContent = mapConfig.maxPlayers;
+    if (mapBriefingDisplay) {
+      var mapsForBrief = getMaps();
+      var fullBrief = (mapConfig.id && mapsForBrief[mapConfig.id]) || mapConfig;
+      var briefing = mapConfig.briefing || fullBrief.briefing || '';
+      mapBriefingDisplay.textContent = briefing;
+      mapBriefingDisplay.style.display = briefing ? '' : 'none';
+    }
 
     renderMapPreview(mapConfig);
     renderMapSelect(me, roomState);

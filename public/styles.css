@@ -1183,6 +1183,13 @@ kbd {
   font-size: 19px;
 }
 
+.map-briefing-copy {
+  margin: -6px 0 12px;
+  color: #c2b898;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 /* 地图预览：JS 在 #mapSpawnPreviews 里画 canvas，这里只做金属框 */
 .map-preview {
   position: relative;
