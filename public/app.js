@@ -24,7 +24,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     mtemple: { icon: '✠', desc: '训练奥术法师' },
     mcircle: { icon: '⬡', desc: '召唤构装体与魔兽' },
     mtower: { icon: '✵', desc: '自动攻击附近敌军（魔法）' },
-    mspring: { icon: '✚', desc: '修复受损构装、巨龙与晶簇' }
+    mspring: { icon: '✚', desc: '修复受损构装、巨龙与晶簇；解锁进阶召唤' }
   };
   var UNIT_VFX = {
     rifle: { icon: '♟', desc: '灵活的基础步兵' },
@@ -45,7 +45,9 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     frost: { icon: '❄', desc: '命中减速敌军，控制拉扯核心' },
     golem: { icon: '⛰', desc: '构装前排，高血投石溅射' },
     panther: { icon: '♞', desc: '全场最快魔兽，近战侧翼包抄' },
-    dragon: { icon: '✹', desc: '重型远程火球，大溅射压轴' },
+    dragon: { icon: '✹', desc: '重型远程火球，大溅射压轴 · 需圣泉' },
+    warden: { icon: '⛊', desc: '晶铠前排，混甲抗磁暴/狙击/军犬 · 需圣泉' },
+    colossus: { icon: '☄', desc: '远程晶陨，专拆建筑 · 需圣泉' },
     mharvester: { icon: '◈', desc: '自动采集水晶' },
     mmcv: { icon: '⬡', desc: '可展开为魔法主堡' }
   };
@@ -137,7 +139,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       repairTitle: '前往最近圣泉 (R)',
       repairHint: '修复构装',
       repairNeed: '没有可用的圣泉',
-      repairSelect: '请选择受损的傀儡、巨龙或晶簇',
+      repairSelect: '请选择受损的构装、巨龙或晶簇',
       repairSent: '个单位已前往圣泉'
     }
   };
@@ -205,7 +207,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1,
-    mage: 1, frost: 1, golem: 1, panther: 1, dragon: 1, mharvester: 1, mmcv: 1
+    mage: 1, frost: 1, golem: 1, panther: 1, dragon: 1, warden: 1, colossus: 1,
+    mharvester: 1, mmcv: 1
   };
 
   function pRect(c, x, y, w, h, fill) {
@@ -850,6 +853,35 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       // 口中龙火 + 眼
       pPoly(c, [[90, 20], [102, 16], [92, 27]], P_FIRE);
       pCirc(c, 80, 22, 1.6, '#ffd9a0');
+    },
+    warden: function (c) {
+      pShadow(c, 48, 61, 28);
+      // 晶铠卫士：比傀儡更像披甲构装——盾 + 晶刃，不是又一坨岩石
+      pPoly(c, [[34, 60], [62, 60], [58, 28], [38, 28]], P_STONE);
+      pPoly(c, [[62, 60], [50, 60], [50, 28], [58, 28]], 'rgba(10,10,6,.26)');
+      pPoly(c, [[36, 42], [60, 42], [57, 30], [39, 30]], P_CRYSTAL);
+      pCirc(c, 47, 24, 6, P_STONE);
+      pPoly(c, [[18, 34], [32, 30], [34, 56], [16, 54]], P_CRYSTAL);
+      pPoly(c, [[18, 34], [26, 32], [26, 54], [16, 54]], 'rgba(243,233,212,.18)');
+      pLine(c, 64, 56, 78, 16, 3.2, P_DARK);
+      pPoly(c, [[76, 8], [82, 18], [76, 24], [70, 18]], P_ARCANE);
+      pCirc(c, 48, 38, 3.4, P_ARCANE);
+      pCirc(c, 48, 38, 1.4, '#f2e6ff');
+      pCirc(c, 45, 23, 1.1, P_ARCANE);
+      pCirc(c, 49, 23, 1.1, P_ARCANE);
+    },
+    colossus: function (c) {
+      pShadow(c, 50, 61, 30);
+      // 裂地晶兽：矮宽石座上架一门高仰角晶炮，肖像一眼是攻城不是傀儡
+      pPoly(c, [[22, 58], [74, 58], [68, 44], [28, 44]], P_STONE);
+      pPoly(c, [[74, 58], [58, 58], [55, 44], [68, 44]], 'rgba(10,10,6,.26)');
+      pRect(c, 34, 34, 22, 12, '#4a4453');
+      pLine(c, 46, 38, 86, 12, 6, P_CRYSTAL);
+      pPoly(c, [[82, 6], [90, 14], [84, 20], [76, 12]], P_ARCANE);
+      pCirc(c, 86, 12, 2.2, '#f2e6ff');
+      pCirc(c, 42, 40, 3.2, P_ARCANE);
+      pCirc(c, 42, 40, 1.3, '#f2e6ff');
+      pLine(c, 30, 44.5, 66, 44.5, 1.4, 'rgba(180,107,255,.45)');
     },
     mharvester: function (c) {
       pShadow(c, 48, 60, 26);

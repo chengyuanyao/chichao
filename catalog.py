@@ -12,7 +12,7 @@ from __future__ import print_function
 VEHICLE_KINDS = frozenset((
     "tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv",
     "v3", "overlord", "prism",
-    "golem", "dragon", "mharvester", "mmcv",
+    "golem", "dragon", "warden", "colossus", "mharvester", "mmcv",
 ))
 
 UNIT_TYPES = {
@@ -174,13 +174,33 @@ UNIT_TYPES = {
         "projectile": "claw", "projectileSpeed": 1000.0, "splash": 0.0,
         "sight": 520.0, "armor": "arcane", "damageType": "magic",
     },
-    # 秘法巨龙：魔法阵营的重炮，远程大火球大溅射，压轴质量兵种。
+    # 秘法巨龙：远程大火球大溅射。圣泉二级后才许召唤，避免法阵一立就能出 1600 压轴。
     "dragon": {
         "name": "秘法巨龙", "cost": 1600, "hp": 900, "speed": 60.0,
         "damage": 95.0, "range": 260.0, "cooldown": 1.7,
         "size": 24.0, "build": 15.0, "producer": "mcircle",
+        "requires": ["mspring"],
         "projectile": "fireball", "projectileSpeed": 520.0, "splash": 60.0,
         "sight": 460.0, "armor": "arcane", "damageType": "magic",
+    },
+    # ---- 进阶：圣泉卡二级。不改开局 3 法师+傀儡，只补中后期缺口 ----
+    # 晶铠卫士：构装前排。heavy/light 混甲，磁暴/狙击/军犬不能当纯魔导一锅端。
+    "warden": {
+        "name": "晶铠卫士", "cost": 1180, "hp": 1040, "speed": 55.0,
+        "damage": 68.0, "range": 148.0, "cooldown": 1.30,
+        "size": 20.0, "build": 11.0, "producer": "mcircle",
+        "requires": ["mspring"],
+        "projectile": "crystal", "projectileSpeed": 460.0, "splash": 24.0,
+        "sight": 380.0, "armor": ("heavy", "light"), "damageType": "magic",
+    },
+    # 裂地晶兽：缺的攻城行。siege ×1.8 拆建筑，对单位很差，对位攻城炮/光棱。
+    "colossus": {
+        "name": "裂地晶兽", "cost": 1280, "hp": 380, "speed": 48.0,
+        "damage": 98.0, "range": 335.0, "cooldown": 2.10,
+        "size": 22.0, "build": 12.0, "producer": "mcircle",
+        "requires": ["mspring"],
+        "projectile": "meteor", "projectileSpeed": 240.0, "splash": 54.0,
+        "sight": 300.0, "armor": ("heavy", "light"), "damageType": "siege",
     },
 }
 
@@ -281,7 +301,10 @@ STRUCTURE_TYPES = {
 MAGIC_STRUCTURES = frozenset((
     "mhq", "mpower", "mrefinery", "mtemple", "mcircle", "mspring", "mtower",
 ))
-MAGIC_UNITS = frozenset(("mharvester", "mmcv", "mage", "frost", "golem", "panther", "dragon"))
+MAGIC_UNITS = frozenset((
+    "mharvester", "mmcv", "mage", "frost", "golem", "panther",
+    "dragon", "warden", "colossus",
+))
 
 _STRUCTURE_ROLES = {
     "hq": "hq", "mhq": "hq",

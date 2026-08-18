@@ -378,6 +378,7 @@ CRATE_TYPES = {
 # Armor types and damage multiplier table for unit-counter system.
 # 查表缺省 1.0（apply_damage 里 .get(armor, 1.0)），所以新增的 arcane(魔导)
 # 护甲只需在它加成的行里写出系数，其余行自动按 1.0 中性处理。
+# 单位 armor 可以是字符串，或 (heavy, light) 这类混甲：系数取各片平均。
 DAMAGE_MULTIPLIER = {
     #                                                        arcane=魔导(法师/傀儡等魔法单位)
     "bullet":  {"infantry": 1.0, "light": 0.65, "heavy": 0.35, "structure": 0.30, "arcane": 1.50},
@@ -2558,11 +2559,34 @@ def nearest_enemy_structure(game, owner, x, y, max_distance, spatial_index=None)
 
 # 军犬自动索敌：步兵甲 + 魔导甲。bite 对载具/建筑是 ×0，追上去白送；
 # 法师/女巫是 arcane，点选能咬但旧扫描只认 infantry，会从法师身边走过。
+# 混甲构装（heavy/light）整件都不是猎物，军犬不会去扑晶铠/裂地晶兽。
 DOG_PREY_ARMOR = frozenset(("infantry", "arcane"))
 
 
+def iter_armor(armor):
+    """Yield armor pieces. Mixed armor is a list/tuple of piece names."""
+    if isinstance(armor, (list, tuple)):
+        return tuple(armor)
+    if armor:
+        return (armor,)
+    return ()
+
+
+def damage_armor_multiplier(damage_type, armor):
+    """Look up damage-type vs armor. Mixed armor averages each piece."""
+    table = DAMAGE_MULTIPLIER.get(damage_type) or {}
+    pieces = iter_armor(armor)
+    if not pieces:
+        return 1.0
+    total = 0.0
+    for piece in pieces:
+        total += table.get(piece, 1.0)
+    return total / float(len(pieces))
+
+
 def is_dog_prey(kind):
-    return UNIT_TYPES.get(kind, {}).get("armor") in DOG_PREY_ARMOR
+    pieces = iter_armor(UNIT_TYPES.get(kind, {}).get("armor"))
+    return bool(pieces) and all(piece in DOG_PREY_ARMOR for piece in pieces)
 
 
 def nearest_enemy_infantry(game, owner, x, y, max_distance, spatial_index=None):
@@ -2629,8 +2653,7 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
         elif target["id"].startswith("s"):
             target_def = STRUCTURE_TYPES.get(target.get("kind", ""), {})
         armor = target_def.get("armor", "structure") if target_def else "structure"
-        multiplier = DAMAGE_MULTIPLIER.get(damage_type, {}).get(armor, 1.0)
-        applied *= multiplier
+        applied *= damage_armor_multiplier(damage_type, armor)
     target["hp"] -= applied
     if target["id"].startswith("s") and not target.get("active", True):
         target["constructionDamage"] = target.get("constructionDamage", 0.0) + applied
@@ -3004,8 +3027,8 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                 target = nearest_enemy(
                     game, unit["owner"], unit["x"], unit["y"], aggro,
                     combat_spatial)
-                # 攻城炮优先打建筑，附近没有建筑时才打单位
-                if (target and unit["kind"] == "artillery"
+                # 攻城炮 / 裂地晶兽优先打建筑，附近没有建筑时才打单位
+                if (target and unit["kind"] in ("artillery", "colossus")
                         and target["kind"] not in STRUCTURE_TYPES):
                     building = nearest_enemy_structure(
                         game, unit["owner"], unit["x"], unit["y"], aggro,
@@ -3183,9 +3206,18 @@ def tick_bots(room):
             roll = random.random()
             if "factory" in roles and roll < 0.58:
                 if magic:
-                    # 召唤法阵：傀儡抗线为主，掺影豹，偶尔召唤巨龙（魔法版天启）
-                    queue_unit(room, bot["id"],
-                               "dragon" if roll < 0.08 else ("golem" if roll < 0.5 else "panther"))
+                    if "repair" in roles and roll < 0.20:
+                        # 圣泉撑起二级后：巨龙溅射 / 裂地拆家 / 晶铠抗线
+                        if roll < 0.07:
+                            queue_unit(room, bot["id"], "dragon")
+                        elif roll < 0.13:
+                            queue_unit(room, bot["id"], "colossus")
+                        else:
+                            queue_unit(room, bot["id"], "warden")
+                    else:
+                        # 法阵刚立：傀儡抗线为主，掺影豹。巨龙已改成要圣泉。
+                        queue_unit(room, bot["id"],
+                                   "golem" if roll < 0.5 else "panther")
                 elif "repair" in roles and roll < 0.16:
                     # 维修厂撑起二级科技后，掺高级装甲：天启抗线 / 光棱远程点杀
                     queue_unit(room, bot["id"], "overlord" if roll < 0.08 else "prism")
