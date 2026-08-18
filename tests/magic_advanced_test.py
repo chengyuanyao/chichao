@@ -4,7 +4,7 @@
    1) 目录与阵营登记齐全
    2) 圣泉门槛：只有法阵不够，缺圣泉拒绝排队
    3) 魔法能生产、科技不能；place_structure 阵营门槛仍在
-   4) 混甲：磁暴/狙击不再按纯魔导 ×2；军犬不把构装当猎物
+   4) 混甲：磁暴/狙击不再按纯魔导 ×2；军犬不把构装/巨龙当猎物
    5) 裂地晶兽用 siege 拆建筑
 """
 
@@ -138,8 +138,9 @@ def main():
     print("  bite vs 混甲: ×0 PASS")
     assert not server.is_dog_prey("warden")
     assert not server.is_dog_prey("colossus")
+    assert not server.is_dog_prey("dragon")
     assert server.is_dog_prey("mage")
-    print("  军犬猎物不含混甲构装: PASS")
+    print("  军犬猎物不含混甲构装/巨龙: PASS")
 
     print("\n=== Test 5: 裂地晶兽 siege 拆建筑 ===")
     room, a, b = make_room("MADV04")

@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 """军犬（attack dog）测试：
    1) 单位定义齐全：归兵营、步兵甲、全场最速、不算载具
-   2) bite 克制系数：对步兵 ×4 一击必杀，对载具/建筑 ×0 咬不动
+   2) bite 克制系数：对步兵 ×4 一击必杀，对载具/建筑/巨龙 ×0 咬不动
    3) 自动索敌扑步兵与魔导（nearest_enemy_infantry 忽略贴脸的坦克，不漏法师）
+   4) 秘法巨龙虽是 arcane，但是载具：不当猎物，bite 也不掉血；法师/女巫仍可咬
 """
 
 from __future__ import print_function
@@ -68,7 +69,7 @@ def main():
         assert victim["hp"] <= 0, "%s 应被一口咬死，剩 %s" % (kind, victim["hp"])
     print("  60×4.0=240 咬死全部步兵（含 190 血磁暴）: PASS")
 
-    print("\n=== Test 4: 扑咬对载具/建筑零伤害 ===")
+    print("\n=== Test 4: 扑咬对载具/建筑/巨龙零伤害 ===")
     room, a, b = make_room("DOG03")
     game = room["game"]
     tank = server.make_unit("tank", b["id"], 9000, 9000)
@@ -81,7 +82,12 @@ def main():
     before = turret["hp"]
     server.apply_damage(room, turret, 60, a["id"], "bite", game)
     assert abs(turret["hp"] - before) < 0.001, "建筑不该掉血"
-    print("  坦克/建筑 0 伤害: PASS")
+    dragon = server.make_unit("dragon", b["id"], 9100, 9100)
+    game["units"].append(dragon)
+    before = dragon["hp"]
+    server.apply_damage(room, dragon, 60, a["id"], "bite", game)
+    assert abs(dragon["hp"] - before) < 0.001, "巨龙不该掉血（载具规则，不是 arcane ×1.5）"
+    print("  坦克/建筑/巨龙 0 伤害: PASS")
 
     print("\n=== Test 5: 自动索敌只扑步兵 ===")
     room, a, b = make_room("DOG04")
@@ -97,6 +103,7 @@ def main():
     print("\n=== Test 6: 自动索敌会扑 arcane 法师/女巫 ===")
     assert server.is_dog_prey("mage") and server.is_dog_prey("frost")
     assert not server.is_dog_prey("tank")
+    assert not server.is_dog_prey("dragon")
     for kind in ("mage", "frost"):
         room, a, b = make_room("DOG-" + kind)
         game = room["game"]
@@ -116,6 +123,19 @@ def main():
     server.apply_damage(room, mage, 60, a["id"], "bite", game)
     assert mage["hp"] <= 0, "法师应被咬死，剩 %s" % mage["hp"]
     print("  60×1.5=90 咬死 90 血法师: PASS")
+
+    print("\n=== Test 8: 自动索敌不扑秘法巨龙 ===")
+    room, a, b = make_room("DOG07")
+    game = room["game"]
+    # 巨龙贴脸（更近），法师稍远：旧逻辑按 arcane 会扑龙
+    game["units"].append(server.make_unit("dragon", b["id"], 5050, 5000))
+    game["units"].append(server.make_unit("mage", b["id"], 5080, 5000))
+    pick = server.nearest_enemy_infantry(game, a["id"], 5000, 5000, 400)
+    assert pick is not None and pick["kind"] == "mage", \
+        "应锁定法师而非巨龙，实际 %s" % (pick and pick["kind"])
+    only_dragon = server.nearest_enemy_infantry(game, a["id"], 5000, 5000, 40)
+    assert only_dragon is None, "射程内只有巨龙时不该锁定"
+    print("  忽略贴脸巨龙、锁定法师；单独巨龙不入猎物: PASS")
 
     print("\n=== 军犬测试全部通过 ===")
 
