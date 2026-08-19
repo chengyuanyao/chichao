@@ -173,8 +173,21 @@ def main():
     assert len(crater["spawnPoints"]) == 5
     assert crater["theme"] == "crater"
     assert crater.get("publicOreCount", 4) > 4
-    assert len(crater.get("bonusResources") or []) >= 8
-    assert len(crater.get("homeOreAmounts") or ()) > 3
+    assert crater["homeOreAmounts"] == (26000, 19000, 17000, 21000)
+    bonuses = list(crater.get("bonusResources") or [])
+    assert len(bonuses) >= 10
+    crater_cx, crater_cy = crater["width"] / 2.0, crater["height"] / 2.0
+    center_ores = [r for r in bonuses
+                   if math.hypot(r["x"] - crater_cx, r["y"] - crater_cy) < 700]
+    pocket_ores = [r for r in bonuses
+                   if math.hypot(r["x"] - crater_cx, r["y"] - crater_cy) > 2000]
+    # 中庭金库围核至少五处，且比初版三处头奖（5万+3.8万+3.8万）更肥。
+    assert len(center_ores) >= 5, len(center_ores)
+    assert sum(r["amount"] for r in center_ores) >= 220000
+    assert min(r["amount"] for r in center_ores) >= 44000
+    # 外环口袋矿与家矿保持原量，多出来的全在正中争夺区。
+    assert len(pocket_ores) == 5
+    assert all(r["amount"] == 26000 for r in pocket_ores)
 
     def ore_payload(map_id, n_players):
         random.seed(88001)
@@ -189,14 +202,25 @@ def main():
         }
         server.start_game(room)
         resources = room["game"]["resources"]
-        return len(resources), sum(r["amount"] for r in resources)
+        return resources
 
-    north_n, north_amt = ore_payload("north_conflict", 5)
-    crater_n, crater_amt = ore_payload("gold_crater", 5)
+    north_ores = ore_payload("north_conflict", 5)
+    crater_ores = ore_payload("gold_crater", 5)
+    north_n, north_amt = len(north_ores), sum(r["amount"] for r in north_ores)
+    crater_n, crater_amt = len(crater_ores), sum(r["amount"] for r in crater_ores)
     assert crater_n > north_n, (crater_n, north_n)
     assert crater_amt > north_amt, (crater_amt, north_amt)
+    live_center = [r for r in crater_ores
+                   if math.hypot(r["x"] - crater_cx, r["y"] - crater_cy) < 700]
+    assert len(live_center) >= 5, len(live_center)
+    for planned in center_ores:
+        nearest = min(math.hypot(r["x"] - planned["x"], r["y"] - planned["y"])
+                      for r in live_center)
+        assert nearest < 80, (planned["x"], planned["y"], nearest)
     print("  赤金陨坑 5人矿点 %d / 储量 %.0f  vs 北境 %d / %.0f" % (
         crater_n, crater_amt, north_n, north_amt))
+    print("  中庭金库 %d 处 / 储量 %.0f" % (
+        len(live_center), sum(r["amount"] for r in live_center)))
 
     print("map tests ok: %d 张地图通过" % len(server.MAPS))
 
