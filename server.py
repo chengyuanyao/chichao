@@ -344,8 +344,8 @@ MAPS = {
         "theme": "crater",
         "briefing": (
             "五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、"
-            "突击兵和火箭兵看守。外环公路稳妥，抄近路就得贴着陨石核走——"
-            "带着攻城炮拆塔，采矿车跟坦克一起发财。"
+            "突击兵和火箭兵看守。外环五处邻里路口被熔水河切开，只能从公路桥过；"
+            "抄近路就得贴着陨石核走——带着攻城炮拆塔，采矿车跟坦克一起发财。"
         ),
         # 正五边形：北、东北、东南、西南、西北。FFA 均势，2v2 时南北成对，
         # 多出来的那位落在西北高地。
@@ -357,8 +357,24 @@ MAPS = {
             (2670, 2443),
         ],
         "spawnLabels": ["北岗", "东北高地", "东南谷地", "西南谷地", "西北高地"],
-        "rivers": [],
-        "bridges": [],
+        # 五道径向熔水河切开外环邻里通道：山壁外侧到地图边，只在外环公路留桥。
+        # 中庭、五条谷口和家矿都不封。口袋矿挪到桥边干地上，储量不变。
+        "rivers": [
+            {"x1": 6176, "y1": 1582, "x2": 7303, "y2": 30, "width": 150},
+            {"x1": 6902, "y1": 3818, "x2": 9970, "y2": 4815, "width": 150},
+            {"x1": 5000, "y1": 5200, "x2": 5000, "y2": 6370, "width": 150},
+            {"x1": 3098, "y1": 3818, "x2": 30, "y2": 4815, "width": 150},
+            {"x1": 3824, "y1": 1582, "x2": 2697, "y2": 30, "width": 150},
+        ],
+        # 桥盒盖住河面与公路交叉，宽到坦克 / 攻城炮 / 晶兽并排都能过。
+        # 南桥矮一些，免得叠进南缘那座小山。
+        "bridges": [
+            {"x": 6575, "y": 1032, "w": 280, "h": 280},
+            {"x": 7549, "y": 4028, "w": 280, "h": 280},
+            {"x": 5000, "y": 5880, "w": 280, "h": 120},
+            {"x": 2451, "y": 4028, "w": 280, "h": 280},
+            {"x": 3425, "y": 1032, "w": 280, "h": 280},
+        ],
         # 五块山壁围出陨坑，正中一块陨石核把金库撕成环形巷战；
         # 五条宽谷对准各家出生点，外圈再留口袋矿和抄近路。
         "mountains": [
@@ -410,6 +426,12 @@ MAPS = {
             {"x1": 5000, "y1": 2890, "x2": 5685, "y2": 2978, "width": 100},
             {"x1": 4577, "y1": 3782, "x2": 5000, "y2": 3510, "width": 100},
             {"x1": 5000, "y1": 3510, "x2": 5423, "y2": 3782, "width": 100},
+            # 五座外环桥上的加宽军路，小地图一眼能认出卡口。
+            {"x1": 6397, "y1": 903, "x2": 6753, "y2": 1161, "width": 140},
+            {"x1": 7617, "y1": 3819, "x2": 7481, "y2": 4237, "width": 140},
+            {"x1": 5220, "y1": 5880, "x2": 4780, "y2": 5880, "width": 140},
+            {"x1": 2519, "y1": 4237, "x2": 2383, "y2": 3819, "width": 140},
+            {"x1": 3247, "y1": 1161, "x2": 3603, "y2": 903, "width": 140},
         ],
         # 比默认图更肥：每家多一片保底矿，公共矿多两处随机点，
         # 中庭五处头奖围着陨石核（对准五条谷口），外加五处邻里口袋矿。
@@ -423,11 +445,11 @@ MAPS = {
             {"x": 5390, "y": 3460, "amount": 44000, "public": True},
             {"x": 4610, "y": 3460, "amount": 44000, "public": True},
             {"x": 4563, "y": 3058, "amount": 44000, "public": True},
-            {"x": 6481, "y": 1161, "amount": 26000, "public": True},
-            {"x": 7397, "y": 3979, "amount": 26000, "public": True},
-            {"x": 5000, "y": 5720, "amount": 26000, "public": True},
-            {"x": 2603, "y": 3979, "amount": 26000, "public": True},
-            {"x": 3519, "y": 1161, "amount": 26000, "public": True},
+            {"x": 6756, "y": 1361, "amount": 26000, "public": True},
+            {"x": 7292, "y": 4302, "amount": 26000, "public": True},
+            {"x": 4660, "y": 5720, "amount": 26000, "public": True},
+            {"x": 2498, "y": 3656, "amount": 26000, "public": True},
+            {"x": 3794, "y": 961, "amount": 26000, "public": True},
         ],
         # 纯装饰：立在陨石核顶上，不进碰撞、不挡矿。
         "landmarks": [dict(easter_eggs.CRATER_LANDMARK)],
@@ -2394,9 +2416,9 @@ class Terrain(object):
 
         if not self.rivers:
             return False
-        # Legacy water primitives still use sampling; live maps no longer
-        # contain rivers. Use a correctness-oriented interval without making
-        # the hot mountain path pay for it.
+        # Rivers still use sampling. gold_crater is the live map that uses
+        # them; keep a correctness-oriented interval without making the hot
+        # mountain path pay for it.
         distance = math.hypot(x2 - x1, y2 - y1)
         samples = min(96, max(samples, int(distance / 40.0) + 1))
         step_x = (x2 - x1) / samples

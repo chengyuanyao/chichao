@@ -77,9 +77,13 @@ def check_map(map_id, map_def):
                 assert not terrain.blocked(px, py), \
                     "%s: 出生点 %d 周围 %d 处被地形阻挡" % (map_id, index, dist)
 
-    # --- 新地图只允许山地分区，彻底禁用河流/桥梁瓶颈 ---
-    assert not map_def.get("rivers"), "%s: 不应再包含河流" % map_id
-    assert not map_def.get("bridges"), "%s: 不应再包含桥梁" % map_id
+    # 赤金陨坑用外环河+桥做邻里卡口；其余图仍只靠山地分区。
+    if map_id == "gold_crater":
+        assert map_def.get("rivers"), "%s: 外环卡口需要河流" % map_id
+        assert map_def.get("bridges"), "%s: 外环卡口需要桥梁" % map_id
+    else:
+        assert not map_def.get("rivers"), "%s: 不应再包含河流" % map_id
+        assert not map_def.get("bridges"), "%s: 不应再包含桥梁" % map_id
 
     # 锁住恢复后的大战场尺寸，防止后续改地形时又意外缩图。
     expected_sizes = {
@@ -100,7 +104,7 @@ def check_map(map_id, map_def):
         assert cell_of(terrain, sx, sy) in reachable, \
             "%s: 出生点 %d 与出生点 0 不连通" % (map_id, index)
 
-    # --- 道路必须可通行（画在山里/河里的路是误导） ---
+    # --- 道路必须可通行（画在山里/没桥的河里是误导） ---
     for index, road in enumerate(map_def.get("roads", [])):
         for step in range(0, 21):
             t = step / 20.0
@@ -108,6 +112,8 @@ def check_map(map_id, map_def):
             py = road["y1"] + (road["y2"] - road["y1"]) * t
             assert not terrain.point_in_mountain(px, py), \
                 "%s: 道路 %d 从山体中穿过（%.0f,%.0f）" % (map_id, index, px, py)
+            assert not terrain.point_in_water(px, py), \
+                "%s: 道路 %d 落入无桥水面（%.0f,%.0f）" % (map_id, index, px, py)
 
     # --- 实际开一局，检查矿区可达 ---
     players = [server.create_human("校验%d" % i, server.COLORS[i])
@@ -170,6 +176,8 @@ def main():
     print("  沿主干道寻路 %d 个航点" % len(path_along_road))
 
     crater = server.MAPS["gold_crater"]
+    pub = server.PUBLIC_MAPS["gold_crater"]
+    assert pub.get("rivers") and pub.get("bridges")
     assert crater["maxPlayers"] == 5
     assert len(crater["spawnPoints"]) == 5
     assert crater["theme"] == "crater"
@@ -225,7 +233,99 @@ def main():
     print("  中庭金库 %d 处 / 储量 %.0f" % (
         len(live_center), sum(r["amount"] for r in live_center)))
 
+    check_gold_crater_chokepoints(crater, crater_ores)
+
     print("map tests ok: %d 张地图通过" % len(server.MAPS))
+
+
+# 外环五处邻里卡口：北岗-东北、东北-东南、东南-西南、西南-西北、西北-北岗。
+# 每道熔水河沿五边形角平分线从陨坑外壁拉到地图边，只在外环公路留桥。
+CRATER_RIM_LINKS = (
+    {"name": "北岗-东北", "angle": -54.0, "bridge": (6575, 1032)},
+    {"name": "东北-东南", "angle": 18.0, "bridge": (7549, 4028)},
+    {"name": "东南-西南", "angle": 90.0, "bridge": (5000, 5880)},
+    {"name": "西南-西北", "angle": 162.0, "bridge": (2451, 4028)},
+    {"name": "西北-北岗", "angle": -126.0, "bridge": (3425, 1032)},
+)
+CRATER_CX, CRATER_CY = 5000.0, 3200.0
+# 坦克 / 攻城炮 / 裂地晶兽半径约 20–22，桥盒短边必须留出并排余量。
+CRATER_BRIDGE_MIN = 110.0
+
+
+def _crater_polar(radius, angle_deg):
+    ang = math.radians(angle_deg)
+    return (CRATER_CX + radius * math.cos(ang),
+            CRATER_CY + radius * math.sin(ang))
+
+
+def check_gold_crater_chokepoints(crater, live_ores):
+    terrain = server.terrain_for_map(crater)
+    terrain._ensure_grid()
+    rivers = list(crater.get("rivers") or [])
+    bridges = list(crater.get("bridges") or [])
+    spawns = crater["spawnPoints"]
+    assert len(rivers) == 5, len(rivers)
+    assert len(bridges) == 5, len(bridges)
+
+    dry = server.Terrain(rivers, [], crater["width"], crater["height"],
+                         crater.get("mountains"), crater.get("roads"))
+    for index, link in enumerate(CRATER_RIM_LINKS):
+        bridge = bridges[index]
+        bx, by = link["bridge"]
+        assert abs(bridge["x"] - bx) < 2 and abs(bridge["y"] - by) < 2, link["name"]
+        assert min(bridge["w"], bridge["h"]) >= CRATER_BRIDGE_MIN, link["name"]
+        assert dry.point_in_water(bridge["x"], bridge["y"]), \
+            "%s: 桥心必须压在河面上" % link["name"]
+        assert not terrain.blocked(bridge["x"], bridge["y"]), \
+            "%s: 桥面被标成阻挡格" % link["name"]
+        assert terrain.cell_open(bridge["x"], bridge["y"]), \
+            "%s: 寻路网格把桥面封了" % link["name"]
+        # 攻城炮 / 晶兽中心踩在桥上不能落水。
+        assert not terrain.blocked(bridge["x"], bridge["y"], 24), \
+            "%s: 桥面不够大单位落脚" % link["name"]
+
+        # 外环抄近道：卡口两侧的旷野直线被河拦住，必须走桥。
+        px, py = _crater_polar(2350.0, link["angle"])
+        ang = math.radians(link["angle"])
+        vx, vy = -math.sin(ang), math.cos(ang)
+        left = (px - 400.0 * vx, py - 400.0 * vy)
+        right = (px + 400.0 * vx, py + 400.0 * vy)
+        assert not terrain.blocked(left[0], left[1]), link["name"]
+        assert not terrain.blocked(right[0], right[1]), link["name"]
+        assert terrain.segment_blocked(left[0], left[1], right[0], right[1]), \
+            "%s: 外环旷野仍能直线穿过卡口" % link["name"]
+        via = terrain.find_path(left[0], left[1], right[0], right[1])
+        assert len(via) > 1, "%s: 卡口两侧无法经桥绕行" % link["name"]
+
+    # 每家都能走到：其他出生点、中庭金库、自家矿、最近口袋矿。
+    vault = (5000.0, 2740.0)
+    for i, (sx, sy) in enumerate(spawns):
+        assert len(terrain.find_path(sx, sy, vault[0], vault[1])) > 0, i
+        cdx, cdy = CRATER_CX - sx, CRATER_CY - sy
+        dist = max(1.0, math.hypot(cdx, cdy))
+        factor = min(0.20, 650.0 / dist)
+        home = (sx + cdx * factor, sy + cdy * factor)
+        assert len(terrain.find_path(sx, sy, home[0], home[1])) > 0, i
+        pocket = min(pocket_ores_of(crater),
+                     key=lambda ore: math.hypot(ore[0] - sx, ore[1] - sy))
+        assert len(terrain.find_path(sx, sy, pocket[0], pocket[1])) > 0, i
+        for j, (tx, ty) in enumerate(spawns):
+            if i == j:
+                continue
+            path = terrain.find_path(sx, sy, tx, ty)
+            assert len(path) > 0, "%s -> %s" % (i, j)
+
+    live_pockets = [r for r in live_ores
+                    if math.hypot(r["x"] - CRATER_CX, r["y"] - CRATER_CY) > 2000]
+    assert len(live_pockets) == 5
+    assert all(r["amount"] == 26000 for r in live_pockets)
+    print("  外环 5 处河桥卡口 / 出生点互通 / 桥面可通行")
+
+
+def pocket_ores_of(crater):
+    cx, cy = crater["width"] / 2.0, crater["height"] / 2.0
+    return [(r["x"], r["y"]) for r in crater.get("bonusResources") or []
+            if math.hypot(r["x"] - cx, r["y"] - cy) > 2000]
 
 
 if __name__ == "__main__":

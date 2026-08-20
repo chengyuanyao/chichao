@@ -83,11 +83,16 @@ def main():
     assert "timestamp - lastHudOverlayAt >= 50" in app
     assert "game.units.length >" not in render
 
-    # Live battlefields use mountains and valleys only: no bridge bottlenecks.
+    # Other live maps stay mountain-only; gold_crater is the rim-bridge map.
+    crater = server.MAPS["gold_crater"]
+    assert crater.get("rivers") and crater.get("bridges")
     for map_id, map_def in server.MAPS.items():
+        if map_id == "gold_crater":
+            continue
         assert not map_def.get("rivers"), "%s still has river data" % map_id
         assert not map_def.get("bridges"), "%s still has bridge data" % map_id
         assert map_def.get("mountains"), "%s needs mountain blockers" % map_id
+    assert crater.get("mountains"), "gold_crater needs mountain blockers"
     expected_sizes = {
         "north_conflict": (9600, 6000),
         "island_hop": (7200, 6000),
