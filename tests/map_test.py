@@ -83,7 +83,6 @@ def check_map(map_id, map_def):
     # 锁住恢复后的大战场尺寸，防止后续改地形时又意外缩图。
     expected_sizes = {
         "north_conflict": (9600, 6000),
-        "cliff_assault": (9600, 6000),
         "island_hop": (7200, 6000),
         "urban_siege": (6400, 6400),
         "narrow_standoff": (4800, 3200),

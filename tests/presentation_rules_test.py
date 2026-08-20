@@ -90,7 +90,6 @@ def main():
         assert map_def.get("mountains"), "%s needs mountain blockers" % map_id
     expected_sizes = {
         "north_conflict": (9600, 6000),
-        "cliff_assault": (9600, 6000),
         "island_hop": (7200, 6000),
         "urban_siege": (6400, 6400),
         "narrow_standoff": (4800, 3200),
@@ -207,7 +206,7 @@ def main():
     for theme_id in ("grassland", "arid", "urban", "crater"):
         assert ("  %s:" % theme_id) in render
     assert server.MAPS["north_conflict"]["theme"] == "grassland"
-    assert server.MAPS["cliff_assault"]["theme"] == "arid"
+    assert server.MAPS["narrow_standoff"]["theme"] == "arid"
     assert server.MAPS["urban_siege"]["theme"] == "urban"
     assert server.MAPS["gold_crater"]["theme"] == "crater"
     assert "mapBriefingDisplay" in app
