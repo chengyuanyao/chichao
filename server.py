@@ -8,6 +8,7 @@ Compatible with the Windows Python 3.6 installation on this machine.
 from __future__ import print_function
 
 import heapq
+import itertools
 import json
 import math
 import mimetypes
@@ -1401,6 +1402,8 @@ def add_random_resources(game, count, spawn_points):
 
 def start_game(room):
     players = list(room["players"].values())
+    # 出生点每局重新洗牌：谁站哪不按进房顺序，team 分配也会因顺序而变。
+    random.shuffle(players)
     count = len(players)
     room_map = MAPS.get(room.get("selectedMap", DEFAULT_MAP), MAPS[DEFAULT_MAP])
     if count < 2:
@@ -1450,32 +1453,25 @@ def start_game(room):
     total_spawns = len(spawn_points)
 
     if not any_team and not has_explicit_spawn:
-        spread_by_spawns = {
-            6: {
-                2: [0, 5],
-                3: [0, 2, 4],
-                4: [0, 2, 3, 5],
-                5: [0, 1, 2, 3, 5],
-                6: [0, 1, 2, 3, 4, 5],
-            },
-            # 赤金陨坑这类五出生点：2 人对角、3 人隔点、4 人空出北岗。
-            5: {
-                2: [0, 2],
-                3: [0, 2, 4],
-                4: [1, 2, 3, 4],
-                5: [0, 1, 2, 3, 4],
-            },
-        }
-        spread = spread_by_spawns.get(total_spawns)
-        if spread is not None:
-            player_spawns = {}
-            assigned_indices = spread.get(count, list(range(min(count, total_spawns))))
-            for index, player in enumerate(players):
-                player_spawns[player["id"]] = assigned_indices[index] if index < len(assigned_indices) else 0
-        else:
-            player_spawns = {}
-            for index, player in enumerate(players):
-                player_spawns[player["id"]] = index if index < total_spawns else 0
+        # 未占满出生点时，从全部 C(n, k) 组合里挑"最分散"的一组（最小两两
+        # 间距最大者），同档多组随机取一；分配顺序已在上方洗牌。既保证
+        # 2 人对角、3 人隔点这类公平几何，又让每局的实际出生点真正随机。
+        best_sets = []
+        best_min = -1.0
+        for combo in itertools.combinations(range(total_spawns), count):
+            local_min = min(
+                (spawn_points[combo[i]][0] - spawn_points[combo[j]][0]) ** 2
+                + (spawn_points[combo[i]][1] - spawn_points[combo[j]][1]) ** 2
+                for i in range(count) for j in range(i + 1, count))
+            if local_min > best_min:
+                best_min = local_min
+                best_sets = [combo]
+            elif local_min == best_min:
+                best_sets.append(combo)
+        chosen = random.choice(best_sets)
+        player_spawns = {}
+        for index, player in enumerate(players):
+            player_spawns[player["id"]] = chosen[index % len(chosen)]
     else:
         # Group players by team (treat team-0 solo players as individual teams)
         teams = {}
@@ -1490,6 +1486,8 @@ def start_game(room):
             0 if isinstance(g[0].get("team", 0), int) and g[0].get("team", 0) > 0 else 1,
             g[0].get("team", 0), g[0]["id"]
         ))
+        # 阵营分组固定后打乱顺序：南/北谁占不再每局一样。
+        random.shuffle(team_groups)
 
         spawns_per_side = total_spawns // 2 if total_spawns >= 2 else total_spawns
 
@@ -3658,11 +3656,12 @@ def player_has_command(game, player_id):
     return False
 
 
-def check_elimination_and_victory(room):
+def check_elimination_and_victory(room, force=False):
     """淘汰与胜负判定。仍按 victoryClock 的 0.45s 节奏跑，不需要 20Hz 的精度。
 
     规则与开局提示一致：摧毁指挥中心（含魔法主堡）即淘汰。折叠成基地车
     不算失去指挥——否则开局就能把主堡收起然后立刻战败。
+    force 用于玩家中途离开等弃权情形：不等开局 15 秒缓冲，立即定胜负。
     """
     game = room["game"]
     for player in room["players"].values():
@@ -3679,12 +3678,12 @@ def check_elimination_and_victory(room):
             add_chat(room, "作战系统", "%s 的指挥中心已被摧毁，彻底战败。" % player["name"], True)
 
     alive = [p for p in room["players"].values() if not p["eliminated"]]
-    if game["elapsed"] > 15 and len(alive) <= 1:
+    if (force or game["elapsed"] > 15) and len(alive) <= 1:
         winner = alive[0] if alive else None
         game["winnerId"] = winner["id"] if winner else None
         room["status"] = "finished"
         add_chat(room, "作战系统", "%s 赢得了本局战斗！" % (winner["name"] if winner else "无人"), True)
-    elif game["elapsed"] > 15:
+    elif force or game["elapsed"] > 15:
         surviving_teams = set()
         for p in alive:
             t = p.get("team", 0)
@@ -4285,6 +4284,19 @@ class GameHandler(BaseHTTPRequestHandler):
                 else:
                     player["connections"] = 0
                     player["lastSeen"] = 0
+                    # 战斗中离开视为放弃：部队退出战区，剩余玩家立即获胜。
+                    if room["status"] == "playing" and not player.get("eliminated"):
+                        player["eliminated"] = True
+                        game = room.get("game")
+                        if game:
+                            game["units"] = [u for u in game["units"] if u["owner"] != player["id"]]
+                            # 遗留的生产建筑保留为摆设（同淘汰逻辑），但清空队列。
+                            for structure in game["structures"]:
+                                if structure["owner"] == player["id"]:
+                                    structure["queue"] = []
+                            invalidate_game_snapshot(game)
+                        add_chat(room, "作战系统", "%s 离开了游戏，放弃本局战斗。" % name, True)
+                        check_elimination_and_victory(room, force=True)
             else:
                 raise ValueError("未知操作")
             # 指令可能在两个模拟 tick 之间直接改变建筑/队列；REST 响应必须看到

@@ -100,8 +100,13 @@ def main():
 
     team1_y = [get_hq_y_reuse(p["id"]) for p in players[:3]]
     team2_y = [get_hq_y_reuse(p["id"]) for p in players[3:]]
-    assert all(y < 1600 for y in team1_y), "team 1 should all be on top"
-    assert all(y > 1600 for y in team2_y), "team 2 should all be on bottom"
+    # 哪队在上哪队在下每局随机，但两队必须各占一侧
+    assert all(y < 1600 for y in team1_y) or all(y > 1600 for y in team1_y), \
+        "team 1 should all be on the same side"
+    assert all(y < 1600 for y in team2_y) or all(y > 1600 for y in team2_y), \
+        "team 2 should all be on the same side"
+    assert (team1_y[0] < 1600) != (team2_y[0] < 1600), \
+        "teams should be on opposite sides"
     print("  3v3 team adjacency: PASS")
 
     print("\n=== Test 5: Mixed solo + team ===")

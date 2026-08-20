@@ -43,12 +43,18 @@ def main():
 
     hq = next(item for item in game["structures"]
               if item["owner"] == alpha["id"] and item["kind"] == "hq")
+    # 出生点现在每局随机（可能贴地图左/右/上/下边缘），建造偏移跟随
+    # 出生朝向取反方向，避开电站/精炼厂等开局建筑。
+    center_x = game["map"]["width"] / 2.0
+    center_y = game["map"]["height"] / 2.0
+    toward_x = 1 if hq["x"] < center_x else -1
+    toward_y = 1 if hq["y"] < center_y else -1
     server.queue_structure(room, alpha["id"], "barracks")
     assert alpha["buildQueue"][0]["ready"] is False
     tick_for(room, 10.2)
     assert alpha["buildQueue"][0]["ready"] is True
     barracks = server.place_prepared_structure(
-        room, alpha["id"], "barracks", hq["x"] + 200, hq["y"] - 120)
+        room, alpha["id"], "barracks", hq["x"] + toward_x * 200, hq["y"] - toward_y * 120)
     assert barracks["active"] is False
     tick_for(room, 3.0)
     assert barracks["active"] is True
@@ -57,7 +63,7 @@ def main():
     server.queue_structure(room, alpha["id"], "turret")
     tick_for(room, 12.2)
     turret = server.place_prepared_structure(
-        room, alpha["id"], "turret", hq["x"] - 190, hq["y"] + 40)
+        room, alpha["id"], "turret", hq["x"] - toward_x * 190, hq["y"] + 40)
     server.apply_damage(room, turret, 130, beta["id"])
     tick_for(room, 0.4)
     undamaged_material_hp = turret["maxHp"] * (
