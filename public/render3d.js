@@ -610,6 +610,30 @@ const UNIT_BUILDERS = {
     };
   },
 
+  hexling: function () {
+    // 爆裂魔仆：矮小符核活体。晶核 + 腰环 + 晶刺，不是卡车也不是傀儡。
+    const body = [
+      taperedBox(7.6, 7.0, 5.2, 4.8, 8.4, 0, 8.6, 0, MAT.crystal),
+      taperedBox(4.4, 4.2, 3.0, 2.8, 3.6, 0.6, 14.4, 0, MAT.slate),
+      sph(1.7, 6, 1.4, 15.2, 0, MAT.slate),
+      box(2.0, 5.6, 2.0, 0.4, 3.2, 2.2, MAT.magicStone),
+      box(2.0, 5.6, 2.0, 0.4, 3.2, -2.2, MAT.magicStone),
+      pyr(0.7, 3.2, 4, 0, 17.6, 0, MAT.crystal),
+      taperedBox(2.4, 2.4, 1.1, 1.1, 2.8, -2.6, 12.4, 2.4, MAT.crystal),
+      taperedBox(2.4, 2.4, 1.1, 1.1, 2.8, -2.6, 12.4, -2.4, MAT.crystal)
+    ];
+    return {
+      body: body,
+      glow: [
+        sph(1.7, 7, 2.2, 9.4, 0, MAT.arcaneGlow),               // 胸口符核
+        cyl(3.6, 3.6, 0.28, 12, 0, 7.4, 0, MAT.arcaneGlow),     // 腰间符环
+        sph(0.45, 5, 2.2, 14.8, 0.85, MAT.arcaneGlow),
+        sph(0.45, 5, 2.2, 14.8, -0.85, MAT.arcaneGlow),
+        sph(0.7, 5, 0, 18.8, 0, MAT.arcaneGlow)
+      ]
+    };
+  },
+
   mmcv: function () {
     // 迁徙法阵：悬浮平台 + 竖立的符文环，环心是奥术漩涡
     const body = [
@@ -788,6 +812,38 @@ const UNIT_BUILDERS = {
   },
 
   tesla: function () { return infantryParts('tesla'); },
+
+  bomb_truck: function () {
+    // 自爆卡车：轮式药箱车。驾驶室在前、后斗码炸药桶，没有炮塔。
+    const body = [
+      taperedBox(30, 16, 24, 14, 7.2, -1, 8.2, 0, 0.92),
+      taperedBox(12, 14, 10, 12, 8.0, 10, 13.0, 0, 0.78),       // 驾驶室
+      box(6, 3.2, 14, 16.4, 8.0, 0, MAT.steel),                 // 前保险杠
+      box(16, 2.4, 15, -6, 11.6, 0, MAT.warnYellow),            // 货斗底板
+      cyl(3.6, 3.6, 7.2, 10, -4, 16.2, 3.2, MAT.rust),          // 炸药桶
+      cyl(3.6, 3.6, 7.2, 10, -4, 16.2, -3.2, MAT.rust),
+      cyl(3.2, 3.2, 6.4, 10, -11, 15.6, 0, MAT.rust),
+      box(14, 1.2, 1.4, -6, 12.4, 7.8, MAT.warnYellow),
+      box(14, 1.2, 1.4, -6, 12.4, -7.8, MAT.warnYellow),
+      box(2.2, 1.6, 2.0, 14.6, 17.6, 0, MAT.gunmetal)           // 观瞄窗框
+    ];
+    [1, -1].forEach(function (side) {
+      [10.0, 0.0, -10.0].forEach(function (px) {
+        body.push(cyl(3.2, 3.2, 2.8, 10, px, 3.4, side * 8.4, MAT.rubber, ROT_X90));
+      });
+    });
+    return {
+      body: body,
+      glow: [
+        box(10, 0.7, 0.5, 8, 12.2, 7.4, GLOW_SOFT),
+        box(10, 0.7, 0.5, 8, 12.2, -7.4, GLOW_SOFT),
+        sph(1.15, 6, -4, 20.4, 3.2, GLOW_HOT),                  // 桶顶引信
+        sph(1.15, 6, -4, 20.4, -3.2, GLOW_HOT),
+        sph(1.05, 6, -11, 19.4, 0, GLOW_HOT),
+        box(1.6, 1.0, 4.2, 15.8, 16.8, 0, GLOW_HOT)
+      ]
+    };
+  },
 
   prism: function () {
     return {
@@ -1502,9 +1558,9 @@ const UNIT_VISUAL_SCALE = {
   rifle: 2.15, rocket: 2.15, sniper: 2.15, tesla: 2.15, dog: 1.85,
   tank: 1.28, scout: 1.34, tank_destroyer: 1.28,
   artillery: 1.28, harvester: 1.16, mcv: 1.30, v3: 1.28,
-  overlord: 1.30, prism: 1.28,
+  overlord: 1.30, prism: 1.28, bomb_truck: 1.32,
   mage: 2.15, frost: 2.15, golem: 1.42, panther: 1.7, dragon: 1.34,
-  warden: 1.40, colossus: 1.30,
+  warden: 1.40, colossus: 1.30, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30
 };
 
@@ -3586,6 +3642,15 @@ export function createRenderer(canvas) {
         sph(2.2, 6, 4, 32, 0, MAT.prismGlow)
       ]);
     }
+    if (kind === 'bomb_truck') {
+      return [
+        taperedBox(30, 16, 24, 14, 7.2, -1, 8.2, 0, 0.92),
+        taperedBox(12, 14, 10, 12, 8.0, 10, 13.0, 0, 0.78),
+        cyl(3.6, 3.6, 7.2, 8, -4, 16.2, 3.2, MAT.rust),
+        cyl(3.6, 3.6, 7.2, 8, -4, 16.2, -3.2, MAT.rust),
+        sph(1.2, 6, -4, 20.4, 0, GLOW_HOT)
+      ];
+    }
     if (kind === 'tesla') {
       return infantry.concat([
         box(4.4, 2.6, 10.6, -0.2, 11.2, 0, 0.5),
@@ -3677,6 +3742,14 @@ export function createRenderer(canvas) {
       return [
         taperedBox(22, 16, 24, 18, 5, 0, 6, 0, MAT.magicStone),
         cyl(9, 9, 2, 10, 0, 16, 0, MAT.crystal, ROT_Z90)
+      ];
+    }
+    if (kind === 'hexling') {
+      return [
+        taperedBox(7.6, 7.0, 5.2, 4.8, 8.4, 0, 8.6, 0, MAT.crystal),
+        sph(1.7, 6, 2.2, 9.4, 0, MAT.arcaneGlow),
+        cyl(3.6, 3.6, 0.28, 10, 0, 7.4, 0, MAT.arcaneGlow),
+        pyr(0.7, 3.2, 4, 0, 17.6, 0, MAT.crystal)
       ];
     }
     return infantry;
@@ -4345,6 +4418,53 @@ export function createRenderer(canvas) {
         x: x, y: y, radius: 26 + rand() * 10, growth: 0, alpha: 0.5,
         life: 14, maxLife: 14, hold: true, r: 0.05, g: 0.04, b: 0.03
       });
+    } else if (type === 'blast') {
+      // 自爆单位的大爆炸：比普通阵亡火球更大，魔仆带紫核。
+      const magic = kind === 'hexling';
+      burst(fireLayer, 14, function () {
+        const a = rand() * TAU;
+        const sp = 80 + rand() * 150;
+        return {
+          x: x, y: 10 + rand() * 14, z: y,
+          vx: Math.cos(a) * sp, vy: 50 + rand() * 110, vz: Math.sin(a) * sp,
+          life: 0.6 + rand() * 0.4, maxLife: 1.0,
+          size: 22 + rand() * 18, grow: true,
+          r: magic ? 1.7 : 2.4, g: magic ? 0.55 : 1.0, b: magic ? 2.2 : 0.22
+        };
+      });
+      burst(fireLayer, 10, function () {
+        const a = rand() * TAU;
+        const sp = 220 + rand() * 260;
+        return {
+          x: x, y: 8, z: y,
+          vx: Math.cos(a) * sp, vy: 110 + rand() * 180, vz: Math.sin(a) * sp,
+          life: 0.4 + rand() * 0.35, maxLife: 0.75,
+          size: 5 + rand() * 4,
+          r: magic ? 1.9 : 2.5, g: magic ? 0.8 : 1.95, b: magic ? 2.4 : 1.0
+        };
+      });
+      flashAt(x, y, magic ? 0xc46bff : 0xffa445);
+      burst(smokeLayer, 9, function () {
+        const a = rand() * TAU;
+        const sp = 30 + rand() * 70;
+        const grey = 0.14 + rand() * 0.12;
+        return {
+          x: x, y: 12 + rand() * 16, z: y,
+          vx: Math.cos(a) * sp, vy: 46 + rand() * 46, vz: Math.sin(a) * sp,
+          life: 1.3 + rand() * 1.0, maxLife: 2.3,
+          size: 28 + rand() * 24, grow: true, buoyancy: -0.12,
+          r: magic ? grey * 0.7 : grey, g: grey * 0.9, b: magic ? grey * 1.2 : grey * 0.85
+        };
+      });
+      shockLayer.spawn({
+        x: x, y: y, radius: 18, growth: 150, alpha: 0.85,
+        life: 0.5, maxLife: 0.5,
+        r: magic ? 0.82 : 1.0, g: magic ? 0.42 : 0.72, b: magic ? 1.0 : 0.36
+      });
+      scorchLayer.spawn({
+        x: x, y: y, radius: 40 + rand() * 12, growth: 0, alpha: 0.58,
+        life: 16, maxLife: 16, hold: true, r: 0.05, g: 0.04, b: 0.03
+      });
     } else if (type === 'impact') {
       if (kind === 'frost') {
         burst(fireLayer, 8, function () {
@@ -4957,9 +5077,11 @@ export function createRenderer(canvas) {
     if (useSimple) return;
     const kind = vis.unit.kind;
     if (kind !== 'frost' && kind !== 'dragon' && kind !== 'mage'
-        && kind !== 'warden' && kind !== 'colossus') return;
+        && kind !== 'warden' && kind !== 'colossus'
+        && kind !== 'bomb_truck' && kind !== 'hexling') return;
     if (fireLayer.list.length > state.particleBudget * 0.5) return;
     const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6
+      : kind === 'bomb_truck' ? 7 : kind === 'hexling' ? 6
       : kind === 'colossus' ? 5 : kind === 'warden' ? 4 : 3.5;
     if (Math.random() > dt * rate) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
@@ -5001,6 +5123,24 @@ export function createRenderer(canvas) {
         vx: 0, vy: 11, vz: 0,
         life: 0.36, maxLife: 0.36, size: 3.0,
         r: 1.4, g: 0.7, b: 2.05
+      });
+    } else if (kind === 'bomb_truck') {
+      emit(fireLayer, {
+        x: vis.x + (Math.random() - 0.5) * 6,
+        y: gy + 16 + Math.random() * 6,
+        z: vis.y + (Math.random() - 0.5) * 6,
+        vx: (Math.random() - 0.5) * 4, vy: 16 + Math.random() * 10, vz: (Math.random() - 0.5) * 4,
+        life: 0.28, maxLife: 0.28, size: 3.4,
+        r: 2.3, g: 1.1, b: 0.28
+      });
+    } else if (kind === 'hexling') {
+      emit(fireLayer, {
+        x: vis.x + (Math.random() - 0.5) * 6,
+        y: gy + 8 + Math.random() * 6,
+        z: vis.y + (Math.random() - 0.5) * 6,
+        vx: 0, vy: 12, vz: 0,
+        life: 0.32, maxLife: 0.32, size: 3.2,
+        r: 1.55, g: 0.55, b: 2.15
       });
     } else {
       emit(fireLayer, {
@@ -5382,7 +5522,9 @@ export function createRenderer(canvas) {
     const fresh = payload.newEffects || [];
     for (let i = 0; i < fresh.length; i++) {
       const fx = fresh[i];
-      const fxKind = fx.type === 'impact' ? guessImpactKind(fx.x, fx.y, projectileHintPrev) : null;
+      const fxKind = fx.type === 'impact'
+        ? guessImpactKind(fx.x, fx.y, projectileHintPrev)
+        : (fx.kind || null);
       spawnEffect(fx.type, fx.x, fx.y, fxKind);
     }
     projectileHintPrev = projectileHints;

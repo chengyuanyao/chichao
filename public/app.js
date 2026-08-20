@@ -41,6 +41,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     prism: { icon: '✦', desc: '远程聚焦光束，点杀轻型与建筑 · 需维修厂' },
     harvester: { icon: '▣', desc: '自动采集矿石' },
     mcv: { icon: '⬢', desc: '可展开为新指挥中心' },
+    bomb_truck: { icon: '💣', desc: '高速药箱车，贴脸或阵亡大爆炸；克步兵堆与成团建筑' },
     mage: { icon: '✦', desc: '远程奥术弹，熔重甲的反坦克手' },
     frost: { icon: '❄', desc: '命中减速敌军，控制拉扯核心' },
     golem: { icon: '⛰', desc: '构装前排，高血投石溅射' },
@@ -49,7 +50,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     warden: { icon: '⛊', desc: '晶铠前排，混甲抗磁暴/狙击/军犬 · 需圣泉' },
     colossus: { icon: '☄', desc: '远程晶陨，专拆建筑 · 需圣泉' },
     mharvester: { icon: '◈', desc: '自动采集水晶' },
-    mmcv: { icon: '⬡', desc: '可展开为魔法主堡' }
+    mmcv: { icon: '⬡', desc: '可展开为魔法主堡' },
+    hexling: { icon: '✶', desc: '符核魔仆，贴脸或阵亡引爆；非载具，军犬能扑' }
   };
 
   var BUILDINGS = {};
@@ -208,7 +210,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1,
     mage: 1, frost: 1, golem: 1, panther: 1, dragon: 1, warden: 1, colossus: 1,
-    mharvester: 1, mmcv: 1
+    mharvester: 1, mmcv: 1, hexling: 1
   };
 
   function pRect(c, x, y, w, h, fill) {
@@ -587,6 +589,28 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       pPoly(c, [[26, 44], [15, 55], [26, 52]], P_DARK);
       pLine(c, 27, 34.6, 49, 34.6, 1.2, 'rgba(243,233,212,.45)');
     },
+    bomb_truck: function (c) {
+      // 轮式药箱车：驾驶室 + 后斗炸药桶 + 引信，一眼不是坦克
+      pShadow(c, 48, 60, 28);
+      pCirc(c, 30, 54, 5.2, P_OUT);
+      pCirc(c, 48, 54, 5.2, P_OUT);
+      pCirc(c, 66, 54, 5.2, P_OUT);
+      pCirc(c, 30, 54, 2.2, P_DARK);
+      pCirc(c, 48, 54, 2.2, P_DARK);
+      pCirc(c, 66, 54, 2.2, P_DARK);
+      pPoly(c, [[22, 50], [74, 50], [70, 40], [40, 38], [26, 44]], P_BODY);
+      pRect(c, 24, 34, 18, 12, P_DARK);
+      pRect(c, 27, 36, 8, 5, P_LITE);
+      pCirc(c, 52, 36, 7, P_RED);
+      pCirc(c, 64, 38, 5.5, P_AMBER);
+      pCirc(c, 52, 36, 2.4, P_LCD);
+      pLine(c, 52, 29, 56, 18, 1.6, P_OUT);
+      pCirc(c, 56, 16, 1.8, P_LCD);
+      pRect(c, 40, 48, 28, 3, P_AMBER);
+      for (var hx = 40; hx < 66; hx += 6) {
+        pPoly(c, [[hx, 51], [hx + 3, 48], [hx + 5.4, 48], [hx + 2.4, 51]], P_OUT);
+      }
+    },
     mcv: function (c) {
       pShadow(c, 48, 61, 30);
       pCirc(c, 30, 56, 4, P_OUT);
@@ -906,6 +930,22 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       pRect(c, 32, 40, 4, 8, '#4a4453');
       pRect(c, 60, 40, 4, 8, '#4a4453');
       pLine(c, 26, 55.5, 70, 55.5, 1.5, P_FROST);
+    },
+    hexling: function (c) {
+      // 爆裂魔仆：矮小符核活体 + 腰环 + 胸口晶核，不是卡车剪影
+      pShadow(c, 48, 60, 18);
+      pRect(c, 40, 46, 4, 12, P_STONE);
+      pRect(c, 52, 46, 4, 12, P_STONE);
+      pPoly(c, [[36, 50], [60, 50], [56, 30], [40, 30]], P_CRYSTAL);
+      pPoly(c, [[60, 50], [50, 50], [50, 30], [56, 30]], 'rgba(10,10,6,.26)');
+      pCirc(c, 48, 26, 7, P_STONE);
+      pPoly(c, [[44, 22], [48, 12], [52, 22]], P_ARCANE);
+      pCirc(c, 48, 38, 4.2, P_ARCANE);
+      pCirc(c, 48, 38, 1.8, '#f2e6ff');
+      c.strokeStyle = P_FROST; c.lineWidth = 1.8;
+      c.beginPath(); c.ellipse(48, 42, 12, 4, 0, 0, Math.PI * 2); c.stroke();
+      pCirc(c, 45, 24, 1.1, P_ARCANE);
+      pCirc(c, 51, 24, 1.1, P_ARCANE);
     }
   };
 
