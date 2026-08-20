@@ -17,6 +17,7 @@ import time
 from collections import deque
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import easter_eggs
 import server
 
 
@@ -172,6 +173,8 @@ def main():
     assert crater["maxPlayers"] == 5
     assert len(crater["spawnPoints"]) == 5
     assert crater["theme"] == "crater"
+    assert easter_eggs.crater_landmark_on_core(crater)
+    assert easter_eggs.inspect_landmark(crater, 5000, 3200)["label"] == "先挖先富"
     assert crater.get("publicOreCount", 4) > 4
     assert crater["homeOreAmounts"] == (26000, 19000, 17000, 21000)
     bonuses = list(crater.get("bonusResources") or [])

@@ -42,6 +42,7 @@ from catalog import (
     structure_role,
     unit_role,
 )
+import easter_eggs
 
 
 VERSION = "2.0.0"
@@ -428,6 +429,8 @@ MAPS = {
             {"x": 2603, "y": 3979, "amount": 26000, "public": True},
             {"x": 3519, "y": 1161, "amount": 26000, "public": True},
         ],
+        # 纯装饰：立在陨石核顶上，不进碰撞、不挡矿。
+        "landmarks": [dict(easter_eggs.CRATER_LANDMARK)],
     },
 }
 COMBAT_CELL_SIZE = 256.0
@@ -991,6 +994,7 @@ PUBLIC_MAPS = {
         "mountains": m.get("mountains", []),
         "roads": m.get("roads", []),
         "resources": m.get("bonusResources", []),
+        "landmarks": [dict(item) for item in m.get("landmarks", [])],
     }
     for mid, m in MAPS.items()
 }
@@ -1004,7 +1008,7 @@ def public_room(room, include_game=True, viewer_id=None, full=True):
         "status": room["status"],
         "hostId": room["hostId"],
         "players": [public_player(room, p, viewer_id) for p in room["players"].values()],
-        "chat": [dict(message) for message in room["chat"][-30:]],
+        "chat": public_chat(room, viewer_id),
         "createdAt": room["createdAt"],
         "serverTime": now(),
         "selectedMap": room.get("selectedMap", DEFAULT_MAP),
@@ -1061,15 +1065,44 @@ def room_list():
     return rooms
 
 
-def add_chat(room, sender, message, system=False):
-    room["chat"].append({
+def public_chat(room, viewer_id=None):
+    """Last 30 lines the viewer is allowed to see. Whispers stay with one player."""
+    visible = []
+    for message in room["chat"]:
+        target = message.get("whisperTo")
+        if target and target != viewer_id:
+            continue
+        visible.append({
+            "id": message["id"],
+            "sender": message["sender"],
+            "message": message["message"],
+            "system": message["system"],
+            "time": message["time"],
+        })
+    return visible[-30:]
+
+
+def add_chat(room, sender, message, system=False, whisper_to=None):
+    item = {
         "id": new_id("m"),
         "sender": sender,
-        "message": clean_text(message, 100, ""),
+        "message": clean_text(message, 120, ""),
         "system": system,
         "time": now(),
-    })
+    }
+    if whisper_to:
+        item["whisperTo"] = whisper_to
+    room["chat"].append(item)
     room["chat"] = room["chat"][-30:]
+
+
+def post_player_chat(room, player, message):
+    """Broadcast a player line, then maybe a private easter-egg reply."""
+    add_chat(room, player["name"], message)
+    reply = easter_eggs.chat_reply(message)
+    if reply:
+        add_chat(room, "作战系统", reply, True, whisper_to=player["id"])
+    return reply
 
 
 def create_human(name, color, team=0, spawn=-1):
@@ -1438,6 +1471,7 @@ def start_game(room):
             "mountains": [{"x": m["x"], "y": m["y"], "r": m["r"]} for m in mountains],
             "roads": [{"x1": r["x1"], "y1": r["y1"], "x2": r["x2"], "y2": r["y2"], "width": r["width"]} for r in roads],
             "theme": room_map.get("theme", "grassland"),
+            "landmarks": [dict(item) for item in room_map.get("landmarks") or []],
         },
         # Shared per-map navigation context. Never serialized: public_game()
         # copies only the plain "terrain" dict above.
@@ -2078,8 +2112,45 @@ def handle_game_command(room, player, payload):
         structure["rally"] = (rally_x, rally_y)
     elif command == "callStrike":
         issue_strike(room, player["id"], payload.get("x", 0), payload.get("y", 0))
+    elif command == "tapHq":
+        tap_own_hq(room, player, payload.get("structureId"))
     else:
         raise ValueError("未知指令")
+
+
+def find_own_hq(game, player_id, structure_id=None):
+    for structure in game["structures"]:
+        if structure["owner"] != player_id or structure.get("hp", 0) <= 0:
+            continue
+        if structure_role(structure["kind"]) != "hq":
+            continue
+        if structure_id and structure["id"] != structure_id:
+            continue
+        return structure
+    return None
+
+
+def tap_own_hq(room, player, structure_id=None):
+    """Count a click on own HQ. Seventh tap in the window fires the salute egg."""
+    game = room.get("game")
+    if not game:
+        return False
+    hq = find_own_hq(game, player["id"], structure_id)
+    if not hq:
+        return False
+    if not easter_eggs.note_hq_tap(player, now()):
+        return False
+    add_chat(room, "作战系统", easter_eggs.hq_salute_line(player), True,
+             whisper_to=player["id"])
+    game["effects"].append({
+        "id": new_id("e"), "type": "smoke",
+        "x": hq["x"], "y": hq["y"], "ttl": 1.2,
+    })
+    game["effects"].append({
+        "id": new_id("e"), "type": "hq_salute",
+        "x": hq["x"], "y": hq["y"], "ttl": 2.0,
+    })
+    return True
 
 
 # --- terrain & navigation ---
@@ -2875,6 +2946,21 @@ def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
     })
 
 
+def emit_dog_kill_egg(room, game, source_unit, target):
+    """Rare 军犬 one-liner + unique bite VFX when a dog finishes a mage/frost."""
+    rng = game.get("_egg_rng") or random
+    if not easter_eggs.should_dog_quip(
+            source_unit.get("kind"), target.get("kind"), rng):
+        return False
+    add_chat(room, "作战系统", easter_eggs.dog_quip(rng), True)
+    game["effects"].append({
+        "id": new_id("e"), "type": "impact",
+        "x": target["x"], "y": target["y"],
+        "kind": "dog_arcane", "ttl": 0.85,
+    })
+    return True
+
+
 def apply_damage(room, target, damage, source_owner, damage_type=None, game=None, source_id=None):
     if target["hp"] <= 0:
         return
@@ -2919,6 +3005,10 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
                         "id": new_id("e"), "type": "promote",
                         "x": source_unit["x"], "y": source_unit["y"], "ttl": 1.0,
                     })
+                    if new_kills == 16 and source:
+                        add_chat(room, "作战系统",
+                                 easter_eggs.promote_16_line(source), True)
+                emit_dog_kill_egg(room, game, source_unit, target)
         # 自爆单位被打死也要炸。game 可能由调用方传入，缺了就用房间里的。
         if target["id"].startswith("u"):
             game_state = game or room.get("game")
@@ -4216,7 +4306,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 message = clean_text(payload.get("message"), 100, "")
                 if not message:
                     raise ValueError("消息不能为空")
-                add_chat(room, player["name"], message)
+                post_player_chat(room, player, message)
             elif action == "command":
                 handle_game_command(room, player, payload)
             elif action == "proposeAlliance":
