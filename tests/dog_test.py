@@ -5,6 +5,7 @@
    2) bite 克制系数：对步兵 ×4 一击必杀，对载具/建筑/巨龙 ×0 咬不动
    3) 自动索敌扑步兵与魔导（nearest_enemy_infantry 忽略贴脸的坦克，不漏法师）
    4) 秘法巨龙虽是 arcane，但是载具：不当猎物，bite 也不掉血；法师/女巫仍可咬
+   5) 法师/女巫 160 血：一口咬不死（咬 90），两口仍死
 """
 
 from __future__ import print_function
@@ -115,14 +116,22 @@ def main():
             "应锁定 %s 而非坦克，实际 %s" % (kind, pick and pick["kind"])
     print("  忽略贴脸坦克、锁定法师/女巫: PASS")
 
-    print("\n=== Test 7: 扑咬对魔导有伤害 ===")
-    room, a, b = make_room("DOG06")
-    game = room["game"]
-    mage = server.make_unit("mage", b["id"], 9000, 9000)
-    game["units"].append(mage)
-    server.apply_damage(room, mage, 60, a["id"], "bite", game)
-    assert mage["hp"] <= 0, "法师应被咬死，剩 %s" % mage["hp"]
-    print("  60×1.5=90 咬死 90 血法师: PASS")
+    print("\n=== Test 7: 扑咬打魔导，一口咬不死法师/女巫 ===")
+    bite = server.UNIT_TYPES["dog"]["damage"]
+    expect_bite = bite * server.DAMAGE_MULTIPLIER["bite"]["arcane"]
+    assert abs(expect_bite - 90.0) < 0.1, expect_bite
+    for kind in ("mage", "frost"):
+        room, a, b = make_room("DOG06-" + kind)
+        game = room["game"]
+        victim = server.make_unit(kind, b["id"], 9000, 9000)
+        game["units"].append(victim)
+        assert victim["hp"] > expect_bite, "%s 应一口咬不死" % kind
+        server.apply_damage(room, victim, bite, a["id"], "bite", game)
+        assert victim["hp"] > 0, "%s 不该被一口咬死，剩 %s" % (kind, victim["hp"])
+        leftover = victim["hp"]
+        server.apply_damage(room, victim, bite, a["id"], "bite", game)
+        assert victim["hp"] <= 0, "%s 两口应死，一口后剩 %s" % (kind, leftover)
+    print("  60×1.5=90，160 血法师/女巫一口剩 70、两口死: PASS")
 
     print("\n=== Test 8: 自动索敌不扑秘法巨龙 ===")
     room, a, b = make_room("DOG07")

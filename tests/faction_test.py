@@ -3,7 +3,7 @@
 """阵营对抗（科技·钢铁军团 vs 魔法·秘法会）测试：
    1) 出生配置按阵营分叉（独立经济：主堡/法力塔/精炼所/浮游晶簇）
    2) 阵营门槛：跨阵营不能建造/生产
-   3) 克制矩阵：magic 熔重甲、tesla 干扰魔导甲
+   3) 克制矩阵：magic 熔重甲、tesla 干扰魔导甲（×1.6）
    4) 冰霜减速：命中挂 slow，到期恢复
    5) 基地车展开/折叠的阵营映射（mmcv <-> mhq）
    6) 独立经济：浮游晶簇把水晶运回精炼所结算资金
@@ -126,13 +126,13 @@ def main():
     server.apply_damage(room, tank, 100, a["id"], "magic", game)
     assert abs((before - tank["hp"]) - 100 * 1.6) < 0.1, (before - tank["hp"])
     print("  magic vs 重甲: ×1.6 PASS")
-    # tesla vs 魔导法师 ×2.0
+    # tesla vs 魔导法师 ×1.6（仍高于对步兵 0.80 / 对轻甲 1.40）
     mage = server.make_unit("mage", b["id"], 9000, 9000)
     game["units"].append(mage)
     before = mage["hp"]
     server.apply_damage(room, mage, 26, a["id"], "tesla", game)
-    assert abs((before - mage["hp"]) - 26 * 2.0) < 0.1, (before - mage["hp"])
-    print("  tesla vs 魔导: ×2.0 PASS")
+    assert abs((before - mage["hp"]) - 26 * 1.6) < 0.1, (before - mage["hp"])
+    print("  tesla vs 魔导: ×1.6 PASS")
     # magic 拆不动建筑 ×0.6
     turret = give(game, b["id"], "turret")
     before = turret["hp"]
@@ -178,6 +178,10 @@ def main():
     print("  mmcv→mhq 展开: PASS")
 
     print("\n=== Test 6: 独立经济（浮游晶簇→精炼所→资金） ===")
+    assert server.UNIT_TYPES["mharvester"]["armor"] == server.UNIT_TYPES["harvester"]["armor"] == "heavy"
+    assert server.UNIT_TYPES["mmcv"]["armor"] == server.UNIT_TYPES["mcv"]["armor"] == "heavy"
+    assert server.UNIT_TYPES["mharvester"]["capacity"] == server.UNIT_TYPES["harvester"]["capacity"]
+    assert server.UNIT_TYPES["mharvester"]["harvestRate"] == server.UNIT_TYPES["harvester"]["harvestRate"]
     room, a, b = make_room("FAC06", magic_b=True)
     game = room["game"]
     # 现成激活的水晶精炼所 + 满载的浮游晶簇

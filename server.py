@@ -480,18 +480,21 @@ DAMAGE_MULTIPLIER = {
     "bullet":  {"infantry": 1.0, "light": 0.65, "heavy": 0.35, "structure": 0.30, "arcane": 1.50},
     "rocket":  {"infantry": 0.75, "light": 1.30, "heavy": 1.50, "structure": 0.85},
     "shell":   {"infantry": 0.55, "light": 1.00, "heavy": 1.00, "structure": 1.20, "arcane": 0.80},
-    "sniper":  {"infantry": 2.20, "light": 0.40, "heavy": 0.15, "structure": 0.10, "arcane": 2.00},
+    # 狙击：专点步兵 ×2.20。对魔导 2.00→1.60，160 血法师/女巫/魔仆两枪才死，不再一枪清后排。
+    "sniper":  {"infantry": 2.20, "light": 0.40, "heavy": 0.15, "structure": 0.10, "arcane": 1.60},
     "siege":   {"infantry": 0.25, "light": 0.30, "heavy": 0.25, "structure": 1.80},
     "ap":      {"infantry": 0.25, "light": 0.65, "heavy": 2.10, "structure": 0.70},
     # 超级武器：对全甲种都致命，清场用。siege 对步兵只有 0.25，清不动人。
     "super":   {"infantry": 1.50, "light": 1.30, "heavy": 1.10, "structure": 1.40},
     # V3 远程火箭：曲射拆建筑，溅射清阵，弹速慢能被看见躲
     "missile": {"infantry": 0.50, "light": 0.70, "heavy": 0.65, "structure": 1.50},
-    # 磁暴步兵的电弧：快脉冲专电载具，对建筑和步兵都一般；电磁干扰魔力场，是科技杀法师的关键
-    "tesla":   {"infantry": 0.80, "light": 1.40, "heavy": 1.30, "structure": 0.50, "arcane": 2.00},
+    # 磁暴步兵的电弧：快脉冲专电载具，对建筑和步兵都一般；电磁干扰魔力场，是科技杀法师的关键。
+    # 对魔导 2.00→1.60：仍明显高于对步兵 0.80 / 对轻甲 1.40，不当成中性。
+    "tesla":   {"infantry": 0.80, "light": 1.40, "heavy": 1.30, "structure": 0.50, "arcane": 1.60},
     # 光棱坦克的聚焦光束：精准点杀伤，克轻型与建筑，打不动重甲与人群；也能切开魔导护甲
     "laser":   {"infantry": 0.45, "light": 1.50, "heavy": 0.85, "structure": 1.70, "arcane": 1.50},
-    # 军犬扑咬：一口一个步兵，对装甲和建筑完全无从下口（×0）；法师一样是肉。
+    # 军犬扑咬：一口一个步兵，对装甲和建筑完全无从下口（×0）。
+    # 对魔导仍 ×1.50（咬 90）；法师/女巫/魔仆 160 血一口剩 70，两口仍死。
     # 秘法巨龙甲种仍是 arcane，但算载具：apply_damage 里 bite 对 VEHICLE_KINDS 再乘 ×0。
     "bite":    {"infantry": 4.00, "light": 0.00, "heavy": 0.00, "structure": 0.00, "arcane": 1.50},
     # 奥术魔法：无视钢铁装甲熔重甲（法师是反坦克答案），但法术拆不动建筑
