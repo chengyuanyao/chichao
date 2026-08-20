@@ -315,10 +315,14 @@ def check_gold_crater_chokepoints(crater, live_ores):
             path = terrain.find_path(sx, sy, tx, ty)
             assert len(path) > 0, "%s -> %s" % (i, j)
 
-    live_pockets = [r for r in live_ores
-                    if math.hypot(r["x"] - CRATER_CX, r["y"] - CRATER_CY) > 2000]
-    assert len(live_pockets) == 5
-    assert all(r["amount"] == 26000 for r in live_pockets)
+    planned_pockets = pocket_ores_of(crater)
+    assert len(planned_pockets) == 5
+    for px, py in planned_pockets:
+        assert not terrain.blocked(px, py, 48)
+        nearest = min(math.hypot(r["x"] - px, r["y"] - py) for r in live_ores)
+        assert nearest < 80, (px, py, nearest)
+        match = min(live_ores, key=lambda r: math.hypot(r["x"] - px, r["y"] - py))
+        assert match["amount"] == 26000
     print("  外环 5 处河桥卡口 / 出生点互通 / 桥面可通行")
 
 
