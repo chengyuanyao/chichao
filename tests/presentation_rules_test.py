@@ -244,6 +244,9 @@ def main():
     assert catalog["units"]["hexling"]["producer"] == "mcircle"
     assert catalog["units"]["bomb_truck"]["cost"] == catalog["units"]["hexling"]["cost"]
     assert catalog["units"]["bomb_truck"]["build"] == catalog["units"]["hexling"]["build"]
+    hud = read("public/index.html")
+    assert "魔导甲怕磁暴/狙击×1.6" in hud
+    assert "魔导甲怕磁暴/狙击×2.0" not in hud
     assert "frostRobe:" in render
     assert "look: 'shard'" in render
     assert "look: 'fireball'" in render

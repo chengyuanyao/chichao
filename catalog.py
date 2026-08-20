@@ -142,34 +142,37 @@ UNIT_TYPES = {
     },
     # ==================== 魔法阵营「秘法会」（faction=magic） ====================
     # 独立经济：自己的主堡/法力塔/精炼所/采矿/基地车，数值与科技对位、只换皮换名。
+    # 采矿/迁徙与钢铁一样走 heavy：轻甲会让步枪/侦察/光棱多吃一层隐藏税。
     "mharvester": {
         "name": "浮游晶簇", "cost": 920, "hp": 680, "speed": 63.6,
         "damage": 0.0, "range": 0.0, "cooldown": 0.0,
         "size": 22.0, "build": 9.0, "producer": "mcircle",
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
         "capacity": 850.0, "harvestRate": 145.0, "sight": 330.0,
-        "armor": "light", "damageType": "none",
+        "armor": "heavy", "damageType": "none",
     },
     "mmcv": {
         "name": "迁徙法阵", "cost": 2500, "hp": 900, "speed": 45.6,
         "damage": 0.0, "range": 0.0, "cooldown": 0.0,
         "size": 24.0, "build": 14.0, "producer": "mcircle",
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
-        "sight": 320.0, "armor": "light", "damageType": "none",
+        "sight": 320.0, "armor": "heavy", "damageType": "none",
         "canDeploy": True, "deploysInto": "mhq",
     },
     # ---- 军事：奥术圣殿(步兵) / 召唤法阵(构装与魔兽) ----
-    # 奥术法师：远程魔法弹，熔重甲的反坦克答案；魔导甲怕磁暴/狙击/子弹。
+    # 奥术法师：远程魔法弹，熔重甲的反坦克答案。160 血与魔仆同一口咬不死门槛
+    # （咬 90，剩 70）；两口仍死。子弹有效血≈107，和突击兵 110 同档。
     "mage": {
-        "name": "奥术法师", "cost": 500, "hp": 90, "speed": 78.0,
+        "name": "奥术法师", "cost": 500, "hp": 160, "speed": 78.0,
         "damage": 42.0, "range": 220.0, "cooldown": 1.1,
         "size": 10.0, "build": 5.0, "producer": "mtemple",
         "projectile": "arcane", "projectileSpeed": 800.0, "splash": 0.0,
         "sight": 410.0, "armor": "arcane", "damageType": "magic",
     },
     # 冰霜女巫：伤害低但命中挂减速，是魔法阵营的控制/拉扯核心。
+    # 血量与法师对齐，一口军犬咬不死，两口仍死。
     "frost": {
-        "name": "冰霜女巫", "cost": 550, "hp": 85, "speed": 74.0,
+        "name": "冰霜女巫", "cost": 550, "hp": 160, "speed": 74.0,
         "damage": 16.0, "range": 205.0, "cooldown": 1.3,
         "size": 10.0, "build": 6.0, "producer": "mtemple",
         "projectile": "frost", "projectileSpeed": 700.0, "splash": 40.0,
@@ -193,8 +196,9 @@ UNIT_TYPES = {
         "sight": 520.0, "armor": "arcane", "damageType": "magic",
     },
     # 秘法巨龙：远程大火球大溅射。圣泉二级后才许召唤，避免法阵一立就能出 1600 压轴。
+    # 1100 血仍低于天启 1500；靠射程/溅射/熔甲换耐久，不当新的碾压前排。
     "dragon": {
-        "name": "秘法巨龙", "cost": 1600, "hp": 900, "speed": 60.0,
+        "name": "秘法巨龙", "cost": 1600, "hp": 1100, "speed": 60.0,
         "damage": 95.0, "range": 260.0, "cooldown": 1.7,
         "size": 24.0, "build": 15.0, "producer": "mcircle",
         "requires": ["mspring"],
@@ -316,10 +320,12 @@ STRUCTURE_TYPES = {
         "requires": ["mcircle", "mpower"], "sight": 440.0,
         "armor": "structure",
     },
+    # 奥术塔：对位哨戒炮塔的单座基地防空。不另造导弹塔；略加射程/伤害
+    # 回答钢铁远程点射，DPS 仍低于哨戒（62/0.9≈69 vs 62/0.70≈89）。
     "mtower": {
         "name": "奥术塔", "cost": 950, "hp": 1300, "size": 30.0,
         "build": 12.0, "deploy": 3.0, "power": -25, "requires": ["mpower"], "sight": 560.0,
-        "damage": 55.0, "range": 300.0, "cooldown": 0.9,
+        "damage": 62.0, "range": 320.0, "cooldown": 0.9,
         "projectile": "arcane", "projectileSpeed": 700.0, "splash": 30.0,
         "armor": "structure", "damageType": "magic",
     },
