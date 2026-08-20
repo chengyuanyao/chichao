@@ -256,6 +256,15 @@ def main():
     assert "步兵有持枪手臂，远看是人不是积木" in render
     assert "主堡顶是石穹加晶刺，不是叠方块" in render
 
+    # 彩蛋挂钩：视觉件只锁字符串，触发逻辑在 easter_egg_test。
+    assert "kind === 'dog_arcane'" in render
+    assert "type === 'hq_salute'" in render
+    assert "function buildLandmarks()" in render
+    assert "function makeCraterSign()" in render
+    assert "command: 'tapHq'" in app
+    assert "function landmarkAt(worldX, worldY)" in app
+    assert "type === 'hq_salute'" in app
+
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 
 

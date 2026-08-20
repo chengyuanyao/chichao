@@ -2465,6 +2465,7 @@ export function createRenderer(canvas) {
 
     buildRoads();
     buildRocks();
+    buildLandmarks();
     buildOreField();
     state.buildTerrainMs = Math.round(performance.now() - buildStarted);
     const scatterStarted = performance.now();
@@ -2980,6 +2981,39 @@ export function createRenderer(canvas) {
       mesh.receiveShadow = true;
       terrainGroup.add(mesh);
     });
+  }
+
+  /**
+   * 地图地标：纯装饰、不可选。赤金陨坑陨石核顶上立一块「先挖先富」木牌。
+   * 坐标来自服务端 landmarks，立在已有山体上，不改寻路也不挡矿。
+   */
+  function makeCraterSign() {
+    const wood = new THREE.MeshLambertMaterial({ color: 0x6a4a28 });
+    const rust = new THREE.MeshLambertMaterial({ color: 0x8a5a30 });
+    const dark = new THREE.MeshLambertMaterial({ color: 0x2a2018 });
+    const g = new THREE.Group();
+    const post = new THREE.Mesh(new THREE.BoxGeometry(3.4, 30, 3.4), wood);
+    post.position.y = 15;
+    g.add(post);
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(30, 13, 2.4), rust);
+    plank.position.set(0, 26, 2);
+    g.add(plank);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(4.4, 6, 5), dark);
+    skull.position.set(0, 35, 0);
+    g.add(skull);
+    return g;
+  }
+
+  function buildLandmarks() {
+    const marks = (state.terrain && state.terrain.landmarks) || [];
+    for (let i = 0; i < marks.length; i++) {
+      const mark = marks[i];
+      const sign = makeCraterSign();
+      const gy = groundHeight(mark.x, mark.y);
+      sign.position.set(mark.x, gy, mark.y);
+      sign.userData.landmark = mark.id;
+      terrainGroup.add(sign);
+    }
   }
 
   /* -------------------- 矿脉 -------------------- */
@@ -4466,7 +4500,35 @@ export function createRenderer(canvas) {
         life: 16, maxLife: 16, hold: true, r: 0.05, g: 0.04, b: 0.03
       });
     } else if (type === 'impact') {
-      if (kind === 'frost') {
+      if (kind === 'dog_arcane') {
+        // 军犬咬法师：牙印金星 + 袍子紫屑。视觉彩蛋，不改扑咬数值。
+        burst(fireLayer, 10, function () {
+          const a = rand() * TAU;
+          const sp = 50 + rand() * 90;
+          return {
+            x: x, y: 4 + rand() * 8, z: y,
+            vx: Math.cos(a) * sp, vy: 70 + rand() * 90, vz: Math.sin(a) * sp,
+            life: 0.32 + rand() * 0.22, maxLife: 0.55,
+            size: 4 + rand() * 3,
+            r: 2.1, g: 1.55, b: 0.45
+          };
+        });
+        burst(fireLayer, 8, function () {
+          const a = rand() * TAU;
+          const sp = 40 + rand() * 70;
+          return {
+            x: x, y: 6, z: y,
+            vx: Math.cos(a) * sp, vy: 30 + rand() * 50, vz: Math.sin(a) * sp,
+            life: 0.28 + rand() * 0.18, maxLife: 0.48,
+            size: 5 + rand() * 4,
+            r: 1.45, g: 0.5, b: 2.05
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 5, growth: 36, alpha: 0.55,
+          life: 0.28, maxLife: 0.28, r: 1.15, g: 0.7, b: 1.35
+        });
+      } else if (kind === 'frost') {
         burst(fireLayer, 8, function () {
           const a = rand() * TAU;
           const sp = 70 + rand() * 120;
@@ -4718,6 +4780,23 @@ export function createRenderer(canvas) {
       shockLayer.spawn({
         x: x, y: y, radius: 9, growth: 96, alpha: 0.85,
         life: 0.6, maxLife: 0.6, r: 1.0, g: 0.85, b: 0.3
+      });
+    } else if (type === 'hq_salute') {
+      // 连点主堡：多冒几口烟，雷达/顶晶在结构循环里短暂加速。
+      burst(smokeLayer, 6, function () {
+        const a = rand() * TAU;
+        const grey = 0.2 + rand() * 0.1;
+        return {
+          x: x + Math.cos(a) * 18, y: 16, z: y + Math.sin(a) * 18,
+          vx: Math.cos(a) * 12, vy: 40 + rand() * 28, vz: Math.sin(a) * 12,
+          life: 1.2 + rand() * 0.6, maxLife: 1.8,
+          size: 14 + rand() * 10, grow: true, buoyancy: -0.12,
+          r: grey, g: grey * 0.96, b: grey * 0.9
+        };
+      });
+      shockLayer.spawn({
+        x: x, y: y, radius: 12, growth: 70, alpha: 0.55,
+        life: 0.55, maxLife: 0.55, r: 1.0, g: 0.82, b: 0.35
       });
     }
   }
@@ -5399,7 +5478,13 @@ export function createRenderer(canvas) {
         node.head.rotation.y = -s.dir;
       }
       if (node.spinner) {
-        node.spinner.rotation.y += dt * node.spinner.userData.speed;
+        let spinMul = 1;
+        const salute = payload.hqSalute;
+        if (salute && payload.time < salute.until
+            && Math.hypot(s.x - salute.x, s.y - salute.y) < 10) {
+          spinMul = 7;
+        }
+        node.spinner.rotation.y += dt * node.spinner.userData.speed * spinMul;
       }
       // 残血建筑冒烟
       const wounded = s.hp / s.maxHp;
@@ -5708,6 +5793,7 @@ export function createRenderer(canvas) {
         t.theme || '',
         (t.rivers || []).length, (t.bridges || []).length,
         (t.mountains || []).length, (t.roads || []).length,
+        (t.landmarks || []).length,
         state.resources.length
       ].join('|');
       if (worldKey === builtWorldKey && terrainGroup) {
