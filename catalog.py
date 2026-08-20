@@ -11,9 +11,12 @@ from __future__ import print_function
 # 可进维修厂/圣泉的单位。步兵、法师、影豹不算；构装、巨龙、晶簇与科技载具对位。
 VEHICLE_KINDS = frozenset((
     "tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv",
-    "v3", "overlord", "prism",
+    "v3", "overlord", "prism", "bomb_truck",
     "golem", "dragon", "warden", "colossus", "mharvester", "mmcv",
 ))
+
+# 死亡/贴脸引爆的玻璃大炮。钢铁是轻甲载具，秘法会对位是魔导活体（非载具）。
+SUICIDE_KINDS = frozenset(("bomb_truck", "hexling"))
 
 UNIT_TYPES = {
     "rifle": {
@@ -122,6 +125,21 @@ UNIT_TYPES = {
         "projectile": "laser", "projectileSpeed": 1400.0, "splash": 0.0,
         "sight": 480.0, "armor": "light", "damageType": "laser",
     },
+    # 自爆卡车：中期玻璃大炮。工厂就能出，不卡维修厂。无常规火力，
+    # 贴近或阵亡时炸开。轻甲载具：军犬咬不动，磁暴/火箭能拆。
+    # 爆炸 330 / 半径 90。贴脸总部约 363 伤（2400 的 15%），
+    # 七八辆才能拆光一座满血指挥中心，不能当后期一键结束。
+    "bomb_truck": {
+        "name": "自爆卡车", "cost": 640, "hp": 160, "speed": 122.4,
+        "damage": 0.0, "range": 22.0, "cooldown": 0.0,
+        "size": 16.0, "build": 6.5, "producer": "factory",
+        "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
+        "sight": 350.0, "armor": "light", "damageType": "explosive",
+        "deathExplosion": {
+            "damage": 330.0, "radius": 90.0, "damageType": "explosive",
+        },
+        "detonateOnContact": True,
+    },
     # ==================== 魔法阵营「秘法会」（faction=magic） ====================
     # 独立经济：自己的主堡/法力塔/精炼所/采矿/基地车，数值与科技对位、只换皮换名。
     "mharvester": {
@@ -201,6 +219,20 @@ UNIT_TYPES = {
         "requires": ["mspring"],
         "projectile": "meteor", "projectileSpeed": 240.0, "splash": 54.0,
         "sight": 300.0, "armor": ("heavy", "light"), "damageType": "siege",
+    },
+    # 爆裂魔仆：秘法会对位自爆单位，不是卡车。符核活体，法阵召唤。
+    # 战斗数值与自爆卡车对齐（造价/血/速/爆炸）；皮相仍是魔导活体。
+    # 魔导甲、不算载具：军犬能扑，但一口咬不死（160 血，咬 90）。圣泉修不了。
+    "hexling": {
+        "name": "爆裂魔仆", "cost": 640, "hp": 160, "speed": 122.4,
+        "damage": 0.0, "range": 22.0, "cooldown": 0.0,
+        "size": 11.0, "build": 6.5, "producer": "mcircle",
+        "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
+        "sight": 350.0, "armor": "arcane", "damageType": "explosive",
+        "deathExplosion": {
+            "damage": 330.0, "radius": 90.0, "damageType": "explosive",
+        },
+        "detonateOnContact": True,
     },
 }
 
@@ -303,7 +335,7 @@ MAGIC_STRUCTURES = frozenset((
 ))
 MAGIC_UNITS = frozenset((
     "mharvester", "mmcv", "mage", "frost", "golem", "panther",
-    "dragon", "warden", "colossus",
+    "dragon", "warden", "colossus", "hexling",
 ))
 
 _STRUCTURE_ROLES = {

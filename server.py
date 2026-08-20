@@ -32,6 +32,7 @@ from catalog import (
     MAGIC_UNITS,
     PUBLIC_CATALOG,
     STRUCTURE_TYPES,
+    SUICIDE_KINDS,
     UNIT_TYPES,
     VEHICLE_KINDS,
     faction_buildings,
@@ -495,6 +496,9 @@ DAMAGE_MULTIPLIER = {
     "bite":    {"infantry": 4.00, "light": 0.00, "heavy": 0.00, "structure": 0.00, "arcane": 1.50},
     # 奥术魔法：无视钢铁装甲熔重甲（法师是反坦克答案），但法术拆不动建筑
     "magic":   {"infantry": 1.20, "light": 1.30, "heavy": 1.60, "structure": 0.60, "arcane": 1.00},
+    # 自爆卡车 / 爆裂魔仆的死亡爆炸：清步兵堆、砸成团建筑；打散开的高血载具差。
+    # 对总部只有约 1.1，单车拆不掉满血指挥中心。
+    "explosive": {"infantry": 1.80, "light": 0.80, "heavy": 0.50, "structure": 1.10, "arcane": 1.45},
 }
 
 DEFAULT_MAP = "north_conflict"
@@ -733,11 +737,14 @@ def public_projectile(projectile):
 
 
 def public_effect(effect):
-    return {
+    result = {
         "id": effect["id"], "type": effect["type"],
         "x": round(effect["x"], 1), "y": round(effect["y"], 1),
         "ttl": round(effect["ttl"], 2),
     }
+    if effect.get("kind"):
+        result["kind"] = effect["kind"]
+    return result
 
 
 def public_resource(resource):
@@ -1855,13 +1862,19 @@ def issue_move(game, player_id, unit_ids, x, y, attack_move=False):
             unit["manualUntil"] = 0.0
 
 
+def unit_can_attack(kind):
+    """普通火力，或靠死亡/贴脸爆炸输出的自爆单位，都能接攻击指令。"""
+    definition = UNIT_TYPES.get(kind) or {}
+    return definition.get("damage", 0) > 0 or bool(definition.get("deathExplosion"))
+
+
 def issue_attack(game, player_id, unit_ids, target_id):
     target = find_entity(game, target_id)
     if not target or is_friendly(game, target["owner"], player_id):
         raise ValueError("无效目标")
     for unit in game["units"]:
         if unit["owner"] == player_id and unit["id"] in unit_ids and unit["hp"] > 0:
-            if UNIT_TYPES[unit["kind"]]["damage"] > 0:
+            if unit_can_attack(unit["kind"]):
                 unit["targetId"] = target_id
                 unit["destX"] = None
                 unit["destY"] = None
@@ -2786,6 +2799,53 @@ def nearest_enemy_infantry(game, owner, x, y, max_distance, spatial_index=None):
     return best
 
 
+DEATH_EXPLOSION_OUTER = 0.28
+
+
+def death_explosion_falloff(distance, radius, inner=1.0, outer=DEATH_EXPLOSION_OUTER):
+    """线性衰减：圆心 full，边缘 outer。半径外为 0。"""
+    if radius <= 0 or distance >= radius:
+        return 0.0
+    return inner + (outer - inner) * (distance / radius)
+
+
+def trigger_death_explosion(room, source, game, combat_spatial=None):
+    """自爆单位阵亡/贴脸时的范围伤害。复用 apply_damage 的甲种表，不打友军。
+
+    先打 _exploded，避免连环爆炸递归把自己再炸一次。新被炸死的自爆单位
+    会在 apply_damage 里再走进来，形成敌对自爆的连锁。
+    """
+    if source.get("_exploded"):
+        return False
+    definition = UNIT_TYPES.get(source.get("kind"), {})
+    boom = definition.get("deathExplosion")
+    if not boom:
+        return False
+    source["_exploded"] = True
+    radius = float(boom.get("radius", 0.0))
+    base = float(boom.get("damage", 0.0))
+    dtype = boom.get("damageType") or definition.get("damageType")
+    if radius <= 0 or base <= 0:
+        return False
+    ox, oy = source["x"], source["y"]
+    owner = source.get("owner")
+    candidates = (spatial_candidates(combat_spatial, ox, oy, radius)
+                  if combat_spatial else game["units"] + game["structures"])
+    for entity in candidates:
+        if entity is source or entity.get("hp", 0) <= 0:
+            continue
+        if is_friendly(game, entity["owner"], owner):
+            continue
+        dist = math.hypot(entity["x"] - ox, entity["y"] - oy)
+        falloff = death_explosion_falloff(dist, radius)
+        if falloff <= 0:
+            continue
+        apply_damage(
+            room, entity, base * falloff, owner, dtype, game,
+            source.get("id"))
+    return True
+
+
 def apply_slow(projectile, target):
     """冰霜命中：给敌方单位挂上短期减速。只影响单位(移动)，建筑无所谓。"""
     slow = projectile.get("slow")
@@ -2858,6 +2918,11 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
                         "id": new_id("e"), "type": "promote",
                         "x": source_unit["x"], "y": source_unit["y"], "ttl": 1.0,
                     })
+        # 自爆单位被打死也要炸。game 可能由调用方传入，缺了就用房间里的。
+        if target["id"].startswith("u"):
+            game_state = game or room.get("game")
+            if game_state:
+                trigger_death_explosion(room, target, game_state)
 
 
 def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
@@ -3220,6 +3285,13 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                     target = nearest_enemy_infantry(
                         game, unit["owner"], unit["x"], unit["y"], aggro,
                         combat_spatial)
+                # 自爆单位优先撞成团建筑，附近没有建筑时才冲单位。
+                elif unit["kind"] in SUICIDE_KINDS:
+                    building = nearest_enemy_structure(
+                        game, unit["owner"], unit["x"], unit["y"], aggro,
+                        combat_spatial)
+                    if building:
+                        target = building
                 unit["targetId"] = target["id"] if target else None
                 unit["scan"] = 0.28 + random.random() * 0.22
         if target:
@@ -3227,7 +3299,15 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
             desired = definition["range"] + target.get("size", 0) * 0.35
             if attack_distance <= desired:
                 unit["dir"] = math.atan2(target["y"] - unit["y"], target["x"] - unit["x"])
-                if unit["cooldown"] <= 0:
+                if (definition.get("detonateOnContact")
+                        and definition.get("deathExplosion")):
+                    # 贴脸引爆：自己倒下，爆炸走死亡钩子。
+                    owner = room["players"].get(unit["owner"])
+                    if owner:
+                        owner["unitsLost"] += 1
+                    unit["hp"] = 0
+                    trigger_death_explosion(room, unit, game, combat_spatial)
+                elif definition.get("damage", 0) > 0 and unit["cooldown"] <= 0:
                     launch_projectile(game, unit, target, definition, dam_mult)
                     unit["cooldown"] = definition["cooldown"]
             else:
@@ -3329,6 +3409,67 @@ def tick_structures(room, dt, combat_spatial=None):
                     structure["cooldown"] = definition["cooldown"]
 
 
+def bot_suicide_kind(faction):
+    return "hexling" if faction == "magic" else "bomb_truck"
+
+
+def bot_suicide_count(game, bot_id, kind):
+    live = 0
+    for unit in game["units"]:
+        if unit["owner"] == bot_id and unit["kind"] == kind and unit["hp"] > 0:
+            live += 1
+    queued = 0
+    for structure in game["structures"]:
+        if structure["owner"] != bot_id:
+            continue
+        for item in structure["queue"]:
+            if item["kind"] == kind:
+                queued += 1
+    return live + queued
+
+
+def bot_should_train_suicide(game, bot, kind):
+    """成团建筑或已有一支野战部队时才掺自爆，且场上/队列不超过 3 辆。"""
+    if bot_suicide_count(game, bot["id"], kind) >= 3:
+        return False
+    enemy_structs = 0
+    for structure in game["structures"]:
+        if (structure["hp"] > 0
+                and not is_friendly(game, structure["owner"], bot["id"])):
+            enemy_structs += 1
+    if enemy_structs >= 5:
+        return True
+    combat = 0
+    for unit in game["units"]:
+        if (unit["owner"] == bot["id"] and unit["hp"] > 0
+                and unit_role(unit["kind"]) != "harvester"):
+            combat += 1
+    return combat >= 8
+
+
+def bot_pick_suicide_target(game, bot_id):
+    """挑敌方建筑最密的一处（160 内至少 3 座），没有成团就返回 None。"""
+    enemy = [
+        structure for structure in game["structures"]
+        if structure["hp"] > 0 and not is_friendly(game, structure["owner"], bot_id)
+    ]
+    if len(enemy) < 3:
+        return None
+    best = None
+    best_n = 0
+    for structure in enemy:
+        nearby = 0
+        for other in enemy:
+            if math.hypot(other["x"] - structure["x"], other["y"] - structure["y"]) < 160:
+                nearby += 1
+        if nearby > best_n:
+            best = structure
+            best_n = nearby
+    if best_n >= 3:
+        return best
+    return None
+
+
 def bot_place_prepared(room, bot, kind):
     game = room["game"]
     anchors = [s for s in game["structures"]
@@ -3386,7 +3527,12 @@ def tick_bots(room):
 
         try:
             roll = random.random()
-            if "factory" in roles and roll < 0.58:
+            suicide_kind = bot_suicide_kind(faction)
+            if ("factory" in roles and roll < 0.08
+                    and bot_should_train_suicide(game, bot, suicide_kind)):
+                # 窄窗口：只在成团建筑或已有野战部队时掺一两辆，不当主力。
+                queue_unit(room, bot["id"], suicide_kind)
+            elif "factory" in roles and roll < 0.58:
                 if magic:
                     if "repair" in roles and roll < 0.20:
                         # 圣泉撑起二级后：巨龙溅射 / 裂地拆家 / 晶铠抗线
@@ -3448,6 +3594,20 @@ def tick_bots(room):
             target = min(enemies, key=lambda s: math.hypot(s["x"] - combat[0]["x"], s["y"] - combat[0]["y"]))
             issue_attack(game, bot["id"], set(u["id"] for u in combat), target["id"])
 
+        suicides = [
+            unit for unit in game["units"]
+            if unit["owner"] == bot["id"] and unit["kind"] in SUICIDE_KINDS
+            and unit["hp"] > 0 and unit.get("order") not in ("attack", "repair", "move")
+        ]
+        cluster = bot_pick_suicide_target(game, bot["id"]) if suicides else None
+        if suicides and cluster:
+            try:
+                issue_attack(
+                    game, bot["id"], set(unit["id"] for unit in suicides),
+                    cluster["id"])
+            except ValueError:
+                pass
+
 
 def remove_destroyed(room):
     """把刚阵亡的单位/建筑移出列表并补大爆炸特效，每 tick 都跑。
@@ -3466,10 +3626,17 @@ def remove_destroyed(room):
     if not destroyed_units and not destroyed_structures:
         return
     for entity in destroyed_units + destroyed_structures:
-        game["effects"].append({
-            "id": new_id("e"), "type": "explosion", "x": entity["x"], "y": entity["y"],
-            "ttl": 1.15 if entity in destroyed_structures else 0.75,
-        })
+        boom = (entity in destroyed_units
+                and UNIT_TYPES.get(entity.get("kind"), {}).get("deathExplosion"))
+        effect = {
+            "id": new_id("e"),
+            "type": "blast" if boom else "explosion",
+            "x": entity["x"], "y": entity["y"],
+            "ttl": 1.35 if boom else (1.15 if entity in destroyed_structures else 0.75),
+        }
+        if boom:
+            effect["kind"] = entity["kind"]
+        game["effects"].append(effect)
     # Surviving units keep orders/targets; only the corpses leave the lists.
     game["units"] = [u for u in game["units"] if u["hp"] > 0]
     game["structures"] = [s for s in game["structures"] if s["hp"] > 0]

@@ -231,6 +231,19 @@ def main():
     assert "秘法巨龙：拉长的翼展剪影" in render
     assert "晶铠卫士：晶体铠甲前排" in render
     assert "裂地晶兽：水晶攻城炮" in render
+    assert "自爆卡车：轮式药箱车" in render
+    assert "爆裂魔仆：矮小符核活体" in render
+    assert "type === 'blast'" in render
+    assert catalog["units"]["bomb_truck"]["name"] == "自爆卡车"
+    assert catalog["units"]["hexling"]["name"] == "爆裂魔仆"
+    assert catalog["units"]["bomb_truck"]["faction"] == "tech"
+    assert catalog["units"]["hexling"]["faction"] == "magic"
+    assert catalog["units"]["bomb_truck"]["repairable"] is True
+    assert catalog["units"]["hexling"]["repairable"] is False
+    assert catalog["units"]["bomb_truck"]["producer"] == "factory"
+    assert catalog["units"]["hexling"]["producer"] == "mcircle"
+    assert catalog["units"]["bomb_truck"]["cost"] == catalog["units"]["hexling"]["cost"]
+    assert catalog["units"]["bomb_truck"]["build"] == catalog["units"]["hexling"]["build"]
     assert "frostRobe:" in render
     assert "look: 'shard'" in render
     assert "look: 'fireball'" in render
