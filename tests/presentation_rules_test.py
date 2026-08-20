@@ -242,6 +242,8 @@ def main():
     assert catalog["units"]["hexling"]["repairable"] is False
     assert catalog["units"]["bomb_truck"]["producer"] == "factory"
     assert catalog["units"]["hexling"]["producer"] == "mcircle"
+    assert catalog["units"]["bomb_truck"]["cost"] == catalog["units"]["hexling"]["cost"]
+    assert catalog["units"]["bomb_truck"]["build"] == catalog["units"]["hexling"]["build"]
     assert "frostRobe:" in render
     assert "look: 'shard'" in render
     assert "look: 'fireball'" in render

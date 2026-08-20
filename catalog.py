@@ -221,16 +221,16 @@ UNIT_TYPES = {
         "sight": 300.0, "armor": ("heavy", "light"), "damageType": "siege",
     },
     # 爆裂魔仆：秘法会对位自爆单位，不是卡车。符核活体，法阵召唤。
-    # 魔导甲、不算载具：军犬能扑（一口咬死），圣泉修不了。
-    # 稍便宜、更快、更脆；爆炸 300 / 半径 84，角色相同、克制不同。
+    # 战斗数值与自爆卡车对齐（造价/血/速/爆炸）；皮相仍是魔导活体。
+    # 魔导甲、不算载具：军犬能扑，但一口咬不死（160 血，咬 90）。圣泉修不了。
     "hexling": {
-        "name": "爆裂魔仆", "cost": 580, "hp": 90, "speed": 130.8,
-        "damage": 0.0, "range": 20.0, "cooldown": 0.0,
-        "size": 11.0, "build": 5.5, "producer": "mcircle",
+        "name": "爆裂魔仆", "cost": 640, "hp": 160, "speed": 122.4,
+        "damage": 0.0, "range": 22.0, "cooldown": 0.0,
+        "size": 11.0, "build": 6.5, "producer": "mcircle",
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
-        "sight": 360.0, "armor": "arcane", "damageType": "explosive",
+        "sight": 350.0, "armor": "arcane", "damageType": "explosive",
         "deathExplosion": {
-            "damage": 300.0, "radius": 84.0, "damageType": "explosive",
+            "damage": 330.0, "radius": 90.0, "damageType": "explosive",
         },
         "detonateOnContact": True,
     },
