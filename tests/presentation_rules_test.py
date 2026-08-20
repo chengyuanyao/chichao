@@ -94,6 +94,7 @@ def main():
         "island_hop": (7200, 6000),
         "urban_siege": (6400, 6400),
         "narrow_standoff": (4800, 3200),
+        "triple_pass": (5400, 4200),
         "valley_clash": (6400, 4800),
         "gold_crater": (10000, 6400),
     }
