@@ -7,7 +7,7 @@
    4) 单车拆不掉满血总部；贴脸引爆
    5) 军犬：卡车不当猎物且咬不动；魔仆是猎物但一口咬不死
    6) 造价/血/速/爆炸对齐；单辆拆不掉满血总部
-   7) AI 在成团建筑时会掺一辆，不当唯一兵种
+   7) 速胜 AI 工厂一立就出自爆卡车，同时仍会混编其他兵种
    8) 无连环爆炸：溅射未致死则邻居还活着；友军并排不炸；圈外邻居不引爆
 """
 
@@ -272,7 +272,7 @@ def main():
     assert truck["order"] == "attack" and truck["targetId"] == hq["id"]
     print("  issue_attack 接受自爆卡车: PASS")
 
-    print("\n=== Test 11: AI 在成团建筑时会掺自爆，不当唯一兵种 ===")
+    print("\n=== Test 11: 速胜 AI 工厂后排出自爆，且不当唯一兵种 ===")
     room, a, b = make_room("SU10")
     game = room["game"]
     a["isBot"] = True
