@@ -278,14 +278,14 @@ STRUCTURE_TYPES = {
     "turret": {
         "name": "哨戒炮塔", "cost": 950, "hp": 1300, "size": 30.0,
         "build": 12.0, "deploy": 3.0, "power": -25, "requires": ["power"], "sight": 560.0,
-        "damage": 62.0, "range": 280.0, "cooldown": 0.70,
+        "damage": 80.0, "range": 320.0, "cooldown": 0.70,
         "projectile": "shell", "projectileSpeed": 460.0, "splash": 51.0,
         "armor": "structure", "damageType": "shell",
     },
     "missile": {
         "name": "导弹炮塔", "cost": 1200, "hp": 1050, "size": 34.0,
         "build": 16.0, "deploy": 3.5, "power": -30, "requires": ["barracks", "power"],
-        "sight": 580.0, "damage": 90.0, "range": 360.0, "cooldown": 1.6,
+        "sight": 580.0, "damage": 120.0, "range": 420.0, "cooldown": 1.6,
         "projectile": "shell", "projectileSpeed": 420.0, "splash": 45.0,
         "armor": "structure", "damageType": "shell",
     },
@@ -323,12 +323,12 @@ STRUCTURE_TYPES = {
         "requires": ["mcircle", "mpower"], "sight": 440.0,
         "armor": "structure",
     },
-    # 奥术塔：对位哨戒炮塔的单座基地防空。不另造导弹塔；略加射程/伤害
-    # 回答钢铁远程点射，DPS 仍低于哨戒（62/0.9≈69 vs 62/0.70≈89）。
+    # 奥术塔：对位哨戒炮塔的单座基地防空。不另造导弹塔；略加射程
+    # 回答钢铁远程点射，DPS 仍低于哨戒（80/0.9≈89 vs 80/0.70≈114）。
     "mtower": {
         "name": "奥术塔", "cost": 950, "hp": 1300, "size": 30.0,
         "build": 12.0, "deploy": 3.0, "power": -25, "requires": ["mpower"], "sight": 560.0,
-        "damage": 62.0, "range": 320.0, "cooldown": 0.9,
+        "damage": 80.0, "range": 360.0, "cooldown": 0.9,
         "projectile": "arcane", "projectileSpeed": 700.0, "splash": 30.0,
         "armor": "structure", "damageType": "magic",
     },
