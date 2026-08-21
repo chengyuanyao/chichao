@@ -235,7 +235,8 @@ def main():
     assert "冰霜女巫：苍蓝袍 + 冰晶头冠" in render
     assert "秘法巨龙：拉长的翼展剪影" in render
     assert "晶铠卫士：晶体铠甲前排" in render
-    assert "裂地晶兽：水晶攻城炮" in render
+    assert "裂地晶兽：四足晶兽驮晶陨鞍塔" in render
+    assert "裂地晶兽：四足晶兽 + 背上晶陨鞍塔" in app
     assert "自爆卡车：轮式药箱车" in render
     assert "爆裂魔仆：矮小符核活体" in render
     assert "type === 'blast'" in render
@@ -257,6 +258,8 @@ def main():
     assert "look: 'fireball'" in render
     assert "look: 'meteor'" in render
     assert "look: 'crystal'" in render
+    assert "function guessMuzzleKind" in render
+    assert "kind === 'meteor'" in render
     assert "function emitIdleAura" in render
     assert "步兵有持枪手臂，远看是人不是积木" in render
     assert "主堡顶是石穹加晶刺，不是叠方块" in render

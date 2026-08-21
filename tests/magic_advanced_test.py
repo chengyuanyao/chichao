@@ -59,6 +59,18 @@ def main():
     assert server.UNIT_TYPES["colossus"]["damageType"] == "siege"
     assert server.UNIT_TYPES["warden"]["damageType"] == "magic"
     assert server.UNIT_TYPES["dragon"]["damageType"] == "magic"
+    colo = server.UNIT_TYPES["colossus"]
+    assert colo["hp"] == 600
+    assert colo["damage"] == 120.0
+    assert colo["range"] == 340.0
+    assert colo["splash"] == 58.0
+    assert colo["size"] == 24.0
+    assert colo["cost"] == 1280
+    assert colo["cooldown"] == 2.10
+    assert colo["requires"] == ["mspring"]
+    assert colo["hp"] < server.UNIT_TYPES["warden"]["hp"]
+    assert colo["hp"] < server.UNIT_TYPES["dragon"]["hp"]
+    assert colo["hp"] < server.UNIT_TYPES["overlord"]["hp"]
     catalog = server.public_catalog()
     for kind in ADVANCED:
         entry = catalog["units"][kind]

@@ -564,28 +564,52 @@ const UNIT_BUILDERS = {
   },
 
   colossus: function () {
-    // 裂地晶兽：水晶攻城炮。矮宽石座上架高仰角晶管，俯视是攻城兽不是大傀儡。
-    const barrel = new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.36);
+    // 裂地晶兽：四足晶兽驮晶陨鞍塔，俯视是攻城兽不是大傀儡/晶铠。
+    const barrel = new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.38);
     const body = [
-      taperedBox(22, 16, 18, 13, 7.2, -1.2, 8.4, 0, MAT.magicStone),
-      taperedBox(12, 12, 9, 9, 6.4, -4.6, 14.6, 0, MAT.slate),
-      taperedBox(8.4, 8.0, 5.6, 5.2, 4.6, 2.2, 15.2, 0, MAT.crystal),
-      box(6.4, 5.2, 14.0, -12.4, 10.6, 0, MAT.slate),
-      box(4.2, 6.4, 3.4, -14.8, 6.4, 6.4, MAT.magicStone),
-      box(4.2, 6.4, 3.4, -14.8, 6.4, -6.4, MAT.magicStone),
-      cyl(1.7, 2.2, 26, 8, 12.4, 20.2, 0, MAT.crystal, barrel),
-      cyl(2.6, 2.6, 3.4, 8, 24.0, 24.6, 0, MAT.slate, barrel),
-      taperedBox(3.6, 3.6, 1.6, 1.6, 4.2, -6.8, 18.8, 4.2, MAT.crystal),
-      taperedBox(3.6, 3.6, 1.6, 1.6, 4.2, -6.8, 18.8, -4.2, MAT.crystal)
+      taperedBox(26, 14.4, 20, 11.6, 8.6, 0.2, 10.4, 0, MAT.magicStone),
+      taperedBox(20, 10.4, 15.2, 8.2, 3.4, 0.6, 6.4, 0, MAT.slate),
+      taperedBox(8.6, 12.4, 6.6, 10.2, 5.4, 8.4, 12.6, 0, MAT.slate),
+      taperedBox(9.4, 13.2, 7.2, 11.0, 5.8, -8.6, 13.0, 0, MAT.magicStone),
+      taperedBox(7.4, 6.6, 5.2, 4.8, 5.0, 16.0, 13.0, 0, MAT.slate),
+      sph(1.9, 6, 19.0, 13.4, 0, MAT.slate),
+      box(2.6, 1.4, 3.4, 19.8, 12.2, 0, MAT.crystal),
+      pyr(0.95, 4.0, 4, 17.2, 16.8, 1.7, MAT.crystal),
+      pyr(0.95, 4.0, 4, 17.2, 16.8, -1.7, MAT.crystal),
+      pyr(0.62, 2.6, 4, 4.8, 15.6, 0, MAT.crystal),
+      pyr(0.52, 2.2, 4, -0.6, 15.2, 0, MAT.crystal),
+      pyr(0.44, 1.8, 4, -6.0, 14.8, 0, MAT.crystal),
+      taperedBox(10.4, 10.2, 8.2, 8.0, 4.4, -2.2, 17.0, 0, MAT.slate),
+      taperedBox(7.4, 7.0, 5.2, 5.0, 3.8, -1.4, 20.6, 0, MAT.crystal),
+      cyl(1.95, 2.45, 22, 8, 10.6, 23.0, 0, MAT.crystal, barrel),
+      cyl(2.9, 2.9, 3.4, 8, 20.6, 27.2, 0, MAT.slate, barrel),
+      taperedBox(2.8, 2.8, 1.15, 1.15, 4.2, -5.4, 19.8, 4.8, MAT.crystal),
+      taperedBox(2.8, 2.8, 1.15, 1.15, 4.2, -5.4, 19.8, -4.8, MAT.crystal),
+      box(4.6, 8.6, 4.6, 8.8, 4.5, 6.0, MAT.magicStone),
+      box(4.6, 8.6, 4.6, 8.8, 4.5, -6.0, MAT.magicStone),
+      box(5.0, 9.0, 5.0, -8.4, 4.7, 6.4, MAT.magicStone),
+      box(5.0, 9.0, 5.0, -8.4, 4.7, -6.4, MAT.magicStone),
+      taperedBox(5.4, 5.4, 3.6, 3.6, 2.2, 9.0, 1.2, 6.0, MAT.crystal),
+      taperedBox(5.4, 5.4, 3.6, 3.6, 2.2, 9.0, 1.2, -6.0, MAT.crystal),
+      taperedBox(5.8, 5.8, 3.8, 3.8, 2.4, -8.6, 1.3, 6.4, MAT.crystal),
+      taperedBox(5.8, 5.8, 3.8, 3.8, 2.4, -8.6, 1.3, -6.4, MAT.crystal),
+      taperedBox(6.8, 3.8, 2.6, 1.8, 2.6, -16.8, 9.4, 0, MAT.crystal)
     ];
     return {
       body: body,
       glow: [
-        sph(2.1, 7, -3.2, 13.2, 0, MAT.arcaneGlow),
-        sph(1.35, 6, 26.4, 25.6, 0, MAT.arcaneGlow),
-        cyl(1.05, 1.05, 0.55, 8, 14.8, 21.2, 0, MAT.frostGlow, barrel),
-        box(12, 0.45, 0.45, -1.4, 5.2, 8.2, MAT.frostGlow),
-        box(12, 0.45, 0.45, -1.4, 5.2, -8.2, MAT.frostGlow)
+        sph(2.05, 7, -1.2, 14.2, 0, MAT.arcaneGlow),
+        sph(1.35, 6, 23.0, 28.2, 0, MAT.arcaneGlow),
+        cyl(1.15, 1.15, 0.55, 8, 12.6, 23.8, 0, MAT.frostGlow, barrel),
+        sph(0.55, 5, 19.4, 13.8, 1.15, MAT.arcaneGlow),
+        sph(0.55, 5, 19.4, 13.8, -1.15, MAT.arcaneGlow),
+        cyl(9.2, 9.2, 0.22, 12, 0, 0.38, 0, MAT.arcaneGlow),
+        cyl(2.35, 2.35, 0.26, 8, 9.0, 0.32, 6.0, MAT.arcaneGlow),
+        cyl(2.35, 2.35, 0.26, 8, 9.0, 0.32, -6.0, MAT.arcaneGlow),
+        cyl(2.55, 2.55, 0.26, 8, -8.6, 0.32, 6.4, MAT.arcaneGlow),
+        cyl(2.55, 2.55, 0.26, 8, -8.6, 0.32, -6.4, MAT.arcaneGlow),
+        box(8.4, 0.38, 0.38, -2.0, 17.4, 4.7, MAT.frostGlow),
+        box(8.4, 0.38, 0.38, -2.0, 17.4, -4.7, MAT.frostGlow)
       ]
     };
   },
@@ -1560,7 +1584,7 @@ const UNIT_VISUAL_SCALE = {
   artillery: 1.28, harvester: 1.16, mcv: 1.30, v3: 1.28,
   overlord: 1.30, prism: 1.28, bomb_truck: 1.32,
   mage: 2.15, frost: 2.15, golem: 1.42, panther: 1.7, dragon: 1.34,
-  warden: 1.40, colossus: 1.30, hexling: 2.05,
+  warden: 1.40, colossus: 1.38, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30
 };
 
@@ -3758,11 +3782,14 @@ export function createRenderer(canvas) {
     }
     if (kind === 'colossus') {
       return [
-        taperedBox(22, 16, 18, 13, 7.2, -1.2, 8.4, 0, MAT.magicStone),
-        taperedBox(12, 12, 9, 9, 6.2, -4.6, 14.4, 0, MAT.slate),
-        cyl(1.8, 2.2, 26, 7, 12.2, 20.0, 0, MAT.crystal,
-          new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.36)),
-        sph(2.0, 6, -3.2, 13.0, 0, MAT.arcaneGlow)
+        taperedBox(26, 14.4, 20, 11.6, 8.6, 0.2, 10.4, 0, MAT.magicStone),
+        box(4.6, 8.6, 4.6, 8.8, 4.5, 6.0, MAT.magicStone),
+        box(4.6, 8.6, 4.6, 8.8, 4.5, -6.0, MAT.magicStone),
+        box(5.0, 9.0, 5.0, -8.4, 4.7, 6.4, MAT.magicStone),
+        box(5.0, 9.0, 5.0, -8.4, 4.7, -6.4, MAT.magicStone),
+        cyl(1.95, 2.45, 22, 7, 10.6, 22.8, 0, MAT.crystal,
+          new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.38)),
+        sph(2.0, 6, -1.2, 14.2, 0, MAT.arcaneGlow)
       ];
     }
     if (kind === 'mharvester') {
@@ -4110,7 +4137,7 @@ export function createRenderer(canvas) {
     // 晶刃：卫士短促紫晶弹
     crystal: { len: 20, thick: 1.15, color: 0xe0c4ff, arc: 10, look: 'crystal' },
     // 晶陨：裂地高弧攻城弹
-    meteor: { len: 22, thick: 2.7, color: 0xc9a0ff, arc: 110, look: 'meteor' }
+    meteor: { len: 24, thick: 3.1, color: 0xc9a0ff, arc: 118, look: 'meteor' }
   };
 
   function ensureStyledMesh(existing, geo, needed) {
@@ -4593,24 +4620,24 @@ export function createRenderer(canvas) {
         });
         flashAt(x, y, 0xff7a2a);
       } else if (kind === 'meteor') {
-        burst(fireLayer, 10, function () {
+        burst(fireLayer, 12, function () {
           const a = rand() * TAU;
-          const sp = 90 + rand() * 160;
+          const sp = 90 + rand() * 170;
           return {
             x: x, y: 8, z: y,
             vx: Math.cos(a) * sp, vy: 50 + rand() * 90, vz: Math.sin(a) * sp,
-            life: 0.32 + rand() * 0.24, maxLife: 0.56,
+            life: 0.34 + rand() * 0.24, maxLife: 0.58,
             size: 7 + rand() * 6, grow: true,
             r: 1.7, g: 0.62, b: 2.2
           };
         });
-        burst(fireLayer, 6, function () {
+        burst(fireLayer, 8, function () {
           const a = rand() * TAU;
-          const sp = 140 + rand() * 160;
+          const sp = 140 + rand() * 170;
           return {
-            x: x, y: 7, z: y,
-            vx: Math.cos(a) * sp, vy: 40 + rand() * 80, vz: Math.sin(a) * sp,
-            life: 0.2 + rand() * 0.16, maxLife: 0.36,
+            x: x, y: 3 + rand() * 4, z: y,
+            vx: Math.cos(a) * sp, vy: 18 + rand() * 40, vz: Math.sin(a) * sp,
+            life: 0.22 + rand() * 0.16, maxLife: 0.38,
             size: 3 + rand() * 3,
             r: 2.1, g: 1.4, b: 2.4
           };
@@ -4619,8 +4646,12 @@ export function createRenderer(canvas) {
           x: x, y: y, radius: 12, growth: 88, alpha: 0.68,
           life: 0.4, maxLife: 0.4, r: 0.85, g: 0.45, b: 1.2
         });
+        shockLayer.spawn({
+          x: x, y: y, radius: 6, growth: 48, alpha: 0.4,
+          life: 0.26, maxLife: 0.26, r: 1.15, g: 0.58, b: 1.45
+        });
         scorchLayer.spawn({
-          x: x, y: y, radius: 26 + rand() * 8, growth: 0, alpha: 0.42,
+          x: x, y: y, radius: 28 + rand() * 8, growth: 0, alpha: 0.44,
           life: 11, maxLife: 11, hold: true, r: 0.08, g: 0.04, b: 0.12
         });
         flashAt(x, y, 0xd6a6ff);
@@ -4716,16 +4747,48 @@ export function createRenderer(canvas) {
         });
       }
     } else if (type === 'muzzle') {
-      burst(fireLayer, 5, function () {
-        const a = rand() * TAU;
-        return {
-          x: x, y: 11, z: y,
-          vx: Math.cos(a) * 40, vy: 14, vz: Math.sin(a) * 40,
-          life: 0.09 + rand() * 0.06, maxLife: 0.15,
-          size: 9 + rand() * 6,
-          r: 1.0, g: 0.94, b: 0.68
-        };
-      });
+      if (kind === 'meteor') {
+        burst(fireLayer, 8, function () {
+          const a = rand() * TAU;
+          return {
+            x: x + (rand() - 0.5) * 8, y: 16 + rand() * 8, z: y + (rand() - 0.5) * 8,
+            vx: Math.cos(a) * 36, vy: 28 + rand() * 40, vz: Math.sin(a) * 36,
+            life: 0.18 + rand() * 0.12, maxLife: 0.3,
+            size: 7 + rand() * 5,
+            r: 1.7, g: 0.62, b: 2.2
+          };
+        });
+        burst(fireLayer, 6, function () {
+          const a = rand() * TAU;
+          return {
+            x: x, y: 2 + rand() * 3, z: y,
+            vx: Math.cos(a) * 52, vy: 8 + rand() * 16, vz: Math.sin(a) * 52,
+            life: 0.22 + rand() * 0.12, maxLife: 0.34,
+            size: 4 + rand() * 3,
+            r: 1.45, g: 0.5, b: 2.05
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 8, growth: 70, alpha: 0.55,
+          life: 0.32, maxLife: 0.32, r: 0.85, g: 0.42, b: 1.15
+        });
+        scorchLayer.spawn({
+          x: x, y: y, radius: 16, growth: 10, alpha: 0.28,
+          life: 1.6, maxLife: 1.6, hold: true, r: 0.12, g: 0.05, b: 0.18
+        });
+        flashAt(x, y, 0xd6a6ff);
+      } else {
+        burst(fireLayer, 5, function () {
+          const a = rand() * TAU;
+          return {
+            x: x, y: 11, z: y,
+            vx: Math.cos(a) * 40, vy: 14, vz: Math.sin(a) * 40,
+            life: 0.09 + rand() * 0.06, maxLife: 0.15,
+            size: 9 + rand() * 6,
+            r: 1.0, g: 0.94, b: 0.68
+          };
+        });
+      }
     } else if (type === 'complete') {
       burst(fireLayer, 10, function (i) {
         const a = (i / 20) * TAU;
@@ -5097,6 +5160,20 @@ export function createRenderer(canvas) {
     return best;
   }
 
+  function guessMuzzleKind(x, y, hints) {
+    let best = null;
+    let bestD = 40 * 40;
+    for (let i = 0; i < hints.length; i++) {
+      const p = hints[i];
+      const d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+      if (d < bestD) {
+        bestD = d;
+        best = p.kind;
+      }
+    }
+    return best;
+  }
+
   function writeTracer(mesh, index, x, height, z, yaw, sx, sy, sz, colorHex) {
     quat.setFromAxisAngle(upAxis, -yaw);
     matrix.compose(vecPos.set(x, height, z), quat, vecScale.set(sx, sy, sz));
@@ -5131,9 +5208,9 @@ export function createRenderer(canvas) {
     } else if (look === 'meteor') {
       emit(fireLayer, {
         x: x + (Math.random() - 0.5) * 6, y: height, z: y + (Math.random() - 0.5) * 6,
-        vx: (Math.random() - 0.5) * 14, vy: 6 + Math.random() * 12, vz: (Math.random() - 0.5) * 14,
-        life: 0.26, maxLife: 0.26, size: 5 + Math.random() * 4,
-        r: 1.7, g: 0.65, b: 2.2
+        vx: (Math.random() - 0.5) * 12, vy: -8 + Math.random() * 6, vz: (Math.random() - 0.5) * 12,
+        life: 0.3, maxLife: 0.3, size: 5.4 + Math.random() * 4.2,
+        r: 1.75, g: 0.68, b: 2.25
       });
     } else if (look === 'bolt') {
       emit(fireLayer, {
@@ -5161,7 +5238,7 @@ export function createRenderer(canvas) {
     if (fireLayer.list.length > state.particleBudget * 0.5) return;
     const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6
       : kind === 'bomb_truck' ? 7 : kind === 'hexling' ? 6
-      : kind === 'colossus' ? 5 : kind === 'warden' ? 4 : 3.5;
+      : kind === 'colossus' ? 7 : kind === 'warden' ? 4 : 3.5;
     if (Math.random() > dt * rate) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
     const scale = UNIT_VISUAL_SCALE[kind] || 1;
@@ -5186,14 +5263,27 @@ export function createRenderer(canvas) {
         r: 2.2, g: 1.0, b: 0.28
       });
     } else if (kind === 'colossus') {
-      emit(fireLayer, {
-        x: vis.x + (Math.random() - 0.5) * 16,
-        y: gy + 8 + Math.random() * 10,
-        z: vis.y + (Math.random() - 0.5) * 16,
-        vx: (Math.random() - 0.5) * 6, vy: 10 + Math.random() * 8, vz: (Math.random() - 0.5) * 6,
-        life: 0.4, maxLife: 0.4, size: 3.6 + Math.random() * 3,
-        r: 1.55, g: 0.62, b: 2.15
-      });
+      if (Math.random() < 0.58) {
+        emit(fireLayer, {
+          x: vis.x + (Math.random() - 0.5) * 22,
+          y: gy + 0.6 + Math.random() * 2.6,
+          z: vis.y + (Math.random() - 0.5) * 22,
+          vx: (Math.random() - 0.5) * 10, vy: 4 + Math.random() * 8, vz: (Math.random() - 0.5) * 10,
+          life: 0.38, maxLife: 0.38, size: 3.2 + Math.random() * 2.8,
+          r: 1.5, g: 0.55, b: 2.1
+        });
+      } else {
+        const mx = vis.x + Math.cos(vis.dir) * 10 * scale;
+        const mz = vis.y + Math.sin(vis.dir) * 10 * scale;
+        emit(fireLayer, {
+          x: mx + (Math.random() - 0.5) * 4,
+          y: gy + 18 * scale * 0.55,
+          z: mz + (Math.random() - 0.5) * 4,
+          vx: (Math.random() - 0.5) * 4, vy: 8 + Math.random() * 8, vz: (Math.random() - 0.5) * 4,
+          life: 0.42, maxLife: 0.42, size: 4.2 + Math.random() * 3,
+          r: 1.7, g: 0.7, b: 2.2
+        });
+      }
     } else if (kind === 'warden') {
       emit(fireLayer, {
         x: vis.x + (Math.random() - 0.5) * 8,
@@ -5555,12 +5645,13 @@ export function createRenderer(canvas) {
             style.len, style.thick * 0.7, style.thick * 0.7, style.color);
           writeTracer(shards, shardCount++, p.x, height + 1.2, p.y, yaw + 0.32, 6.0, 1.25, 1.25, 0xb46bff);
         } else if (look === 'meteor') {
-          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 3.6, 3.6, 3.6, 0xe8d0ff);
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 4.2, 4.2, 4.2, 0xe8d0ff);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len, style.thick, style.thick, style.color);
-          writeTracer(shards, shardCount++, p.x, height + 1.6, p.y, yaw, 8.4, 2.4, 2.4, 0xd6a6ff);
+          writeTracer(shards, shardCount++, p.x, height + 1.8, p.y, yaw, 9.2, 2.7, 2.7, 0xd6a6ff);
+          writeTracer(shards, shardCount++, p.x, height - 1.2, p.y, yaw + 0.4, 6.4, 1.8, 1.8, 0xb46bff);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
-            style.len * 1.45, style.thick * 0.42, style.thick * 0.42, 0xf2e6ff);
+            style.len * 1.55, style.thick * 0.42, style.thick * 0.42, 0xf2e6ff);
         } else if (look === 'bolt') {
           writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 2.15, 2.15, 2.15, 0xf0d0ff);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
@@ -5609,7 +5700,8 @@ export function createRenderer(canvas) {
       const fx = fresh[i];
       const fxKind = fx.type === 'impact'
         ? guessImpactKind(fx.x, fx.y, projectileHintPrev)
-        : (fx.kind || null);
+        : (fx.kind || (fx.type === 'muzzle'
+          ? guessMuzzleKind(fx.x, fx.y, projectileHints) : null));
       spawnEffect(fx.type, fx.x, fx.y, fxKind);
     }
     projectileHintPrev = projectileHints;
