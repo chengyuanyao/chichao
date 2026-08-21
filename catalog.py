@@ -218,12 +218,13 @@ UNIT_TYPES = {
         "sight": 380.0, "armor": ("heavy", "light"), "damageType": "magic",
     },
     # 裂地晶兽：缺的攻城行。siege ×1.8 拆建筑，对单位很差，对位攻城炮/光棱。
+    # 600 血不再一碰就碎，仍远低于晶铠 1040 / 巨龙 1100 / 天启 2000。
     "colossus": {
-        "name": "裂地晶兽", "cost": 1280, "hp": 380, "speed": 48.0,
-        "damage": 98.0, "range": 335.0, "cooldown": 2.10,
-        "size": 22.0, "build": 12.0, "producer": "mcircle",
+        "name": "裂地晶兽", "cost": 1280, "hp": 600, "speed": 48.0,
+        "damage": 120.0, "range": 340.0, "cooldown": 2.10,
+        "size": 24.0, "build": 12.0, "producer": "mcircle",
         "requires": ["mspring"],
-        "projectile": "meteor", "projectileSpeed": 240.0, "splash": 54.0,
+        "projectile": "meteor", "projectileSpeed": 240.0, "splash": 58.0,
         "sight": 300.0, "armor": ("heavy", "light"), "damageType": "siege",
     },
     # 爆裂魔仆：秘法会对位自爆单位，不是卡车。符核活体，法阵召唤。

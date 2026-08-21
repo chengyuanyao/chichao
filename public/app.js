@@ -895,17 +895,27 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       pCirc(c, 49, 23, 1.1, P_ARCANE);
     },
     colossus: function (c) {
-      pShadow(c, 50, 61, 30);
-      // 裂地晶兽：矮宽石座上架一门高仰角晶炮，肖像一眼是攻城不是傀儡
-      pPoly(c, [[22, 58], [74, 58], [68, 44], [28, 44]], P_STONE);
-      pPoly(c, [[74, 58], [58, 58], [55, 44], [68, 44]], 'rgba(10,10,6,.26)');
-      pRect(c, 34, 34, 22, 12, '#4a4453');
-      pLine(c, 46, 38, 86, 12, 6, P_CRYSTAL);
-      pPoly(c, [[82, 6], [90, 14], [84, 20], [76, 12]], P_ARCANE);
-      pCirc(c, 86, 12, 2.2, '#f2e6ff');
-      pCirc(c, 42, 40, 3.2, P_ARCANE);
-      pCirc(c, 42, 40, 1.3, '#f2e6ff');
-      pLine(c, 30, 44.5, 66, 44.5, 1.4, 'rgba(180,107,255,.45)');
+      pShadow(c, 50, 62, 32);
+      // 裂地晶兽：四足晶兽 + 背上晶陨鞍塔，肖像一眼是攻城兽不是傀儡/晶铠
+      pRect(c, 28, 48, 3.4, 14, P_STONE);
+      pRect(c, 36, 48, 3.4, 14, P_STONE);
+      pRect(c, 54, 48, 3.2, 14, P_STONE);
+      pRect(c, 62, 48, 3.2, 14, P_STONE);
+      pCirc(c, 30, 61, 2.2, P_CRYSTAL);
+      pCirc(c, 38, 61, 2.2, P_CRYSTAL);
+      pCirc(c, 56, 61, 2.0, P_CRYSTAL);
+      pCirc(c, 64, 61, 2.0, P_CRYSTAL);
+      pPoly(c, [[24, 52], [68, 50], [70, 38], [30, 40]], P_STONE);
+      pPoly(c, [[68, 50], [50, 50], [50, 38], [70, 38]], 'rgba(10,10,6,.26)');
+      pPoly(c, [[66, 42], [80, 40], [82, 32], [70, 30]], P_STONE);
+      pPoly(c, [[72, 30], [75, 20], [78, 30]], P_CRYSTAL);
+      pPoly(c, [[32, 40], [56, 38], [54, 28], [36, 30]], P_CRYSTAL);
+      pLine(c, 48, 32, 86, 10, 5.2, P_CRYSTAL);
+      pPoly(c, [[82, 4], [90, 12], [84, 18], [76, 10]], P_ARCANE);
+      pCirc(c, 86, 10, 2.2, '#f2e6ff');
+      pCirc(c, 76, 34, 1.4, P_ARCANE);
+      pCirc(c, 44, 36, 2.8, P_ARCANE);
+      pCirc(c, 44, 36, 1.2, '#f2e6ff');
     },
     mharvester: function (c) {
       pShadow(c, 48, 60, 26);
