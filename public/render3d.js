@@ -27,7 +27,7 @@ const TAU = Math.PI * 2;
  */
 function mergeParts(parts) {
   // 直接把源顶点按矩阵变换写进输出缓冲，不做 geometry.clone()。
-  // 撒草木时一张图要合并上万个零件，clone 一份 BufferGeometry 再
+  // 单位、建筑和山岩会合并大量零件，clone 一份 BufferGeometry 再
   // applyMatrix4 的开销和 GC 压力都很可观，手写这一段能省掉一半时间。
   const prepared = [];
   let total = 0;
@@ -1738,9 +1738,9 @@ export function createRenderer(canvas) {
     map: null, terrain: null,
     camX: 0, camY: 0, zoom: 0.78, yaw: 0, pitch: 0.94,
     shadows: 'structures', lod: true, fogScale: 6, particleBudget: 600,
-    bloom: true, scatter: true, scatterCount: 0, scatterChunks: 0,
+    bloom: true,
     showProjectiles: true,
-    buildTerrainMs: 0, buildScatterMs: 0,
+    buildTerrainMs: 0,
     snapshotUnits: 0, renderedUnits: 0, renderedStructures: 0,
     sight: null,
     palette: new Map(),
@@ -1750,13 +1750,12 @@ export function createRenderer(canvas) {
 
   /* -------------------- 地形 -------------------- */
 
-  const textureLoader = new THREE.TextureLoader();
   let groundTexture = null;
   let terrainGroup = null;
   let waterMesh = null;
   // 已经建好的静态世界的身份。full 帧不等于「静态数据变了」——重连、恢复
   // 会话、以及每条 REST 响应都会带 full 帧，其中绝大多数是同一张图。
-  // 只有这个键变了才值得推倒重建，否则直接复用显存里现成的地形与植被。
+  // 只有这个键变了才值得推倒重建，否则直接复用显存里现成的地形。
   let builtWorldKey = '';
   // 地形建好后直接采样网格高度。过去每个可见单位每帧都重新遍历河流、山脉
   // 并执行多组三角函数，军团规模上来后 CPU 时间会线性爆炸。
@@ -2077,60 +2076,6 @@ export function createRenderer(canvas) {
     return result;
   }
 
-  /**
-   * 把泥地照片「洗」成干净的细节贴图（Apple/Google 式干净地表的关键一步）。
-   *
-   * 原图偏暗、饱和、颗粒重，直接乘在顶点色上整张地图发闷、发脏。这里一次性
-   * 处理成：降采样软化颗粒 → 大幅去饱和（固有色交给顶点色分层）→ 提亮并压
-   * 对比（围绕一个亮基调收拢，泥点变成细腻的明暗颗粒）。贴图从此只提供微观
-   * 质感，宏观颜色全由顶点色决定 —— 这正是干净地图「颜色是大块平滑形状」的
-   * 做法。原图加载失败或处理异常时回退原图，绝不让地面渲染开天窗。
-   */
-  function cleanGroundTexture(image) {
-    const size = 512;                 // 顺手降采样：canvas 缩放自带柔化
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = size;
-    const ctx = cv.getContext('2d');
-    ctx.drawImage(image, 0, 0, size, size);
-    const img = ctx.getImageData(0, 0, size, size);
-    const d = img.data;
-    // 泥感主要来自脏褐的色相和重颗粒，不是单纯的暗。所以重点去饱和 + 柔化，
-    // 亮度只适度提（BASE 150 ≈ 0.59，比原图 ~0.37 亮但留给 AgX 足够高光余量）。
-    const KEEP_SAT = 0.22;             // 只留一点点固有色
-    const BASE = 150, CONTRAST = 0.42; // 适度提亮 + 收对比
-    for (let i = 0; i < d.length; i += 4) {
-      const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-      for (let k = 0; k < 3; k++) {
-        const v = lum + (d[i + k] - lum) * KEEP_SAT;       // 去饱和
-        const lifted = BASE + (v - 128) * CONTRAST;         // 提亮 + 收对比
-        d[i + k] = lifted < 0 ? 0 : (lifted > 255 ? 255 : lifted);
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-  }
-
-  function mixGroundPhoto(procTex, photo, themeId) {
-    const size = 512;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = size;
-    const ctx = cv.getContext('2d');
-    ctx.drawImage(procTex.image, 0, 0, size, size);
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.globalAlpha = 0.32;
-    ctx.drawImage(photo, 0, 0, size, size);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1;
-    const tex = new THREE.CanvasTexture(cv);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = procTex.anisotropy;
-    tex.userData.themeId = themeId;
-    return tex;
-  }
-
   function spawnWearAt(x, y) {
     const spawns = state.spawnPoints || [];
     let best = 0;
@@ -2142,6 +2087,13 @@ export function createRenderer(canvas) {
       }
     }
     return best;
+  }
+
+  /** 低频噪声：给地表顶点色做草木/干土斑块，同一张图每次一致。 */
+  function clumpNoise(x, y) {
+    return (Math.sin(x * 0.00085 + y * 0.00042) * 0.5
+      + Math.sin(x * 0.00031 - y * 0.00097) * 0.35
+      + Math.sin((x + y) * 0.00058) * 0.25) * 0.5 + 0.5;
   }
 
   function roadWearAt(x, y) {
@@ -2489,12 +2441,8 @@ export function createRenderer(canvas) {
 
     buildRoads();
     buildRocks();
-    buildLandmarks();
     buildOreField();
     state.buildTerrainMs = Math.round(performance.now() - buildStarted);
-    const scatterStarted = performance.now();
-    buildScatter();
-    state.buildScatterMs = Math.round(performance.now() - scatterStarted);
   }
 
   /**
@@ -2590,346 +2538,6 @@ export function createRenderer(canvas) {
     terrainGroup.add(mesh);
   }
 
-  /* -------------------- 植被与地面杂物 -------------------- *
-   *
-   * 空旷的棕色平原是「像素游戏」和「成品 RTS」最直观的差距 —— 参考画面里到处
-   * 是松树、灌木、碎石。这里按确定性哈希在地图上撒点，再按 1400 单位见方分块
-   * 把每块里的所有草木烘焙成一个合并网格。
-   *
-   * 为什么烘焙而不是 InstancedMesh：一块地里有松树、灌木、石头好几种几何体，
-   * 实例化就得每种一个 mesh（可见区块 × 种类 = 几十次绘制调用）；合并之后
-   * 一个可见区块只要一次绘制调用，而且 three.js 会自动按包围球做视锥剔除。
-   *
-   * 这些完全是装饰：服务端不知道它们存在，不参与寻路也不阻挡射击。用地图
-   * 数据本身做种子，所以每个客户端撒出来的位置一致。
-   */
-
-  const SCATTER_CHUNK = 1400;
-  let scatterGroup = null;
-  // 取消令牌：新的 buildScatter 会让仍在分块构建的旧任务自动放弃（重连/改画质）。
-  let scatterBuildToken = 0;
-
-  // 各主题的配色：松林 / 荒漠 / 城区废墟
-  const SCATTER_THEMES = {
-    grassland: {
-      trunk: [0.42, 0.30, 0.19],
-      // 灰绿/橄榄（抬红蓝、压一点绿峰），和洗干净的鼠尾草地面同色系，不刺眼
-      foliage: [[0.30, 0.50, 0.30], [0.38, 0.60, 0.37], [0.25, 0.41, 0.27]],
-      bush: [[0.38, 0.54, 0.33], [0.46, 0.61, 0.39]],
-      rock: [[0.40, 0.39, 0.36], [0.32, 0.31, 0.29]],
-      reed: [[0.42, 0.50, 0.30], [0.50, 0.57, 0.34]],
-      density: 1.0
-    },
-    arid: {
-      trunk: [0.34, 0.26, 0.17],
-      foliage: [[0.34, 0.34, 0.19], [0.40, 0.38, 0.22], [0.28, 0.28, 0.16]],
-      bush: [[0.38, 0.34, 0.20], [0.44, 0.39, 0.24]],
-      rock: [[0.46, 0.41, 0.33], [0.36, 0.32, 0.26]],
-      reed: [[0.48, 0.45, 0.24], [0.56, 0.50, 0.30]],
-      density: 0.55
-    },
-    urban: {
-      trunk: [0.28, 0.26, 0.24],
-      foliage: [[0.22, 0.30, 0.20], [0.26, 0.34, 0.23], [0.18, 0.25, 0.18]],
-      bush: [[0.30, 0.30, 0.28], [0.36, 0.35, 0.32]],
-      rock: [[0.42, 0.41, 0.40], [0.33, 0.32, 0.31]],
-      reed: [[0.34, 0.42, 0.26], [0.42, 0.48, 0.30]],
-      density: 0.7
-    },
-    crater: {
-      trunk: [0.30, 0.20, 0.14],
-      foliage: [[0.36, 0.28, 0.16], [0.42, 0.32, 0.18], [0.28, 0.22, 0.14]],
-      bush: [[0.40, 0.28, 0.16], [0.46, 0.32, 0.18]],
-      rock: [[0.48, 0.36, 0.28], [0.38, 0.28, 0.22]],
-      reed: [[0.50, 0.36, 0.20], [0.56, 0.40, 0.22]],
-      density: 0.5
-    }
-  };
-
-  /** 位置哈希：同一张地图每次撒出来的草木完全一致。 */
-  function hash2(x, y) {
-    let h = (Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263)) >>> 0;
-    h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
-    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-  }
-
-  /** 低频噪声：决定哪里成林、哪里空旷，避免草木均匀铺满显得假。 */
-  function clumpNoise(x, y) {
-    return (Math.sin(x * 0.00085 + y * 0.00042) * 0.5
-      + Math.sin(x * 0.00031 - y * 0.00097) * 0.35
-      + Math.sin((x + y) * 0.00058) * 0.25) * 0.5 + 0.5;
-  }
-
-  /**
-   * 草木零件的几何模板，全局只建一次。
-   *
-   * 每棵树都 new 一组 ConeGeometry 的话，一张大图要造上万个几何体对象，
-   * 开局会明显卡一下，显存也吃不消。模板 + 矩阵缩放把这部分开销降到常数。
-   * 面数也压到最低：一棵松树约 40 个三角形，撒一两千棵才不会失控。
-   */
-  const SCATTER_GEO = {
-    trunk: new THREE.CylinderGeometry(0.055, 0.095, 1, 4),
-    cone: new THREE.ConeGeometry(1, 1, 5),
-    blob: new THREE.DodecahedronGeometry(1, 0),
-    disc: new THREE.CircleGeometry(1, 6).rotateX(-Math.PI / 2)
-  };
-
-  function scaled(geo, sx, sy, sz, x, y, z, rgb) {
-    const m = new THREE.Matrix4().makeScale(sx, sy, sz);
-    m.setPosition(x, y, z);
-    return { geo: geo, matrix: m, rgb: rgb };
-  }
-
-  function pineParts(scale, rand, theme) {
-    const trunkH = 17 * scale;
-    return [
-      scaled(SCATTER_GEO.trunk, 17 * scale, trunkH, 17 * scale,
-        0, trunkH / 2, 0, theme.trunk),
-      scaled(SCATTER_GEO.cone, 13 * scale, 22 * scale, 13 * scale,
-        0, trunkH * 0.72 + 11 * scale, 0, theme.foliage[0]),
-      scaled(SCATTER_GEO.cone, 8.5 * scale, 17 * scale, 8.5 * scale,
-        0, trunkH * 0.72 + 22 * scale, 0, theme.foliage[1]),
-      scaled(SCATTER_GEO.disc, 11 * scale, 1, 11 * scale,
-        0, 0.6, 0, [0.06, 0.07, 0.05])
-    ];
-  }
-
-  function bushParts(scale, rand, theme) {
-    const parts = [];
-    for (let i = 0; i < 2; i++) {
-      const a = rand() * TAU;
-      const d = 3.2 * scale * rand();
-      const r = (5.4 - i * 1.2) * scale;
-      parts.push(scaled(SCATTER_GEO.blob, r, r * 0.8, r,
-        Math.cos(a) * d, r * 0.7, Math.sin(a) * d,
-        theme.bush[i % theme.bush.length]));
-    }
-    parts.push(scaled(SCATTER_GEO.disc, 7 * scale, 1, 7 * scale,
-      0, 0.5, 0, [0.07, 0.08, 0.06]));
-    return parts;
-  }
-
-  /** 岸边芦苇：几根细长锥体，把水陆边界接起来。 */
-  function reedParts(scale, rand, theme) {
-    const parts = [];
-    const blades = 4;
-    for (let i = 0; i < blades; i++) {
-      const a = rand() * TAU;
-      const d = 3.5 * scale * rand();
-      const h = (13 + rand() * 11) * scale;
-      parts.push(scaled(SCATTER_GEO.cone, 1.5 * scale, h, 1.5 * scale,
-        Math.cos(a) * d, h * 0.5, Math.sin(a) * d, theme.reed[i % theme.reed.length]));
-    }
-    return parts;
-  }
-
-  function pebbleParts(scale, rand, theme) {
-    const parts = [];
-    const count = 2;
-    for (let i = 0; i < count; i++) {
-      const a = rand() * TAU;
-      const d = 5 * scale * rand();
-      const r = (2.8 + rand() * 2.2) * scale;
-      parts.push(scaled(SCATTER_GEO.blob, r, r * 0.7, r * 1.1,
-        Math.cos(a) * d, r * 0.5, Math.sin(a) * d,
-        theme.rock[i % theme.rock.length]));
-    }
-    return parts;
-  }
-
-  /** 草丛：几根矮锥，用来打破基地周围那块光板。纯装饰，不挡路。 */
-  function tuftParts(scale, rand, theme) {
-    const parts = [];
-    const blades = 5;
-    for (let i = 0; i < blades; i++) {
-      const a = rand() * TAU;
-      const d = 2.8 * scale * rand();
-      const h = (4.5 + rand() * 5.5) * scale;
-      parts.push(scaled(SCATTER_GEO.cone, 1.15 * scale, h, 1.15 * scale,
-        Math.cos(a) * d, h * 0.5, Math.sin(a) * d,
-        theme.foliage[i % theme.foliage.length]));
-    }
-    parts.push(scaled(SCATTER_GEO.disc, 5.5 * scale, 1, 5.5 * scale,
-      0, 0.4, 0, [0.10, 0.12, 0.07]));
-    return parts;
-  }
-
-  function spawnClearance(x, y, spawnPoints) {
-    let best = Infinity;
-    for (let i = 0; i < spawnPoints.length; i++) {
-      const d = Math.hypot(x - spawnPoints[i][0], y - spawnPoints[i][1]);
-      if (d < best) best = d;
-    }
-    return best;
-  }
-
-  /** 这个点能不能长草木：水里、山上、路上、总部台基和矿区附近都不行。 */
-  function scatterAllowed(x, y, spawnPoints, resources) {
-    // 允许长到浅岸上：光秃秃的岸线不真实，芦苇和滩石能把水陆接起来
-    if (riverDepthAt(x, y) > 0.34) return false;
-    if (mountainHeightAt(x, y) > 6) return false;
-    const roads = (state.terrain && state.terrain.roads) || [];
-    for (let i = 0; i < roads.length; i++) {
-      const r = roads[i];
-      const dx = r.x2 - r.x1;
-      const dy = r.y2 - r.y1;
-      const lenSq = dx * dx + dy * dy;
-      let t = lenSq < 1 ? 0 : ((x - r.x1) * dx + (y - r.y1) * dy) / lenSq;
-      t = Math.max(0, Math.min(1, t));
-      const cx = r.x1 + t * dx;
-      const cy = r.y1 + t * dy;
-      if (Math.hypot(x - cx, y - cy) < r.width * 0.5 + 26) return false;
-    }
-    // 总部台基留空，但 150 以外允许草丛/碎石，避免开局就是一块网球场
-    if (spawnClearance(x, y, spawnPoints) < 150) return false;
-    for (let i = 0; i < resources.length; i++) {
-      const res = resources[i];
-      if (Math.hypot(x - res.x, y - res.y) < res.radius + 90) return false;
-    }
-    return true;
-  }
-
-  function buildScatter() {
-    // 取消任何仍在分块构建的旧任务，并清掉旧植被
-    const token = ++scatterBuildToken;
-    if (scatterGroup) {
-      worldRoot.remove(scatterGroup);
-      scatterGroup.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
-      scatterGroup = null;
-    }
-    state.scatterCount = 0;
-    state.scatterChunks = 0;
-    if (!state.scatter || !state.map) return;
-
-    const mw = state.map.width;
-    const mh = state.map.height;
-    const theme = SCATTER_THEMES[(state.terrain && state.terrain.theme)] ||
-      SCATTER_THEMES.grassland;
-    const spawnPoints = state.spawnPoints || [];
-    const resources = state.resources || [];
-
-    const material = applyFogMask(new THREE.MeshLambertMaterial({
-      vertexColors: true, flatShading: true
-    }));
-
-    const chunksX = Math.ceil(mw / SCATTER_CHUNK);
-    const chunksY = Math.ceil(mh / SCATTER_CHUNK);
-    const step = 84 / theme.density;      // 采样间距，越小越密
-    const group = new THREE.Group();
-    let placed = 0;
-
-    // 单个 1400 单位见方区块的采样与合并（原同步双重循环的循环体，逻辑原样保留）
-    function buildChunk(cx, cy) {
-      const parts = [];
-      const x0 = cx * SCATTER_CHUNK;
-      const y0 = cy * SCATTER_CHUNK;
-      const x1 = Math.min(mw, x0 + SCATTER_CHUNK);
-      const y1 = Math.min(mh, y0 + SCATTER_CHUNK);
-
-      for (let sx = x0; sx < x1; sx += step) {
-        for (let sy = y0; sy < y1; sy += step) {
-          const h1 = hash2(sx * 7.3, sy * 3.1);
-          // 成林/空地：低频噪声决定这一带的密度
-          const clump = clumpNoise(sx, sy);
-          if (h1 > 0.10 + clump * 0.78) continue;   // 噪声高的地方成密林
-
-          // 在格子里抖动，避免看出网格
-          const jx = sx + (hash2(sx * 1.7, sy * 9.4) - 0.5) * step * 1.6;
-          const jy = sy + (hash2(sx * 5.1, sy * 2.9) - 0.5) * step * 1.6;
-          if (jx < 40 || jy < 40 || jx > mw - 40 || jy > mh - 40) continue;
-          if (!scatterAllowed(jx, jy, spawnPoints, resources)) continue;
-
-          let seed = Math.floor(hash2(jx * 3.7, jy * 8.2) * 1e9);
-          const rand = function () {
-            seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-            return seed / 0x7fffffff;
-          };
-
-          const kind = rand();
-          const scale = 1.15 + rand() * 0.95;
-          const nearRavine = riverDepthAt(jx, jy) > 0.04;
-          const nearBase = spawnClearance(jx, jy, spawnPoints) < 560;
-          const biome = (state.terrain && state.terrain.theme) || 'grassland';
-          let items;
-          if (nearRavine) {
-            // 沟壑坡面不长草木，只有碎石
-            items = pebbleParts(scale * 1.3, rand, theme);
-          } else if (nearBase) {
-            // 基地外围只撒草丛和碎石，松树留给野外
-            items = kind < 0.62 ? tuftParts(scale * 1.05, rand, theme)
-              : pebbleParts(scale * 1.15, rand, theme);
-          } else if (biome === 'arid') {
-            if (kind < 0.22) items = pineParts(scale * 0.85, rand, theme);
-            else if (kind < 0.50) items = bushParts(scale * 1.05, rand, theme);
-            else if (kind < 0.72) items = tuftParts(scale, rand, theme);
-            else items = pebbleParts(scale * 1.35, rand, theme);
-          } else if (biome === 'urban') {
-            if (kind < 0.16) items = pineParts(scale * 0.8, rand, theme);
-            else if (kind < 0.36) items = bushParts(scale, rand, theme);
-            else if (kind < 0.52) items = tuftParts(scale * 0.9, rand, theme);
-            else items = pebbleParts(scale * 1.45, rand, theme);
-          } else if (biome === 'crater') {
-            if (kind < 0.12) items = pineParts(scale * 0.75, rand, theme);
-            else if (kind < 0.34) items = bushParts(scale * 0.95, rand, theme);
-            else if (kind < 0.55) items = tuftParts(scale * 0.9, rand, theme);
-            else items = pebbleParts(scale * 1.5, rand, theme);
-          } else if (kind < 0.48) items = pineParts(scale, rand, theme);
-          else if (kind < 0.68) items = bushParts(scale * 1.1, rand, theme);
-          else if (kind < 0.86) items = tuftParts(scale, rand, theme);
-          else items = pebbleParts(scale, rand, theme);
-
-          const place = new THREE.Matrix4()
-            .makeRotationY(rand() * TAU)
-            .setPosition(jx, groundHeight(jx, jy), jy);
-          items.forEach(function (part) {
-            part.matrix = place.clone().multiply(part.matrix);
-            parts.push(part);
-          });
-          placed++;
-        }
-      }
-
-      if (!parts.length) return;
-      const mesh = new THREE.Mesh(mergeParts(parts), material);
-      // 每块单独一个 mesh，three.js 按包围球自动视锥剔除；
-      // 再加一个到相机的距离剔除（见 render 里的 scatterCull）。
-      mesh.frustumCulled = true;
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
-      mesh.userData.cx = (x0 + x1) / 2;
-      mesh.userData.cy = (y0 + y1) / 2;
-      group.add(mesh);
-    }
-
-    // 撒草木是纯装饰：单位落地、拾取、迷雾都不依赖它。原先它在地形构建末尾
-    // 一次性跑完（上万零件的合并），开局会明显卡一下。改成首帧之后按块构建，
-    // 每帧最多约 8ms；全部建完才整体挂进场景，避免树木逐块「蹦」出来。
-    let cx = 0, cy = 0;
-    const stepFrame = function () {
-      if (token !== scatterBuildToken) {
-        // 被更新的 buildScatter 取代（重连 / 改画质），丢弃这个半成品
-        group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
-        return;
-      }
-      const deadline = performance.now() + 8;
-      while (cy < chunksY) {
-        buildChunk(cx, cy);
-        cx++;
-        if (cx >= chunksX) { cx = 0; cy++; }
-        if (performance.now() >= deadline) break;
-      }
-      if (cy < chunksY) {
-        requestAnimationFrame(stepFrame);
-      } else {
-        scatterGroup = group;
-        worldRoot.add(scatterGroup);
-        state.scatterCount = placed;
-        state.scatterChunks = group.children.length;
-      }
-    };
-    requestAnimationFrame(stepFrame);
-  }
-
   /**
    * 山体上的岩块：给隆起的地形一个硬朗的轮廓，而不只是一个土包。
    *
@@ -3005,39 +2613,6 @@ export function createRenderer(canvas) {
       mesh.receiveShadow = true;
       terrainGroup.add(mesh);
     });
-  }
-
-  /**
-   * 地图地标：纯装饰、不可选。赤金陨坑陨石核顶上立一块「先挖先富」木牌。
-   * 坐标来自服务端 landmarks，立在已有山体上，不改寻路也不挡矿。
-   */
-  function makeCraterSign() {
-    const wood = new THREE.MeshLambertMaterial({ color: 0x6a4a28 });
-    const rust = new THREE.MeshLambertMaterial({ color: 0x8a5a30 });
-    const dark = new THREE.MeshLambertMaterial({ color: 0x2a2018 });
-    const g = new THREE.Group();
-    const post = new THREE.Mesh(new THREE.BoxGeometry(3.4, 30, 3.4), wood);
-    post.position.y = 15;
-    g.add(post);
-    const plank = new THREE.Mesh(new THREE.BoxGeometry(30, 13, 2.4), rust);
-    plank.position.set(0, 26, 2);
-    g.add(plank);
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(4.4, 6, 5), dark);
-    skull.position.set(0, 35, 0);
-    g.add(skull);
-    return g;
-  }
-
-  function buildLandmarks() {
-    const marks = (state.terrain && state.terrain.landmarks) || [];
-    for (let i = 0; i < marks.length; i++) {
-      const mark = marks[i];
-      const sign = makeCraterSign();
-      const gy = groundHeight(mark.x, mark.y);
-      sign.position.set(mark.x, gy, mark.y);
-      sign.userData.landmark = mark.id;
-      terrainGroup.add(sign);
-    }
   }
 
   /* -------------------- 矿脉 -------------------- */
@@ -5429,26 +5004,6 @@ export function createRenderer(canvas) {
       if (!bucket) { bucket = []; byKind.set(u.kind, bucket); }
       bucket.push(vis);
     }
-    // 草木剔除。两层：
-    //   1) 拉远到战略视角时整组隐藏 —— 那个距离下草木只剩亚像素
-    //   2) 否则按到相机的距离逐块剔除。光靠视锥不行：远裁剪面一万二，
-    //      正前方的块全都「在视锥内」，但它们早被场景雾吃没了。
-    if (scatterGroup) {
-      const showScatter = camDist < 1800;
-      scatterGroup.visible = showScatter;
-      if (showScatter) {
-        const cutoff = scene.fog.far * 0.92;
-        const cutoffSq = cutoff * cutoff;
-        const cx = camera.position.x;
-        const cz = camera.position.z;
-        const chunks = scatterGroup.children;
-        for (let i = 0; i < chunks.length; i++) {
-          const dx = chunks[i].userData.cx - cx;
-          const dz = chunks[i].userData.cy - cz;
-          chunks[i].visible = dx * dx + dz * dz < cutoffSq;
-        }
-      }
-    }
     // 只按相机距离降模；单位数量增加不会让整场模型突然变成盒子。
     const useSimple = state.lod && camDist > UNIT_LOD_DISTANCE;
 
@@ -5853,10 +5408,6 @@ export function createRenderer(canvas) {
         state.bloom = !!options.bloom;
         postfx.setOptions({ enabled: state.bloom, fastBloom: !!options.fastBloom });
       }
-      if (options.scatter != null && !!options.scatter !== state.scatter) {
-        state.scatter = !!options.scatter;
-        if (state.map) buildScatter();
-      }
       if (options.showProjectiles != null) state.showProjectiles = !!options.showProjectiles;
       if (options.postfx) postfx.setOptions(options.postfx);
     },
@@ -5864,7 +5415,7 @@ export function createRenderer(canvas) {
     /**
      * 一局开始（或重连收到 full 帧）时调用，刷新静态数据。
      *
-     * 地形、植被、道路、矿脉、迷雾画布全部按「地图身份」缓存：同一局里反复
+     * 地形、道路、矿脉、迷雾画布全部按「地图身份」缓存：同一局里反复
      * 收到 full 帧只更新引用，不碰几何体。返回是否真的重建了世界。
      */
     setMatch: function (map, terrain, resources, sight, spawnPoints) {
@@ -5874,7 +5425,6 @@ export function createRenderer(canvas) {
       state.resourceById = new Map();
       state.resources.forEach(function (r) { state.resourceById.set(r.id, r); });
       if (sight) state.sight = sight;
-      // 撒草木时要避开出生点，给基地留出空地
       state.spawnPoints = spawnPoints || state.spawnPoints || [];
 
       // 每局开新地图时服务端会给 map.seed 一个新随机值，尺寸与地形要素数量
@@ -5885,7 +5435,6 @@ export function createRenderer(canvas) {
         t.theme || '',
         (t.rivers || []).length, (t.bridges || []).length,
         (t.mountains || []).length, (t.roads || []).length,
-        (t.landmarks || []).length,
         state.resources.length
       ].join('|');
       if (worldKey === builtWorldKey && terrainGroup) {
@@ -5893,27 +5442,10 @@ export function createRenderer(canvas) {
       }
       builtWorldKey = worldKey;
 
-      const rebuild = function () { buildTerrain(); };
-      // 地面细节贴图在本地画布生成，开局不再等待 /terrain-ground.png。
-      // 照片仍可作可选微粒：加载成功就叠一层去饱和颗粒，失败也不挡渲染。
       const themeId = t.theme || 'grassland';
       groundTexture = makeProceduralGroundTexture(themeId);
       groundTexture.repeat.set(map.width / 280, map.height / 280);
-      if (!state._groundPhotoTried) {
-        state._groundPhotoTried = true;
-        textureLoader.load('/terrain-ground.png', function (photo) {
-          try {
-            const cleaned = cleanGroundTexture(photo.image);
-            const mixed = mixGroundPhoto(groundTexture, cleaned.image, themeId);
-            mixed.repeat.copy(groundTexture.repeat);
-            groundTexture = mixed;
-            if (state.map) rebuild();
-          } catch (err) {
-            // 照片叠不上就继续用程序化贴图
-          }
-        });
-      }
-      rebuild();
+      buildTerrain();
       return true;
     },
 
@@ -5958,10 +5490,7 @@ export function createRenderer(canvas) {
         structures: structureNodes.size,
         renderedStructures: state.renderedStructures,
         particles: fireLayer.list.length + smokeLayer.list.length,
-        scatter: state.scatterCount,
-        scatterChunks: state.scatterChunks,
         buildTerrainMs: state.buildTerrainMs,
-        buildScatterMs: state.buildScatterMs,
         geometries: renderer.info.memory.geometries,
         textures: renderer.info.memory.textures
       };

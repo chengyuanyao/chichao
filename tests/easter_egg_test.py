@@ -5,9 +5,9 @@
    2) 连点己方指挥中心 / 魔法主堡 7 次才敬礼，途中断开会重置
    3) 军犬咬死法师/女巫按 18% 出一句；咬步兵或未过检定不出
    4) 单兵第 16 杀按阵营补授衔句，3/8 杀不说话
-   5) 赤金陨坑木牌立在陨石核上，inspect 命中，不挡矿
+   5) 地图不再带装饰地标 / 木牌；陨石核仍是阻挡山体
 
-视觉项（hq_salute 雷达加速、dog_arcane 紫金牙印、陨坑木牌模型）只在
+视觉项（hq_salute 雷达加速、dog_arcane 紫金牙印）只在
 render3d.js / app.js 里冒烟，见 presentation_rules_test 的字符串锁。
 """
 
@@ -232,28 +232,21 @@ def main():
         server.public_room(room, viewer_id=b["id"]))
     print("  只在 16 杀说话，钢铁/秘法会各一句: PASS")
 
-    print("\n=== Test 5: 赤金陨坑木牌 ===")
-    crater = server.MAPS["gold_crater"]
-    assert easter_eggs.crater_landmark_on_core(crater)
-    mark = easter_eggs.inspect_landmark(crater, 5000, 3200)
-    assert mark is not None
-    assert mark["label"] == "先挖先富"
-    assert "先挖先富" in mark["line"]
-    assert easter_eggs.inspect_landmark(crater, 100, 100) is None
+    print("\n=== Test 5: 地图无装饰地标 ===")
+    assert not hasattr(easter_eggs, "CRATER_LANDMARK")
+    assert not hasattr(easter_eggs, "inspect_landmark")
+    assert not hasattr(easter_eggs, "crater_landmark_on_core")
     for map_id, map_def in server.MAPS.items():
-        if map_id == "gold_crater":
-            continue
         assert not map_def.get("landmarks"), map_id
+        assert "先挖先富" not in str(map_def)
     room, a, b = make_room("EGG-CRATER", map_id="gold_crater")
-    marks = room["game"]["terrain"].get("landmarks") or []
-    assert len(marks) == 1
-    assert marks[0]["id"] == "first_pick"
+    assert not (room["game"]["terrain"].get("landmarks") or [])
     pub = server.PUBLIC_MAPS["gold_crater"]
-    assert pub["landmarks"][0]["label"] == "先挖先富"
-    # 木牌点在山体上：blocked，采矿车走不进去
+    assert not pub.get("landmarks")
+    # 陨石核仍是山体：采矿车走不进去
     terrain = server.game_terrain(room["game"])
     assert terrain.blocked(5000, 3200)
-    print("  核顶木牌 / 其他图无地标 / 不挡矿路: PASS")
+    print("  全图无地标 / 陨石核仍阻挡: PASS")
 
     print("\n=== 彩蛋测试全部通过 ===")
 

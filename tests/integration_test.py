@@ -64,17 +64,14 @@ def main():
     health = call("/api/health")
     assert health["ok"] is True
 
-    terrain_status, terrain_type, terrain = fetch_static("/terrain-ground.png")
-    assert terrain_status == 200
-    assert terrain_type == "image/png"
-    assert terrain.startswith(b"\x89PNG\r\n\x1a\n") and len(terrain) > 500000
     style_status, style_type, stylesheet = fetch_static("/styles.css")
     assert style_status == 200 and style_type == "text/css"
     assert b"Soviet Steel v3" in stylesheet
     assert b"#hudCanvas" in stylesheet, "3D 叠加层样式缺失"
     script_status, script_type, script = fetch_static("/app.js")
     assert script_status == 200 and "javascript" in script_type
-    assert b"issueRepairCommand" in script and b"terrain-ground.png" in script
+    assert b"issueRepairCommand" in script
+    assert b"terrain-ground.png" not in script
     assert b"render3d.js" in script, "app.js 应当引入 3D 渲染层"
 
     # 3D 渲染层与内置的 three.js 必须能直出（局域网客户端不联网）

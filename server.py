@@ -458,8 +458,6 @@ MAPS = {
             {"x": 2498, "y": 3656, "amount": 26000, "public": True},
             {"x": 3794, "y": 961, "amount": 26000, "public": True},
         ],
-        # 纯装饰：立在陨石核顶上，不进碰撞、不挡矿。
-        "landmarks": [dict(easter_eggs.CRATER_LANDMARK)],
     },
 }
 COMBAT_CELL_SIZE = 256.0
@@ -1023,7 +1021,6 @@ PUBLIC_MAPS = {
         "mountains": m.get("mountains", []),
         "roads": m.get("roads", []),
         "resources": m.get("bonusResources", []),
-        "landmarks": [dict(item) for item in m.get("landmarks", [])],
     }
     for mid, m in MAPS.items()
 }
@@ -1500,7 +1497,6 @@ def start_game(room):
             "mountains": [{"x": m["x"], "y": m["y"], "r": m["r"]} for m in mountains],
             "roads": [{"x1": r["x1"], "y1": r["y1"], "x2": r["x2"], "y2": r["y2"], "width": r["width"]} for r in roads],
             "theme": room_map.get("theme", "grassland"),
-            "landmarks": [dict(item) for item in room_map.get("landmarks") or []],
         },
         # Shared per-map navigation context. Never serialized: public_game()
         # copies only the plain "terrain" dict above.
@@ -4060,8 +4056,8 @@ def game_loop():
 def static_entry(target):
     """读静态文件并按 (mtime, size) 缓存进内存，返回 (content, content_type, last_modified)。
 
-    过去每次请求都从磁盘重读整份文件 —— terrain-ground.png 有 3.5MB，多名玩家
-    同时开局就是几次整读。改成只在文件真的变了（mtime 或大小不同）时才重读；
+    过去每次请求都从磁盘重读整份文件。改成只在文件真的变了
+    （mtime 或大小不同）时才重读；
     os.stat 本身只是一次廉价系统调用，不读文件内容，开发时改完文件也能立即生效。
     """
     try:
