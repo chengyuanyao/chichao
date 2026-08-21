@@ -1104,7 +1104,10 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, theme: 'grassland', spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
     narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
     triple_pass: { id: 'triple_pass', name: '三岔隘口', width: 5400, height: 4200, maxPlayers: 3, theme: 'arid', spawnLabels: ['西境营地', '东北营地', '东南营地'], spawnPoints: [[700,2100],[3700,368],[3700,3832]] },
-    gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。外环邻里路口被熔水河切开，只能从公路桥过。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]] }
+    gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。外环邻里路口被熔水河切开，只能从公路桥过。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]] },
+    island_hop: { id: 'island_hop', name: '三谷争夺', width: 7200, height: 6000, maxPlayers: 4, theme: 'grassland', spawnLabels: ['西北高地', '东北高地', '西南高地', '东南高地'], spawnPoints: [[900,900],[6300,900],[900,5100],[6300,5100]] },
+    urban_siege: { id: 'urban_siege', name: '围城战', width: 6400, height: 6400, maxPlayers: 4, theme: 'urban', spawnLabels: ['西区', '北区', '东区', '南区'], spawnPoints: [[900,3200],[3200,900],[5500,3200],[3200,5500]] },
+    valley_clash: { id: 'valley_clash', name: '峡谷交锋', width: 6400, height: 4800, maxPlayers: 4, theme: 'grassland', spawnLabels: ['左路前哨', '左路后哨', '右路前哨', '右路后哨'], spawnPoints: [[800,1800],[800,3000],[5600,1800],[5600,3000]] }
   };
 
   // 地图目录只在大厅和首帧下发，缓存住供整局使用
@@ -1291,14 +1294,39 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     return div.innerHTML;
   }
 
+  function lobbySpawnCount(mapConfig) {
+    var config = mapConfig || getMapConfig() || {};
+    if (config.spawnPoints && config.spawnPoints.length) {
+      return config.spawnPoints.length;
+    }
+    if (config.spawnLabels && config.spawnLabels.length) {
+      return config.spawnLabels.length;
+    }
+    return 6;
+  }
+
+  function takeFreeSpawn(used, preferred, totalSpawns) {
+    if (preferred >= 0 && preferred < totalSpawns && !used[preferred]) {
+      used[preferred] = true;
+      return preferred;
+    }
+    for (var i = 0; i < totalSpawns; i++) {
+      if (!used[i]) {
+        used[i] = true;
+        return i;
+      }
+    }
+    return -1;
+  }
+
   function autoAssignSpawns() {
     if (!roomState || !roomState.players) { return; }
     var me = ownPlayer();
     if (!me || !me.isHost) { return; }
 
-    var mapConfig = roomState.mapConfig || {};
-    var totalSpawns = (mapConfig.spawnPoints || []).length || 6;
-    var spawnsPerSide = Math.floor(totalSpawns / 2);
+    var mapConfig = getMapConfig();
+    var totalSpawns = lobbySpawnCount(mapConfig);
+    var spawnsPerSide = Math.max(1, Math.floor(totalSpawns / 2));
 
     // Group players by team
     var teamGroups = {};
@@ -1323,35 +1351,36 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       sides[side][key] = group;
     });
 
-    // Assign within each side
-    var assigned = {};
+    // One unique seat per seated player. FFA groups are size 1, so a
+    // per-group index of 0 used to hand the same side-slot to every
+    // solo player and skip the rest — 4人图只写出两个出生点。
+    var used = {};
+    var assignments = [];
     [0, 1].forEach(function (side) {
-      var sideKeys = Object.keys(sides[side] || {});
-      sideKeys.forEach(function (key) {
-        var group = sides[side][key];
-        var offset = side * spawnsPerSide;
-        group.forEach(function (p, pi) {
-          var sp = offset + pi;
-          if (sp >= offset && sp < offset + spawnsPerSide && !assigned[sp]) {
-            assigned[sp] = p;
-          }
+      var offset = side * spawnsPerSide;
+      var sideCount = (side === 0) ? spawnsPerSide : (totalSpawns - spawnsPerSide);
+      var seat = 0;
+      Object.keys(sides[side] || {}).forEach(function (key) {
+        (sides[side][key] || []).forEach(function (p) {
+          var preferred = (seat < sideCount) ? (offset + seat) : -1;
+          var sp = takeFreeSpawn(used, preferred, totalSpawns);
+          if (sp >= 0) { assignments.push({ player: p, spawn: sp }); }
+          seat += 1;
         });
       });
     });
 
-    // Send spawn assignments
-    Object.keys(assigned).forEach(function (sp) {
-      var p = assigned[sp];
-      var currentSpawn = p.spawn == null ? -1 : p.spawn;
-      if (currentSpawn !== parseInt(sp, 10)) {
-        sendAction('setSpawn', { playerId: p.id, spawn: parseInt(sp, 10) });
+    assignments.forEach(function (entry) {
+      var currentSpawn = entry.player.spawn == null ? -1 : entry.player.spawn;
+      if (currentSpawn !== entry.spawn) {
+        sendAction('setSpawn', { playerId: entry.player.id, spawn: entry.spawn });
       }
     });
   }
 
   async function randomAssignSpawns(rs, mapConfig) {
-    var totalSpawns = (mapConfig.spawnPoints || []).length || 6;
-    var spawnsPerSide = Math.floor(totalSpawns / 2);
+    var totalSpawns = lobbySpawnCount(mapConfig);
+    var spawnsPerSide = Math.max(1, Math.floor(totalSpawns / 2));
     var players = rs.players.slice().sort(function () { return Math.random() - 0.5; });
 
     var side0 = [];
@@ -1370,18 +1399,27 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
         var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
       }
     }
+    function pool(start, end) {
+      var items = [];
+      for (var n = start; n < end; n++) { items.push(n); }
+      shuffle(items);
+      return items;
+    }
     shuffle(side0);
     shuffle(side1);
 
+    var used = {};
+    var pools = [pool(0, spawnsPerSide), pool(spawnsPerSide, totalSpawns)];
     var spawnList = [];
-    for (var i = 0; i < Math.max(side0.length, side1.length); i++) {
-      if (i < side0.length) {
-        spawnList.push({ player: side0[i], spawn: Math.min(i, spawnsPerSide - 1) });
-      }
-      if (i < side1.length) {
-        spawnList.push({ player: side1[i], spawn: Math.min(spawnsPerSide + i, totalSpawns - 1) });
-      }
+    function assignSide(sidePlayers, side) {
+      sidePlayers.forEach(function (p) {
+        var preferred = pools[side].length ? pools[side].shift() : -1;
+        var sp = takeFreeSpawn(used, preferred, totalSpawns);
+        if (sp >= 0) { spawnList.push({ player: p, spawn: sp }); }
+      });
     }
+    assignSide(side0, 0);
+    assignSide(side1, 1);
 
     for (var k = 0; k < spawnList.length; k++) {
       var entry = spawnList[k];
@@ -4330,12 +4368,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     } finally {
       randomSpawnBtn.disabled = false;
     }
-  });
-  randomSpawnBtn.addEventListener('click', function () {
-    if (!roomState || !roomState.players) { return; }
-    var mapConfig = getMapConfig();
-    randomAssignSpawns(roomState, mapConfig);
-    sound('confirm');
   });
   startGameBtn.addEventListener('click', function () {
     sendAction('start').then(function () { sound('start'); }).catch(function () {});
