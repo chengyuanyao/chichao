@@ -6,12 +6,14 @@
    3) 死亡爆炸打附近单位与建筑，带衰减；不伤友军
    4) 单车拆不掉满血总部；贴脸引爆
    5) 军犬：卡车不当猎物且咬不动；魔仆是猎物但一口咬不死
-   6) 两阵营自爆单位战斗数值对齐
+   6) 造价/血/速对齐；卡车爆炸单独加强，连带半径两边共用
    7) AI 在成团建筑时会掺一辆，不当唯一兵种
+   8) 连带爆炸：溅射未致死也炸，友军并排也炸，环上每辆只炸一次
 """
 
 from __future__ import print_function
 
+import math
 import os
 import sys
 import time
@@ -66,12 +68,16 @@ def main():
         assert definition["detonateOnContact"] is True
         assert definition["deathExplosion"]["damage"] > 0
         assert definition["deathExplosion"]["radius"] > 0
-    # 战斗数值对齐：造价、建造、血、速、爆炸、伤害类型。皮相/生产者仍分阵营。
+        assert definition["deathExplosion"]["chainRadius"] > 0
+    # 造价/血/速仍对齐。卡车爆炸单独加强；连带半径两边共用。
     for field in ("cost", "hp", "speed", "build", "damageType"):
         assert truck[field] == hexling[field], (field, truck[field], hexling[field])
-    assert truck["deathExplosion"]["damage"] == hexling["deathExplosion"]["damage"]
-    assert truck["deathExplosion"]["radius"] == hexling["deathExplosion"]["radius"]
+    assert truck["deathExplosion"]["damage"] > hexling["deathExplosion"]["damage"]
+    assert truck["deathExplosion"]["radius"] > hexling["deathExplosion"]["radius"]
+    assert truck["deathExplosion"]["chainRadius"] == hexling["deathExplosion"]["chainRadius"]
     assert truck["deathExplosion"]["damageType"] == hexling["deathExplosion"]["damageType"]
+    assert truck["deathExplosion"]["chainRadius"] >= truck["deathExplosion"]["radius"]
+    assert hexling["deathExplosion"]["chainRadius"] > hexling["deathExplosion"]["radius"]
     bite_to_hexling = (
         server.UNIT_TYPES["dog"]["damage"]
         * server.DAMAGE_MULTIPLIER["bite"]["arcane"])
@@ -183,11 +189,13 @@ def main():
     game["units"].append(truck)
     hq_before = hq["hp"]
     server.trigger_death_explosion(room, truck, game)
+    hq_hit = hq_before - hq["hp"]
     assert hq["hp"] > 0, "总部不该被单车拆掉"
-    assert hq["hp"] > hq_before * 0.75, hq["hp"]
-    assert hq_before - hq["hp"] < 500, hq_before - hq["hp"]
+    assert hq["hp"] > hq_before * 0.60, hq["hp"]
+    assert hq_hit < 850, hq_hit
+    assert hq_hit > 550, hq_hit
     assert abs(ally["hp"] - 200) < 0.1, "友军不该吃自己的爆炸"
-    print("  总部剩 %.0f / 友军无损: PASS" % hq["hp"])
+    print("  总部剩 %.0f（单车伤 %.0f）/ 友军无损: PASS" % (hq["hp"], hq_hit))
 
     print("\n=== Test 7: 魔仆爆炸同样生效 ===")
     room, a, b = make_room("SU05", magic_b=True)
@@ -287,6 +295,86 @@ def main():
     assert "bomb_truck" in produced, produced
     assert produced != set(["bomb_truck"]), produced
     print("  AI 排出 %s: PASS" % sorted(produced))
+
+    print("\n=== Test 12: 溅射未致死的邻近自爆也会连带 ===")
+    room, a, b = make_room("SU11", magic_b=True)
+    game = room["game"]
+    truck_boom = server.UNIT_TYPES["bomb_truck"]["deathExplosion"]
+    # 放在卡车爆破半径外、连带半径内：溅射为 0，全靠 连带。
+    gap = (truck_boom["radius"] + truck_boom["chainRadius"]) * 0.5
+    assert truck_boom["radius"] < gap < truck_boom["chainRadius"], gap
+    truck = server.make_unit("bomb_truck", a["id"], 4000, 4000)
+    other = server.make_unit("hexling", b["id"], 4000 + gap, 4000)
+    # 魔仆外侧的步兵：只吃得到魔仆爆炸，证明魔仆确实引爆了。
+    witness = server.make_unit("rifle", a["id"], 4000 + gap + 18, 4000)
+    tank = server.make_unit("tank", b["id"], 4008, 4000)
+    mage = server.make_unit("mage", b["id"], 4000, 4012)
+    game["units"].extend([truck, other, witness, tank, mage])
+    other_hp = other["hp"]
+    tank_hp = tank["hp"]
+    mage_hp = mage["hp"]
+    expect_splash = expected_explosion("bomb_truck", gap, "arcane")
+    assert expect_splash <= 0, expect_splash
+    assert other_hp > expect_splash
+    server.trigger_death_explosion(room, truck, game)
+    assert truck.get("_exploded") and other.get("_exploded")
+    assert truck["hp"] <= 0 and other["hp"] <= 0
+    assert witness["hp"] <= 0, "魔仆连带后应炸死身边步兵，剩 %s" % witness["hp"]
+    assert not tank.get("_exploded"), "坦克不该被扫进假爆炸"
+    assert not mage.get("_exploded"), "法师不该被扫进假爆炸"
+    assert tank["hp"] < tank_hp and tank["hp"] > 0
+    assert mage["hp"] < mage_hp
+    print("  间距 %.0f：魔仆未吃溅射仍引爆 / 坦克法师不假炸: PASS" % gap)
+
+    print("\n=== Test 12b: 爆破圈内溅射未打死也会连带 ===")
+    room, a, b = make_room("SU11b")
+    game = room["game"]
+    truck = server.make_unit("bomb_truck", a["id"], 5000, 5000)
+    other = server.make_unit("bomb_truck", b["id"], 5115, 5000)
+    game["units"].extend([truck, other])
+    expect = expected_explosion("bomb_truck", 115.0, "light")
+    assert 0 < expect < other["hp"], (expect, other["hp"])
+    server.trigger_death_explosion(room, truck, game)
+    assert other.get("_exploded") and other["hp"] <= 0
+    print("  圈内溅射 %.0f < 160，仍连带: PASS" % expect)
+
+    print("\n=== Test 13: 友军并排两辆都会炸 ===")
+    room, a, b = make_room("SU12")
+    game = room["game"]
+    first = server.make_unit("bomb_truck", a["id"], 4000, 4000)
+    parked = server.make_unit("bomb_truck", a["id"], 4050, 4000)
+    prey = server.make_unit("rifle", b["id"], 4025, 4000)
+    prey["hp"] = 200
+    game["units"].extend([first, parked, prey])
+    server.trigger_death_explosion(room, first, game)
+    assert first.get("_exploded") and parked.get("_exploded")
+    assert first["hp"] <= 0 and parked["hp"] <= 0
+    assert abs(parked["hp"]) < 0.1
+    assert prey["hp"] <= 0, "两车都炸后贴脸步兵应死，剩 %s" % prey["hp"]
+    print("  友军并排双炸: PASS")
+
+    print("\n=== Test 14: 三四辆环形各炸一次，不递归死循环 ===")
+    room, a, b = make_room("SU13", magic_b=True)
+    game = room["game"]
+    ring = [
+        server.make_unit("bomb_truck", a["id"], 4000, 4000),
+        server.make_unit("hexling", b["id"], 4080, 4000),
+        server.make_unit("bomb_truck", a["id"], 4080, 4080),
+        server.make_unit("hexling", b["id"], 4000, 4080),
+    ]
+    for unit in ring:
+        game["units"].append(unit)
+    # 边长 80、对角 113，都在 chainRadius 130 内。
+    for i, unit in enumerate(ring):
+        nxt = ring[(i + 1) % 4]
+        side = math.hypot(nxt["x"] - unit["x"], nxt["y"] - unit["y"])
+        assert 70 < side < 130, side
+    server.trigger_death_explosion(room, ring[0], game)
+    assert all(unit.get("_exploded") for unit in ring), [u.get("_exploded") for u in ring]
+    assert all(unit["hp"] <= 0 for unit in ring)
+    assert server.trigger_death_explosion(room, ring[0], game) is False
+    assert server.trigger_death_explosion(room, ring[2], game) is False
+    print("  环形 4 辆各炸一次: PASS")
 
     print("\n=== 自爆单位测试全部通过 ===")
 

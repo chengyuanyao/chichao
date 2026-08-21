@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """秘法会针对性补强：玻璃后排、轻甲经济、磁暴/狙击过伤。
-   不改钢铁身份（军犬仍一口清步兵，磁暴仍克载具），也不拆齐自爆数值。
+   不改钢铁身份（军犬仍一口清步兵，磁暴仍克载具）。
+   自爆卡车与魔仆造价/血/速仍对齐；爆炸威力按卡车单独加强。
 """
 
 from __future__ import print_function
@@ -58,13 +59,15 @@ def main():
         assert unit["hp"] <= 0, "%s 两口应死" % kind
     print("  咬 90 / 血 160，一口剩 70: PASS")
 
-    print("\n=== Test 2: 自爆卡车与爆裂魔仆战斗数值仍对齐 ===")
+    print("\n=== Test 2: 自爆卡车与爆裂魔仆造价/血/速仍对齐 ===")
     truck = server.UNIT_TYPES["bomb_truck"]
     hexling = server.UNIT_TYPES["hexling"]
     for field in ("cost", "hp", "speed", "build", "damageType"):
         assert truck[field] == hexling[field], (field, truck[field], hexling[field])
-    for field in ("damage", "radius", "damageType"):
-        assert truck["deathExplosion"][field] == hexling["deathExplosion"][field]
+    assert truck["deathExplosion"]["damageType"] == hexling["deathExplosion"]["damageType"]
+    assert truck["deathExplosion"]["chainRadius"] == hexling["deathExplosion"]["chainRadius"]
+    assert truck["deathExplosion"]["damage"] > hexling["deathExplosion"]["damage"]
+    assert truck["deathExplosion"]["radius"] > hexling["deathExplosion"]["radius"]
     assert hexling["hp"] > bite_arcane
     assert hexling["armor"] == "arcane"
     assert truck["armor"] == "light"
@@ -79,7 +82,7 @@ def main():
     server.apply_damage(room, familiar, dog_bite, a["id"], "bite", game)
     assert familiar["hp"] > 0
     assert abs((before - familiar["hp"]) - bite_arcane) < 0.1
-    print("  640/160/122.4/爆炸对齐，魔仆一口不死: PASS")
+    print("  640/160/122.4 对齐；卡车爆炸更高；魔仆一口不死: PASS")
 
     print("\n=== Test 3: 经济甲种与钢铁对齐，采矿仍结算 ===")
     assert server.UNIT_TYPES["mharvester"]["armor"] == "heavy"
