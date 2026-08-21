@@ -1183,6 +1183,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var pointer = { x: 0, y: 0, worldX: 0, worldY: 0, inside: false };
   var dragging = null;
   var pressedKeys = new Set();
+  var stopKeyDownAt = 0;
   var controlGroups = {};
   var lastGroupTap = {};
   var structureHpSnap = {};
@@ -3596,6 +3597,16 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     selectionBox.classList.toggle('hidden', width < 3 && height < 3);
   }
 
+  function isAdditiveSelect(event) {
+    return !!(event && (event.shiftKey || event.ctrlKey || event.metaKey));
+  }
+
+  function selectedUnitIdList() {
+    // Copy at command time so a later selection change cannot rewrite an
+    // in-flight move/stop payload.
+    return Array.from(selectedUnits);
+  }
+
   function selectAt(worldX, worldY, additive) {
     var entity = entityAt(worldX, worldY);
     if (!additive) {
@@ -3711,8 +3722,9 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   // 下达指令反馈（水波纹效果已移除，保留函数避免调用处报错）
   function markOrder(x, y, type) {}
 
-  function issueGroundCommand(x, y) {
-    if (!selectedUnits.size) {
+  function issueGroundCommand(x, y, unitIds) {
+    var ids = unitIds || selectedUnitIdList();
+    if (!ids.length) {
       toast('请先选择部队');
       return;
     }
@@ -3720,7 +3732,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     markOrder(x, y, command === 'attackMove' ? 'attack' : 'move');
     sendAction('command', {
       command: command,
-      unitIds: Array.from(selectedUnits),
+      unitIds: ids,
       x: x,
       y: y
     }).then(function () { sound('move'); }).catch(function () {});
@@ -3729,7 +3741,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     }
   }
 
-  function issueContextCommand(worldX, worldY) {
+  function issueContextCommand(worldX, worldY, event) {
     // 选中兵营/重装工厂且无部队选中时，右键设集结点
     if (selectedStructureId && !selectedUnits.size) {
       var prod = roomState.game.structures.find(function (s) {
@@ -3746,11 +3758,18 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       }
     }
     var target = entityAt(worldX, worldY);
+    // Own-unit context click is a selection change, never a move/stop.
+    // Otherwise a right-click or macOS ctrl-click meant to pick group B
+    // would re-order group A onto B's feet and abort A's march.
+    if (target && target.id.charAt(0) === 'u' && target.owner === session.playerId) {
+      selectAt(worldX, worldY, isAdditiveSelect(event));
+      return;
+    }
     if (target && !isFriendly(target.owner) && selectedUnits.size) {
       markOrder(target.x, target.y, 'attack');
       sendAction('command', {
         command: 'attack',
-        unitIds: Array.from(selectedUnits),
+        unitIds: selectedUnitIdList(),
         targetId: target.id
       }).then(function () { sound('attack'); }).catch(function () {});
     } else if (target && isFriendly(target.owner) && structureRole(target.kind) === 'repair' && selectedUnits.size) {
@@ -3846,7 +3865,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     }
     sendAction('command', {
       command: 'stop',
-      unitIds: Array.from(selectedUnits)
+      unitIds: selectedUnitIdList()
     }).then(function () { sound('select'); }).catch(function () {});
   }
 
@@ -4078,7 +4097,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       if (buildMode || commandMode) {
         cancelModes();
       } else {
-        issueContextCommand(pointer.worldX, pointer.worldY);
+        issueContextCommand(pointer.worldX, pointer.worldY, event);
       }
       return;
     }
@@ -4106,7 +4125,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       cancelModes();
       return;
     }
-    dragging = { startX: pointer.x, startY: pointer.y, additive: event.shiftKey };
+    dragging = { startX: pointer.x, startY: pointer.y, additive: isAdditiveSelect(event) };
     canvas.setPointerCapture(event.pointerId);
   });
   canvas.addEventListener('pointerup', function (event) {
@@ -4160,7 +4179,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
         var cmd = commandMode === 'attackMove' ? 'attackMove' : 'move';
         sendAction('command', {
           command: cmd,
-          unitIds: Array.from(selectedUnits),
+          unitIds: selectedUnitIdList(),
           x: wx,
           y: wy
         }).then(function () { sound('move'); }).catch(function () {});
@@ -4226,7 +4245,11 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       setCommandMode('attackMove');
     } else if (event.code === 'KeyS') {
       event.preventDefault();
-      stopSelected();
+      // Tap S = stop. Hold S = camera pan (WASD). Immediate stop-on-keydown
+      // cancelled marches while the player panned to pick another group.
+      if (!event.repeat && !stopKeyDownAt) {
+        stopKeyDownAt = performance.now();
+      }
     } else if (event.code === 'KeyR') {
       event.preventDefault();
       repairSelectedAtNearestBay();
@@ -4272,8 +4295,18 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   });
   window.addEventListener('keyup', function (event) {
     pressedKeys.delete(event.code);
+    if (event.code === 'KeyS' && stopKeyDownAt) {
+      var heldMs = performance.now() - stopKeyDownAt;
+      stopKeyDownAt = 0;
+      if (heldMs < 220 && currentScreen === 'game') {
+        stopSelected();
+      }
+    }
   });
-  window.addEventListener('blur', function () { pressedKeys.clear(); });
+  window.addEventListener('blur', function () {
+    pressedKeys.clear();
+    stopKeyDownAt = 0;
+  });
 
   createRoomBtn.addEventListener('click', createRoom);
   refreshRoomsBtn.addEventListener('click', refreshRooms);
