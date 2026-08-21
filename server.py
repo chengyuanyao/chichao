@@ -1459,6 +1459,79 @@ def add_random_resources(game, count, spawn_points):
     refresh_neutral_camps(game)
 
 
+def _spawn_index(value, total_spawns):
+    """Lobby spawn pick as an in-range index, or -1 if unset / stale."""
+    try:
+        spawn = int(value)
+    except (TypeError, ValueError):
+        return -1
+    if 0 <= spawn < total_spawns:
+        return spawn
+    return -1
+
+
+def resolve_unique_spawns(player_spawns, players, total_spawns):
+    """One seated player per birth seat whenever a free seat exists.
+
+    The lobby can send the same index twice (FFA auto-assign reuses slot 0
+    on each side, random-assign clamps with min(), two dropdowns pick the
+    same label). start_game used to copy those picks verbatim, so two
+    command centers landed on the same cell — or, with a leftover 6-player
+    index, ``spawn_points[sp]`` raised and the host saw a failed start.
+    Keep the first valid unique pick in the already-shuffled player order
+    and fill everyone else from the unused seats.
+    """
+    if total_spawns <= 0:
+        return {player["id"]: 0 for player in players}
+    used = set()
+    resolved = {}
+    for player in players:
+        spawn = _spawn_index(player_spawns.get(player["id"], -1), total_spawns)
+        if spawn >= 0 and spawn not in used:
+            resolved[player["id"]] = spawn
+            used.add(spawn)
+    free = [index for index in range(total_spawns) if index not in used]
+    for player in players:
+        if player["id"] in resolved:
+            continue
+        if free:
+            resolved[player["id"]] = free.pop(0)
+        else:
+            fallback = _spawn_index(player_spawns.get(player["id"], 0), total_spawns)
+            resolved[player["id"]] = fallback if fallback >= 0 else 0
+    return resolved
+
+
+def find_open_start_point(game, x, y, size):
+    """Spiral out from a birth seat until a building footprint fits."""
+    if position_clear(game, x, y, size):
+        return x, y
+    map_w = game["map"]["width"]
+    map_h = game["map"]["height"]
+    for step in range(1, 18):
+        radius = step * 70
+        for index in range(16):
+            angle = index * math.pi / 8.0
+            nx = clamp(x + math.cos(angle) * radius, 180, map_w - 180)
+            ny = clamp(y + math.sin(angle) * radius, 180, map_h - 180)
+            if position_clear(game, nx, ny, size):
+                return nx, ny
+    return x, y
+
+
+def ensure_starting_command(game, player, spawn_x, spawn_y):
+    """If a seated player still has no HQ/MCV after kit drop, plant one."""
+    if player_has_command(game, player["id"]):
+        return
+    loadout = faction_loadout(player.get("faction", "tech"))
+    hq_kind = loadout["hq"]
+    size = STRUCTURE_TYPES[hq_kind]["size"]
+    x, y = find_open_start_point(game, spawn_x, spawn_y, size)
+    start_hq = make_structure(hq_kind, player["id"], x, y, True)
+    start_hq["packable"] = True
+    game["structures"].append(start_hq)
+
+
 def start_game(room):
     players = list(room["players"].values())
     # 出生点每局重新洗牌：谁站哪不按进房顺序，team 分配也会因顺序而变。
@@ -1553,8 +1626,8 @@ def start_game(room):
         used_spawns = set()
         player_spawns = {}
         for p in players:
-            sp = p.get("spawn", -1)
-            if 0 <= sp < total_spawns:
+            sp = _spawn_index(p.get("spawn", -1), total_spawns)
+            if sp >= 0 and sp not in used_spawns:
                 used_spawns.add(sp)
                 player_spawns[p["id"]] = sp
 
@@ -1599,6 +1672,8 @@ def start_game(room):
                                 break
                 used_spawns.add(player_spawns[p["id"]])
 
+    player_spawns = resolve_unique_spawns(player_spawns, players, total_spawns)
+
     for player in players:
         player["cash"] = 6800
         player["eliminated"] = False
@@ -1608,6 +1683,7 @@ def start_game(room):
         player["buildQueue"] = []
         player["strikeCharges"] = 0
         sp = player_spawns[player["id"]]
+        player["spawn"] = sp
         x, y = spawn_points[sp]
         toward_x = 1 if x < center_x else -1
         toward_y = 1 if y < center_y else -1
@@ -1668,6 +1744,10 @@ def start_game(room):
 
     room["game"] = game
     room["status"] = "playing"
+    for player in players:
+        spawn = player_spawns[player["id"]]
+        sx, sy = spawn_points[spawn]
+        ensure_starting_command(game, player, sx, sy)
     teams_used = set(p.get("team", 0) for p in players)
     if any(t > 0 for t in teams_used):
         team_lines = []
@@ -4345,6 +4425,9 @@ class GameHandler(BaseHTTPRequestHandler):
                     max_spawns = len(MAPS.get(room.get("selectedMap", DEFAULT_MAP), MAPS[DEFAULT_MAP])["spawnPoints"])
                     if sp >= max_spawns:
                         raise ValueError("无效的出生地")
+                    for other in room["players"].values():
+                        if other["id"] != target["id"] and other.get("spawn") == sp:
+                            other["spawn"] = -1
                 target["spawn"] = sp
             elif action == "start":
                 if room["hostId"] != player["id"]:
