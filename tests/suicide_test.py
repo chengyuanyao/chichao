@@ -189,10 +189,11 @@ def main():
         hq_before = hq["hp"]
         server.trigger_death_explosion(room, unit, game)
         hq_hit = hq_before - hq["hp"]
+        expect_hq = expected_explosion(kind, 0.0, "structure")
+        assert abs(expect_hq - 770.0) < 0.1, (kind, expect_hq)
         assert hq["hp"] > 0, "%s 不该拆掉总部" % kind
-        assert hq["hp"] > hq_before * 0.60, (kind, hq["hp"])
-        assert hq_hit < 850, (kind, hq_hit)
-        assert hq_hit > 550, (kind, hq_hit)
+        assert abs(hq_hit - expect_hq) < 0.6, (kind, hq_hit, expect_hq)
+        assert abs(hq["hp"] - 1630.0) < 0.6, (kind, hq["hp"])
         assert abs(ally["hp"] - 200) < 0.1, "友军不该吃自己的爆炸"
         print("  %s 总部剩 %.0f（伤 %.0f）/ 友军无损: PASS" % (
             kind, hq["hp"], hq_hit))
@@ -332,20 +333,23 @@ def main():
     print("  间距 %.0f：魔仆未吃溅射仍引爆 / 坦克法师不假炸: PASS" % gap)
 
     print("\n=== Test 12b: 爆破圈内溅射未打死也会连带 ===")
-    # 轻甲 160 血在 115 处吃不下 600 圈内溅射；魔仆甲种更高，圈内会被溅射打死，
-    # 所以两边都用轻甲卡车当「未致死」目标，引爆源卡车/魔仆轮流，爆炸数值相同。
-    expect = expected_explosion("bomb_truck", 115.0, "light")
-    assert expect == expected_explosion("hexling", 115.0, "light")
+    # 700 圈内 115 已能打死轻甲 160；贴爆破边缘才溅射未致死。
+    # 魔仆甲种更高，圈内会被溅射打死，所以两边都用轻甲卡车当目标。
+    boom = server.UNIT_TYPES["bomb_truck"]["deathExplosion"]
+    dist = boom["radius"] - 0.6
+    expect = expected_explosion("bomb_truck", dist, "light")
+    assert expect == expected_explosion("hexling", dist, "light")
     for source_kind in ("bomb_truck", "hexling"):
         room, a, b = make_room("SU11b-" + source_kind)
         game = room["game"]
         source = server.make_unit(source_kind, a["id"], 5000, 5000)
-        other = server.make_unit("bomb_truck", b["id"], 5115, 5000)
+        other = server.make_unit("bomb_truck", b["id"], 5000 + dist, 5000)
         game["units"].extend([source, other])
         assert 0 < expect < other["hp"], (source_kind, expect, other["hp"])
         server.trigger_death_explosion(room, source, game)
         assert other.get("_exploded") and other["hp"] <= 0, source_kind
-        print("  %s 圈内溅射 %.0f < 160，仍连带: PASS" % (source_kind, expect))
+        print("  %s 圈内 %.1f 溅射 %.0f < 160，仍连带: PASS" % (
+            source_kind, dist, expect))
 
     print("\n=== Test 13: 友军并排两辆都会炸 ===")
     for kind in ("bomb_truck", "hexling"):
