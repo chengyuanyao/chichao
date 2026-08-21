@@ -3614,6 +3614,19 @@ def tick_structures(room, dt, combat_spatial=None):
                     structure["cooldown"] = definition["cooldown"]
 
 
+# 速胜 AI：拆敌方指挥中心/魔法主堡就赢，不龟缩。折叠成基地车不算输掉。
+# 科技：电站→兵营→工厂，有钱再补第二精炼所/矿车，然后军犬+自爆卡车。
+# 魔法：法力塔→圣殿→法阵，跳过圣泉（除非长局要裂地晶兽），然后法师/影豹+魔仆。
+# 维修厂/圣泉/炮塔只在自家总部挨打时补；魔法仍然不造导弹塔。
+BOT_SUICIDE_CAP = 5
+BOT_SUICIDE_WAVE = 2
+BOT_OPENING_SECONDS = 120.0
+BOT_LATE_SECONDS = 180.0
+BOT_RUSH_RESERVE = 2000
+BOT_CLUSTER_RADIUS = 160.0
+BOT_ARMY_PUSH = 3
+
+
 def bot_suicide_kind(faction):
     return "hexling" if faction == "magic" else "bomb_truck"
 
@@ -3634,45 +3647,238 @@ def bot_suicide_count(game, bot_id, kind):
 
 
 def bot_should_train_suicide(game, bot, kind):
-    """成团建筑或已有一支野战部队时才掺自爆，且场上/队列不超过 3 辆。"""
-    if bot_suicide_count(game, bot["id"], kind) >= 3:
-        return False
-    enemy_structs = 0
+    """工厂/法阵一立就出自爆，不必等 8 个野战或 5 座敌建。场上+队列最多 5。"""
+    return bot_suicide_count(game, bot["id"], kind) < BOT_SUICIDE_CAP
+
+
+def bot_own_origin(game, bot_id):
+    """自家总部坐标；没总部就用还活着的部队，给「打最近的敌人」当原点。"""
     for structure in game["structures"]:
-        if (structure["hp"] > 0
-                and not is_friendly(game, structure["owner"], bot["id"])):
-            enemy_structs += 1
-    if enemy_structs >= 5:
-        return True
-    combat = 0
+        if (structure["owner"] == bot_id and structure["hp"] > 0
+                and structure_role(structure["kind"]) == "hq"):
+            return structure["x"], structure["y"]
     for unit in game["units"]:
-        if (unit["owner"] == bot["id"] and unit["hp"] > 0
-                and unit_role(unit["kind"]) != "harvester"):
-            combat += 1
-    return combat >= 8
+        if unit["owner"] == bot_id and unit["hp"] > 0:
+            return unit["x"], unit["y"]
+    return 0.0, 0.0
 
 
-def bot_pick_suicide_target(game, bot_id):
-    """挑敌方建筑最密的一处（160 内至少 3 座），没有成团就返回 None。"""
+def bot_hq_threatened(game, bot_id):
+    """总部掉血才算挨打：这时才允许补维修厂/圣泉/炮塔。"""
+    for structure in game["structures"]:
+        if (structure["owner"] == bot_id and structure["hp"] > 0
+                and structure_role(structure["kind"]) == "hq"
+                and structure["hp"] < structure["maxHp"] - 0.5):
+            return True
+    return False
+
+
+def bot_focus_hq(game, bot_id):
+    """多人局锁定最近的一座敌方总部，拆掉再轮转，不把兵力拆去满图。"""
+    origin_x, origin_y = bot_own_origin(game, bot_id)
+    best = None
+    best_dist = None
+    for structure in game["structures"]:
+        if (structure["hp"] <= 0
+                or is_friendly(game, structure["owner"], bot_id)
+                or structure_role(structure["kind"]) != "hq"):
+            continue
+        dist = math.hypot(structure["x"] - origin_x, structure["y"] - origin_y)
+        if best is None or dist < best_dist:
+            best = structure
+            best_dist = dist
+    return best
+
+
+def bot_building_cluster(game, bot_id, prefer_near=None):
+    """160 内成团的敌方建筑（电厂/兵营贴总部那种）。没有成团就返回 None。"""
     enemy = [
         structure for structure in game["structures"]
         if structure["hp"] > 0 and not is_friendly(game, structure["owner"], bot_id)
     ]
-    if len(enemy) < 3:
+    if len(enemy) < 2:
         return None
     best = None
     best_n = 0
     for structure in enemy:
+        if prefer_near is not None:
+            if math.hypot(structure["x"] - prefer_near["x"],
+                          structure["y"] - prefer_near["y"]) > BOT_CLUSTER_RADIUS:
+                continue
         nearby = 0
         for other in enemy:
-            if math.hypot(other["x"] - structure["x"], other["y"] - structure["y"]) < 160:
+            if math.hypot(other["x"] - structure["x"],
+                          other["y"] - structure["y"]) < BOT_CLUSTER_RADIUS:
                 nearby += 1
         if nearby > best_n:
             best = structure
             best_n = nearby
-    if best_n >= 3:
+    if best_n >= 2:
         return best
     return None
+
+
+def bot_pick_suicide_target(game, bot_id):
+    """自爆只砸建筑：最近的敌方总部，或贴着总部的电厂/兵营团。不追野战部队。"""
+    focus = bot_focus_hq(game, bot_id)
+    if focus is not None:
+        cluster = bot_building_cluster(game, bot_id, prefer_near=focus)
+        return cluster or focus
+    cluster = bot_building_cluster(game, bot_id)
+    if cluster is not None:
+        return cluster
+    origin_x, origin_y = bot_own_origin(game, bot_id)
+    best = None
+    best_dist = None
+    for structure in game["structures"]:
+        if structure["hp"] <= 0 or is_friendly(game, structure["owner"], bot_id):
+            continue
+        dist = math.hypot(structure["x"] - origin_x, structure["y"] - origin_y)
+        if best is None or dist < best_dist:
+            best = structure
+            best_dist = dist
+    return best
+
+
+def bot_try_queue_structure(room, bot, kind):
+    try:
+        queue_structure(room, bot["id"], kind)
+        return True
+    except ValueError:
+        return False
+
+
+def bot_try_queue_unit(room, bot, kind):
+    try:
+        queue_unit(room, bot["id"], kind)
+        return True
+    except ValueError:
+        return False
+
+
+def bot_role_count(structures, role):
+    return sum(1 for structure in structures
+               if structure_role(structure["kind"]) == role)
+
+
+def bot_factory_queue_mix(game, bot_id, suicide_kind):
+    """工厂/法阵队列里自爆和其他兵各有几辆。用来避免五连只排自爆。"""
+    suicide_q = 0
+    other_q = 0
+    for structure in game["structures"]:
+        if structure["owner"] != bot_id or structure["hp"] <= 0:
+            continue
+        if structure_role(structure["kind"]) != "factory":
+            continue
+        for item in structure["queue"]:
+            if item["kind"] == suicide_kind:
+                suicide_q += 1
+            else:
+                other_q += 1
+    return suicide_q, other_q
+
+
+def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
+    """速胜混编：前两分钟军犬/步枪或法师/影豹。不开局堆坦克/天启/光棱/巨龙。"""
+    magic = faction == "magic"
+    choices = []
+    if magic:
+        if "barracks" in roles:
+            choices.extend(("mage", "mage"))
+            if not opening:
+                choices.append("frost")
+        if "factory" in roles:
+            choices.extend(("panther", "panther"))
+            if "repair" in roles:
+                choices.extend(("colossus", "colossus", "warden", "dragon"))
+            if rich and harvester_n < 2:
+                choices.append("mharvester")
+    else:
+        if "barracks" in roles:
+            if opening:
+                choices.extend(("dog", "dog", "dog", "rifle"))
+            else:
+                choices.extend(("dog", "dog", "rifle", "rocket"))
+                if "factory" in roles:
+                    choices.append("tesla")
+        if "factory" in roles:
+            choices.append("scout")
+            if rich and harvester_n < 2:
+                choices.append("harvester")
+            if "repair" in roles and late:
+                choices.append("prism")
+    return choices
+
+
+def bot_queue_rush_building(room, bot, fb, roles, own_structures, supply, usage,
+                            threatened, late, magic):
+    """建造顺序：电→兵营/圣殿→工厂/法阵。有钱才补第二精炼所。不龟缩。"""
+    def afford(key):
+        kind = fb.get(key)
+        return bool(kind) and bot["cash"] >= STRUCTURE_TYPES[kind]["cost"]
+
+    def enqueue(key):
+        kind = fb.get(key)
+        return bool(kind) and bot_try_queue_structure(room, bot, kind)
+
+    if supply < usage + 35 and afford("power") and enqueue("power"):
+        return
+    if "barracks" not in roles and afford("barracks") and enqueue("barracks"):
+        return
+    if "factory" not in roles:
+        if afford("factory") and enqueue("factory"):
+            return
+        if "refinery" not in roles and afford("refinery"):
+            enqueue("refinery")
+        return
+    refineries = bot_role_count(own_structures, "refinery")
+    if (refineries < 2 and afford("refinery")
+            and bot["cash"] >= STRUCTURE_TYPES[fb["refinery"]]["cost"] + BOT_RUSH_RESERVE):
+        enqueue("refinery")
+        return
+    if threatened:
+        if "repair" not in roles and afford("repair") and enqueue("repair"):
+            return
+        if afford("defense"):
+            enqueue("defense")
+        return
+    if (late and magic and "repair" not in roles and afford("repair")):
+        enqueue("repair")
+
+
+def bot_queue_rush_unit(room, bot, faction, roles, opening, late):
+    """工厂/法阵一就绪就排自爆；前两分钟其余名额给军犬/步枪或法师/影豹。"""
+    suicide_kind = bot_suicide_kind(faction)
+    suicide_n = bot_suicide_count(room["game"], bot["id"], suicide_kind)
+    want_suicide = "factory" in roles and bot_should_train_suicide(
+        room["game"], bot, suicide_kind)
+    suicide_q, other_q = bot_factory_queue_mix(
+        room["game"], bot["id"], suicide_kind)
+    rich = bot["cash"] >= BOT_RUSH_RESERVE
+    harvester_n = sum(
+        1 for unit in room["game"]["units"]
+        if unit["owner"] == bot["id"] and unit["hp"] > 0
+        and unit_role(unit["kind"]) == "harvester")
+    force_support = want_suicide and suicide_q >= 2 and other_q == 0
+    if want_suicide and suicide_n < BOT_SUICIDE_WAVE and not force_support:
+        if bot_try_queue_unit(room, bot, suicide_kind):
+            return
+    if ("repair" in roles and faction == "magic"
+            and random.random() < 0.28):
+        if bot_try_queue_unit(
+                room, bot, random.choice(("colossus", "warden", "dragon"))):
+            return
+    if (want_suicide and not force_support
+            and suicide_n >= BOT_SUICIDE_WAVE
+            and random.random() < 0.55):
+        if bot_try_queue_unit(room, bot, suicide_kind):
+            return
+    choices = bot_support_choices(
+        faction, roles, opening, late, rich, harvester_n)
+    if not choices and "factory" in roles:
+        choices = ["panther" if faction == "magic" else "scout"]
+    if choices:
+        bot_try_queue_unit(room, bot, random.choice(choices))
 
 
 def bot_place_prepared(room, bot, kind):
@@ -3699,6 +3905,9 @@ def bot_place_prepared(room, bot, kind):
 
 def tick_bots(room):
     game = room["game"]
+    elapsed = game.get("elapsed", 0.0)
+    opening = elapsed < BOT_OPENING_SECONDS
+    late = elapsed >= BOT_LATE_SECONDS
     for bot in [p for p in room["players"].values() if p["isBot"] and not p["eliminated"]]:
         faction = bot.get("faction", "tech")
         magic = faction == "magic"
@@ -3707,68 +3916,16 @@ def tick_bots(room):
         # 按 role 判定已建成的建筑：圣殿=兵营、法阵=工厂，魔法换皮整套复用同一套决策
         roles = set(structure_role(s["kind"]) for s in own_structures if s["active"])
         supply, usage = player_power(room, bot["id"])
+        threatened = bot_hq_threatened(game, bot["id"])
         build_queue = bot.get("buildQueue", [])
         if build_queue and build_queue[0].get("ready"):
             bot_place_prepared(room, bot, build_queue[0]["kind"])
         elif not build_queue:
-            try:
-                if supply < usage + 35 and bot["cash"] >= STRUCTURE_TYPES[fb["power"]]["cost"]:
-                    queue_structure(room, bot["id"], fb["power"])
-                elif "barracks" not in roles and bot["cash"] >= STRUCTURE_TYPES[fb["barracks"]]["cost"]:
-                    queue_structure(room, bot["id"], fb["barracks"])
-                elif "refinery" not in roles and bot["cash"] >= STRUCTURE_TYPES[fb["refinery"]]["cost"]:
-                    queue_structure(room, bot["id"], fb["refinery"])
-                elif "factory" not in roles and bot["cash"] >= STRUCTURE_TYPES[fb["factory"]]["cost"]:
-                    queue_structure(room, bot["id"], fb["factory"])
-                elif ("factory" in roles and "repair" not in roles
-                      and fb.get("repair")
-                      and random.random() < 0.30
-                      and bot["cash"] >= STRUCTURE_TYPES[fb["repair"]]["cost"]):
-                    queue_structure(room, bot["id"], fb["repair"])
-                elif random.random() < 0.14 and bot["cash"] >= STRUCTURE_TYPES[fb["defense"]]["cost"]:
-                    queue_structure(room, bot["id"], fb["defense"])
-            except ValueError:
-                pass
+            bot_queue_rush_building(
+                room, bot, fb, roles, own_structures, supply, usage,
+                threatened, late, magic)
 
-        try:
-            roll = random.random()
-            suicide_kind = bot_suicide_kind(faction)
-            if ("factory" in roles and roll < 0.08
-                    and bot_should_train_suicide(game, bot, suicide_kind)):
-                # 窄窗口：只在成团建筑或已有野战部队时掺一两辆，不当主力。
-                queue_unit(room, bot["id"], suicide_kind)
-            elif "factory" in roles and roll < 0.58:
-                if magic:
-                    if "repair" in roles and roll < 0.20:
-                        # 圣泉撑起二级后：巨龙溅射 / 裂地拆家 / 晶铠抗线
-                        if roll < 0.07:
-                            queue_unit(room, bot["id"], "dragon")
-                        elif roll < 0.13:
-                            queue_unit(room, bot["id"], "colossus")
-                        else:
-                            queue_unit(room, bot["id"], "warden")
-                    else:
-                        # 法阵刚立：傀儡抗线为主，掺影豹。巨龙已改成要圣泉。
-                        queue_unit(room, bot["id"],
-                                   "golem" if roll < 0.5 else "panther")
-                elif "repair" in roles and roll < 0.16:
-                    # 维修厂撑起二级科技后，掺高级装甲：天启抗线 / 光棱远程点杀
-                    queue_unit(room, bot["id"], "overlord" if roll < 0.08 else "prism")
-                else:
-                    queue_unit(room, bot["id"], "tank" if roll < 0.4 else "scout")
-            elif "barracks" in roles:
-                if magic:
-                    # 奥术圣殿：奥术法师为主，掺冰霜女巫群体减速
-                    queue_unit(room, bot["id"], "mage" if roll < 0.78 else "frost")
-                elif "factory" in roles and roll < 0.72:
-                    # 工厂开了二级科技，兵营开始出磁暴步兵专电载具
-                    queue_unit(room, bot["id"], "tesla")
-                else:
-                    # 基础混编：火箭兵为主，掺突击兵，偶尔放条军犬（便宜、咬步兵、能侦察）
-                    queue_unit(room, bot["id"],
-                               "rocket" if roll < 0.80 else ("rifle" if roll < 0.93 else "dog"))
-        except ValueError:
-            pass
+        bot_queue_rush_unit(room, bot, faction, roles, opening, late)
 
         repair_bays = [
             structure for structure in own_structures
@@ -3788,28 +3945,41 @@ def tick_bots(room):
             except ValueError:
                 pass
 
+        focus = bot_focus_hq(game, bot["id"])
         combat = [
             unit for unit in game["units"]
             if unit["owner"] == bot["id"] and unit_role(unit["kind"]) != "harvester"
+            and unit["kind"] not in SUICIDE_KINDS
             and unit["hp"] > 0 and unit.get("order") != "repair"
             and unit["hp"] / unit["maxHp"] >= 0.45
         ]
-        enemies = [s for s in game["structures"] if not is_friendly(game, s["owner"], bot["id"]) and structure_role(s["kind"]) == "hq" and s["hp"] > 0]
-        if len(combat) >= 5 and enemies and random.random() < 0.48:
-            target = min(enemies, key=lambda s: math.hypot(s["x"] - combat[0]["x"], s["y"] - combat[0]["y"]))
-            issue_attack(game, bot["id"], set(u["id"] for u in combat), target["id"])
+        # 不屯兵：开局那一点守军也往最近的敌方总部压，拆掉再换下一家。
+        if focus and len(combat) >= BOT_ARMY_PUSH:
+            try:
+                issue_attack(game, bot["id"], set(u["id"] for u in combat), focus["id"])
+            except ValueError:
+                pass
 
         suicides = [
             unit for unit in game["units"]
             if unit["owner"] == bot["id"] and unit["kind"] in SUICIDE_KINDS
-            and unit["hp"] > 0 and unit.get("order") not in ("attack", "repair", "move")
+            and unit["hp"] > 0 and unit.get("order") != "repair"
         ]
-        cluster = bot_pick_suicide_target(game, bot["id"]) if suicides else None
-        if suicides and cluster:
+        idle_or_chasing = []
+        for unit in suicides:
+            if unit.get("order") != "attack":
+                idle_or_chasing.append(unit)
+                continue
+            prey = find_entity(game, unit.get("targetId"))
+            if prey is None or prey.get("kind") in UNIT_TYPES:
+                idle_or_chasing.append(unit)
+        # 凑齐 2 辆就出发，不等 8 人野战部队。目标只许是总部或成团建筑。
+        building = bot_pick_suicide_target(game, bot["id"]) if suicides else None
+        if building and len(suicides) >= BOT_SUICIDE_WAVE and idle_or_chasing:
             try:
                 issue_attack(
-                    game, bot["id"], set(unit["id"] for unit in suicides),
-                    cluster["id"])
+                    game, bot["id"], set(unit["id"] for unit in idle_or_chasing),
+                    building["id"])
             except ValueError:
                 pass
 
