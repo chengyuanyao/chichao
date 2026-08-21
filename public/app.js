@@ -3253,37 +3253,15 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     }
   }
 
-  // 按地形数据绘制道路/山地/河流/桥梁；小地图静态层与大厅预览共用
+  // 按地形数据绘制山地/河流/桥梁；小地图静态层与大厅预览共用。
+  // 道路只留玩法加成，不再画成贴在图上的线条。
   function paintTerrainFeatures(c, terrain, sx, sy) {
     if (!terrain) { return; }
-    var roads = terrain.roads || [];
     var rivers = terrain.rivers || [];
     var mountains = terrain.mountains || [];
     var bridges = terrain.bridges || [];
     var swatch = mapDisplayTheme(terrain.theme).minimap;
     var i;
-    // 道路垫底：路网是背景信息，河流才是需要抢视线的阻隔
-    if (roads.length) {
-      c.save();
-      c.lineCap = 'round';
-      for (i = 0; i < roads.length; i++) {
-        var rd = roads[i];
-        // 深色路肩衬一圈，沙色不至于直接糊进草色
-        c.strokeStyle = 'rgba(10,10,6,.28)';
-        c.lineWidth = Math.max(2, rd.width * sx + 1.5);
-        c.beginPath();
-        c.moveTo(rd.x1 * sx, rd.y1 * sy);
-        c.lineTo(rd.x2 * sx, rd.y2 * sy);
-        c.stroke();
-        c.strokeStyle = swatch.road;
-        c.lineWidth = Math.max(1.2, rd.width * sx);
-        c.beginPath();
-        c.moveTo(rd.x1 * sx, rd.y1 * sy);
-        c.lineTo(rd.x2 * sx, rd.y2 * sy);
-        c.stroke();
-      }
-      c.restore();
-    }
     // 山地：灰色径向渐变外缘淡出到草色，再加放射棱脊笔触画出山体走向
     for (i = 0; i < mountains.length; i++) {
       var m = mountains[i];
@@ -3366,11 +3344,10 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     var height = minimap.height;
     // 缓存键要带上地形指纹：换地图但尺寸相同时，静态层必须重画
     var terrain = roomState.game.terrain || {};
-    var key = 'v4_' + map.width + 'x' + map.height +
+    var key = 'v5_' + map.width + 'x' + map.height +
       '_' + (terrain.theme || '') +
       '_' + ((terrain.rivers || []).length) +
-      '_' + ((terrain.mountains || []).length) +
-      '_' + ((terrain.roads || []).length);
+      '_' + ((terrain.mountains || []).length);
     if (minimapStaticKey === key && minimapStaticCanvas.width === width) { return; }
     minimapStaticCanvas.width = width;
     minimapStaticCanvas.height = height;
@@ -3479,7 +3456,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       miniCtx.globalAlpha = 0.72;
       miniCtx.drawImage(fog, 0, 0, width, height);
       miniCtx.restore();
-      // 未探索区仍要能读出山脉和公路，否则雷达就是一块黑盒子
+      // 未探索区仍要能读出山脉、沟壑和桥梁，否则雷达就是一块黑盒子
       miniCtx.save();
       miniCtx.globalAlpha = 0.42;
       paintTerrainFeatures(miniCtx, roomState.game.terrain, sx, sy);

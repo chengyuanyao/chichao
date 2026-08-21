@@ -1471,7 +1471,6 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.40, 0.32, 0.20],
     packed: [0.38, 0.33, 0.24],
     rock: [0.46, 0.44, 0.40],
-    road: 0x6e6250,
     skirt: 0x4a5638,
     pad: 0x5a4e3a,
     fog: 0x9ec8d8,
@@ -1485,7 +1484,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0x9ab4c4,
     rim: 0xa8e2f2,
     tex: [0.90, 1.00, 0.76],
-    minimap: { base: '#3f5234', dry: 'rgba(196,176,96,.14)', light: 'rgba(232,236,196,', dark: 'rgba(8,16,6,', road: '#8a7a55', mountain: '#a89f8a' }
+    minimap: { base: '#3f5234', dry: 'rgba(196,176,96,.14)', light: 'rgba(232,236,196,', dark: 'rgba(8,16,6,', mountain: '#a89f8a' }
   },
   arid: {
     id: 'arid',
@@ -1495,7 +1494,6 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.56, 0.38, 0.18],
     packed: [0.52, 0.38, 0.22],
     rock: [0.56, 0.46, 0.34],
-    road: 0x7a6848,
     skirt: 0x6a5a3a,
     pad: 0x6a5840,
     fog: 0xc8b894,
@@ -1509,7 +1507,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0xc4b090,
     rim: 0xe8d4a0,
     tex: [1.00, 0.90, 0.68],
-    minimap: { base: '#6a5a38', dry: 'rgba(220,180,90,.16)', light: 'rgba(236,212,150,', dark: 'rgba(28,18,8,', road: '#9a8060', mountain: '#b8a078' }
+    minimap: { base: '#6a5a38', dry: 'rgba(220,180,90,.16)', light: 'rgba(236,212,150,', dark: 'rgba(28,18,8,', mountain: '#b8a078' }
   },
   urban: {
     id: 'urban',
@@ -1519,7 +1517,6 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.34, 0.32, 0.28],
     packed: [0.36, 0.35, 0.32],
     rock: [0.40, 0.39, 0.38],
-    road: 0x4a4844,
     skirt: 0x3a3c38,
     pad: 0x3e3c38,
     fog: 0x8a9aaa,
@@ -1533,7 +1530,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0x8a9aaa,
     rim: 0xa8c0d0,
     tex: [0.88, 0.90, 0.86],
-    minimap: { base: '#3a3e38', dry: 'rgba(160,156,140,.14)', light: 'rgba(200,204,196,', dark: 'rgba(8,10,10,', road: '#6a6864', mountain: '#8a8680' }
+    minimap: { base: '#3a3e38', dry: 'rgba(160,156,140,.14)', light: 'rgba(200,204,196,', dark: 'rgba(8,10,10,', mountain: '#8a8680' }
   },
   crater: {
     id: 'crater',
@@ -1543,7 +1540,6 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.48, 0.30, 0.18],
     packed: [0.46, 0.32, 0.22],
     rock: [0.50, 0.38, 0.32],
-    road: 0x6a5040,
     skirt: 0x5a3a28,
     pad: 0x5a4030,
     fog: 0xb88870,
@@ -1557,7 +1553,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0xc09070,
     rim: 0xf0b080,
     tex: [1.00, 0.78, 0.62],
-    minimap: { base: '#5a3a28', dry: 'rgba(220,140,70,.16)', light: 'rgba(236,180,120,', dark: 'rgba(24,10,6,', road: '#8a6850', mountain: '#a88870' }
+    minimap: { base: '#5a3a28', dry: 'rgba(220,140,70,.16)', light: 'rgba(236,180,120,', dark: 'rgba(24,10,6,', mountain: '#a88870' }
   }
 };
 
@@ -2096,26 +2092,6 @@ export function createRenderer(canvas) {
       + Math.sin((x + y) * 0.00058) * 0.25) * 0.5 + 0.5;
   }
 
-  function roadWearAt(x, y) {
-    const roads = (state.terrain && state.terrain.roads) || [];
-    let best = 0;
-    for (let i = 0; i < roads.length; i++) {
-      const r = roads[i];
-      const dx = r.x2 - r.x1;
-      const dy = r.y2 - r.y1;
-      const lenSq = dx * dx + dy * dy;
-      let t = lenSq < 1 ? 0 : ((x - r.x1) * dx + (y - r.y1) * dy) / lenSq;
-      t = Math.max(0, Math.min(1, t));
-      const dist = Math.hypot(x - (r.x1 + t * dx), y - (r.y1 + t * dy));
-      const band = r.width * 0.5 + 70;
-      if (dist < band) {
-        const k = 1 - dist / band;
-        if (k > best) best = k;
-      }
-    }
-    return best;
-  }
-
   const proceduralGroundCache = new Map();
 
   /**
@@ -2289,15 +2265,15 @@ export function createRenderer(canvas) {
       heights[i] = height;
       pos.setY(i, height);
 
-      // 地表分层：主题底色 + 草木斑 + 出生点踩实土 + 路肩脏土 + 山岩。
+      // 地表分层：主题底色 + 草木斑 + 出生点踩实土 + 山岩。
       // 色值压在 0.7 以下，避免 Lambert×强阳光把草地晒成荧光网球场。
+      // 道路只留玩法加成，不再把路肩脏土画进顶点色。
       const stone = Math.min(1, rock / 70);
       const ravine = Math.min(1, depth * 1.4);
       const bank = Math.max(0, 1 - Math.abs(depth - 0.10) / 0.14) * (depth > 0.005 ? 1 : 0);
       const lush = clumpNoise(wx, wz);
       const stripe = 0.5 + 0.5 * Math.sin(wx * 0.0022 + lush * 2.4);
       const wear = spawnWearAt(wx, wz);
-      const shoulder = roadWearAt(wx, wz);
       const topo = 1 + Math.max(-1, Math.min(1, height / 24)) * 0.10;
 
       let r = theme.grass[0] + (theme.lush[0] - theme.grass[0]) * lush;
@@ -2313,7 +2289,7 @@ export function createRenderer(canvas) {
       r = r * (1 - bank) + theme.dirt[0] * 1.15 * bank;
       g = g * (1 - bank) + theme.dirt[1] * 1.05 * bank;
       b = b * (1 - bank) + theme.dirt[2] * bank;
-      const packed = Math.max(wear * 0.85, shoulder * 0.72);
+      const packed = wear * 0.85;
       r = r * (1 - packed) + theme.packed[0] * packed;
       g = g * (1 - packed) + theme.packed[1] * packed;
       b = b * (1 - packed) + theme.packed[2] * packed;
@@ -2439,103 +2415,9 @@ export function createRenderer(canvas) {
       terrainGroup.add(apron);
     });
 
-    buildRoads();
     buildRocks();
     buildOreField();
     state.buildTerrainMs = Math.round(performance.now() - buildStarted);
-  }
-
-  /**
-   * 道路：沿路径切成小段的贴地带状网格，逐点采样地表高度。
-   * 用一个平面贴上去会在起伏处穿模，所以必须跟着地形走。
-   */
-  function buildRoads() {
-    const roads = (state.terrain && state.terrain.roads) || [];
-    if (!roads.length) return;
-
-    const positions = [];
-    const colors = [];
-    const LIFT = 1.8;                 // 略微抬离地表，避免 z-fighting
-    const bridges = (state.terrain && state.terrain.bridges) || [];
-    const BRIDGE_DECK = 4.4;          // 桥面顶部高度，与 buildTerrain 里一致
-
-    const onBridge = function (x, y) {
-      for (let i = 0; i < bridges.length; i++) {
-        const b = bridges[i];
-        // 用渲染桥长判定，路面才会正好停在桥头而不是水里
-        const along = b.w >= b.h;
-        const bw = (along ? b.w * BRIDGE_RENDER_SPAN : b.w) * 0.5 + 12;
-        const bh = (along ? b.h : b.h * BRIDGE_RENDER_SPAN) * 0.5 + 12;
-        if (Math.abs(x - b.x) <= bw && Math.abs(y - b.y) <= bh) return true;
-      }
-      return false;
-    };
-    // 路面在过桥处要抬到桥面高度，否则会沉进河床里
-    const roadHeight = function (x, y) {
-      return onBridge(x, y) ? BRIDGE_DECK : groundHeight(x, y) + LIFT;
-    };
-    // 桥面本身就是路：那一段不铺路面，否则会把桥的栏杆和木纹整个盖住。
-    // 沟壑里又没有桥的地方同样不铺 —— 那段本来就走不了。
-    const skipRoad = function (x, y) {
-      return onBridge(x, y) || riverDepthAt(x, y) > 0.35;
-    };
-
-    roads.forEach(function (road) {
-      const dx = road.x2 - road.x1;
-      const dy = road.y2 - road.y1;
-      const length = Math.hypot(dx, dy);
-      if (length < 1) return;
-      const steps = Math.max(2, Math.ceil(length / 40));
-      const nx = -dy / length;        // 路面法向（水平面内）
-      const ny = dx / length;
-      const half = road.width * 0.5;
-
-      let prev = null;
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const cx = road.x1 + dx * t;
-        const cy = road.y1 + dy * t;
-        const lx = cx + nx * half;
-        const ly = cy + ny * half;
-        const rx = cx - nx * half;
-        const ry = cy - ny * half;
-        const cur = {
-          l: [lx, roadHeight(lx, ly), ly],
-          c: [cx, roadHeight(cx, cy), cy],
-          r: [rx, roadHeight(rx, ry), ry],
-          skip: skipRoad(cx, cy)
-        };
-        if (prev && !prev.skip && !cur.skip) {
-          // 左半幅与右半幅各两个三角形；中缝顶点更亮，形成中线
-          const quad = function (a1, a2, b1, b2, shadeA, shadeB) {
-            positions.push(a1[0], a1[1], a1[2], b1[0], b1[1], b1[2], a2[0], a2[1], a2[2]);
-            positions.push(a2[0], a2[1], a2[2], b1[0], b1[1], b1[2], b2[0], b2[1], b2[2]);
-            const push = function (v) { colors.push(v, v, v); };
-            push(shadeA); push(shadeB); push(shadeA);
-            push(shadeA); push(shadeB); push(shadeB);
-          };
-          // 路肩压暗、路心提亮，形成一条自然的中线
-          quad(prev.l, cur.l, prev.c, cur.c, 0.5, 1.25);
-          quad(prev.c, cur.c, prev.r, cur.r, 1.25, 0.5);
-        }
-        prev = cur;
-      }
-    });
-
-    if (!positions.length) return;
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
-    geo.computeVertexNormals();
-    const material = applyFogMask(new THREE.MeshLambertMaterial({
-      color: displayTheme(state.terrain && state.terrain.theme).road,
-      vertexColors: true, side: THREE.DoubleSide,
-      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
-    }));
-    const mesh = new THREE.Mesh(geo, material);
-    mesh.receiveShadow = true;
-    mesh.renderOrder = 1;
-    terrainGroup.add(mesh);
   }
 
   /**

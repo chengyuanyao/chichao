@@ -224,6 +224,11 @@ def main():
     assert server.MAPS["gold_crater"].get("briefing")
     assert "function paintGrassBase(c, w, h, themeId)" in app
     assert "paintTerrainFeatures(miniCtx, roomState.game.terrain, sx, sy)" in app
+    # 道路只留玩法数据：不再铺 3D 条带、路肩脏土或小地图/大厅描线。
+    assert "function buildRoads" not in render
+    assert "function roadWearAt" not in render
+    assert "swatch.road" not in app
+    assert "roadWearAt(" not in render
     assert "shadowQuality: 'structures'" in app
     assert "sceneryQuality" not in app
     assert "terrain-ground.png" not in app
