@@ -2992,10 +2992,8 @@ def death_explosion_falloff(distance, radius, inner=1.0, outer=DEATH_EXPLOSION_O
 def trigger_death_explosion(room, source, game, combat_spatial=None):
     """自爆单位阵亡/贴脸时的范围伤害。复用 apply_damage 的甲种表，不打友军。
 
-    先打 _exploded，避免连环爆炸递归把自己再炸一次。溅射打死的敌对自爆
-    仍会经 apply_damage 再走进来。另外按 chainRadius 扫描 SUICIDE_KINDS：
-    友军并排、溅射未致死的敌对，都会连带引爆（红警式 连带爆炸）。
-    普通坦克/法师/建筑没有 deathExplosion，不会被扫进假爆炸。
+    先打 _exploded，避免同一单位被溅射打死后再走进来炸第二次。
+    邻近自爆只吃 700 圈溅射：打不死就还站着，不会连带引爆。
     """
     if source.get("_exploded"):
         return False
@@ -3004,22 +3002,20 @@ def trigger_death_explosion(room, source, game, combat_spatial=None):
     if not boom:
         return False
     source["_exploded"] = True
-    # 连带进来的活体也要倒下，否则会炸完还站着。阵亡/贴脸路径已经 hp=0。
+    # 阵亡/贴脸路径已经 hp=0；测试直接引爆时还活着，这里补倒下。
     if source.get("hp", 0) > 0:
         owner_rec = room["players"].get(source.get("owner"))
         if owner_rec:
             owner_rec["unitsLost"] += 1
         source["hp"] = 0
     radius = float(boom.get("radius", 0.0))
-    chain_r = float(boom.get("chainRadius", radius))
     base = float(boom.get("damage", 0.0))
     dtype = boom.get("damageType") or definition.get("damageType")
     if radius <= 0 or base <= 0:
         return False
     ox, oy = source["x"], source["y"]
     owner = source.get("owner")
-    scan_r = max(radius, chain_r)
-    candidates = (spatial_candidates(combat_spatial, ox, oy, scan_r)
+    candidates = (spatial_candidates(combat_spatial, ox, oy, radius)
                   if combat_spatial else game["units"] + game["structures"])
     for entity in candidates:
         if entity is source or entity.get("hp", 0) <= 0:
@@ -3033,21 +3029,6 @@ def trigger_death_explosion(room, source, game, combat_spatial=None):
         apply_damage(
             room, entity, base * falloff, owner, dtype, game,
             source.get("id"))
-    if chain_r > 0:
-        chain_from = (spatial_candidates(combat_spatial, ox, oy, chain_r)
-                      if combat_spatial else game["units"])
-        nearby = []
-        for entity in chain_from:
-            if entity is source or entity.get("_exploded"):
-                continue
-            if entity.get("kind") not in SUICIDE_KINDS:
-                continue
-            dist = math.hypot(entity["x"] - ox, entity["y"] - oy)
-            if dist >= chain_r:
-                continue
-            nearby.append(entity)
-        for entity in nearby:
-            trigger_death_explosion(room, entity, game, combat_spatial)
     return True
 
 

@@ -129,7 +129,7 @@ UNIT_TYPES = {
     # 贴近或阵亡时炸开。轻甲载具：军犬咬不动，磁暴/火箭能拆。
     # 爆炸 700 / 半径 120，与爆裂魔仆对齐。贴脸总部约 770 伤
     # （2400 的 32%），单车拆不掉满血指挥中心；三四辆叠炸才够。
-    # chainRadius 130：邻近自爆（友军并排 / 溅射未致死的敌对）连带引爆。
+    # 邻近自爆只吃 700 溅射，不会连带引爆。
     "bomb_truck": {
         "name": "自爆卡车", "cost": 640, "hp": 160, "speed": 122.4,
         "damage": 0.0, "range": 22.0, "cooldown": 0.0,
@@ -137,7 +137,7 @@ UNIT_TYPES = {
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
         "sight": 350.0, "armor": "light", "damageType": "explosive",
         "deathExplosion": {
-            "damage": 700.0, "radius": 120.0, "chainRadius": 130.0,
+            "damage": 700.0, "radius": 120.0,
             "damageType": "explosive",
         },
         "detonateOnContact": True,
@@ -228,7 +228,7 @@ UNIT_TYPES = {
         "sight": 300.0, "armor": ("heavy", "light"), "damageType": "siege",
     },
     # 爆裂魔仆：秘法会对位自爆单位，不是卡车。符核活体，法阵召唤。
-    # 造价/血/速/爆炸与卡车对齐（700 / 120 / 连带 130）。
+    # 造价/血/速/爆炸与卡车对齐（700 / 120）。邻近自爆不连带。
     # 魔导甲、不算载具：军犬能扑，但一口咬不死（160 血，咬 90）。圣泉修不了。
     "hexling": {
         "name": "爆裂魔仆", "cost": 640, "hp": 160, "speed": 122.4,
@@ -237,7 +237,7 @@ UNIT_TYPES = {
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
         "sight": 350.0, "armor": "arcane", "damageType": "explosive",
         "deathExplosion": {
-            "damage": 700.0, "radius": 120.0, "chainRadius": 130.0,
+            "damage": 700.0, "radius": 120.0,
             "damageType": "explosive",
         },
         "detonateOnContact": True,

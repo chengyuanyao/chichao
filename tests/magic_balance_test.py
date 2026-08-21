@@ -64,9 +64,11 @@ def main():
     hexling = server.UNIT_TYPES["hexling"]
     for field in ("cost", "hp", "speed", "build", "damageType"):
         assert truck[field] == hexling[field], (field, truck[field], hexling[field])
-    for field in ("damage", "radius", "chainRadius", "damageType"):
+    for field in ("damage", "radius", "damageType"):
         assert truck["deathExplosion"][field] == hexling["deathExplosion"][field], (
             field, truck["deathExplosion"][field], hexling["deathExplosion"][field])
+    assert "chainRadius" not in truck["deathExplosion"]
+    assert "chainRadius" not in hexling["deathExplosion"]
     assert hexling["hp"] > bite_arcane
     assert hexling["armor"] == "arcane"
     assert truck["armor"] == "light"
@@ -81,7 +83,7 @@ def main():
     server.apply_damage(room, familiar, dog_bite, a["id"], "bite", game)
     assert familiar["hp"] > 0
     assert abs((before - familiar["hp"]) - bite_arcane) < 0.1
-    print("  640/160/122.4/700/r120/连带130 对齐，魔仆一口不死: PASS")
+    print("  640/160/122.4/700/r120 对齐，魔仆一口不死: PASS")
 
     print("\n=== Test 3: 经济甲种与钢铁对齐，采矿仍结算 ===")
     assert server.UNIT_TYPES["mharvester"]["armor"] == "heavy"
