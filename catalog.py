@@ -102,7 +102,7 @@ UNIT_TYPES = {
     },
     # ---- 高级兵种：靠 requires 卡在二级科技后，贵在单兵质量而非数量 ----
     "overlord": {
-        "name": "天启坦克", "cost": 1700, "hp": 1500, "speed": 57.6,
+        "name": "天启坦克", "cost": 1700, "hp": 2000, "speed": 57.6,
         "damage": 120.0, "range": 195.0, "cooldown": 1.6,
         "size": 24.0, "build": 16.0, "producer": "factory",
         "requires": ["repair"],
@@ -198,7 +198,7 @@ UNIT_TYPES = {
         "sight": 520.0, "armor": "arcane", "damageType": "magic",
     },
     # 秘法巨龙：远程大火球大溅射。圣泉二级后才许召唤，避免法阵一立就能出 1600 压轴。
-    # 1100 血仍低于天启 1500；靠射程/溅射/熔甲换耐久，不当新的碾压前排。
+    # 1100 血仍低于天启 2000；靠射程/溅射/熔甲换耐久，不当新的碾压前排。
     "dragon": {
         "name": "秘法巨龙", "cost": 1600, "hp": 1100, "speed": 60.0,
         "damage": 95.0, "range": 260.0, "cooldown": 1.7,

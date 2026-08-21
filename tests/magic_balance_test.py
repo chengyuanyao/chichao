@@ -154,12 +154,12 @@ def main():
     overlord = server.UNIT_TYPES["overlord"]
     assert dog["damage"] == 60.0 and dog["hp"] == 55
     assert tesla_u["damage"] == 26.0 and tesla_u["hp"] == 190
-    assert overlord["hp"] == 1500 and overlord["damage"] == 120.0
+    assert overlord["hp"] == 2000 and overlord["damage"] == 120.0
     turret = server.STRUCTURE_TYPES["turret"]
     missile = server.STRUCTURE_TYPES["missile"]
     assert turret["damage"] == 80.0 and turret["range"] == 320.0
     assert missile["damage"] == 120.0 and missile["range"] == 420.0
-    print("  军犬/磁暴/天启未动；双塔 80/320 与 120/420: PASS")
+    print("  军犬/磁暴未动；天启 2000/120；双塔 80/320 与 120/420: PASS")
 
     print("\n=== Test 6: 巨龙仍低于天启，奥术塔仍弱于钢铁双塔组合 ===")
     dragon = server.UNIT_TYPES["dragon"]
@@ -176,7 +176,7 @@ def main():
     missile_dps = missile["damage"] / missile["cooldown"]
     assert tower_dps < turret_dps
     assert missile_dps < tower_dps
-    print("  巨龙 1100 < 天启 1500；奥术塔 DPS/射程夹在哨戒与导弹之间: PASS")
+    print("  巨龙 1100 < 天启 2000；奥术塔 DPS/射程夹在哨戒与导弹之间: PASS")
 
     print("\n=== 秘法会平衡测试全部通过 ===")
 
