@@ -1976,6 +1976,7 @@ def issue_repair(game, player_id, unit_ids, structure_id):
 
 
 def command_unit_ids(payload):
+    """Named units only. Missing/empty unitIds is a no-op, never 'all mine'."""
     values = payload.get("unitIds")
     if not isinstance(values, list):
         return set()
@@ -2097,6 +2098,8 @@ def handle_game_command(room, player, payload):
         issue_undeploy(game, player["id"], payload.get("structureId"))
     elif command == "stop":
         unit_ids = command_unit_ids(payload)
+        if not unit_ids:
+            return
         for unit in game["units"]:
             if unit["owner"] == player["id"] and unit["id"] in unit_ids:
                 unit["destX"] = None

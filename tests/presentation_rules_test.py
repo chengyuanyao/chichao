@@ -270,6 +270,41 @@ def main():
     assert "function landmarkAt(worldX, worldY)" in app
     assert "type === 'hq_salute'" in app
 
+    # Selection is only the current control set. A left-click / box / additive
+    # gesture must not post move/stop, and a context click on an own unit is
+    # select — otherwise the previous group is re-ordered onto the new pick.
+    assert "function isAdditiveSelect(event)" in app
+    assert "function selectedUnitIdList()" in app
+    assert "event.shiftKey || event.ctrlKey || event.metaKey" in app
+    assert "selectAt(worldX, worldY, isAdditiveSelect(event));" in app
+    assert "Own-unit context click is a selection change, never a move/stop." in app
+    pointer_up = re.search(
+        r"canvas\.addEventListener\('pointerup', function \(event\) \{([\s\S]*?)\n  \}\);",
+        app)
+    assert pointer_up, "missing pointerup handler"
+    up_body = pointer_up.group(1)
+    assert "selectAt(pointer.worldX, pointer.worldY, dragging.additive)" in up_body
+    assert "selectBoxUnits(" in up_body
+    assert "issueGroundCommand" not in up_body
+    assert "issueContextCommand" not in up_body
+    assert "command: 'stop'" not in up_body
+    assert "command: 'move'" not in up_body
+    select_at = re.search(
+        r"function selectAt\(worldX, worldY, additive\) \{([\s\S]*?)\n  \}",
+        app)
+    assert select_at, "missing selectAt"
+    select_body = select_at.group(1)
+    assert "command: 'move'" not in select_body
+    assert "command: 'stop'" not in select_body
+    assert "command: 'attackMove'" not in select_body
+    box_fn = re.search(
+        r"function selectBoxUnits\([\s\S]*?\) \{([\s\S]*?)\n  \}",
+        app)
+    assert box_fn, "missing selectBoxUnits"
+    assert "sendAction" not in box_fn.group(1)
+    assert "heldMs < 220 && currentScreen === 'game'" in app
+    assert "stopKeyDownAt = performance.now();" in app
+
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 
 
