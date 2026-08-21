@@ -206,8 +206,14 @@ def main():
     assert "export const MAP_DISPLAY_THEMES" in render
     assert "applyTerrainDetail(applyFogMask" in render
     assert "function makeProceduralGroundTexture" in render
-    assert "function tuftParts" in render
     assert "function spawnWearAt" in render
+    assert "function tuftParts" not in render
+    assert "function pineParts" not in render
+    assert "function buildScatter" not in render
+    assert "function makeCraterSign" not in render
+    assert "function buildLandmarks" not in render
+    assert "mixGroundPhoto" not in render
+    assert "terrain-ground.png" not in render
     for theme_id in ("grassland", "arid", "urban", "crater"):
         assert ("  %s:" % theme_id) in render
     assert server.MAPS["north_conflict"]["theme"] == "grassland"
@@ -219,7 +225,8 @@ def main():
     assert "function paintGrassBase(c, w, h, themeId)" in app
     assert "paintTerrainFeatures(miniCtx, roomState.game.terrain, sx, sy)" in app
     assert "shadowQuality: 'structures'" in app
-    assert "sceneryQuality: 'on'" in app
+    assert "sceneryQuality" not in app
+    assert "terrain-ground.png" not in app
 
     # 建筑/单位视觉第二轮：阵营地基、尘土围裙、共享金属/石面着色，不能退回灰方块。
     assert "function addStructureFoundation(c, kind, s)" in render
@@ -265,12 +272,11 @@ def main():
     assert "主堡顶是石穹加晶刺，不是叠方块" in render
 
     # 彩蛋挂钩：视觉件只锁字符串，触发逻辑在 easter_egg_test。
+    # 陨坑木牌 / 撒点草木已从地图上拆掉，不能再被字符串锁住。
     assert "kind === 'dog_arcane'" in render
     assert "type === 'hq_salute'" in render
-    assert "function buildLandmarks()" in render
-    assert "function makeCraterSign()" in render
     assert "command: 'tapHq'" in app
-    assert "function landmarkAt(worldX, worldY)" in app
+    assert "function landmarkAt" not in app
     assert "type === 'hq_salute'" in app
 
     # Selection is only the current control set. A left-click / box / additive

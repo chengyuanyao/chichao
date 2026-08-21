@@ -1104,7 +1104,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, theme: 'grassland', spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
     narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
     triple_pass: { id: 'triple_pass', name: '三岔隘口', width: 5400, height: 4200, maxPlayers: 3, theme: 'arid', spawnLabels: ['西境营地', '东北营地', '东南营地'], spawnPoints: [[700,2100],[3700,368],[3700,3832]] },
-    gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。外环邻里路口被熔水河切开，只能从公路桥过。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]], landmarks: [{ id: 'first_pick', x: 5000, y: 3200, radius: 88, label: '先挖先富', line: '坑边木牌：先挖先富。后挖的，去跟陨石核讲理。' }] }
+    gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。外环邻里路口被熔水河切开，只能从公路桥过。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]] }
   };
 
   // 地图目录只在大厅和首帧下发，缓存住供整局使用
@@ -1133,12 +1133,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   };
   var hudCanvas = $('#hudCanvas');
   var hudCtx = hudCanvas.getContext('2d');
-  // 小地图仍是 2D，需要地表图当底纹
-  var terrainTexture = new Image();
-  terrainTexture.addEventListener('load', function () {
-    minimapStaticKey = '';
-  });
-  terrainTexture.src = '/terrain-ground.png?v=1';
   var minimap = $('#minimapCanvas');
   var miniCtx = minimap.getContext('2d');
   var selectionBox = $('#selectionBox');
@@ -1238,7 +1232,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   }
 
   var SETTINGS_KEY = 'steel-front-settings';
-  var settings = { masterVolume: 70, sfxVolume: 80, particleQuality: 'low', fogQuality: 'low', shadowQuality: 'structures', bloomQuality: 'off', sceneryQuality: 'on', projectileQuality: 'on' };
+  var settings = { masterVolume: 70, sfxVolume: 80, particleQuality: 'low', fogQuality: 'low', shadowQuality: 'structures', bloomQuality: 'off', projectileQuality: 'on' };
   // 性能模式硬参数
   var PERF_PARTICLE_BUDGET = { low: 60, medium: 150, high: 300 };
   var PERF_FOG_SCALE = { low: 14, medium: 9, high: 6 };
@@ -1246,9 +1240,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     try {
       var saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
       if (saved) { Object.keys(settings).forEach(function (k) { if (saved[k] != null) settings[k] = saved[k]; }); }
-      // 旧默认把场景细节和阴影都关了，战场看起来像一块绿板。只升级一次。
+      // 旧默认把阴影关了，战场看起来像一块绿板。只升级一次。
       if (saved && !saved.mapDisplayV2) {
-        if (settings.sceneryQuality === 'off') settings.sceneryQuality = 'on';
         if (settings.shadowQuality === 'off') settings.shadowQuality = 'structures';
         settings.mapDisplayV2 = 1;
         try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (_) {}
@@ -1275,7 +1268,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       fogScale: PERF_FOG_SCALE[settings.fogQuality] || 9,
       bloom: settings.bloomQuality !== 'off',
       fastBloom: settings.bloomQuality === 'low',
-      scatter: settings.sceneryQuality !== 'off',
       showProjectiles: settings.projectileQuality !== 'off',
       lod: true
     });
@@ -1290,7 +1282,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     $('#fogQuality').value = settings.fogQuality;
     $('#shadowQuality').value = settings.shadowQuality;
     if ($('#bloomQuality')) { $('#bloomQuality').value = settings.bloomQuality; }
-    if ($('#sceneryQuality')) { $('#sceneryQuality').value = settings.sceneryQuality; }
     if ($('#projectileQuality')) { $('#projectileQuality').value = settings.projectileQuality; }
   }
 
@@ -3532,27 +3523,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     miniCtx.stroke();
   }
 
-  function landmarkAt(worldX, worldY) {
-    if (!roomState) {
-      return null;
-    }
-    var marks = (roomState.game && roomState.game.terrain && roomState.game.terrain.landmarks)
-      || (roomState.maps && roomState.selectedMap && roomState.maps[roomState.selectedMap]
-        && roomState.maps[roomState.selectedMap].landmarks)
-      || [];
-    var best = null;
-    var bestDist = Infinity;
-    for (var i = 0; i < marks.length; i++) {
-      var mark = marks[i];
-      var dist = Math.hypot(worldX - mark.x, worldY - mark.y);
-      if (dist <= (mark.radius || 80) && dist < bestDist) {
-        best = mark;
-        bestDist = dist;
-      }
-    }
-    return best;
-  }
-
   function entityAt(worldX, worldY) {
     if (!roomState || !roomState.game) {
       return null;
@@ -3614,11 +3584,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       selectedStructureId = null;
     }
     if (!entity) {
-      var mark = landmarkAt(worldX, worldY);
-      if (mark) {
-        toast(mark.line || mark.label, 'info');
-        sound('select');
-      }
       renderSelectionInfo();
       return;
     }
@@ -4460,7 +4425,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     settings.fogQuality = $('#fogQuality').value;
     settings.shadowQuality = $('#shadowQuality').value;
     if ($('#bloomQuality')) { settings.bloomQuality = $('#bloomQuality').value; }
-    if ($('#sceneryQuality')) { settings.sceneryQuality = $('#sceneryQuality').value; }
     if ($('#projectileQuality')) { settings.projectileQuality = $('#projectileQuality').value; }
     saveSettings();
     applySettings();
