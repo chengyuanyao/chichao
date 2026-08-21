@@ -8,7 +8,7 @@
    5) 军犬：卡车不当猎物且咬不动；魔仆是猎物但一口咬不死
    6) 造价/血/速/爆炸对齐；单辆拆不掉满血总部
    7) AI 在成团建筑时会掺一辆，不当唯一兵种
-   8) 连带爆炸：溅射未致死也炸，友军并排也炸，环上每辆只炸一次
+   8) 无连环爆炸：溅射未致死则邻居还活着；友军并排不炸；圈外邻居不引爆
 """
 
 from __future__ import print_function
@@ -68,14 +68,15 @@ def main():
         assert definition["detonateOnContact"] is True
         assert definition["deathExplosion"]["damage"] > 0
         assert definition["deathExplosion"]["radius"] > 0
-        assert definition["deathExplosion"]["chainRadius"] > 0
+        assert "chainRadius" not in definition["deathExplosion"]
     # 造价/血/速/爆炸对齐。皮相/生产者仍分阵营。
     for field in ("cost", "hp", "speed", "build", "damageType"):
         assert truck[field] == hexling[field], (field, truck[field], hexling[field])
-    for field in ("damage", "radius", "chainRadius", "damageType"):
+    for field in ("damage", "radius", "damageType"):
         assert truck["deathExplosion"][field] == hexling["deathExplosion"][field], (
             field, truck["deathExplosion"][field], hexling["deathExplosion"][field])
-    assert truck["deathExplosion"]["chainRadius"] >= truck["deathExplosion"]["radius"]
+    assert truck["deathExplosion"]["damage"] == 700.0
+    assert truck["deathExplosion"]["radius"] == 120.0
     bite_to_hexling = (
         server.UNIT_TYPES["dog"]["damage"]
         * server.DAMAGE_MULTIPLIER["bite"]["arcane"])
@@ -297,42 +298,45 @@ def main():
     assert produced != set(["bomb_truck"]), produced
     print("  AI 排出 %s: PASS" % sorted(produced))
 
-    print("\n=== Test 12: 溅射未致死的邻近自爆也会连带 ===")
+    print("\n=== Test 12: 爆破圈外的邻近自爆不连环引爆 ===")
     room, a, b = make_room("SU11", magic_b=True)
     game = room["game"]
     truck_boom = server.UNIT_TYPES["bomb_truck"]["deathExplosion"]
     hex_boom = server.UNIT_TYPES["hexling"]["deathExplosion"]
-    assert truck_boom["damage"] == hex_boom["damage"]
-    assert truck_boom["radius"] == hex_boom["radius"]
-    assert truck_boom["chainRadius"] == hex_boom["chainRadius"]
-    # 放在爆破半径外、连带半径内：溅射为 0，全靠 连带。两边爆炸相同。
-    gap = (truck_boom["radius"] + truck_boom["chainRadius"]) * 0.5
-    assert truck_boom["radius"] < gap < truck_boom["chainRadius"], gap
+    assert truck_boom["damage"] == hex_boom["damage"] == 700.0
+    assert truck_boom["radius"] == hex_boom["radius"] == 120.0
+    assert "chainRadius" not in truck_boom
+    assert "chainRadius" not in hex_boom
+    # 放在爆破半径外：溅射为 0。没有连环则魔仆应还活着。
+    gap = truck_boom["radius"] + 10.0
+    assert gap > truck_boom["radius"], gap
     truck = server.make_unit("bomb_truck", a["id"], 4000, 4000)
     other = server.make_unit("hexling", b["id"], 4000 + gap, 4000)
-    # 魔仆外侧的步兵：只吃得到魔仆爆炸，证明魔仆确实引爆了。
+    # 魔仆外侧的步兵：只吃得到魔仆爆炸。魔仆没炸，步兵应还活着。
     witness = server.make_unit("rifle", a["id"], 4000 + gap + 18, 4000)
     tank = server.make_unit("tank", b["id"], 4008, 4000)
     mage = server.make_unit("mage", b["id"], 4000, 4012)
     game["units"].extend([truck, other, witness, tank, mage])
     other_hp = other["hp"]
+    witness_hp = witness["hp"]
     tank_hp = tank["hp"]
     mage_hp = mage["hp"]
     expect_splash = expected_explosion("bomb_truck", gap, "arcane")
     assert expect_splash == expected_explosion("hexling", gap, "arcane")
     assert expect_splash <= 0, expect_splash
-    assert other_hp > expect_splash
     server.trigger_death_explosion(room, truck, game)
-    assert truck.get("_exploded") and other.get("_exploded")
-    assert truck["hp"] <= 0 and other["hp"] <= 0
-    assert witness["hp"] <= 0, "魔仆连带后应炸死身边步兵，剩 %s" % witness["hp"]
+    assert truck.get("_exploded") and truck["hp"] <= 0
+    assert not other.get("_exploded"), "圈外魔仆不该连环引爆"
+    assert abs(other["hp"] - other_hp) < 0.1, other["hp"]
+    assert not witness.get("_exploded")
+    assert abs(witness["hp"] - witness_hp) < 0.1, "魔仆没炸，外侧步兵不该死"
     assert not tank.get("_exploded"), "坦克不该被扫进假爆炸"
     assert not mage.get("_exploded"), "法师不该被扫进假爆炸"
     assert tank["hp"] < tank_hp and tank["hp"] > 0
     assert mage["hp"] < mage_hp
-    print("  间距 %.0f：魔仆未吃溅射仍引爆 / 坦克法师不假炸: PASS" % gap)
+    print("  间距 %.0f：魔仆未吃溅射也不引爆 / 坦克法师只吃溅射: PASS" % gap)
 
-    print("\n=== Test 12b: 爆破圈内溅射未打死也会连带 ===")
+    print("\n=== Test 12b: 爆破圈内溅射未打死则不连环 ===")
     # 700 圈内 115 已能打死轻甲 160；贴爆破边缘才溅射未致死。
     # 魔仆甲种更高，圈内会被溅射打死，所以两边都用轻甲卡车当目标。
     boom = server.UNIT_TYPES["bomb_truck"]["deathExplosion"]
@@ -346,12 +350,17 @@ def main():
         other = server.make_unit("bomb_truck", b["id"], 5000 + dist, 5000)
         game["units"].extend([source, other])
         assert 0 < expect < other["hp"], (source_kind, expect, other["hp"])
+        other_before = other["hp"]
         server.trigger_death_explosion(room, source, game)
-        assert other.get("_exploded") and other["hp"] <= 0, source_kind
-        print("  %s 圈内 %.1f 溅射 %.0f < 160，仍连带: PASS" % (
+        assert source.get("_exploded") and source["hp"] <= 0
+        assert not other.get("_exploded"), source_kind
+        assert other["hp"] > 0, source_kind
+        assert abs((other_before - other["hp"]) - expect) < 0.6, (
+            source_kind, other_before - other["hp"], expect)
+        print("  %s 圈内 %.1f 溅射 %.0f < 160，邻居受伤但不连环: PASS" % (
             source_kind, dist, expect))
 
-    print("\n=== Test 13: 友军并排两辆都会炸 ===")
+    print("\n=== Test 13: 友军并排不连环，只炸自己 ===")
     for kind in ("bomb_truck", "hexling"):
         room, a, b = make_room("SU12-" + kind)
         game = room["game"]
@@ -360,34 +369,79 @@ def main():
         prey = server.make_unit("rifle", b["id"], 4025, 4000)
         prey["hp"] = 200
         game["units"].extend([first, parked, prey])
+        parked_hp = parked["hp"]
         server.trigger_death_explosion(room, first, game)
-        assert first.get("_exploded") and parked.get("_exploded"), kind
-        assert first["hp"] <= 0 and parked["hp"] <= 0, kind
-        assert prey["hp"] <= 0, "%s 两辆都炸后贴脸步兵应死，剩 %s" % (kind, prey["hp"])
-        print("  友军并排 %s 双炸: PASS" % kind)
+        assert first.get("_exploded") and first["hp"] <= 0, kind
+        assert not parked.get("_exploded"), kind
+        assert abs(parked["hp"] - parked_hp) < 0.1, (kind, parked["hp"])
+        assert prey["hp"] <= 0, "%s 自己的 700 圈应炸死贴脸步兵，剩 %s" % (
+            kind, prey["hp"])
+        print("  友军并排 %s 邻车不炸 / 步兵仍死: PASS" % kind)
 
-    print("\n=== Test 14: 三四辆环形各炸一次，不递归死循环 ===")
+    print("\n=== Test 14: 环形邻居只吃溅射，不连环；已炸过的不再炸 ===")
     room, a, b = make_room("SU13", magic_b=True)
     game = room["game"]
+    # 边长 80、对角 113，都在爆破半径 120 内。魔导 160 血在 80 处
+    # 会被 700 溅射打死——那是普通死亡爆炸，不是连环触发。
+    # 对角换成重甲坦克：只吃溅射，不该被扫进假爆炸。
     ring = [
         server.make_unit("bomb_truck", a["id"], 4000, 4000),
         server.make_unit("hexling", b["id"], 4080, 4000),
-        server.make_unit("bomb_truck", a["id"], 4080, 4080),
+        server.make_unit("tank", b["id"], 4080, 4080),
         server.make_unit("hexling", b["id"], 4000, 4080),
     ]
     for unit in ring:
         game["units"].append(unit)
-    # 边长 80、对角 113，都在 chainRadius 130 内。
     for i, unit in enumerate(ring):
         nxt = ring[(i + 1) % 4]
         side = math.hypot(nxt["x"] - unit["x"], nxt["y"] - unit["y"])
         assert 70 < side < 130, side
+    hex_side = expected_explosion("bomb_truck", 80.0, "arcane")
+    tank_diag = expected_explosion("bomb_truck", math.hypot(80.0, 80.0), "heavy")
+    assert hex_side >= ring[1]["hp"], hex_side
+    assert hex_side >= ring[3]["hp"], hex_side
+    assert 0 < tank_diag < ring[2]["hp"], tank_diag
+    tank_before = ring[2]["hp"]
     server.trigger_death_explosion(room, ring[0], game)
-    assert all(unit.get("_exploded") for unit in ring), [u.get("_exploded") for u in ring]
-    assert all(unit["hp"] <= 0 for unit in ring)
+    assert ring[0].get("_exploded") and ring[0]["hp"] <= 0
+    # 邻边魔仆被 700 溅射打死，于是走普通死亡爆炸（不是 chainRadius）。
+    assert ring[1]["hp"] <= 0 and ring[1].get("_exploded")
+    assert ring[3]["hp"] <= 0 and ring[3].get("_exploded")
+    assert not ring[2].get("_exploded"), "坦克不该被扫进假爆炸"
+    assert ring[2]["hp"] > 0
+    assert abs((tank_before - ring[2]["hp"]) - tank_diag) < 0.6, (
+        tank_before - ring[2]["hp"], tank_diag)
     assert server.trigger_death_explosion(room, ring[0], game) is False
-    assert server.trigger_death_explosion(room, ring[2], game) is False
-    print("  环形 4 辆各炸一次: PASS")
+    assert server.trigger_death_explosion(room, ring[1], game) is False
+    print("  环形：溅射致死才炸 / 坦克不假炸 / 已炸不再炸: PASS")
+
+    print("\n=== Test 15: 圈外环形邻居全部活着，证明没有连环 ===")
+    room, a, b = make_room("SU14", magic_b=True)
+    game = room["game"]
+    boom = server.UNIT_TYPES["bomb_truck"]["deathExplosion"]
+    # 边长 140 在爆破半径 120 外，溅射为 0。没有连环则只有被引爆的那辆倒下。
+    step = boom["radius"] + 20.0
+    ring = [
+        server.make_unit("bomb_truck", a["id"], 4000, 4000),
+        server.make_unit("hexling", b["id"], 4000 + step, 4000),
+        server.make_unit("bomb_truck", a["id"], 4000 + step, 4000 + step),
+        server.make_unit("hexling", b["id"], 4000, 4000 + step),
+    ]
+    for unit in ring:
+        game["units"].append(unit)
+    for i, unit in enumerate(ring):
+        nxt = ring[(i + 1) % 4]
+        side = math.hypot(nxt["x"] - unit["x"], nxt["y"] - unit["y"])
+        assert side > boom["radius"], side
+        assert expected_explosion("bomb_truck", side, "light") <= 0
+    lives = [unit["hp"] for unit in ring[1:]]
+    server.trigger_death_explosion(room, ring[0], game)
+    assert ring[0].get("_exploded") and ring[0]["hp"] <= 0
+    for unit, hp in zip(ring[1:], lives):
+        assert not unit.get("_exploded"), unit["kind"]
+        assert abs(unit["hp"] - hp) < 0.1, (unit["kind"], unit["hp"])
+    assert server.trigger_death_explosion(room, ring[0], game) is False
+    print("  圈外环形 3 邻全活: PASS")
 
     print("\n=== 自爆单位测试全部通过 ===")
 

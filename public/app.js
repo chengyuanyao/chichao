@@ -41,7 +41,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     prism: { icon: '✦', desc: '远程聚焦光束，点杀轻型与建筑 · 需维修厂' },
     harvester: { icon: '▣', desc: '自动采集矿石' },
     mcv: { icon: '⬢', desc: '可展开为新指挥中心' },
-    bomb_truck: { icon: '💣', desc: '高速药箱车，贴脸或阵亡大爆炸，邻近自爆会连带；克步兵堆与成团建筑' },
+    bomb_truck: { icon: '💣', desc: '高速药箱车，贴脸或阵亡大爆炸；克步兵堆与成团建筑' },
     mage: { icon: '✦', desc: '远程奥术弹，熔重甲的反坦克手' },
     frost: { icon: '❄', desc: '命中减速敌军，控制拉扯核心' },
     golem: { icon: '⛰', desc: '构装前排，高血投石溅射' },
@@ -51,7 +51,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     colossus: { icon: '☄', desc: '远程晶陨，专拆建筑 · 需圣泉' },
     mharvester: { icon: '◈', desc: '自动采集水晶' },
     mmcv: { icon: '⬡', desc: '可展开为魔法主堡' },
-    hexling: { icon: '✶', desc: '符核魔仆，贴脸或阵亡引爆，邻近自爆会连带；非载具，军犬能扑' }
+    hexling: { icon: '✶', desc: '符核魔仆，贴脸或阵亡引爆；非载具，军犬能扑' }
   };
 
   var BUILDINGS = {};
