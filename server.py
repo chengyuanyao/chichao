@@ -1468,6 +1468,12 @@ def spawn_neutral_ore_camp(game, resource, rng):
         game["units"].append(guard)
         camp["guardIds"].append(guard["id"])
 
+    # 行军寻路把这口矿圈进守卫火力范围，部队抄近路路过会被白打。A* 抬价
+    # 绕开威胁圈，代价是绕一点路而不是送掉一队兵。
+    game_terrain(game).add_camp_zone(
+        resource["x"], resource["y"],
+        resource["radius"] + CAMP_THREAT_RADIUS)
+
 
 def refresh_neutral_camps(game):
     """刷新公共矿锁；只有所属建筑和守军全部阵亡才解锁。"""
@@ -2398,6 +2404,14 @@ _PATH_CACHE_MAX = 800
 # 道路：寻路代价打折（部队会自发沿路行军）+ 实际行军加速
 ROAD_PATH_COST = 0.55
 ROAD_SPEED_BONUS = 1.35
+# 中立矿区守卫威胁圈：行军路线穿越矿区会被守军白打（炮塔射程 320 + 站位
+# 145 ≈ 465px）。A* 把威胁圈内格子抬价，部队自动绕开；代价只是"更贵"而
+# 非"禁止"，采矿车仍能进矿。
+CAMP_PATH_COST = 4.0
+CAMP_THREAT_RADIUS = 480.0
+# 一局公共矿最多约 16 口；长期运行后允许跨房间并集到几局量级，再多就不
+# 再加了——全图都抬价等于没抬价，还不如维持"几局并集"的保守程度。
+_CAMP_ZONE_CAP = 48
 _PATH_NEIGHBORS = ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1))
 _CIRCLE8 = ((1.0, 0.0), (0.70710678, 0.70710678), (0.0, 1.0),
             (-0.70710678, 0.70710678), (-1.0, 0.0),
@@ -2430,7 +2444,7 @@ class Terrain(object):
     __slots__ = ("rivers", "bridges", "mountains", "roads", "width", "height",
                  "_river_shapes", "_bridge_boxes", "_mountain_shapes", "_road_shapes",
                  "_grid", "_cost", "_grid_w", "_grid_h", "_path_cache",
-                 "_near_cache")
+                 "_near_cache", "_camp_zones")
 
     def __init__(self, rivers, bridges, width, height, mountains=None, roads=None):
         self.rivers = list(rivers or [])
@@ -2478,6 +2492,7 @@ class Terrain(object):
         self._grid_h = 0
         self._path_cache = {}
         self._near_cache = {}
+        self._camp_zones = []
 
     # --- water ---
 
@@ -2602,7 +2617,7 @@ class Terrain(object):
             return 1.0
         return ROAD_SPEED_BONUS if self.on_road(x, y) else 1.0
 
-    def segment_blocked(self, x1, y1, x2, y2, samples=24):
+    def segment_blocked(self, x1, y1, x2, y2, samples=24, padding=0.0):
         if not self.rivers and not self.mountains:
             return False
 
@@ -2610,6 +2625,11 @@ class Terrain(object):
         # cap could skip a mountain on a long diagonal minimap command; the
         # unit would then run straight into it and the stuck timer ended the
         # order as though the destination had been reached.
+        #
+        # padding 让"贴着山角擦过"的直线也判为阻挡。军团过窄谷口时边缘单位
+        # 会被分离力挤进山角：从山角出发的直线恰好擦边（圆心到直线距离略大
+        # 于半径），segment_blocked 放行 → 单位直走撞山 → stuck 重置后重算
+        # 同一条擦边直线，永远出不来。带上单位半径后这种路线强制走 A*。
         seg_dx = x2 - x1
         seg_dy = y2 - y1
         seg_len_sq = seg_dx * seg_dx + seg_dy * seg_dy
@@ -2623,21 +2643,29 @@ class Terrain(object):
                 closest_y = y1 + seg_dy * t
             dx = mx - closest_x
             dy = my - closest_y
-            if dx * dx + dy * dy < radius * radius:
+            if dx * dx + dy * dy < (radius + padding) * (radius + padding):
                 return True
 
         if not self.rivers:
             return False
         # Rivers still use sampling. gold_crater is the live map that uses
         # them; keep a correctness-oriented interval without making the hot
-        # mountain path pay for it.
+        # mountain path pay for it. padding 对水面同样生效：被分离力挤到
+        # 河岸临界（中心距水 < size 一半）的单位，直线判定必须算阻挡，
+        # 否则直走一步就进河，单轴滑行也被河顶住，永远卡在岸边。
         distance = math.hypot(x2 - x1, y2 - y1)
         samples = min(96, max(samples, int(distance / 40.0) + 1))
         step_x = (x2 - x1) / samples
         step_y = (y2 - y1) / samples
         for i in range(samples + 1):
-            if self.point_in_water(x1 + step_x * i, y1 + step_y * i):
+            px = x1 + step_x * i
+            py = y1 + step_y * i
+            if self.point_in_water(px, py):
                 return True
+            if padding > 0:
+                for dx, dy in _CIRCLE8:
+                    if self.point_in_water(px + dx * padding, py + dy * padding):
+                        return True
         return False
 
     def nearest_bridge_waypoint(self, unit_x, unit_y, dest_x, dest_y):
@@ -2660,6 +2688,32 @@ class Terrain(object):
 
     # --- A* navigation ---
 
+    def add_camp_zone(self, x, y, radius):
+        """动态标记一处中立守卫威胁圈，让 A* 行军尽量绕开。
+
+        公共矿每局随机落位，Terrain 实例又是跨房间共享的静态缓存，所以
+        威胁圈只能在对局生成守军时追加。代价是"更贵"不是"禁止"：绕路省兵
+        的命，采矿车需要进矿时仍能走进去。
+
+        跨房间共享意味着各区会累积成并集（路径只是更保守，不会出错）；
+        cap 防止服务器长期运行后全图都被抬价、绕路失效。
+        """
+        if len(self._camp_zones) >= _CAMP_ZONE_CAP:
+            return
+        self._camp_zones.append((float(x), float(y), float(radius)))
+        self._grid = None
+        self._cost = None
+        self._near_cache = {}
+        self._path_cache.clear()
+
+    def _in_camp_zone(self, x, y):
+        for zx, zy, zr in self._camp_zones:
+            dx = x - zx
+            dy = y - zy
+            if dx * dx + dy * dy < zr * zr:
+                return True
+        return False
+
     def _ensure_grid(self):
         if self._grid is not None:
             return self._grid
@@ -2668,7 +2722,7 @@ class Terrain(object):
         grid = [[True] * gh for _ in range(gw)]
         # 每格的通行代价：道路更便宜，于是 A* 会自发沿路走
         cost = [[1.0] * gh for _ in range(gw)]
-        if self.rivers or self.mountains or self.roads:
+        if self.rivers or self.mountains or self.roads or self._camp_zones:
             for cx in range(gw):
                 column = grid[cx]
                 cost_column = cost[cx]
@@ -2678,6 +2732,8 @@ class Terrain(object):
                     if (self.point_in_mountain(wx, wy, PATH_MOUNTAIN_CLEARANCE)
                             or self.point_in_water(wx, wy)):
                         column[cy] = False
+                    elif self._in_camp_zone(wx, wy):
+                        cost_column[cy] = CAMP_PATH_COST
                     elif self.on_road(wx, wy):
                         cost_column[cy] = ROAD_PATH_COST
         self._grid = grid
@@ -2903,7 +2959,9 @@ def move_toward(terrain, entity, target_x, target_y, speed, dt, stop_distance=0.
             end_x, end_y = terrain.nearest_open_point(
                 end_x, end_y, entity["x"], entity["y"],
                 destination_clearance)
-        path_blocked = terrain.segment_blocked(entity["x"], entity["y"], end_x, end_y)
+        path_blocked = terrain.segment_blocked(
+            entity["x"], entity["y"], end_x, end_y,
+            padding=entity.get("size", 20.0) * 0.5)
         if path_blocked:
             path = terrain.find_path(entity["x"], entity["y"], end_x, end_y)
             if path:
@@ -2997,6 +3055,14 @@ def move_toward(terrain, entity, target_x, target_y, speed, dt, stop_distance=0.
                 entity["_path"] = None
                 entity["_pathDest"] = None
                 entity["_pathDirect"] = False
+                # 被分离力挤进山/水临界带（中心可行但 body 压阻挡）时，
+                # 先把自己推出阻挡再重算，否则新路径仍以临界位置为起点，
+                # 第一段方向永远撞阻挡，每 0.5s 循环一次卡到天荒地老。
+                size = entity.get("size", 20.0)
+                if terrain.blocked(entity["x"], entity["y"], size * 0.5):
+                    entity["x"], entity["y"] = terrain.nearest_open_point(
+                        entity["x"], entity["y"], entity["x"], entity["y"],
+                        size * 0.5)
                 return False
         else:
             entity["_stuck"] = 0.0
@@ -3448,9 +3514,13 @@ def separate_units(terrain, units):
                         second["y"] += ny * push
                         # 绝大多数碰撞发生在开阔地，不再为每一对单位扫描全图
                         # 山河；宽相位命中障碍物包围盒时才做精确 blocked 检查。
-                        if ((check_first and terrain.blocked(first["x"], first["y"]))
+                        # 回退检查带单位半径：只拦"中心点入水"会把单位挤到
+                        # 河岸临界带（中心距水 < size/2），那里任何一步都进河，
+                        # 移动与寻路全部失效，单位永久卡死在岸边。
+                        if ((check_first and terrain.blocked(
+                                first["x"], first["y"], first["size"] * 0.5))
                                 or (check_second and terrain.blocked(
-                                    second["x"], second["y"]))):
+                                    second["x"], second["y"], second["size"] * 0.5))):
                             first["x"], first["y"] = old_fx, old_fy
                             second["x"], second["y"] = old_sx, old_sy
         key = spatial_cell(first["x"], first["y"], SEPARATION_CELL_SIZE)
