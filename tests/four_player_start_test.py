@@ -15,7 +15,7 @@ import server
 
 
 MAPS_4P = ("island_hop", "urban_siege", "valley_clash")
-MAPS_LARGER = ("north_conflict", "gold_crater")
+MAPS_LARGER = ("north_conflict", "gold_crater", "gold_crater_small")
 TICKS = 24
 
 
@@ -129,14 +129,15 @@ def main():
             assert len(set(cells)) == 4, (map_id, cells)
             print("  %s %s: 4 人入座均有总部" % (map_id, factions))
 
-    print("\n=== 赤金陨坑满 5 人 ===")
-    for factions in (("tech",) * 5,
-                     ("magic",) * 5,
-                     ("tech", "magic", "tech", "magic", "tech")):
-        room, cells = start_and_check(
-            "gold_crater", factions, seed=88, n=5)
-        assert len(set(cells)) == 5, ("gold_crater", factions, cells)
-        print("  gold_crater %s: 5 座总部分散，无战败" % (factions,))
+    print("\n=== 赤金陨坑满 5 人（大图 / 紧凑版）===")
+    for map_id in ("gold_crater", "gold_crater_small"):
+        for factions in (("tech",) * 5,
+                         ("magic",) * 5,
+                         ("tech", "magic", "tech", "magic", "tech")):
+            room, cells = start_and_check(
+                map_id, factions, seed=88, n=5)
+            assert len(set(cells)) == 5, (map_id, factions, cells)
+            print("  %s %s: 5 座总部分散，无战败" % (map_id, factions))
 
     print("\n=== 大厅复用同一出生点时必须拆开 ===")
     for map_id in MAPS_4P:
@@ -146,12 +147,13 @@ def main():
         assert len(set(cells)) == 4, \
             "%s 四个 spawn=0 仍叠在一起 %s" % (map_id, cells)
         print("  %s 重复出生点已拆成 4 席" % map_id)
-    room, cells = start_and_check(
-        "gold_crater", ("tech", "magic", "tech", "magic", "tech"),
-        seed=4, spawns=(0, 0, 0, 0, 0), n=5)
-    assert len(set(cells)) == 5, \
-        "gold_crater 五个 spawn=0 仍叠在一起 %s" % (cells,)
-    print("  gold_crater 重复出生点已拆成 5 席")
+    for map_id in ("gold_crater", "gold_crater_small"):
+        room, cells = start_and_check(
+            map_id, ("tech", "magic", "tech", "magic", "tech"),
+            seed=4, spawns=(0, 0, 0, 0, 0), n=5)
+        assert len(set(cells)) == 5, \
+            "%s 五个 spawn=0 仍叠在一起 %s" % (map_id, cells)
+        print("  %s 重复出生点已拆成 5 席" % map_id)
 
     print("\n=== 6 人图残留的出生下标不能让 4 人图开局崩掉 ===")
     room, cells = start_and_check(
@@ -159,15 +161,17 @@ def main():
     assert len(set(cells)) == 4, cells
     print("  island_hop spawn=5 回落到空席")
 
-    print("\n=== 客户端内置目录必须带上三张 4 人图 ===")
+    print("\n=== 客户端内置目录必须带上三张 4 人图与紧凑版赤金陨坑 ===")
     builtin = builtin_maps_from_client()
     for map_id in MAPS_4P:
         assert ("%s:" % map_id) in builtin, \
             "BUILTIN_MAPS 缺少 %s，大厅回退会按 6 个出生点发出无效 setSpawn" % map_id
+    assert "gold_crater_small:" in builtin, \
+        "BUILTIN_MAPS 缺少 gold_crater_small，大厅回退会用错出生点"
     assert "function lobbySpawnCount" in open(
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                      "public", "app.js"), encoding="utf-8").read()
-    print("  BUILTIN_MAPS 含 island_hop / urban_siege / valley_clash")
+    print("  BUILTIN_MAPS 含 island_hop / urban_siege / valley_clash / gold_crater_small")
 
     print("\nfour-player start tests ok")
 

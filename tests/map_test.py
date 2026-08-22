@@ -76,8 +76,8 @@ def check_map(map_id, map_def):
                 assert not terrain.blocked(px, py), \
                     "%s: 出生点 %d 周围 %d 处被地形阻挡" % (map_id, index, dist)
 
-    # 赤金陨坑用外环河+桥做邻里卡口；其余图仍只靠山地分区。
-    if map_id == "gold_crater":
+    # 赤金陨坑大图 / 紧凑版用外环河+桥做邻里卡口；其余图仍只靠山地分区。
+    if map_id in ("gold_crater", "gold_crater_small"):
         assert map_def.get("rivers"), "%s: 外环卡口需要河流" % map_id
         assert map_def.get("bridges"), "%s: 外环卡口需要桥梁" % map_id
     else:
@@ -93,6 +93,7 @@ def check_map(map_id, map_def):
         "triple_pass": (5400, 4200),
         "valley_clash": (6400, 4800),
         "gold_crater": (10000, 6400),
+        "gold_crater_small": (6400, 6400),
     }
     assert (width, height) == expected_sizes[map_id], \
         "%s: 地图尺寸意外变化 (%dx%d)" % (map_id, width, height)
@@ -174,30 +175,31 @@ def main():
     assert len(path_along_road) > 1, "沿路路径应当存在"
     print("  沿主干道寻路 %d 个航点" % len(path_along_road))
 
-    crater = server.MAPS["gold_crater"]
-    pub = server.PUBLIC_MAPS["gold_crater"]
-    assert pub.get("rivers") and pub.get("bridges")
-    assert crater["maxPlayers"] == 5
-    assert len(crater["spawnPoints"]) == 5
-    assert crater["theme"] == "crater"
-    assert not crater.get("landmarks")
-    assert not pub.get("landmarks")
-    assert crater.get("publicOreCount", 4) > 4
-    assert crater["homeOreAmounts"] == (26000, 19000, 17000, 21000)
-    bonuses = list(crater.get("bonusResources") or [])
-    assert len(bonuses) >= 10
-    crater_cx, crater_cy = crater["width"] / 2.0, crater["height"] / 2.0
-    center_ores = [r for r in bonuses
-                   if math.hypot(r["x"] - crater_cx, r["y"] - crater_cy) < 700]
-    pocket_ores = [r for r in bonuses
-                   if math.hypot(r["x"] - crater_cx, r["y"] - crater_cy) > 2000]
-    # 中庭金库围核至少五处，且比初版三处头奖（5万+3.8万+3.8万）更肥。
-    assert len(center_ores) >= 5, len(center_ores)
-    assert sum(r["amount"] for r in center_ores) >= 220000
-    assert min(r["amount"] for r in center_ores) >= 44000
-    # 外环口袋矿与家矿保持原量，多出来的全在正中争夺区。
-    assert len(pocket_ores) == 5
-    assert all(r["amount"] == 26000 for r in pocket_ores)
+    for map_id in ("gold_crater", "gold_crater_small"):
+        crater = server.MAPS[map_id]
+        pub = server.PUBLIC_MAPS[map_id]
+        assert pub.get("rivers") and pub.get("bridges")
+        assert crater["maxPlayers"] == 5
+        assert len(crater["spawnPoints"]) == 5
+        assert crater["theme"] == "crater"
+        assert not crater.get("landmarks")
+        assert not pub.get("landmarks")
+        assert crater.get("publicOreCount", 4) > 4
+        assert crater["homeOreAmounts"] == (26000, 19000, 17000, 21000)
+        bonuses = list(crater.get("bonusResources") or [])
+        assert len(bonuses) >= 10
+        crater_cx, crater_cy = crater["width"] / 2.0, crater["height"] / 2.0
+        center_ores = [r for r in bonuses
+                       if math.hypot(r["x"] - crater_cx, r["y"] - crater_cy) < 700]
+        pocket_ores = [r for r in bonuses
+                       if math.hypot(r["x"] - crater_cx, r["y"] - crater_cy) > 1280]
+        # 中庭金库围核至少五处，且比初版三处头奖（5万+3.8万+3.8万）更肥。
+        assert len(center_ores) >= 5, len(center_ores)
+        assert sum(r["amount"] for r in center_ores) >= 220000
+        assert min(r["amount"] for r in center_ores) >= 44000
+        # 外环口袋矿与家矿保持原量，多出来的全在正中争夺区。
+        assert len(pocket_ores) == 5, map_id
+        assert all(r["amount"] == 26000 for r in pocket_ores)
 
     def ore_payload(map_id, n_players):
         random.seed(88001)
@@ -216,14 +218,18 @@ def main():
 
     north_ores = ore_payload("north_conflict", 5)
     crater_ores = ore_payload("gold_crater", 5)
+    small_ores = ore_payload("gold_crater_small", 5)
     north_n, north_amt = len(north_ores), sum(r["amount"] for r in north_ores)
     crater_n, crater_amt = len(crater_ores), sum(r["amount"] for r in crater_ores)
     assert crater_n > north_n, (crater_n, north_n)
     assert crater_amt > north_amt, (crater_amt, north_amt)
+    crater = server.MAPS["gold_crater"]
+    crater_cx, crater_cy = crater["width"] / 2.0, crater["height"] / 2.0
     live_center = [r for r in crater_ores
                    if math.hypot(r["x"] - crater_cx, r["y"] - crater_cy) < 700]
     assert len(live_center) >= 5, len(live_center)
-    for planned in center_ores:
+    for planned in [r for r in crater.get("bonusResources") or []
+                    if math.hypot(r["x"] - crater_cx, r["y"] - crater_cy) < 700]:
         nearest = min(math.hypot(r["x"] - planned["x"], r["y"] - planned["y"])
                       for r in live_center)
         assert nearest < 80, (planned["x"], planned["y"], nearest)
@@ -232,34 +238,51 @@ def main():
     print("  中庭金库 %d 处 / 储量 %.0f" % (
         len(live_center), sum(r["amount"] for r in live_center)))
 
-    check_gold_crater_chokepoints(crater, crater_ores)
+    check_gold_crater_chokepoints(crater, crater_ores, CRATER_LAYOUTS["gold_crater"])
+    small = server.MAPS["gold_crater_small"]
+    check_gold_crater_chokepoints(small, small_ores, CRATER_LAYOUTS["gold_crater_small"])
 
     print("map tests ok: %d 张地图通过" % len(server.MAPS))
 
 
 # 外环五处邻里卡口：北岗-东北、东北-东南、东南-西南、西南-西北、西北-北岗。
 # 每道熔水河沿五边形角平分线从陨坑外壁拉到地图边，只在外环公路留桥。
-CRATER_RIM_LINKS = (
-    {"name": "北岗-东北", "angle": -54.0, "bridge": (6575, 1032)},
-    {"name": "东北-东南", "angle": 18.0, "bridge": (7549, 4028)},
-    {"name": "东南-西南", "angle": 90.0, "bridge": (5000, 5880)},
-    {"name": "西南-西北", "angle": 162.0, "bridge": (2451, 4028)},
-    {"name": "西北-北岗", "angle": -126.0, "bridge": (3425, 1032)},
-)
-CRATER_CX, CRATER_CY = 5000.0, 3200.0
+# 大图 / 紧凑版各自有独立的中心、桥位、金库与采样偏移。
+CRATER_LAYOUTS = {
+    "gold_crater": {
+        "cx": 5000.0, "cy": 3200.0,
+        "links": (
+            {"name": "北岗-东北", "bridge": (6575, 1032)},
+            {"name": "东北-东南", "bridge": (7549, 4028)},
+            {"name": "东南-西南", "bridge": (5000, 5880)},
+            {"name": "西南-西北", "bridge": (2451, 4028)},
+            {"name": "西北-北岗", "bridge": (3425, 1032)},
+        ),
+        "vault": (5000.0, 2740.0),
+        "offset": 400.0,
+    },
+    "gold_crater_small": {
+        "cx": 3200.0, "cy": 3200.0,
+        "links": (
+            {"name": "北岗-东北", "bridge": (4208, 1032)},
+            {"name": "东北-东南", "bridge": (4831, 4028)},
+            {"name": "东南-西南", "bridge": (3200, 5880)},
+            {"name": "西南-西北", "bridge": (1569, 4028)},
+            {"name": "西北-北岗", "bridge": (2192, 1032)},
+        ),
+        "vault": (3200.0, 2740.0),
+        "offset": 256.0,
+    },
+}
 # 坦克 / 攻城炮 / 裂地晶兽半径约 20–24，桥盒短边必须留出并排余量。
 CRATER_BRIDGE_MIN = 110.0
 
 
-def _crater_polar(radius, angle_deg):
-    ang = math.radians(angle_deg)
-    return (CRATER_CX + radius * math.cos(ang),
-            CRATER_CY + radius * math.sin(ang))
-
-
-def check_gold_crater_chokepoints(crater, live_ores):
+def check_gold_crater_chokepoints(crater, live_ores, layout):
     terrain = server.terrain_for_map(crater)
     terrain._ensure_grid()
+    cx, cy = layout["cx"], layout["cy"]
+    offset = layout["offset"]
     rivers = list(crater.get("rivers") or [])
     bridges = list(crater.get("bridges") or [])
     spawns = crater["spawnPoints"]
@@ -268,7 +291,7 @@ def check_gold_crater_chokepoints(crater, live_ores):
 
     dry = server.Terrain(rivers, [], crater["width"], crater["height"],
                          crater.get("mountains"), crater.get("roads"))
-    for index, link in enumerate(CRATER_RIM_LINKS):
+    for index, link in enumerate(layout["links"]):
         bridge = bridges[index]
         bx, by = link["bridge"]
         assert abs(bridge["x"] - bx) < 2 and abs(bridge["y"] - by) < 2, link["name"]
@@ -284,23 +307,29 @@ def check_gold_crater_chokepoints(crater, live_ores):
             "%s: 桥面不够大单位落脚" % link["name"]
 
         # 外环抄近道：卡口两侧的旷野直线被河拦住，必须走桥。
-        px, py = _crater_polar(2350.0, link["angle"])
-        ang = math.radians(link["angle"])
-        vx, vy = -math.sin(ang), math.cos(ang)
-        left = (px - 400.0 * vx, py - 400.0 * vy)
-        right = (px + 400.0 * vx, py + 400.0 * vy)
-        assert not terrain.blocked(left[0], left[1]), link["name"]
-        assert not terrain.blocked(right[0], right[1]), link["name"]
+        # 紧凑版（x×0.64、y 不变）五边形不再等距，采样点沿每座桥的
+        # 中心连线取"桥与中心之间 0.877 处"，再垂直偏移。
+        bx, by = bridge["x"], bridge["y"]
+        udx, udy = bx - cx, by - cy
+        bridge_dist = math.hypot(udx, udy)
+        ux, uy = udx / bridge_dist, udy / bridge_dist
+        px = cx + ux * bridge_dist * 0.877
+        py = cy + uy * bridge_dist * 0.877
+        vx, vy = -uy, ux
+        left = (px - offset * vx, py - offset * vy)
+        right = (px + offset * vx, py + offset * vy)
+        assert not terrain.blocked(left[0], left[1]), (link["name"], left)
+        assert not terrain.blocked(right[0], right[1]), (link["name"], right)
         assert terrain.segment_blocked(left[0], left[1], right[0], right[1]), \
             "%s: 外环旷野仍能直线穿过卡口" % link["name"]
         via = terrain.find_path(left[0], left[1], right[0], right[1])
         assert len(via) > 1, "%s: 卡口两侧无法经桥绕行" % link["name"]
 
     # 每家都能走到：其他出生点、中庭金库、自家矿、最近口袋矿。
-    vault = (5000.0, 2740.0)
+    vault = layout["vault"]
     for i, (sx, sy) in enumerate(spawns):
         assert len(terrain.find_path(sx, sy, vault[0], vault[1])) > 0, i
-        cdx, cdy = CRATER_CX - sx, CRATER_CY - sy
+        cdx, cdy = cx - sx, cy - sy
         dist = max(1.0, math.hypot(cdx, cdy))
         factor = min(0.20, 650.0 / dist)
         home = (sx + cdx * factor, sy + cdy * factor)
@@ -328,7 +357,7 @@ def check_gold_crater_chokepoints(crater, live_ores):
 def pocket_ores_of(crater):
     cx, cy = crater["width"] / 2.0, crater["height"] / 2.0
     return [(r["x"], r["y"]) for r in crater.get("bonusResources") or []
-            if math.hypot(r["x"] - cx, r["y"] - cy) > 2000]
+            if math.hypot(r["x"] - cx, r["y"] - cy) > 1280]
 
 
 if __name__ == "__main__":

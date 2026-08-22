@@ -38,12 +38,12 @@ def make_room():
 def main():
     random.seed(20260719)
 
-    # --- Test 1: only gold_crater uses live rivers / bridges ---
+    # --- Test 1: only the two 赤金陨坑 variants use live rivers / bridges ---
     for map_id in sorted(server.MAPS):
         map_data = server.MAPS[map_id]
-        if map_id == "gold_crater":
-            assert map_data.get("rivers"), "gold_crater should use rim rivers"
-            assert map_data.get("bridges"), "gold_crater should use rim bridges"
+        if map_id in ("gold_crater", "gold_crater_small"):
+            assert map_data.get("rivers"), "%s should use rim rivers" % map_id
+            assert map_data.get("bridges"), "%s should use rim bridges" % map_id
         else:
             assert not map_data.get("rivers"), "%s should not have rivers" % map_id
             assert not map_data.get("bridges"), "%s should not have bridges" % map_id
@@ -175,17 +175,22 @@ def main():
     assert server.position_clear(room_game, 500, 2400, 30), \
         "dry position should be clear for building"
 
-    # --- Test 11: gold_crater live rivers / bridges ---
-    crater = server.MAPS["gold_crater"]
-    live = server.terrain_for_map(crater)
-    assert live.rivers and live.bridges
-    for bridge in crater["bridges"]:
-        assert not live.point_in_water(bridge["x"], bridge["y"])
-        assert not live.blocked(bridge["x"], bridge["y"])
-        assert live.cell_open(bridge["x"], bridge["y"])
-    # 南缘抄近道必须被河拦住，从桥上则能过。
-    assert live.segment_blocked(5432, 5382, 4568, 5382)
-    assert not live.segment_blocked(5220, 5880, 4780, 5880)
+    # --- Test 11: 赤金陨坑（大图 / 紧凑版）live rivers / bridges ---
+    crater_rim_checks = {
+        "gold_crater": ((5432, 5382, 4568, 5382), (5220, 5880, 4780, 5880)),
+        "gold_crater_small": ((3476, 5382, 2924, 5382), (3341, 5880, 3059, 5880)),
+    }
+    for map_id, (blocked_way, bridge_way) in crater_rim_checks.items():
+        crater = server.MAPS[map_id]
+        live = server.terrain_for_map(crater)
+        assert live.rivers and live.bridges
+        for bridge in crater["bridges"]:
+            assert not live.point_in_water(bridge["x"], bridge["y"]), map_id
+            assert not live.blocked(bridge["x"], bridge["y"]), map_id
+            assert live.cell_open(bridge["x"], bridge["y"]), map_id
+        # 南缘抄近道必须被河拦住，从桥上则能过。
+        assert live.segment_blocked(*blocked_way), map_id
+        assert not live.segment_blocked(*bridge_way), map_id
 
     print("water tests ok: 11 tests passed")
 

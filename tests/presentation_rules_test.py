@@ -83,16 +83,17 @@ def main():
     assert "timestamp - lastHudOverlayAt >= 50" in app
     assert "game.units.length >" not in render
 
-    # Other live maps stay mountain-only; gold_crater is the rim-bridge map.
-    crater = server.MAPS["gold_crater"]
-    assert crater.get("rivers") and crater.get("bridges")
+    # Other live maps stay mountain-only; the two crater maps are rim-bridge maps.
+    crater_ids = ("gold_crater", "gold_crater_small")
+    for map_id in crater_ids:
+        crater = server.MAPS[map_id]
+        assert crater.get("rivers") and crater.get("bridges")
     for map_id, map_def in server.MAPS.items():
-        if map_id == "gold_crater":
+        if map_id in crater_ids:
             continue
         assert not map_def.get("rivers"), "%s still has river data" % map_id
         assert not map_def.get("bridges"), "%s still has bridge data" % map_id
         assert map_def.get("mountains"), "%s needs mountain blockers" % map_id
-    assert crater.get("mountains"), "gold_crater needs mountain blockers"
     expected_sizes = {
         "north_conflict": (9600, 6000),
         "island_hop": (7200, 6000),
@@ -101,6 +102,7 @@ def main():
         "triple_pass": (5400, 4200),
         "valley_clash": (6400, 4800),
         "gold_crater": (10000, 6400),
+        "gold_crater_small": (6400, 6400),
     }
     assert {map_id: (map_def["width"], map_def["height"])
             for map_id, map_def in server.MAPS.items()} == expected_sizes
@@ -220,8 +222,10 @@ def main():
     assert server.MAPS["narrow_standoff"]["theme"] == "arid"
     assert server.MAPS["urban_siege"]["theme"] == "urban"
     assert server.MAPS["gold_crater"]["theme"] == "crater"
+    assert server.MAPS["gold_crater_small"]["theme"] == "crater"
     assert "mapBriefingDisplay" in app
     assert server.MAPS["gold_crater"].get("briefing")
+    assert server.MAPS["gold_crater_small"].get("briefing")
     assert "function paintGrassBase(c, w, h, themeId)" in app
     assert "paintTerrainFeatures(miniCtx, roomState.game.terrain, sx, sy)" in app
     # 道路只留玩法数据：不再铺 3D 条带、路肩脏土或小地图/大厅描线。
