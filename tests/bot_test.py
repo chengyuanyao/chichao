@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""速胜 AI：电脑玩家按拆总部剧本开局，不龟缩。
+"""大师 AI：开局仍按拆总部剧本，随后按可见编制克制。
    1) 科技 2 人开局先排兵营再排工厂，总部没掉血就不造维修厂/炮塔
    2) 工厂一转就排自爆卡车，不必凑齐 8 个野战单位
    3) 魔法法阵立了就排爆裂魔仆，不等圣泉
    4) 自爆指令只打敌方总部或成团建筑，不追野战部队
    5) 自爆上限 5；凑齐 2 辆才出发
    6) 多人局锁定最近的一座敌方总部
+   7) 总部掉血或家矿有敌军时改练守军/炮塔，不再排下一辆自爆
+   8) 看见成堆军犬时，魔法改出傀儡/载具，不再堆法师
+   9) 第一波没拆掉敌方总部时补第二精炼所或电力，而不是只排卡车
 """
 
 from __future__ import print_function
@@ -250,7 +253,87 @@ def main():
     assert picked["kind"] not in server.UNIT_TYPES
     print("  成团建筑 %s: PASS" % picked["kind"])
 
-    print("\n=== 速胜 AI 测试全部通过 ===")
+    print("\n=== Test 9: 总部受伤/敌军进家时改防，不再排自爆卡车 ===")
+    room, a, b = make_room("BOT09")
+    game = room["game"]
+    a["isBot"] = True
+    a["faction"] = "tech"
+    a["cash"] = 99999
+    a["buildQueue"] = []
+    give(game, a["id"], "barracks")
+    give(game, a["id"], "factory")
+    hq = player_hq(game, a["id"])
+    hq["hp"] = hq["maxHp"] * 0.45
+    rifle = server.make_unit("rifle", b["id"], hq["x"] + 80, hq["y"] + 30)
+    game["units"].append(rifle)
+    assert server.bot_needs_defense(game, a["id"])
+    assert not server.bot_should_train_suicide(game, a, "bomb_truck")
+    server.tick_bots(room)
+    produced = queued_kinds(game, a["id"])
+    queued = a.get("buildQueue") or []
+    assert "bomb_truck" not in produced, produced
+    defended = (queued and queued[0]["kind"] in ("turret", "repair", "power")
+                or any(kind in produced for kind in (
+                    "dog", "rifle", "rocket", "tesla", "tank", "scout")))
+    assert defended, (queued, produced)
+    print("  受伤总部 → 未排卡车，改 %s / %s: PASS" % (
+        queued[0]["kind"] if queued else "-", produced))
+
+    print("\n=== Test 10: 看见成堆军犬时魔法改出傀儡，不再堆法师 ===")
+    room, a, b = make_room("BOT10", magic_b=True)
+    game = room["game"]
+    b["isBot"] = True
+    b["cash"] = 99999
+    b["buildQueue"] = [{"id": "busy", "kind": "mpower",
+                        "remaining": 4.0, "total": 8.0, "ready": False}]
+    give(game, b["id"], "mtemple")
+    give(game, b["id"], "mcircle")
+    hq = player_hq(game, b["id"])
+    for index in range(6):
+        dog = server.make_unit(
+            "dog", a["id"], hq["x"] + 70, hq["y"] + 24 + index * 16)
+        game["units"].append(dog)
+    assert server.bot_needs_defense(game, b["id"])
+    server.tick_bots(room)
+    produced = queued_kinds(game, b["id"])
+    assert "golem" in produced, produced
+    assert produced.count("mage") == 0, produced
+    assert "hexling" not in produced, produced
+    print("  6 军犬进家 → 法阵排 %s: PASS" % produced)
+
+    print("\n=== Test 11: 第一波没拆掉总部时补第二精炼所或电力 ===")
+    room, a, b = make_room("BOT11")
+    game = room["game"]
+    a["isBot"] = True
+    a["faction"] = "tech"
+    a["cash"] = 100
+    a["buildQueue"] = [{"id": "busy", "kind": "power",
+                        "remaining": 4.0, "total": 8.0, "ready": False}]
+    give(game, a["id"], "barracks")
+    give(game, a["id"], "factory", 1400, 900)
+    trucks = [
+        server.make_unit("bomb_truck", a["id"], 300, 300),
+        server.make_unit("bomb_truck", a["id"], 320, 310),
+    ]
+    game["units"].extend(trucks)
+    server.tick_bots(room)
+    assert a.get("_ai", {}).get("waves_sent", 0) >= 1, a.get("_ai")
+    game["units"] = [unit for unit in game["units"]
+                     if unit["kind"] != "bomb_truck"]
+    assert player_hq(game, b["id"]) is not None
+    a["cash"] = 2000
+    a["buildQueue"] = []
+    before_trucks = queued_kinds(game, a["id"]).count("bomb_truck")
+    server.tick_bots(room)
+    queued = a.get("buildQueue") or []
+    assert queued, queued
+    assert queued[0]["kind"] in ("refinery", "power"), queued
+    after_trucks = queued_kinds(game, a["id"]).count("bomb_truck")
+    assert after_trucks == before_trucks, (before_trucks, after_trucks,
+                                           queued_kinds(game, a["id"]))
+    print("  波次失败 → 建造 %s，未加卡车: PASS" % queued[0]["kind"])
+
+    print("\n=== 大师 AI 测试全部通过 ===")
 
 
 def hypot(dx, dy):
