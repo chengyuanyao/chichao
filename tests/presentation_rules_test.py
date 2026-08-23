@@ -323,6 +323,43 @@ def main():
     assert "heldMs < 220 && currentScreen === 'game'" in app
     assert "stopKeyDownAt = performance.now();" in app
 
+    # Playability QoL: double-click same-kind (visible/rendered only),
+    # control groups 1-3, production hotkeys. S stays stop — scout is D.
+    assert "function selectAllOfType(worldX, worldY, additive)" in app
+    assert "function unitIsCurrentlySeen(unit)" in app
+    assert "view3d.isVisible && !view3d.isVisible(visual.x, visual.y)" in app
+    assert "return visibleAt(visual.x, visual.y);" in app
+    assert "selectAllOfType(pointer.worldX, pointer.worldY, isAdditiveSelect(event));" in app
+    assert "CONTROL_GROUP_JUMP_MS = 350" in app
+    assert "event.code >= 'Digit1' && event.code <= 'Digit3'" in app
+    assert "function pruneControlGroups()" in app
+    assert "var TRAIN_HOTKEYS = {" in app
+    assert "KeyQ: 'rifle'" in app
+    assert "KeyW: 'dog'" in app
+    assert "KeyE: 'rocket'" in app
+    assert "KeyR: 'sniper'" in app
+    assert "KeyA: 'tank'" in app
+    assert "KeyD: 'scout'" in app
+    assert "KeyF: 'bomb_truck'" in app
+    assert "KeyZ: 'tesla'" in app
+    assert "KeyQ: 'mage'" in app
+    assert "KeyW: 'frost'" in app
+    assert "KeyE: 'panther'" in app
+    assert "KeyA: 'golem'" in app
+    assert "KeyF: 'hexling'" in app
+    assert "KeyS: 'scout'" not in app
+    assert "Do not steal S for scout — production scout is KeyD." in app
+    assert "function tryTrainHotkey(code)" in app
+    assert "command: 'train', unitType: kind" in app
+    assert "cameraTrainKeyDownAt[event.code] = performance.now();" in app
+    assert "trainHeldMs < 220 && currentScreen === 'game'" in app
+    assert "id=\"productionHint\"" in hud
+    assert "function updateProductionHint()" in app
+    assert "S停止" in app
+    assert "双击己方单位" in readme
+    assert "Ctrl+1 / Ctrl+2 / Ctrl+3" in readme
+    assert "S 仍是停止，不用来出猎犬" in readme
+
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 
 

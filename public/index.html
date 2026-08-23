@@ -215,6 +215,7 @@
           </div>
 
           <div id="commandGrid" class="command-grid"></div>
+          <div id="productionHint" class="production-hint hidden"></div>
 
           <div id="tacticalReadout" class="tactical-readout">
             <div class="readout-head"><span>FIELD STATUS</span><i></i>战场态势</div>
@@ -242,7 +243,7 @@
           <div class="orders-row">
             <button id="attackMoveBtn" class="order-button" title="攻击移动 (Q)"><span>⌁</span>攻击移动</button>
             <button id="repairBtn" class="order-button" title="前往最近维修厂 (R)"><span>✚</span>维修载具</button>
-            <button id="deployBtn" class="order-button hidden" title="展开为新基地 (D)"><span>⬢</span>展开</button>
+            <button id="deployBtn" class="order-button hidden" title="展开为新基地"><span>⬢</span>展开</button>
             <button id="stopBtn" class="order-button" title="停止 (S)"><span>■</span>停止</button>
             <button id="pingBtn" class="order-button" title="地图信标 (G)"><span>◉</span>信标</button>
             <button id="strikeBtn" class="order-button strike-button hidden" title="轨道打击 (X)"><span>☢</span>轨道打击</button>
@@ -305,6 +306,8 @@
         <div class="control-legend">
           <span><kbd>左键</kbd> 选择</span>
           <span><kbd>右键</kbd> 移动 / 攻击</span>
+          <span><kbd>双击</kbd> 同种</span>
+          <span><kbd>1-3</kbd> 编队</span>
           <span id="repairHint"><kbd>R</kbd> 维修载具</span>
           <span><kbd>Q</kbd> 攻击移动</span>
           <span><kbd>空格</kbd> 返回基地</span>
