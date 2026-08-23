@@ -2149,6 +2149,30 @@ kbd {
   border-color: var(--hazard);
 }
 
+.command-hotkey {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  z-index: 4;
+  min-width: 14px;
+  padding: 1px 3px;
+  border: 1px solid rgba(201, 162, 75, 0.55);
+  background: rgba(10, 10, 6, 0.82);
+  color: var(--lcd);
+  font: 700 8px/1 var(--font-mono);
+  pointer-events: none;
+}
+
+.production-hint {
+  margin: 2px 8px 4px;
+  color: rgba(232, 209, 150, 0.88);
+  font: 8px/1.45 var(--font-mono);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* 队列数徽章：深底黄铜圈 */
 .command-card.queued::after {
   content: attr(data-queue);

@@ -173,6 +173,30 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     if (repairHint) { repairHint.innerHTML = '<kbd>R</kbd> ' + copy.repairHint; }
   }
 
+  // Production hotkeys reuse the existing train action. S stays stop
+  // (tap) / camera (hold) — scout is D, not S. W/A/D still pan while
+  // held; a short tap trains when a producer is selected or implied.
+  var TRAIN_HOTKEYS = {
+    tech: {
+      KeyQ: 'rifle',
+      KeyW: 'dog',
+      KeyE: 'rocket',
+      KeyR: 'sniper',
+      KeyA: 'tank',
+      KeyD: 'scout',
+      KeyF: 'bomb_truck',
+      KeyZ: 'tesla'
+    },
+    magic: {
+      KeyQ: 'mage',
+      KeyW: 'frost',
+      KeyE: 'panther',
+      KeyA: 'golem',
+      KeyF: 'hexling'
+    }
+  };
+  var CONTROL_GROUP_JUMP_MS = 350;
+
   var STRUCTURE_ICONS = {
     hq: '★', power: 'ϟ', refinery: '◆', barracks: '♟', factory: '▰', repair: '✚', turret: '⌖', missile: '⊿',
     mhq: '★', mpower: '✦', mrefinery: '◈', mtemple: '✠', mcircle: '⬡', mspring: '✚', mtower: '✵'
@@ -1184,6 +1208,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var stopKeyDownAt = 0;
   var controlGroups = {};
   var lastGroupTap = {};
+  var lastProducerId = null;
+  var cameraTrainKeyDownAt = {};
   var structureHpSnap = {};
   var structureAlertUntil = {};
   var displayedCash = 0;
@@ -2115,6 +2141,10 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     resultShown = false;
     selectedUnits.clear();
     selectedStructureId = null;
+    lastProducerId = null;
+    controlGroups = {};
+    lastGroupTap = {};
+    cameraTrainKeyDownAt = {};
     setScreen('home');
   }
 
@@ -2128,6 +2158,10 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       resultShown = false;
       selectedUnits.clear();
       selectedStructureId = null;
+      lastProducerId = null;
+      controlGroups = {};
+      lastGroupTap = {};
+      cameraTrainKeyDownAt = {};
       buildMode = null;
       commandMode = null;
       view3d.clearEntities();
@@ -2221,6 +2255,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     }
 
     applyFactionHud();
+    updateProductionHint();
     var repairBtn = $('#repairBtn');
     if (repairBtn) {
       repairBtn.classList.remove('hidden');
@@ -2470,11 +2505,13 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
         button.dataset.kind = kind;
         button.dataset.type = isBuilding ? 'building' : 'unit';
         // DOM 结构是与样式层的跨线契约（DESIGN_V3 第 1 条），顺序不可调
+        var hotkeyLetter = trainHotkeyLetter(kind);
         button.innerHTML =
           '<canvas class="command-portrait" width="96" height="72"></canvas>' +
           '<span class="command-progress"></span>' +
           '<strong class="command-name">' + definition.name + '</strong>' +
-          '<small class="command-status"></small>';
+          '<small class="command-status"></small>' +
+          (hotkeyLetter ? '<span class="command-hotkey">' + hotkeyLetter + '</span>' : '');
         // 肖像位图是共享缓存，这里只 blit 一份进卡片自己的画布
         var portraitCanvas = button.querySelector('.command-portrait');
         portraitCanvas.getContext('2d').drawImage(portraitFor(kind, isBuilding), 0, 0);
@@ -2545,7 +2582,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
           status.textContent = '◆ ' + definition.cost.toLocaleString('zh-CN');
         }
         button.disabled = !requirementsMet || me.cash < definition.cost || me.eliminated;
-        button.title = definition.desc;
+        var unitHotkey = trainHotkeyLetter(kind);
+        button.title = definition.desc + (unitHotkey ? ' · ' + unitHotkey : '');
       }
       button.style.setProperty('--progress', Math.max(0, Math.min(1, progress)) * 360 + 'deg');
       if (queued) {
@@ -2557,6 +2595,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   }
 
   function renderSelectionInfo() {
+    updateProductionHint();
     if (!roomState || !roomState.game) {
       return;
     }
@@ -2667,7 +2706,9 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     if (!roomState || !roomState.game) {
       return;
     }
-    var liveIds = new Set(roomState.game.units.map(function (u) { return u.id; }));
+    var liveIds = new Set(roomState.game.units.filter(function (u) {
+      return u.hp > 0;
+    }).map(function (u) { return u.id; }));
     selectedUnits.forEach(function (id) {
       if (!liveIds.has(id)) {
         selectedUnits.delete(id);
@@ -2675,6 +2716,147 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     });
     if (selectedStructureId && !roomState.game.structures.some(function (s) { return s.id === selectedStructureId; })) {
       selectedStructureId = null;
+    }
+    pruneControlGroups();
+  }
+
+  function pruneControlGroups() {
+    // Groups forget dead units. Own units stay in the local list until
+    // the next snapshot drops them, so filter by live id + hp.
+    if (!roomState || !roomState.game) {
+      controlGroups = {};
+      lastProducerId = null;
+      return;
+    }
+    var liveIds = new Set(roomState.game.units.filter(function (u) {
+      return u.hp > 0;
+    }).map(function (u) { return u.id; }));
+    Object.keys(controlGroups).forEach(function (num) {
+      var kept = (controlGroups[num] || []).filter(function (id) {
+        return liveIds.has(id);
+      });
+      if (kept.length) {
+        controlGroups[num] = kept;
+      } else {
+        delete controlGroups[num];
+      }
+    });
+    if (lastProducerId && !roomState.game.structures.some(function (structure) {
+      return structure.id === lastProducerId && structure.owner === session.playerId
+        && structure.hp > 0;
+    })) {
+      lastProducerId = null;
+    }
+  }
+
+  function isProducerRole(role) {
+    return role === 'barracks' || role === 'factory';
+  }
+
+  function rememberProducer(structure) {
+    if (structure && session && structure.owner === session.playerId
+        && structure.hp > 0 && isProducerRole(structureRole(structure.kind))) {
+      lastProducerId = structure.id;
+    }
+  }
+
+  function currentProducer() {
+    if (!roomState || !roomState.game || !session) {
+      return null;
+    }
+    var ids = [];
+    if (selectedStructureId) {
+      ids.push(selectedStructureId);
+    }
+    if (lastProducerId && lastProducerId !== selectedStructureId) {
+      ids.push(lastProducerId);
+    }
+    for (var i = 0; i < ids.length; i++) {
+      var structure = roomState.game.structures.find(function (item) {
+        return item.id === ids[i];
+      });
+      if (structure && structure.owner === session.playerId && structure.hp > 0
+          && isProducerRole(structureRole(structure.kind))) {
+        return structure;
+      }
+    }
+    return null;
+  }
+
+  function productionHotkeysActive() {
+    return currentScreen === 'game' && !selectedUnits.size && !!currentProducer();
+  }
+
+  function trainKindForCode(code) {
+    var faction = isOwnMagicFaction() ? 'magic' : 'tech';
+    return (TRAIN_HOTKEYS[faction] || {})[code] || '';
+  }
+
+  function trainHotkeyLetter(kind) {
+    var faction = isOwnMagicFaction() ? 'magic' : 'tech';
+    var keys = TRAIN_HOTKEYS[faction] || {};
+    var codes = Object.keys(keys);
+    for (var i = 0; i < codes.length; i++) {
+      if (keys[codes[i]] === kind) {
+        return codes[i].slice(3);
+      }
+    }
+    return '';
+  }
+
+  function canTrainKind(kind) {
+    var definition = UNITS[kind];
+    if (!definition) {
+      return false;
+    }
+    return hasStructure(definition.producer)
+      && (definition.requires || []).every(hasStructure);
+  }
+
+  function tryTrainHotkey(code) {
+    if (!productionHotkeysActive()) {
+      return false;
+    }
+    var kind = trainKindForCode(code);
+    if (!kind || !canTrainKind(kind)) {
+      return false;
+    }
+    sendAction('command', { command: 'train', unitType: kind }).then(function () {
+      sound('confirm');
+    }).catch(function () {});
+    return true;
+  }
+
+  function productionHintText() {
+    var faction = isOwnMagicFaction() ? 'magic' : 'tech';
+    var keys = TRAIN_HOTKEYS[faction] || {};
+    var parts = [];
+    Object.keys(keys).forEach(function (code) {
+      var kind = keys[code];
+      if (!canTrainKind(kind)) {
+        return;
+      }
+      var name = (UNITS[kind] || {}).name || kind;
+      parts.push(code.slice(3) + name);
+    });
+    if (!parts.length) {
+      return '';
+    }
+    return parts.join('  ') + '  ·  S停止';
+  }
+
+  function updateProductionHint() {
+    var el = $('#productionHint');
+    if (!el) {
+      return;
+    }
+    var text = productionHotkeysActive() ? productionHintText() : '';
+    if (text) {
+      el.textContent = text;
+      el.classList.remove('hidden');
+    } else {
+      el.textContent = '';
+      el.classList.add('hidden');
     }
   }
 
@@ -3615,6 +3797,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       selectedUnits.clear();
       selectedStructureId = entity.id;
       sound('select');
+      rememberProducer(entity);
       if (session && entity.owner === session.playerId && structureRole(entity.kind) === 'hq') {
         sendAction('command', { command: 'tapHq', structureId: entity.id }).catch(function () {});
       }
@@ -3622,18 +3805,36 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     renderSelectionInfo();
   }
 
-  function selectAllOfType(worldX, worldY) {
+  function unitIsCurrentlySeen(unit) {
+    // Own units are always in the local list. Double-click must not
+    // grab the whole map through fog — prefer the renderer visible set,
+    // then currently rendered / on-screen owned units.
+    var visual = (view3d.visualPosition && view3d.visualPosition(unit.id)) || unit;
+    if (view3d.isVisible && !view3d.isVisible(visual.x, visual.y)) {
+      return false;
+    }
+    return visibleAt(visual.x, visual.y);
+  }
+
+  function selectAllOfType(worldX, worldY, additive) {
     var entity = entityAt(worldX, worldY);
     if (!entity || entity.id.charAt(0) !== 'u' || entity.owner !== session.playerId) {
       return false;
     }
     var kind = entity.kind;
-    selectedUnits.clear();
+    if (!additive) {
+      selectedUnits.clear();
+    }
     selectedStructureId = null;
+    selectedUnits.add(entity.id);
     roomState.game.units.forEach(function (unit) {
-      if (unit.owner === session.playerId && unit.kind === kind) {
-        selectedUnits.add(unit.id);
+      if (unit.owner !== session.playerId || unit.kind !== kind || unit.hp <= 0) {
+        return;
       }
+      if (unit.id !== entity.id && !unitIsCurrentlySeen(unit)) {
+        return;
+      }
+      selectedUnits.add(unit.id);
     });
     sound('select');
     renderSelectionInfo();
@@ -4126,7 +4327,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   canvas.addEventListener('dblclick', function (event) {
     if (event.button !== 0) { return; }
     pointerPosition(event);
-    selectAllOfType(pointer.worldX, pointer.worldY);
+    selectAllOfType(pointer.worldX, pointer.worldY, isAdditiveSelect(event));
   });
   canvas.addEventListener('pointercancel', function () {
     dragging = null;
@@ -4189,24 +4390,29 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       return;
     }
     pressedKeys.add(event.code);
-    if (event.code >= 'Digit1' && event.code <= 'Digit9') {
-      var groupNum = parseInt(event.code.slice(5));
-      if (event.ctrlKey) {
-        event.preventDefault();
+    if (event.code >= 'Digit1' && event.code <= 'Digit3') {
+      var groupNum = parseInt(event.code.slice(5), 10);
+      event.preventDefault();
+      pruneControlGroups();
+      if (event.ctrlKey || event.metaKey) {
         if (selectedUnits.size > 0) {
-          controlGroups[groupNum] = Array.from(selectedUnits);
+          controlGroups[groupNum] = selectedUnitIdList();
           toast('编队 ' + groupNum + ' 已保存 · ' + selectedUnits.size + ' 个单位');
           sound('confirm');
         }
       } else {
-        event.preventDefault();
         var group = controlGroups[groupNum];
         if (group && group.length > 0) {
           var now = performance.now();
-          if (lastGroupTap[groupNum] && now - lastGroupTap[groupNum] < 400) {
+          if (lastGroupTap[groupNum] && now - lastGroupTap[groupNum] < CONTROL_GROUP_JUMP_MS) {
             var cx = 0, cy = 0, count = 0;
             roomState.game.units.forEach(function (u) {
-              if (group.indexOf(u.id) >= 0) { cx += u.x; cy += u.y; count++; }
+              if (group.indexOf(u.id) >= 0 && u.hp > 0) {
+                var vis = (view3d.visualPosition && view3d.visualPosition(u.id)) || u;
+                cx += vis.x;
+                cy += vis.y;
+                count++;
+              }
             });
             if (count > 0) { camera.x = cx / count; camera.y = cy / count; clampCamera(); }
             lastGroupTap[groupNum] = 0;
@@ -4223,17 +4429,34 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       }
     } else if (event.code === 'KeyQ') {
       event.preventDefault();
+      if (!event.repeat && tryTrainHotkey('KeyQ')) {
+        return;
+      }
       setCommandMode('attackMove');
     } else if (event.code === 'KeyS') {
       event.preventDefault();
       // Tap S = stop. Hold S = camera pan (WASD). Immediate stop-on-keydown
       // cancelled marches while the player panned to pick another group.
+      // Do not steal S for scout — production scout is KeyD.
       if (!event.repeat && !stopKeyDownAt) {
         stopKeyDownAt = performance.now();
       }
     } else if (event.code === 'KeyR') {
       event.preventDefault();
+      if (!event.repeat && tryTrainHotkey('KeyR')) {
+        return;
+      }
       repairSelectedAtNearestBay();
+    } else if (event.code === 'KeyE' || event.code === 'KeyF' || event.code === 'KeyZ') {
+      if (!event.repeat && tryTrainHotkey(event.code)) {
+        event.preventDefault();
+      }
+    } else if (event.code === 'KeyW' || event.code === 'KeyA' || event.code === 'KeyD') {
+      // Hold = camera pan. Short tap trains when a producer is selected
+      // or last-selected barracks/factory is implied.
+      if (!event.repeat && productionHotkeysActive() && trainKindForCode(event.code)) {
+        cameraTrainKeyDownAt[event.code] = performance.now();
+      }
     } else if (event.code === 'KeyU') {
       event.preventDefault();
       if (selectedStructureId && roomState && roomState.game) {
@@ -4282,11 +4505,18 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       if (heldMs < 220 && currentScreen === 'game') {
         stopSelected();
       }
+    } else if (cameraTrainKeyDownAt[event.code]) {
+      var trainHeldMs = performance.now() - cameraTrainKeyDownAt[event.code];
+      delete cameraTrainKeyDownAt[event.code];
+      if (trainHeldMs < 220 && currentScreen === 'game') {
+        tryTrainHotkey(event.code);
+      }
     }
   });
   window.addEventListener('blur', function () {
     pressedKeys.clear();
     stopKeyDownAt = 0;
+    cameraTrainKeyDownAt = {};
   });
 
   createRoomBtn.addEventListener('click', createRoom);
