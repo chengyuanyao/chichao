@@ -1161,7 +1161,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, theme: 'grassland', spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
     narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
     triple_pass: { id: 'triple_pass', name: '三岔隘口', width: 5400, height: 4200, maxPlayers: 3, theme: 'arid', spawnLabels: ['西境营地', '东北营地', '东南营地'], spawnPoints: [[700,2100],[3700,368],[3700,3832]] },
-    gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。外环邻里路口被熔水河切开，只能从公路桥过。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]] },
+    gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。外环邻里路口被密林切开，只能从林间桥过。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]] },
     gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '赤金陨坑的紧凑版：五方围着陨石核打，地图小一圈，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[4691,2443],[4122,5182],[2278,5182],[1709,2443]] },
     island_hop: { id: 'island_hop', name: '三谷争夺', width: 7200, height: 6000, maxPlayers: 4, theme: 'grassland', spawnLabels: ['西北高地', '东北高地', '西南高地', '东南高地'], spawnPoints: [[900,900],[6300,900],[900,5100],[6300,5100]] },
     urban_siege: { id: 'urban_siege', name: '围城战', width: 6400, height: 6400, maxPlayers: 4, theme: 'urban', spawnLabels: ['西区', '北区', '东区', '南区'], spawnPoints: [[900,3200],[3200,900],[5500,3200],[3200,5500]] },
@@ -3543,16 +3543,16 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
         c.stroke();
       }
     }
-    // 沟壑：干土外发光 → 深色底 → 亮土色芯，三遍各画完整条沟，
+    // 树林带：深绿外发光 → 深色林底 → 亮绿芯线，三遍各画完整条林带，
     // 分段折线的接头会被同一遍的圆头笔帽自然焊上
     if (rivers.length) {
       c.save();
       c.lineCap = 'round';
       c.lineJoin = 'round';
       var passes = [
-        ['rgba(82,58,36,.35)', 6, 0],
-        ['#33241a', 2.5, 0],
-        ['#5b3f28', 0, 0.55]
+        ['rgba(34,64,28,.35)', 6, 0],
+        ['#14280f', 2.5, 0],
+        ['#2b5422', 0, 0.55]
       ];
       for (var p = 0; p < passes.length; p++) {
         c.strokeStyle = passes[p][0];

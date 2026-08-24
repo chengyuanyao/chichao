@@ -2154,9 +2154,10 @@ export function createRenderer(canvas) {
     const key = (kx << 16) | (ky & 0xffff);
     const cached = _ghCache.get(key);
     if (cached !== undefined) return cached;
-    const depth = riverDepthAt(x, y);
+    // 河道不挖深槽：渲染成平地树林（riverDepthAt 只用于着色与种树），
+    // 桥从林间跨过。视觉上比下沉沟壑清楚，也不用担心桥头插进土里。
     const roll = rollingHeight(x, y);
-    const result = roll - depth * depth * 66 + mountainHeightAt(x, y);
+    const result = roll + mountainHeightAt(x, y);
     _ghCache.set(key, result);
     return result;
   }
@@ -2360,7 +2361,7 @@ export function createRenderer(canvas) {
       const wz = pos.getZ(i) + mh / 2;
       const depth = riverDepthAt(wx, wz);
       const rock = mountainHeightAt(wx, wz);
-      const height = rollingHeight(wx, wz) - depth * depth * 66 + rock;
+      const height = rollingHeight(wx, wz) + rock;
       heights[i] = height;
       pos.setY(i, height);
 
@@ -2395,9 +2396,10 @@ export function createRenderer(canvas) {
       r = r * (1 - stone * 0.72) + theme.rock[0] * stone;
       g = g * (1 - stone * 0.72) + theme.rock[1] * stone;
       b = b * (1 - stone * 0.72) + theme.rock[2] * stone;
-      r = r * (1 - ravine) + 0.42 * ravine;
-      g = g * (1 - ravine) + 0.34 * ravine;
-      b = b * (1 - ravine) + 0.24 * ravine;
+      // 河道：深绿林床（树荫 + 腐殖土），上面再立树模型
+      r = r * (1 - ravine) + 0.13 * ravine;
+      g = g * (1 - ravine) + 0.24 * ravine;
+      b = b * (1 - ravine) + 0.12 * ravine;
       r *= topo; g *= topo; b *= topo;
       colors[i * 3] = r;
       colors[i * 3 + 1] = g;
@@ -2423,16 +2425,91 @@ export function createRenderer(canvas) {
     };
     _ghCache.clear();
 
-    // 河道不画水面：按干涸的沟壑处理。地形已沿河挖出一条深槽（groundHeight
-    // 里的 riverDepthAt），沟底由上面的顶点着色压成土岩色，桥跨在槽上。
-    // 没有水，也没有蓝板子 —— 走到河边看到的是真的过不去的深沟。
+    // 河道不画水面也不挖深槽：渲染成一片树林（riverDepthAt 决定林带位置），
+    // 桥从林间跨过。没有水，也没有蓝板子 —— 走到林边看到的是真的过不去
+    // 的密林，一眼就能看出桥是唯一的通路。
     waterMesh = null;
 
-    // 桥梁：唯一能跨过沟壑的地方，必须一眼看得出来。桥面比路面略高，
-    // 两侧加护栏和桥墩，让它在深沟上「立」起来而不是一块贴图。
+    // 树林：沿河道撒树，桥盒（含渲染加长段）两侧留出桥头空地。
+    // 所有树干 + 树冠合并进一个网格，一次绘制调用。
+    const bridges = (state.terrain && state.terrain.bridges) || [];
+    const rivers = (state.terrain && state.terrain.rivers) || [];
+    if (rivers.length) {
+      const forestParts = [];
+      const treeSlab = function (w, h, d, x, y, z, rgb) {
+        forestParts.push({
+          geo: new THREE.BoxGeometry(w, h, d),
+          matrix: new THREE.Matrix4().setPosition(x, y, z),
+          rgb: rgb
+        });
+      };
+      const TRUNK = [0.30, 0.20, 0.10];
+      const FOLIAGE_A = [0.14, 0.30, 0.13];
+      const FOLIAGE_B = [0.19, 0.36, 0.15];
+      const FOLIAGE_DARK = [0.10, 0.22, 0.10];
+      // 确定性哈希：同一张图每次打开树的位置不变
+      const treeRand = function (n) {
+        const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+        return s - Math.floor(s);
+      };
+      for (let r = 0; r < rivers.length; r++) {
+        const rv = rivers[r];
+        const len = Math.hypot(rv.x2 - rv.x1, rv.y2 - rv.y1);
+        const half = rv.width * 0.5;
+        const count = Math.max(6, Math.floor(len / 70));
+        for (let k = 0; k < count; k++) {
+          const t = (k + 0.5) / count;
+          const cx = rv.x1 + (rv.x2 - rv.x1) * t;
+          const cy = rv.y1 + (rv.y2 - rv.y1) * t;
+          // 横向偏移落进林带内，再叠一层抖动让树不排成直线
+          const spread = half * (0.55 + treeRand(k + r * 131) * 0.8);
+          const ang = treeRand(k * 7.3 + r * 19) * Math.PI * 2;
+          const tx = cx + Math.cos(ang) * spread;
+          const ty = cy + Math.sin(ang) * spread;
+          if (riverDepthAt(tx, ty) < 0.12) continue;
+          // 桥盒附近留空，桥从林间跨过
+          let nearBridge = false;
+          for (let bi = 0; bi < bridges.length; bi++) {
+            const b = bridges[bi];
+            const along = b.w >= b.h;
+            const hw = (along ? b.w * BRIDGE_RENDER_SPAN : b.w) * 0.5 + 55;
+            const hh = (along ? b.h : b.h * BRIDGE_RENDER_SPAN) * 0.5 + 55;
+            if (Math.abs(tx - b.x) < hw && Math.abs(ty - b.y) < hh) {
+              nearBridge = true;
+              break;
+            }
+          }
+          if (nearBridge) continue;
+          const gy = rollingHeight(tx, ty) + mountainHeightAt(tx, ty);
+          const big = treeRand(k * 3.1 + r * 97) > 0.5;
+          const trunkH = 3.2 + treeRand(k + r * 53) * 2.6;
+          const crownR = big ? 5.4 : 3.9;
+          const crownH = big ? 5.6 : 4.2;
+          treeSlab(1.7, trunkH, 1.7, tx, gy + trunkH * 0.5, ty, TRUNK);
+          const foliage = treeRand(k * 5.7 + r * 41);
+          const rgb = foliage > 0.72 ? FOLIAGE_DARK : (foliage > 0.3 ? FOLIAGE_A : FOLIAGE_B);
+          // 双层树冠：下层宽、上层窄，俯视有团簇感
+          treeSlab(crownR * 2.1, crownH, crownR * 2.1,
+                   tx, gy + trunkH + crownH * 0.5, ty, rgb);
+          treeSlab(crownR * 1.2, crownH * 0.8, crownR * 1.2,
+                   tx, gy + trunkH + crownH * 0.95, ty, rgb);
+        }
+      }
+      if (forestParts.length) {
+        const forestMesh = new THREE.Mesh(
+          mergeParts(forestParts),
+          applyFogMask(new THREE.MeshLambertMaterial({ vertexColors: true })));
+        forestMesh.castShadow = state.shadows !== 'off';
+        forestMesh.receiveShadow = true;
+        forestMesh.frustumCulled = false;
+        terrainGroup.add(forestMesh);
+      }
+    }
+
+    // 桥梁：唯一能穿过树林的地方，必须一眼看得出来。桥面比路面略高，
+    // 两侧加护栏和桥墩，让它在林间「立」起来而不是一块贴图。
     // 所有桥合并成一个网格：一张图上只有三五座桥，分开做剔除没意义，
     // 合并后从五十多次绘制调用降到一次。
-    const bridges = (state.terrain && state.terrain.bridges) || [];
     if (bridges.length) {
       // 深色做旧木料：新光照 + 高曝光下原来的浅木色会晒成一块白板。
       // 两种板色交替 + 深色底板缝，桥面才有「一块块木板」的读感。
