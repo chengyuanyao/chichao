@@ -21,7 +21,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     repair: { icon: '✚', desc: '维修受损装甲载具' },
     mpower: { icon: '✦', desc: '提供 120 法力' },
     mrefinery: { icon: '◈', desc: '接收浮游晶簇的水晶' },
-    mtemple: { icon: '✠', desc: '训练奥术法师' },
+    mtemple: { icon: '✠', desc: '训练圣殿步兵' },
     mcircle: { icon: '⬡', desc: '召唤构装体与魔兽' },
     mtower: { icon: '✵', desc: '自动攻击附近敌军（魔法）' },
     mspring: { icon: '✚', desc: '修复受损构装、巨龙与晶簇；解锁进阶召唤' }
@@ -44,6 +44,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     bomb_truck: { icon: '💣', desc: '高速药箱车，贴脸或阵亡大爆炸；克步兵堆与成团建筑' },
     mage: { icon: '✦', desc: '远程奥术弹，熔重甲的反坦克手' },
     frost: { icon: '❄', desc: '命中减速敌军，控制拉扯核心' },
+    imp: { icon: '✧', desc: '廉价晶刺肉，短距碎晶，一口军犬咬不死' },
+    oracle: { icon: '◎', desc: '超远棱晶点射，玻璃后排，无溅射' },
     golem: { icon: '⛰', desc: '构装前排，高血投石溅射' },
     panther: { icon: '♞', desc: '全场最快魔兽，近战侧翼包抄' },
     dragon: { icon: '✹', desc: '重型远程火球，大溅射压轴 · 需圣泉' },
@@ -191,6 +193,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       KeyQ: 'mage',
       KeyW: 'frost',
       KeyE: 'panther',
+      KeyR: 'imp',
+      KeyT: 'oracle',
       KeyA: 'golem',
       KeyF: 'hexling'
     }
@@ -233,8 +237,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1,
-    mage: 1, frost: 1, golem: 1, panther: 1, dragon: 1, warden: 1, colossus: 1,
-    mharvester: 1, mmcv: 1, hexling: 1
+    mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, panther: 1, dragon: 1,
+    warden: 1, colossus: 1, mharvester: 1, mmcv: 1, hexling: 1
   };
 
   function pRect(c, x, y, w, h, fill) {
@@ -850,6 +854,35 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       pPoly(c, [[70, 10], [74, 18], [70, 26], [66, 18]], P_FROST);
       pPoly(c, [[70, 8], [72, 15], [70, 16], [68, 15]], '#ffffff');
       pCirc(c, 70, 18, 1.6, '#ffffff');
+    },
+    imp: function (c) {
+      // 晶刺：碎晶人形 + 肩刺，不是袍子法师也不是符核魔仆
+      pShadow(c, 48, 60, 16);
+      pRect(c, 42, 46, 4, 12, P_STONE);
+      pRect(c, 50, 46, 4, 12, P_STONE);
+      pPoly(c, [[38, 52], [58, 52], [54, 28], [42, 28]], P_CRYSTAL);
+      pPoly(c, [[58, 52], [50, 52], [50, 28], [54, 28]], 'rgba(10,10,6,.26)');
+      pPoly(c, [[44, 28], [48, 14], [52, 28]], P_ARCANE);
+      pPoly(c, [[36, 30], [40, 18], [44, 32]], P_CRYSTAL);
+      pPoly(c, [[52, 32], [56, 18], [60, 30]], P_CRYSTAL);
+      pCirc(c, 48, 38, 3.4, P_ARCANE);
+      pCirc(c, 48, 38, 1.4, '#f2e6ff');
+      pLine(c, 58, 44, 72, 22, 2.2, P_CRYSTAL);
+      pPoly(c, [[70, 14], [76, 22], [70, 26], [66, 20]], P_ARCANE);
+    },
+    oracle: function (c) {
+      // 虹视使：细长袍 + 棱镜杖，面罩一眼是远视者
+      pShadow(c, 48, 60, 18);
+      pPoly(c, [[38, 60], [58, 60], [54, 26], [42, 26]], P_ROBE);
+      pPoly(c, [[58, 60], [50, 60], [50, 26], [54, 26]], 'rgba(10,10,6,.28)');
+      pPoly(c, [[42, 28], [54, 28], [48, 12]], P_ROBE);
+      pRect(c, 42, 24, 12, 4, P_CRYSTAL);
+      pCirc(c, 48, 26, 1.4, '#f2e6ff');
+      pLine(c, 58, 56, 74, 10, 2.2, P_DARK);
+      pPoly(c, [[74, 4], [80, 12], [74, 16], [68, 10]], P_FROST);
+      pPoly(c, [[74, 6], [78, 12], [74, 14], [70, 10]], P_ARCANE);
+      pCirc(c, 74, 11, 1.4, '#ffffff');
+      pLine(c, 80, 8, 92, 4, 1.4, P_FROST);
     },
     golem: function (c) {
       pShadow(c, 48, 61, 30);
@@ -4447,7 +4480,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
         return;
       }
       repairSelectedAtNearestBay();
-    } else if (event.code === 'KeyE' || event.code === 'KeyF' || event.code === 'KeyZ') {
+    } else if (event.code === 'KeyE' || event.code === 'KeyF' || event.code === 'KeyZ' || event.code === 'KeyT') {
       if (!event.repeat && tryTrainHotkey(event.code)) {
         event.preventDefault();
       }

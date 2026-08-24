@@ -435,6 +435,61 @@ const UNIT_BUILDERS = {
     };
   },
 
+  imp: function () {
+    // 晶刺：晶体碎片人形。矮小结晶躯干 + 肩刺 + 手持碎晶，不是袍子法师也不是魔仆。
+    const body = [
+      taperedBox(5.6, 5.0, 3.6, 3.2, 7.4, 0, 7.6, 0, MAT.crystal),
+      taperedBox(3.2, 3.0, 2.0, 1.8, 3.0, 0.3, 12.4, 0, MAT.slate),
+      sph(1.55, 6, 0.8, 13.0, 0, MAT.slate),
+      pyr(0.82, 3.2, 4, 0, 16.2, 0, MAT.crystal),
+      pyr(0.68, 2.6, 4, -1.1, 13.6, 2.3, MAT.crystal),
+      pyr(0.68, 2.6, 4, -1.1, 13.6, -2.3, MAT.crystal),
+      box(1.7, 4.6, 1.7, 0.2, 2.7, 1.6, MAT.slate),
+      box(1.7, 4.6, 1.7, 0.2, 2.7, -1.6, MAT.slate),
+      box(1.8, 1.8, 3.6, 1.1, 9.0, 3.2, MAT.crystal),
+      box(1.8, 1.8, 3.6, 1.1, 9.0, -3.2, MAT.crystal),
+      box(3.4, 1.3, 1.3, 3.4, 8.6, -3.0, MAT.crystal),
+      pyr(0.58, 3.2, 4, 6.0, 8.5, -3.0, MAT.crystal, ROT_Z90)
+    ];
+    return {
+      body: body,
+      glow: [
+        sph(1.25, 6, 1.6, 8.8, 0, MAT.arcaneGlow),
+        sph(0.42, 5, 1.6, 13.2, 0.7, MAT.arcaneGlow),
+        sph(0.42, 5, 1.6, 13.2, -0.7, MAT.arcaneGlow),
+        sph(0.55, 5, 7.4, 8.5, -3.0, MAT.arcaneGlow),
+        cyl(2.4, 2.4, 0.22, 10, 0, 1.1, 0, MAT.arcaneGlow)
+      ]
+    };
+  },
+
+  oracle: function () {
+    // 虹视使：细长远视者，棱镜长杖。比法师更瘦更高，杖顶三色棱晶，不是冰霜冠。
+    const body = [
+      taperedBox(7.0, 7.0, 2.8, 2.8, 13.6, 0, 7.6, 0, MAT.robe),
+      box(3.2, 1.3, 6.0, 0, 14.4, 0, 0.70),
+      sph(2.15, 8, 0, 16.2, 0, MAT.sandArmor),
+      taperedBox(3.0, 3.0, 0.6, 0.6, 3.2, 0, 18.6, 0, MAT.robe),
+      box(4.4, 0.7, 4.6, 0, 16.8, 0, MAT.crystal),
+      box(1.7, 1.9, 4.0, 0.7, 12.2, 3.2, MAT.robe),
+      box(1.7, 1.9, 4.0, 0.7, 12.2, -3.2, MAT.robe),
+      box(4.0, 1.3, 1.3, 3.4, 10.0, 2.4, MAT.robe),
+      cyl(0.30, 0.40, 18.4, 6, 6.4, 10.0, 2.6, MAT.bronze, ROT_Z90)
+    ];
+    return {
+      body: body,
+      glow: [
+        box(3.2, 0.45, 2.2, 1.6, 16.8, 0, MAT.prismGlow),
+        sph(1.35, 7, 16.0, 10.0, 2.6, MAT.prismGlow),
+        pyr(0.72, 2.4, 4, 16.8, 11.6, 2.6, MAT.prismGlow),
+        pyr(0.58, 2.0, 4, 16.8, 8.6, 2.6, MAT.arcaneGlow),
+        sph(0.42, 5, 0.6, 16.6, 1.1, MAT.prismGlow),
+        sph(0.42, 5, 0.6, 16.6, -1.1, MAT.prismGlow),
+        cyl(2.6, 2.6, 0.22, 10, 0, 1.15, 0, MAT.prismGlow)
+      ]
+    };
+  },
+
   golem: function () {
     // 岩石傀儡：厚重岩躯 + 巨石双臂 + 水晶拳，胸口一颗奥术核心
     const body = [
@@ -1579,7 +1634,7 @@ const UNIT_VISUAL_SCALE = {
   tank: 1.28, scout: 1.34, tank_destroyer: 1.28,
   artillery: 1.28, harvester: 1.16, mcv: 1.30, v3: 1.28,
   overlord: 1.30, prism: 1.28, bomb_truck: 1.32,
-  mage: 2.15, frost: 2.15, golem: 1.42, panther: 1.7, dragon: 1.34,
+  mage: 2.15, frost: 2.15, imp: 2.05, oracle: 2.15, golem: 1.42, panther: 1.7, dragon: 1.34,
   warden: 1.40, colossus: 1.38, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30
 };
@@ -3200,6 +3255,22 @@ export function createRenderer(canvas) {
         sph(1.8, 6, 12.0, 8.4, 2.6, orb)
       ];
     }
+    if (kind === 'imp') {
+      return [
+        taperedBox(5.6, 5.0, 3.6, 3.2, 7.4, 0, 7.6, 0, MAT.crystal),
+        pyr(0.82, 3.2, 4, 0, 16.0, 0, MAT.crystal),
+        pyr(0.58, 3.0, 4, 5.8, 8.4, -3.0, MAT.crystal, ROT_Z90),
+        sph(1.2, 6, 1.6, 8.8, 0, MAT.arcaneGlow)
+      ];
+    }
+    if (kind === 'oracle') {
+      return [
+        taperedBox(7.0, 7.0, 2.8, 2.8, 13.4, 0, 7.6, 0, MAT.robe),
+        box(4.2, 0.7, 4.4, 0, 16.6, 0, MAT.crystal),
+        cyl(0.32, 0.40, 16, 6, 6.0, 10.0, 2.4, MAT.bronze, ROT_Z90),
+        sph(1.3, 6, 15.2, 10.0, 2.4, MAT.prismGlow)
+      ];
+    }
     if (kind === 'golem') {
       return [
         taperedBox(11, 9, 9, 7, 11, 0, 10, 0, MAT.magicStone),
@@ -3593,6 +3664,8 @@ export function createRenderer(canvas) {
     fireball: { len: 15, thick: 3.1, color: 0xff7a28, arc: 52, look: 'fireball' },
     // 晶刃：卫士短促紫晶弹
     crystal: { len: 20, thick: 1.15, color: 0xe0c4ff, arc: 10, look: 'crystal' },
+    // 虹视：细长棱晶束，几乎无弧
+    iris: { len: 38, thick: 0.62, color: 0xffc8f0, arc: 0, look: 'beam' },
     // 晶陨：裂地高弧攻城弹
     meteor: { len: 24, thick: 3.1, color: 0xc9a0ff, arc: 118, look: 'meteor' }
   };
@@ -4112,6 +4185,22 @@ export function createRenderer(canvas) {
           life: 11, maxLife: 11, hold: true, r: 0.08, g: 0.04, b: 0.12
         });
         flashAt(x, y, 0xd6a6ff);
+      } else if (kind === 'iris') {
+        burst(fireLayer, 6, function () {
+          const a = rand() * TAU;
+          const sp = 90 + rand() * 140;
+          return {
+            x: x, y: 7, z: y,
+            vx: Math.cos(a) * sp, vy: 30 + rand() * 60, vz: Math.sin(a) * sp,
+            life: 0.18 + rand() * 0.16, maxLife: 0.34,
+            size: 3 + rand() * 3,
+            r: 1.9, g: 1.15, b: 2.05
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 5, growth: 40, alpha: 0.5,
+          life: 0.22, maxLife: 0.22, r: 1.2, g: 0.7, b: 1.15
+        });
       } else if (kind === 'crystal') {
         burst(fireLayer, 7, function () {
           const a = rand() * TAU;
@@ -4691,11 +4780,13 @@ export function createRenderer(canvas) {
     const kind = vis.unit.kind;
     if (kind !== 'frost' && kind !== 'dragon' && kind !== 'mage'
         && kind !== 'warden' && kind !== 'colossus'
-        && kind !== 'bomb_truck' && kind !== 'hexling') return;
+        && kind !== 'bomb_truck' && kind !== 'hexling'
+        && kind !== 'imp' && kind !== 'oracle') return;
     if (fireLayer.list.length > state.particleBudget * 0.5) return;
     const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6
       : kind === 'bomb_truck' ? 7 : kind === 'hexling' ? 6
-      : kind === 'colossus' ? 7 : kind === 'warden' ? 4 : 3.5;
+      : kind === 'colossus' ? 7 : kind === 'warden' ? 4
+      : kind === 'oracle' ? 4 : kind === 'imp' ? 3 : 3.5;
     if (Math.random() > dt * rate) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
     const scale = UNIT_VISUAL_SCALE[kind] || 1;
@@ -4767,6 +4858,24 @@ export function createRenderer(canvas) {
         vx: 0, vy: 12, vz: 0,
         life: 0.32, maxLife: 0.32, size: 3.2,
         r: 1.55, g: 0.55, b: 2.15
+      });
+    } else if (kind === 'imp') {
+      emit(fireLayer, {
+        x: vis.x + (Math.random() - 0.5) * 5,
+        y: gy + 6 + Math.random() * 6,
+        z: vis.y + (Math.random() - 0.5) * 5,
+        vx: 0, vy: 10, vz: 0,
+        life: 0.28, maxLife: 0.28, size: 2.6,
+        r: 1.55, g: 0.6, b: 2.1
+      });
+    } else if (kind === 'oracle') {
+      emit(fireLayer, {
+        x: vis.x + (Math.random() - 0.5) * 4,
+        y: gy + 14 + Math.random() * 6,
+        z: vis.y + (Math.random() - 0.5) * 4,
+        vx: 0, vy: 12, vz: 0,
+        life: 0.34, maxLife: 0.34, size: 2.8,
+        r: 1.85, g: 1.15, b: 2.0
       });
     } else {
       emit(fireLayer, {

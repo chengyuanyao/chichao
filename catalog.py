@@ -181,6 +181,24 @@ UNIT_TYPES = {
         "sight": 420.0, "armor": "arcane", "damageType": "magic",
         "slow": {"mult": 0.45, "duration": 2.5},
     },
+    # 晶刺：圣殿廉价肉。短距晶刺，对位突击/军犬档，不是步枪抄数。
+    # 95 血：军犬咬 90，一口剩 5，两口死。比 160 法师更脆，比一口死的步兵厚。
+    "imp": {
+        "name": "晶刺", "cost": 200, "hp": 95, "speed": 120.0,
+        "damage": 18.0, "range": 90.0, "cooldown": 0.7,
+        "size": 9.0, "build": 3.0, "producer": "mtemple",
+        "projectile": "crystal", "projectileSpeed": 520.0, "splash": 0.0,
+        "sight": 360.0, "armor": "arcane", "damageType": "magic",
+    },
+    # 虹视使：圣殿远程点射。玻璃后排，对位狙击档，不用狙击伤种、不抄 420/75。
+    # 80 血低于一口咬 (90)，比法师更脆；无溅射，不卡圣泉。
+    "oracle": {
+        "name": "虹视使", "cost": 450, "hp": 80, "speed": 88.0,
+        "damage": 48.0, "range": 300.0, "cooldown": 1.55,
+        "size": 10.0, "build": 6.0, "producer": "mtemple",
+        "projectile": "iris", "projectileSpeed": 1100.0, "splash": 0.0,
+        "sight": 470.0, "armor": "arcane", "damageType": "magic",
+    },
     # 岩石傀儡：构装前排，高血慢速，投掷巨石溅射，踩步兵/轻型。
     "golem": {
         "name": "岩石傀儡", "cost": 850, "hp": 760, "speed": 52.0,
@@ -344,8 +362,8 @@ MAGIC_STRUCTURES = frozenset((
     "mhq", "mpower", "mrefinery", "mtemple", "mcircle", "mspring", "mtower",
 ))
 MAGIC_UNITS = frozenset((
-    "mharvester", "mmcv", "mage", "frost", "golem", "panther",
-    "dragon", "warden", "colossus", "hexling",
+    "mharvester", "mmcv", "mage", "frost", "imp", "oracle",
+    "golem", "panther", "dragon", "warden", "colossus", "hexling",
 ))
 
 _STRUCTURE_ROLES = {
