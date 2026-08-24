@@ -1622,6 +1622,10 @@ function displayTheme(themeId) {
 const UNIT_LOD_DISTANCE = 900;
 // 渲染出来的桥比碰撞尺寸长这么多倍，用来跨过做了抖动加宽的可见水面
 const BRIDGE_RENDER_SPAN = 2.0;
+// 桥面是刚体：DECK 板中心 y=2.2、厚 6，顶面 5.2。地面高度场（起伏/河床
+// 下沉/山体）在桥上是平的，单位/建筑/特效一律落在 5.2，否则会随地形
+// 起伏陷进或浮出桥面。
+const BRIDGE_DECK_Y = 5.2;
 
 /**
  * 单位模型的视觉放大系数（纯表现，不影响碰撞/选取，那些仍用服务端 size）。
@@ -2087,6 +2091,36 @@ export function createRenderer(canvas) {
   }
 
   /**
+   * 桥面刚体高度。返回 0..1：0 = 不在桥上；1 = 桥面核心区（碰撞盒内）；
+   * 0..1 之间 = 桥头过渡带（渲染加长的那一截，从桥面平滑落回河岸）。
+   * 桥面/过渡带必须跟地形起伏脱钩——否则桥头插进河岸土里、桥上单位
+   * 随滚动地形陷进或浮出桥面，整座桥全是穿模。
+   */
+  function bridgeDeckAt(x, y) {
+    const bridges = (state.terrain && state.terrain.bridges) || [];
+    for (let i = 0; i < bridges.length; i++) {
+      const b = bridges[i];
+      const along = b.w >= b.h;
+      const halfW = b.w * 0.5;
+      const halfH = b.h * 0.5;
+      const renderHalfW = along ? halfW * BRIDGE_RENDER_SPAN : halfW;
+      const renderHalfH = along ? halfH : halfH * BRIDGE_RENDER_SPAN;
+      const dx = Math.abs(x - b.x);
+      const dy = Math.abs(y - b.y);
+      if (dx > renderHalfW || dy > renderHalfH) continue;
+      let blend = 1;
+      if (dx > halfW) {
+        blend = Math.min(blend, 1 - (dx - halfW) / (renderHalfW - halfW));
+      }
+      if (dy > halfH) {
+        blend = Math.min(blend, 1 - (dy - halfH) / (renderHalfH - halfH));
+      }
+      if (blend > 0) return blend;
+    }
+    return 0;
+  }
+
+  /**
    * 地表高度。地形网格、道路贴花、单位与建筑的落点都用这一个函数，
    * 否则各算各的就会出现「单位悬空」「路飘在坡上」这类错位。
    */
@@ -2101,7 +2135,7 @@ export function createRenderer(canvas) {
       + Math.sin(x * 0.028 + y * 0.019) * 0.8;
   }
 
-  function groundHeight(x, y) {
+  function baseGroundHeight(x, y) {
     if (heightField) {
       const hf = heightField;
       const gx = THREE.MathUtils.clamp(x / hf.width * hf.segX, 0, hf.segX);
@@ -2125,6 +2159,16 @@ export function createRenderer(canvas) {
     const result = roll - depth * depth * 66 + mountainHeightAt(x, y);
     _ghCache.set(key, result);
     return result;
+  }
+
+  function groundHeight(x, y) {
+    const blend = bridgeDeckAt(x, y);
+    if (blend > 0) {
+      if (blend >= 1) return BRIDGE_DECK_Y;
+      const base = baseGroundHeight(x, y);
+      return base + (BRIDGE_DECK_Y - base) * blend;
+    }
+    return baseGroundHeight(x, y);
   }
 
   function spawnWearAt(x, y) {
