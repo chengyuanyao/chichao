@@ -1526,6 +1526,7 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.40, 0.32, 0.20],
     packed: [0.38, 0.33, 0.24],
     rock: [0.46, 0.44, 0.40],
+    forest: [0.20, 0.38, 0.15],
     skirt: 0x4a5638,
     pad: 0x5a4e3a,
     fog: 0x9ec8d8,
@@ -1539,7 +1540,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0x9ab4c4,
     rim: 0xa8e2f2,
     tex: [0.90, 1.00, 0.76],
-    minimap: { base: '#3f5234', dry: 'rgba(196,176,96,.14)', light: 'rgba(232,236,196,', dark: 'rgba(8,16,6,', mountain: '#a89f8a' }
+    minimap: { base: '#3f5234', dry: 'rgba(196,176,96,.14)', light: 'rgba(232,236,196,', dark: 'rgba(8,16,6,', mountain: '#4d7a3c' }
   },
   arid: {
     id: 'arid',
@@ -1549,6 +1550,7 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.56, 0.38, 0.18],
     packed: [0.52, 0.38, 0.22],
     rock: [0.56, 0.46, 0.34],
+    forest: [0.30, 0.40, 0.13],
     skirt: 0x6a5a3a,
     pad: 0x6a5840,
     fog: 0xc8b894,
@@ -1562,7 +1564,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0xc4b090,
     rim: 0xe8d4a0,
     tex: [1.00, 0.90, 0.68],
-    minimap: { base: '#6a5a38', dry: 'rgba(220,180,90,.16)', light: 'rgba(236,212,150,', dark: 'rgba(28,18,8,', mountain: '#b8a078' }
+    minimap: { base: '#6a5a38', dry: 'rgba(220,180,90,.16)', light: 'rgba(236,212,150,', dark: 'rgba(28,18,8,', mountain: '#7a8a3c' }
   },
   urban: {
     id: 'urban',
@@ -1572,6 +1574,7 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.34, 0.32, 0.28],
     packed: [0.36, 0.35, 0.32],
     rock: [0.40, 0.39, 0.38],
+    forest: [0.15, 0.27, 0.15],
     skirt: 0x3a3c38,
     pad: 0x3e3c38,
     fog: 0x8a9aaa,
@@ -1585,7 +1588,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0x8a9aaa,
     rim: 0xa8c0d0,
     tex: [0.88, 0.90, 0.86],
-    minimap: { base: '#3a3e38', dry: 'rgba(160,156,140,.14)', light: 'rgba(200,204,196,', dark: 'rgba(8,10,10,', mountain: '#8a8680' }
+    minimap: { base: '#3a3e38', dry: 'rgba(160,156,140,.14)', light: 'rgba(200,204,196,', dark: 'rgba(8,10,10,', mountain: '#3a5c3a' }
   },
   crater: {
     id: 'crater',
@@ -1595,6 +1598,7 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.48, 0.30, 0.18],
     packed: [0.46, 0.32, 0.22],
     rock: [0.50, 0.38, 0.32],
+    forest: [0.13, 0.25, 0.11],
     skirt: 0x5a3a28,
     pad: 0x5a4030,
     fog: 0xb88870,
@@ -1608,7 +1612,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0xc09070,
     rim: 0xf0b080,
     tex: [1.00, 0.78, 0.62],
-    minimap: { base: '#5a3a28', dry: 'rgba(220,140,70,.16)', light: 'rgba(236,180,120,', dark: 'rgba(24,10,6,', mountain: '#a88870' }
+    minimap: { base: '#5a3a28', dry: 'rgba(220,140,70,.16)', light: 'rgba(236,180,120,', dark: 'rgba(24,10,6,', mountain: '#3c5c2c' }
   }
 };
 
@@ -2393,9 +2397,9 @@ export function createRenderer(canvas) {
       r = r * (1 - packed) + theme.packed[0] * packed;
       g = g * (1 - packed) + theme.packed[1] * packed;
       b = b * (1 - packed) + theme.packed[2] * packed;
-      r = r * (1 - stone * 0.72) + theme.rock[0] * stone;
-      g = g * (1 - stone * 0.72) + theme.rock[1] * stone;
-      b = b * (1 - stone * 0.72) + theme.rock[2] * stone;
+      r = r * (1 - stone * 0.72) + theme.forest[0] * stone;
+      g = g * (1 - stone * 0.72) + theme.forest[1] * stone;
+      b = b * (1 - stone * 0.72) + theme.forest[2] * stone;
       // 河道：深绿林床（树荫 + 腐殖土），上面再立树模型
       r = r * (1 - ravine) + 0.13 * ravine;
       g = g * (1 - ravine) + 0.24 * ravine;
@@ -2425,16 +2429,17 @@ export function createRenderer(canvas) {
     };
     _ghCache.clear();
 
-    // 河道不画水面也不挖深槽：渲染成一片树林（riverDepthAt 决定林带位置），
-    // 桥从林间跨过。没有水，也没有蓝板子 —— 走到林边看到的是真的过不去
-    // 的密林，一眼就能看出桥是唯一的通路。
+    // 河道与山丘都不画水面/岩石：渲染成树林（riverDepthAt / mountainHeightAt
+    // 决定林带位置），桥从林间跨过。没有水，也没有岩石 —— 走到林边看到的
+    // 是真的过不去的密林，一眼就能看出桥是唯一的通路。
     waterMesh = null;
 
-    // 树林：沿河道撒树，桥盒（含渲染加长段）两侧留出桥头空地。
+    // 树林：沿河道与山丘撒树，桥盒（含渲染加长段）两侧留出桥头空地。
     // 所有树干 + 树冠合并进一个网格，一次绘制调用。
     const bridges = (state.terrain && state.terrain.bridges) || [];
     const rivers = (state.terrain && state.terrain.rivers) || [];
-    if (rivers.length) {
+    const mountains = (state.terrain && state.terrain.mountains) || [];
+    if (rivers.length || mountains.length) {
       const forestParts = [];
       const treeSlab = function (w, h, d, x, y, z, rgb) {
         forestParts.push({
@@ -2443,15 +2448,58 @@ export function createRenderer(canvas) {
           rgb: rgb
         });
       };
-      const TRUNK = [0.30, 0.20, 0.10];
-      const FOLIAGE_A = [0.14, 0.30, 0.13];
-      const FOLIAGE_B = [0.19, 0.36, 0.15];
-      const FOLIAGE_DARK = [0.10, 0.22, 0.10];
       // 确定性哈希：同一张图每次打开树的位置不变
       const treeRand = function (n) {
         const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
         return s - Math.floor(s);
       };
+      // 树冠色板：每张图从主题森林色派生三种色调，山与河道各自取用，
+      // 同图里不同位置也会出现深浅变化 ——「各种森林」而不是一种绿。
+      const baseForest = theme.forest;
+      const FOLIAGE_A = baseForest;
+      const FOLIAGE_B = [
+        Math.min(1, baseForest[0] * 1.35), Math.min(1, baseForest[1] * 1.3),
+        Math.min(1, baseForest[2] * 1.35)
+      ];
+      const FOLIAGE_DARK = [
+        baseForest[0] * 0.72, baseForest[1] * 0.82, baseForest[2] * 0.72
+      ];
+      const TRUNK = [0.30, 0.20, 0.10];
+      const placeTree = function (tx, ty, seed, skirt) {
+        if (riverDepthAt(tx, ty) > 0.05 || mountainHeightAt(tx, ty) > 0.05) {
+          // 树底落在实际地面上（含山丘），避免树干悬空或埋进坡里
+          const gy = rollingHeight(tx, ty) + mountainHeightAt(tx, ty);
+          if (skirt) {
+            treeSlab(2.4, 1.6, 2.4, tx, gy + 0.8, ty, [0.10, 0.16, 0.08]);
+          }
+          const big = treeRand(seed * 3.1 + 97) > 0.5;
+          const trunkH = 3.2 + treeRand(seed + 53) * 2.6;
+          const crownR = big ? 5.4 : 3.9;
+          const crownH = big ? 5.6 : 4.2;
+          treeSlab(1.7, trunkH, 1.7, tx, gy + trunkH * 0.5, ty, TRUNK);
+          const foliage = treeRand(seed * 5.7 + 41);
+          const rgb = foliage > 0.72 ? FOLIAGE_DARK
+            : (foliage > 0.3 ? FOLIAGE_A : FOLIAGE_B);
+          // 双层树冠：下层宽、上层窄，俯视有团簇感
+          treeSlab(crownR * 2.1, crownH, crownR * 2.1,
+                   tx, gy + trunkH + crownH * 0.5, ty, rgb);
+          treeSlab(crownR * 1.2, crownH * 0.8, crownR * 1.2,
+                   tx, gy + trunkH + crownH * 0.95, ty, rgb);
+        }
+      };
+      const nearBridge = function (tx, ty) {
+        for (let bi = 0; bi < bridges.length; bi++) {
+          const b = bridges[bi];
+          const along = b.w >= b.h;
+          const hw = (along ? b.w * BRIDGE_RENDER_SPAN : b.w) * 0.5 + 55;
+          const hh = (along ? b.h : b.h * BRIDGE_RENDER_SPAN) * 0.5 + 55;
+          if (Math.abs(tx - b.x) < hw && Math.abs(ty - b.y) < hh) {
+            return true;
+          }
+        }
+        return false;
+      };
+      // 河道林带
       for (let r = 0; r < rivers.length; r++) {
         const rv = rivers[r];
         const len = Math.hypot(rv.x2 - rv.x1, rv.y2 - rv.y1);
@@ -2467,32 +2515,23 @@ export function createRenderer(canvas) {
           const tx = cx + Math.cos(ang) * spread;
           const ty = cy + Math.sin(ang) * spread;
           if (riverDepthAt(tx, ty) < 0.12) continue;
-          // 桥盒附近留空，桥从林间跨过
-          let nearBridge = false;
-          for (let bi = 0; bi < bridges.length; bi++) {
-            const b = bridges[bi];
-            const along = b.w >= b.h;
-            const hw = (along ? b.w * BRIDGE_RENDER_SPAN : b.w) * 0.5 + 55;
-            const hh = (along ? b.h : b.h * BRIDGE_RENDER_SPAN) * 0.5 + 55;
-            if (Math.abs(tx - b.x) < hw && Math.abs(ty - b.y) < hh) {
-              nearBridge = true;
-              break;
-            }
-          }
-          if (nearBridge) continue;
-          const gy = rollingHeight(tx, ty) + mountainHeightAt(tx, ty);
-          const big = treeRand(k * 3.1 + r * 97) > 0.5;
-          const trunkH = 3.2 + treeRand(k + r * 53) * 2.6;
-          const crownR = big ? 5.4 : 3.9;
-          const crownH = big ? 5.6 : 4.2;
-          treeSlab(1.7, trunkH, 1.7, tx, gy + trunkH * 0.5, ty, TRUNK);
-          const foliage = treeRand(k * 5.7 + r * 41);
-          const rgb = foliage > 0.72 ? FOLIAGE_DARK : (foliage > 0.3 ? FOLIAGE_A : FOLIAGE_B);
-          // 双层树冠：下层宽、上层窄，俯视有团簇感
-          treeSlab(crownR * 2.1, crownH, crownR * 2.1,
-                   tx, gy + trunkH + crownH * 0.5, ty, rgb);
-          treeSlab(crownR * 1.2, crownH * 0.8, crownR * 1.2,
-                   tx, gy + trunkH + crownH * 0.95, ty, rgb);
+          if (nearBridge(tx, ty)) continue;
+          placeTree(tx, ty, k + r * 211, true);
+        }
+      }
+      // 山丘森林：每座山按半径撒树，山顶到山脚密度递减，
+      // 大树/小树/三种绿色混出「各种森林」
+      for (let mi = 0; mi < mountains.length; mi++) {
+        const m = mountains[mi];
+        const mcount = Math.max(4, Math.round(m.r / 52));
+        for (let k = 0; k < mcount; k++) {
+          const ang = treeRand(k * 3.7 + mi * 29) * Math.PI * 2;
+          const rad = m.r * (0.16 + treeRand(k * 1.9 + mi * 13) * 0.78);
+          const tx = m.x + Math.cos(ang) * rad;
+          const ty = m.y + Math.sin(ang) * rad;
+          if (nearBridge(tx, ty)) continue;
+          if (riverDepthAt(tx, ty) > 0.05) continue;
+          placeTree(tx, ty, k + mi * 977 + 5000, false);
         }
       }
       if (forestParts.length) {

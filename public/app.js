@@ -3516,31 +3516,37 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     var bridges = terrain.bridges || [];
     var swatch = mapDisplayTheme(terrain.theme).minimap;
     var i;
-    // 山地：灰色径向渐变外缘淡出到草色，再加放射棱脊笔触画出山体走向
+    // 森林山丘：绿径向渐变外缘淡出到草色，树点按山体散布。
+    // 每座山用哈希取三种绿调之一，树点大小/密度也不同 —— 各种森林。
+    var forestTones = ['rgba(48,92,40,.95)', 'rgba(64,104,44,.9)', 'rgba(36,78,32,.95)'];
+    var forestDark = ['rgba(28,58,26,.9)', 'rgba(38,66,28,.85)', 'rgba(22,48,22,.9)'];
     for (i = 0; i < mountains.length; i++) {
       var m = mountains[i];
       var mx = m.x * sx;
       var my = m.y * sy;
       var mr = Math.max(3, m.r * sx);
+      var tone = forestTones[Math.floor(cellHash(i, 7) * forestTones.length)];
+      var toneDark = forestDark[Math.floor(cellHash(i, 11) * forestDark.length)];
       var grad = c.createRadialGradient(mx, my, 1, mx, my, mr);
-      grad.addColorStop(0, swatch.mountain);
-      grad.addColorStop(0.65, 'rgba(59,63,46,.85)');
-      grad.addColorStop(1, 'rgba(59,63,46,0)');
+      grad.addColorStop(0, tone);
+      grad.addColorStop(0.6, toneDark);
+      grad.addColorStop(1, 'rgba(30,60,24,0)');
       c.fillStyle = grad;
       c.beginPath();
       c.arc(mx, my, mr, 0, Math.PI * 2);
       c.fill();
-      c.lineWidth = 1;
-      for (var k = 0; k < 6; k++) {
-        var ang = (k / 6) * Math.PI * 2 + cellHash(i + 31, k) * 0.9;
-        var len = mr * (0.55 + cellHash(k, i + 17) * 0.35);
-        // 朝西北的棱脊受光、其余背光，圆丘立刻有了体积
-        c.strokeStyle = (ang > Math.PI * 0.9 && ang < Math.PI * 1.6) ?
-          'rgba(243,233,212,.30)' : 'rgba(10,10,6,.28)';
+      // 树点：沿径向随机散布，团簇感来自大小/深浅交替
+      var trees = Math.max(4, Math.round(mr * 0.55));
+      for (var k = 0; k < trees; k++) {
+        var tr = mr * (0.14 + cellHash(i * 7 + k, 3) * 0.8);
+        var ta = cellHash(i + k * 13, 5) * Math.PI * 2;
+        var tpx = mx + Math.cos(ta) * tr;
+        var tpy = my + Math.sin(ta) * tr;
+        var ts = 1.1 + cellHash(i * 3 + k, 9) * 1.8;
+        c.fillStyle = cellHash(i + k, 17) > 0.5 ? tone : toneDark;
         c.beginPath();
-        c.moveTo(mx, my);
-        c.lineTo(mx + Math.cos(ang) * len, my + Math.sin(ang) * len);
-        c.stroke();
+        c.arc(tpx, tpy, ts, 0, Math.PI * 2);
+        c.fill();
       }
     }
     // 树林带：深绿外发光 → 深色林底 → 亮绿芯线，三遍各画完整条林带，
