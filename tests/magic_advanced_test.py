@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 
 
-ADVANCED = ("warden", "colossus", "dragon")
+ADVANCED = ("warden", "colossus", "dragon", "comet")
 
 
 def make_room(tag, magic_b=True):
@@ -59,6 +59,7 @@ def main():
     assert server.UNIT_TYPES["colossus"]["damageType"] == "siege"
     assert server.UNIT_TYPES["warden"]["damageType"] == "magic"
     assert server.UNIT_TYPES["dragon"]["damageType"] == "magic"
+    assert server.UNIT_TYPES["comet"]["damageType"] == "missile"
     colo = server.UNIT_TYPES["colossus"]
     assert colo["hp"] == 600
     assert colo["damage"] == 120.0
@@ -110,7 +111,7 @@ def main():
     give(game, a["id"], "repair")
     give(game, b["id"], "mcircle")
     give(game, b["id"], "mspring")
-    for kind in ("warden", "colossus"):
+    for kind in ("warden", "colossus", "comet"):
         try:
             server.queue_unit(room, a["id"], kind)
             raise AssertionError("科技不该能产 %s" % kind)
@@ -151,6 +152,7 @@ def main():
     assert not server.is_dog_prey("warden")
     assert not server.is_dog_prey("colossus")
     assert not server.is_dog_prey("dragon")
+    assert not server.is_dog_prey("comet")
     assert server.is_dog_prey("mage")
     print("  军犬猎物不含混甲构装/巨龙: PASS")
 

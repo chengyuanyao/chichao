@@ -186,6 +186,12 @@ def main():
     assert catalog["units"]["dragon"]["requires"] == ["mspring"]
     assert catalog["units"]["warden"]["requires"] == ["mspring"]
     assert catalog["units"]["colossus"]["requires"] == ["mspring"]
+    assert catalog["units"]["comet"]["requires"] == ["mspring"]
+    assert catalog["units"]["comet"]["name"] == "坠星台"
+    assert catalog["units"]["comet"]["repairable"] is True
+    assert catalog["units"]["comet"]["producer"] == "mcircle"
+    assert catalog["units"]["comet"]["faction"] == "magic"
+    assert catalog["units"]["comet"]["cost"] == 2000
 
     assert server.select_lan_ips(
         ["127.0.0.1", "192.168.1.5", "10.18.0.2", "10.0.0.1"]
@@ -261,6 +267,8 @@ def main():
     assert "晶铠卫士：晶体铠甲前排" in render
     assert "裂地晶兽：四足晶兽驮晶陨鞍塔" in render
     assert "裂地晶兽：四足晶兽 + 背上晶陨鞍塔" in app
+    assert "坠星台：重型石座底盘上的黑曜发射架" in render
+    assert "坠星台：重型石座 + 黑曜发射架 + 待发彗核" in app
     assert "自爆卡车：轮式药箱车" in render
     assert "爆裂魔仆：矮小符核活体" in render
     assert "type === 'blast'" in render
@@ -281,10 +289,12 @@ def main():
     assert "look: 'shard'" in render
     assert "look: 'fireball'" in render
     assert "look: 'meteor'" in render
+    assert "look: 'comet'" in render
     assert "look: 'crystal'" in render
     assert "iris:" in render
     assert "function guessMuzzleKind" in render
     assert "kind === 'meteor'" in render
+    assert "kind === 'comet'" in render
     assert "function emitIdleAura" in render
     assert "步兵有持枪手臂，远看是人不是积木" in render
     assert "主堡顶是石穹加晶刺，不是叠方块" in render

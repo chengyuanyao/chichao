@@ -669,6 +669,43 @@ const UNIT_BUILDERS = {
     };
   },
 
+  comet: function () {
+    // 坠星台：重型石座底盘上的黑曜发射架，托着一颗待发晶彗。
+    // 远看是曲射台，不是东风竖火箭，也不是裂地晶兽的四足鞍塔。
+    const cradle = new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.72);
+    const body = [
+      taperedBox(36, 24, 30, 20, 8.4, 0, 7.8, 0, MAT.magicStone),
+      taperedBox(22, 20, 18, 16, 4.2, -1.2, 13.6, 0, MAT.slate),
+      box(28, 3.6, 1.6, -2, 10.4, 11.2, MAT.slate),
+      box(28, 3.6, 1.6, -2, 10.4, -11.2, MAT.slate),
+      box(4.8, 8.2, 4.8, 10.4, 5.2, 7.2, MAT.magicStone),
+      box(4.8, 8.2, 4.8, 10.4, 5.2, -7.2, MAT.magicStone),
+      box(5.2, 8.6, 5.2, -10.8, 5.4, 7.6, MAT.magicStone),
+      box(5.2, 8.6, 5.2, -10.8, 5.4, -7.6, MAT.magicStone),
+      taperedBox(8.4, 8.0, 5.6, 5.2, 6.2, 2.4, 18.4, 0, MAT.slate),
+      cyl(2.4, 3.2, 18, 8, 8.6, 24.0, 0, MAT.crystal, cradle),
+      cyl(3.6, 3.6, 3.2, 8, 2.2, 16.8, 0, MAT.slate, cradle),
+      box(1.6, 16, 2.2, 8.2, 16.4, 6.8, MAT.slate),
+      box(1.6, 16, 2.2, 8.2, 16.4, -6.8, MAT.slate),
+      sph(3.4, 8, 14.8, 30.2, 0, MAT.crystal),
+      pyr(1.15, 4.4, 4, 16.6, 34.6, 0, MAT.crystal),
+      taperedBox(6.2, 3.4, 2.4, 1.6, 2.4, -16.4, 12.2, 0, MAT.crystal)
+    ];
+    return {
+      body: body,
+      glow: [
+        sph(2.6, 7, 14.8, 30.2, 0, MAT.arcaneGlow),
+        sph(1.1, 6, 16.8, 35.2, 0, MAT.frostGlow),
+        cyl(1.35, 1.35, 0.55, 8, 9.4, 24.6, 0, MAT.frostGlow, cradle),
+        cyl(10.4, 10.4, 0.22, 12, 0, 0.42, 0, MAT.arcaneGlow),
+        box(16, 0.45, 0.45, -2, 12.2, 11.6, MAT.frostGlow),
+        box(16, 0.45, 0.45, -2, 12.2, -11.6, MAT.frostGlow),
+        sph(0.7, 5, 8.6, 18.8, 4.2, MAT.arcaneGlow),
+        sph(0.7, 5, 8.6, 18.8, -4.2, MAT.arcaneGlow)
+      ]
+    };
+  },
+
   mharvester: function () {
     // 浮游晶簇：悬浮底座上托着一簇水晶，底部悬浮光环（无履带，靠浮空）
     const body = [
@@ -1639,7 +1676,7 @@ const UNIT_VISUAL_SCALE = {
   artillery: 1.28, harvester: 1.16, mcv: 1.30, v3: 1.28,
   overlord: 1.30, prism: 1.28, bomb_truck: 1.32,
   mage: 2.15, frost: 2.15, imp: 2.05, oracle: 2.15, golem: 1.42, panther: 1.7, dragon: 1.34,
-  warden: 1.40, colossus: 1.38, hexling: 2.05,
+  warden: 1.40, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30
 };
 
@@ -3469,6 +3506,16 @@ export function createRenderer(canvas) {
         sph(2.0, 6, -1.2, 14.2, 0, MAT.arcaneGlow)
       ];
     }
+    if (kind === 'comet') {
+      return [
+        taperedBox(36, 24, 30, 20, 8.4, 0, 7.8, 0, MAT.magicStone),
+        box(4.8, 8.2, 4.8, 10.4, 5.2, 7.2, MAT.magicStone),
+        box(4.8, 8.2, 4.8, 10.4, 5.2, -7.2, MAT.magicStone),
+        cyl(2.4, 3.2, 18, 7, 8.6, 24.0, 0, MAT.crystal,
+          new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.72)),
+        sph(3.4, 7, 14.8, 30.2, 0, MAT.arcaneGlow)
+      ];
+    }
     if (kind === 'mharvester') {
       return [
         taperedBox(16, 14, 18, 16, 4, 0, 6, 0, MAT.darkSteel),
@@ -3816,7 +3863,9 @@ export function createRenderer(canvas) {
     // 虹视：细长棱晶束，几乎无弧
     iris: { len: 38, thick: 0.62, color: 0xffc8f0, arc: 0, look: 'beam' },
     // 晶陨：裂地高弧攻城弹
-    meteor: { len: 24, thick: 3.1, color: 0xc9a0ff, arc: 118, look: 'meteor' }
+    meteor: { len: 24, thick: 3.1, color: 0xc9a0ff, arc: 118, look: 'meteor' },
+    // 坠星：东风同档慢弹高弧，晶彗核 + 长尾，能被看见躲
+    comet: { len: 34, thick: 3.4, color: 0xe8d0ff, arc: 140, look: 'comet' }
   };
 
   function ensureStyledMesh(existing, geo, needed) {
@@ -4334,6 +4383,42 @@ export function createRenderer(canvas) {
           life: 11, maxLife: 11, hold: true, r: 0.08, g: 0.04, b: 0.12
         });
         flashAt(x, y, 0xd6a6ff);
+      } else if (kind === 'comet') {
+        burst(fireLayer, 16, function () {
+          const a = rand() * TAU;
+          const sp = 110 + rand() * 200;
+          return {
+            x: x, y: 9, z: y,
+            vx: Math.cos(a) * sp, vy: 40 + rand() * 100, vz: Math.sin(a) * sp,
+            life: 0.4 + rand() * 0.28, maxLife: 0.68,
+            size: 8 + rand() * 7, grow: true,
+            r: 1.85, g: 0.7, b: 2.3
+          };
+        });
+        burst(fireLayer, 10, function () {
+          const a = rand() * TAU;
+          const sp = 160 + rand() * 190;
+          return {
+            x: x, y: 3 + rand() * 5, z: y,
+            vx: Math.cos(a) * sp, vy: 14 + rand() * 36, vz: Math.sin(a) * sp,
+            life: 0.26 + rand() * 0.18, maxLife: 0.44,
+            size: 4 + rand() * 4,
+            r: 2.2, g: 1.5, b: 2.5
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 16, growth: 110, alpha: 0.74,
+          life: 0.46, maxLife: 0.46, r: 0.9, g: 0.48, b: 1.25
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 8, growth: 62, alpha: 0.46,
+          life: 0.3, maxLife: 0.3, r: 1.2, g: 0.62, b: 1.5
+        });
+        scorchLayer.spawn({
+          x: x, y: y, radius: 36 + rand() * 10, growth: 0, alpha: 0.48,
+          life: 13, maxLife: 13, hold: true, r: 0.1, g: 0.04, b: 0.16
+        });
+        flashAt(x, y, 0xf2e6ff);
       } else if (kind === 'iris') {
         burst(fireLayer, 6, function () {
           const a = rand() * TAU;
@@ -4472,6 +4557,36 @@ export function createRenderer(canvas) {
           life: 1.6, maxLife: 1.6, hold: true, r: 0.12, g: 0.05, b: 0.18
         });
         flashAt(x, y, 0xd6a6ff);
+      } else if (kind === 'comet') {
+        burst(fireLayer, 10, function () {
+          const a = rand() * TAU;
+          return {
+            x: x + (rand() - 0.5) * 10, y: 22 + rand() * 10, z: y + (rand() - 0.5) * 10,
+            vx: Math.cos(a) * 42, vy: 36 + rand() * 48, vz: Math.sin(a) * 42,
+            life: 0.22 + rand() * 0.14, maxLife: 0.36,
+            size: 8 + rand() * 6,
+            r: 1.85, g: 0.7, b: 2.3
+          };
+        });
+        burst(fireLayer, 7, function () {
+          const a = rand() * TAU;
+          return {
+            x: x, y: 2 + rand() * 3, z: y,
+            vx: Math.cos(a) * 64, vy: 10 + rand() * 18, vz: Math.sin(a) * 64,
+            life: 0.26 + rand() * 0.14, maxLife: 0.4,
+            size: 4 + rand() * 3,
+            r: 1.55, g: 0.55, b: 2.1
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 10, growth: 86, alpha: 0.6,
+          life: 0.36, maxLife: 0.36, r: 0.9, g: 0.45, b: 1.2
+        });
+        scorchLayer.spawn({
+          x: x, y: y, radius: 20, growth: 12, alpha: 0.3,
+          life: 1.8, maxLife: 1.8, hold: true, r: 0.14, g: 0.05, b: 0.2
+        });
+        flashAt(x, y, 0xf2e6ff);
       } else {
         burst(fireLayer, 5, function () {
           const a = rand() * TAU;
@@ -4907,6 +5022,13 @@ export function createRenderer(canvas) {
         life: 0.3, maxLife: 0.3, size: 5.4 + Math.random() * 4.2,
         r: 1.75, g: 0.68, b: 2.25
       });
+    } else if (look === 'comet') {
+      emit(fireLayer, {
+        x: x + (Math.random() - 0.5) * 8, y: height, z: y + (Math.random() - 0.5) * 8,
+        vx: (Math.random() - 0.5) * 14, vy: -10 + Math.random() * 7, vz: (Math.random() - 0.5) * 14,
+        life: 0.36, maxLife: 0.36, size: 6.4 + Math.random() * 5,
+        r: 1.9, g: 0.75, b: 2.35
+      });
     } else if (look === 'bolt') {
       emit(fireLayer, {
         x: x, y: height, z: y,
@@ -4928,13 +5050,13 @@ export function createRenderer(canvas) {
     if (useSimple) return;
     const kind = vis.unit.kind;
     if (kind !== 'frost' && kind !== 'dragon' && kind !== 'mage'
-        && kind !== 'warden' && kind !== 'colossus'
+        && kind !== 'warden' && kind !== 'colossus' && kind !== 'comet'
         && kind !== 'bomb_truck' && kind !== 'hexling'
         && kind !== 'imp' && kind !== 'oracle') return;
     if (fireLayer.list.length > state.particleBudget * 0.5) return;
     const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6
       : kind === 'bomb_truck' ? 7 : kind === 'hexling' ? 6
-      : kind === 'colossus' ? 7 : kind === 'warden' ? 4
+      : kind === 'colossus' ? 7 : kind === 'comet' ? 6 : kind === 'warden' ? 4
       : kind === 'oracle' ? 4 : kind === 'imp' ? 3 : 3.5;
     if (Math.random() > dt * rate) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
@@ -4981,6 +5103,17 @@ export function createRenderer(canvas) {
           r: 1.7, g: 0.7, b: 2.2
         });
       }
+    } else if (kind === 'comet') {
+      const mx = vis.x + Math.cos(vis.dir) * 8 * scale;
+      const mz = vis.y + Math.sin(vis.dir) * 8 * scale;
+      emit(fireLayer, {
+        x: mx + (Math.random() - 0.5) * 6,
+        y: gy + 22 * scale * 0.55 + Math.random() * 8,
+        z: mz + (Math.random() - 0.5) * 6,
+        vx: (Math.random() - 0.5) * 5, vy: 10 + Math.random() * 8, vz: (Math.random() - 0.5) * 5,
+        life: 0.4, maxLife: 0.4, size: 4.6 + Math.random() * 3.4,
+        r: 1.85, g: 0.72, b: 2.3
+      });
     } else if (kind === 'warden') {
       emit(fireLayer, {
         x: vis.x + (Math.random() - 0.5) * 8,
@@ -5347,6 +5480,15 @@ export function createRenderer(canvas) {
           writeTracer(shards, shardCount++, p.x, height - 1.2, p.y, yaw + 0.4, 6.4, 1.8, 1.8, 0xb46bff);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len * 1.55, style.thick * 0.42, style.thick * 0.42, 0xf2e6ff);
+        } else if (look === 'comet') {
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 5.4, 5.4, 5.4, 0xf4e8ff);
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 3.1, 3.1, 3.1, 0xb46bff);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(shards, shardCount++, p.x, height + 2.2, p.y, yaw, 11.4, 3.2, 3.2, 0xe8d0ff);
+          writeTracer(shards, shardCount++, p.x, height - 1.6, p.y, yaw + 0.38, 8.2, 2.2, 2.2, 0x9a7fd0);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len * 1.85, style.thick * 0.48, style.thick * 0.48, 0xf2e6ff);
         } else if (look === 'bolt') {
           writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 2.15, 2.15, 2.15, 0xf0d0ff);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,

@@ -51,6 +51,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     dragon: { icon: '✹', desc: '重型远程火球，大溅射压轴 · 需圣泉' },
     warden: { icon: '⛊', desc: '晶铠前排，混甲抗磁暴/狙击/军犬 · 需圣泉' },
     colossus: { icon: '☄', desc: '远程晶陨，专拆建筑 · 需圣泉' },
+    comet: { icon: '✺', desc: '超远程坠星，曲射拆建筑，弹速慢能躲 · 需圣泉' },
     mharvester: { icon: '◈', desc: '自动采集水晶' },
     mmcv: { icon: '⬡', desc: '可展开为魔法主堡' },
     hexling: { icon: '✶', desc: '符核魔仆，贴脸或阵亡引爆；非载具，军犬能扑' }
@@ -214,7 +215,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1,
     mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, panther: 1, dragon: 1,
-    warden: 1, colossus: 1, mharvester: 1, mmcv: 1, hexling: 1
+    warden: 1, colossus: 1, comet: 1, mharvester: 1, mmcv: 1, hexling: 1
   };
 
   function pRect(c, x, y, w, h, fill) {
@@ -949,6 +950,23 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       pCirc(c, 76, 34, 1.4, P_ARCANE);
       pCirc(c, 44, 36, 2.8, P_ARCANE);
       pCirc(c, 44, 36, 1.2, '#f2e6ff');
+    },
+    comet: function (c) {
+      // 坠星台：重型石座 + 黑曜发射架 + 待发彗核，不是东风火箭也不是裂地兽
+      pShadow(c, 50, 61, 30);
+      pRect(c, 26, 50, 44, 10, P_STONE);
+      pPoly(c, [[24, 50], [72, 50], [66, 40], [30, 40]], P_DARK);
+      pPoly(c, [[30, 40], [64, 40], [58, 32], [36, 32]], '#2a2433');
+      pRect(c, 44, 18, 8, 16, '#1a1620');
+      pRect(c, 38, 22, 4, 14, P_STONE);
+      pRect(c, 54, 22, 4, 14, P_STONE);
+      pCirc(c, 48, 16, 8.5, P_CRYSTAL);
+      pCirc(c, 48, 16, 5.2, P_ARCANE);
+      pCirc(c, 48, 16, 2.2, '#f2e6ff');
+      pPoly(c, [[42, 10], [48, 2], [54, 10]], P_FROST);
+      pLine(c, 48, 24, 48, 38, 2, P_ARCANE);
+      pCirc(c, 32, 46, 1.6, P_ARCANE);
+      pCirc(c, 64, 46, 1.6, P_ARCANE);
     },
     mharvester: function (c) {
       pShadow(c, 48, 60, 26);

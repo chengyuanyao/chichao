@@ -600,7 +600,7 @@ DAMAGE_MULTIPLIER = {
     "ap":      {"infantry": 0.25, "light": 0.65, "heavy": 2.10, "structure": 0.70},
     # 超级武器：对全甲种都致命，清场用。siege 对步兵只有 0.25，清不动人。
     "super":   {"infantry": 1.50, "light": 1.30, "heavy": 1.10, "structure": 1.40},
-    # V3 远程火箭：曲射拆建筑，溅射清阵，弹速慢能被看见躲
+    # V3 / 坠星台 远程曲射：拆建筑，溅射清阵，弹速慢能被看见躲
     "missile": {"infantry": 0.50, "light": 0.70, "heavy": 0.65, "structure": 1.50},
     # 磁暴步兵的电弧：快脉冲专电载具，对建筑和步兵都一般；电磁干扰魔力场，是科技杀法师的关键。
     # 对魔导 2.00→1.60：仍明显高于对步兵 0.80 / 对轻甲 1.40，不当成中性。
@@ -3763,7 +3763,7 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                     game, unit["owner"], unit["x"], unit["y"], aggro,
                     combat_spatial)
                 # 攻城炮 / 裂地晶兽优先打建筑，附近没有建筑时才打单位
-                if (target and unit["kind"] in ("artillery", "colossus")
+                if (target and unit["kind"] in ("artillery", "colossus", "comet")
                         and target["kind"] not in STRUCTURE_TYPES):
                     building = nearest_enemy_structure(
                         game, unit["owner"], unit["x"], unit["y"], aggro,
@@ -3929,7 +3929,7 @@ BOT_INFANTRY_KINDS = frozenset((
 ))
 BOT_MAGE_KINDS = frozenset(("mage", "frost"))
 BOT_LATE_UNITS = frozenset((
-    "overlord", "prism", "v3", "dragon", "colossus", "warden",
+    "overlord", "prism", "v3", "dragon", "colossus", "warden", "comet",
 ))
 BOT_LATE_STRUCTURES = frozenset(("repair", "mspring"))
 BOT_SCOUT_VEHICLES = VEHICLE_KINDS - frozenset((
@@ -4284,6 +4284,8 @@ def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
             choices.extend(("panther", "panther"))
             if "repair" in roles:
                 choices.extend(("colossus", "warden", "dragon"))
+                if late:
+                    choices.append("comet")
             if rich and harvester_n < 2:
                 choices.append("mharvester")
     else:
@@ -4386,12 +4388,20 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
 
     if late and "repair" in roles:
         if magic:
-            return ["colossus", "dragon", "warden"]
+            choices = ["colossus", "dragon", "warden"]
+            if phase in (BOT_PHASE_STABILIZE, BOT_PHASE_CLOSE):
+                choices.append("comet")
+            return choices
         return ["overlord", "prism", "artillery"]
 
     opening = phase == BOT_PHASE_OPEN
-    return bot_support_choices(
+    choices = bot_support_choices(
         faction, roles, opening, late, rich, harvester_n)
+    if (magic and "repair" in roles
+            and phase in (BOT_PHASE_STABILIZE, BOT_PHASE_CLOSE)):
+        if "comet" not in choices:
+            choices.append("comet")
+    return choices
 
 
 def bot_try_choices(room, bot, choices):
@@ -4474,7 +4484,7 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
     if ("repair" in roles and phase == BOT_PHASE_CLOSE
             and not defend and not inbound):
         late_choices = (
-            ("colossus", "dragon", "warden") if faction == "magic"
+            ("colossus", "dragon", "warden", "comet") if faction == "magic"
             else ("overlord", "prism", "artillery"))
         if bot_try_choices(room, bot, late_choices):
             return
