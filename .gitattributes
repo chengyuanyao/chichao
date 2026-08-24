@@ -1,0 +1,9 @@
+# 仓库内所有文本文件一律以 LF 存储。
+# 没有这条时，Windows 上的编辑器会把整个仓库重写成 CRLF，
+# 于是一次几十行的改动会产生几万行的行尾噪声 diff。
+* text=auto eol=lf
+
+# 二进制资源不做任何行尾转换。
+*.png binary
+*.jpg binary
+*.svg -text

@@ -4683,6 +4683,18 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   });
   $('#gameMenuBtn').addEventListener('click', function () { $('#gameMenu').classList.remove('hidden'); });
   $('#resumeBtn').addEventListener('click', function () { $('#gameMenu').classList.add('hidden'); canvas.focus(); });
+  $('#pairAgentBtn').addEventListener('click', function () {
+    var button = $('#pairAgentBtn');
+    button.disabled = true;
+    sendAction('requestAgentPair').then(function (data) {
+      var code = data.pairCode || '';
+      window.prompt('AI 副官配对码（2 分钟内有效、仅可使用一次）\n在 play.bat 模式3的玩家名称栏直接输入此码：', code);
+    }).catch(function (err) {
+      toast(err.message || '生成配对码失败', 'error');
+    }).finally(function () {
+      button.disabled = false;
+    });
+  });
   $('#leaveGameBtn').addEventListener('click', function () {
     $('#gameMenu').classList.add('hidden');
     leaveRoom();

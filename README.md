@@ -86,6 +86,43 @@ netsh int ipv4 show excludedportrange protocol=tcp
   - S 仍是停止，不用来出猎犬。点按 W/A/D 生产，按住仍平移镜头。本局不做建筑热键，避免和放置/取消抢键。
 - 空格：返回己方基地，Enter：战斗聊天。
 
+## AI 玩法
+
+游戏里有两条互不相干的 AI 路线，解决的是两件事。
+
+| | 换掉房间里的「添加 AI」 | 给人类玩家配副官 |
+|---|---|---|
+| 代码在哪 | 本仓库 `ai_commander/` | 独立项目 `rts-agent`，**不在本仓库内** |
+| 跑在哪 | 服务器进程内 | 玩家自己的机器上，通过 HTTP 接入 |
+| 怎么接入 | 启动时替换 `server.tick_bots` | `/api/attach` 换取已有玩家的会话 |
+| 要不要 LLM | 可选，没有就按固定模板打 | 见该项目自己的说明 |
+
+### 内置 AI 指挥官（`ai_commander/`）
+
+会看克制关系的 AI，替换掉内置那套。用 `ai_commander/start.py` 代替 `server.py`
+启动即可，房间里照常「添加 AI」，加进来的就是新 AI：
+
+```bash
+python ai_commander/start.py            # 启动时问一次 LLM API Key，回车＝不用
+python ai_commander/start.py --no-llm   # 不问，直接固定模板
+./ai_commander/start-ai.sh 18081        # Linux / macOS
+ai_commander\start-ai.bat 18081         # Windows
+```
+
+配了本地或远端 LLM 就让 LLM 定出兵策略，没配就按 `ai_commander/templates.py`
+里那张手写的「局势 → 配比」表打——**没有 API Key 也是完整可玩的**，不是降级演示。
+无论策略来自哪一边，落地前都会过一遍克制安全过滤和经济硬约束。细节见
+`ai_commander/README.md`。想跑回原版直接 `python server.py`，什么都不用还原。
+
+### 连接 AI 副官（外部 agent）
+
+游戏中按 Esc，点击「连接 AI 副官」即可生成一个 8 位配对码。配对码 2 分钟内有效且
+只能使用一次；在 `rts-agent` 的 `play.bat` 选择模式3并输入该码，即可让副官接入当前
+浏览器玩家。服务端不会在公开房间列表中泄露玩家 token，也不需要手工查找浏览器存储。
+
+`rts-agent` 是独立于本仓库的项目，本仓库这一侧只提供 `/api/attach` 这个换取会话的
+接口；没有它也不影响正常游戏。
+
 ## 技术说明
 
 - 服务端：Python 3 标准库，权威状态与 20Hz 模拟，零第三方依赖。
@@ -185,6 +222,10 @@ python3 tests/integration_test.py http://127.0.0.1:18081  # 需要服务器已�
 
 `economy_test.py` 锁住采矿车返程卸矿与随机公共矿区：满载首帧不能改写到精炼厂坐标，
 必须驶入卸矿范围才结算；相同地图 seed 复现相同布局，不同对局改变公共矿位置。
+
+`ai_commander_test.py` 只是个壳，转调 `ai_commander/selftest.py`（也可以单独跑）。
+它锁住的是 AI 指挥官的克制计算与安全过滤：护甲倍率必须现读 `server.DAMAGE_MULTIPLIER`
+而不是抄一份副本，所以改 `catalog.py` 的平衡时这里会跟着报警。
 
 ## 图形设置
 

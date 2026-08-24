@@ -66,6 +66,9 @@ MAX_ROOMS = 32
 MIN_TEAM = 0
 MAX_TEAM = 4
 RUNNING = True
+AGENT_PAIR_TTL = 120
+AGENT_PAIR_MAX_FAILS = 10   # 同一房间连续猜错这么多次就冷却
+AGENT_PAIR_COOLDOWN = 60
 
 
 def room_lock(room):
@@ -1305,6 +1308,64 @@ def authenticate(room_id, player_id, token):
         return room, None
     player["lastSeen"] = now()
     return room, player
+
+
+def issue_agent_pair(player):
+    """Create a short-lived, one-use code for attaching an AI co-pilot.
+
+    This is issued only through an already authenticated browser action.  The
+    public room list never exposes player tokens, so another LAN user cannot
+    silently take over a player merely by knowing their name.
+    """
+    code = uuid.uuid4().hex[:8].upper()
+    player["agentPair"] = {"code": code, "expires": now() + AGENT_PAIR_TTL}
+    return code
+
+
+def agent_pair_cooldown(room):
+    """Seconds left on this room's pairing cooldown; 0 means callers may try.
+
+    A pairing code is only eight hex characters, so an unthrottled endpoint
+    lets a LAN neighbour grind through guesses for the whole two-minute window.
+    """
+    gate = room.get("agentPairGate")
+    if not isinstance(gate, dict):
+        return 0
+    remaining = gate.get("until", 0) - now()
+    return int(remaining) + 1 if remaining > 0 else 0
+
+
+def note_agent_pair_failure(room):
+    """Record a wrong guess and start a cooldown once they pile up."""
+    current = now()
+    gate = room.get("agentPairGate")
+    if not isinstance(gate, dict) or current > gate.get("resetAt", 0):
+        gate = {"fails": 0, "resetAt": current + AGENT_PAIR_COOLDOWN, "until": 0}
+        room["agentPairGate"] = gate
+    gate["fails"] += 1
+    if gate["fails"] >= AGENT_PAIR_MAX_FAILS:
+        gate["until"] = current + AGENT_PAIR_COOLDOWN
+
+
+def redeem_agent_pair(room, code):
+    """Redeem and consume a browser-approved AI co-pilot pairing code."""
+    code = str(code or "").strip().upper()
+    if not code:
+        return None
+    current = now()
+    for player in room["players"].values():
+        pair = player.get("agentPair")
+        if not isinstance(pair, dict):
+            continue
+        if pair.get("expires", 0) < current:
+            player.pop("agentPair", None)
+            continue
+        if pair.get("code") == code and not player.get("isBot"):
+            player.pop("agentPair", None)
+            player["lastSeen"] = current
+            room.pop("agentPairGate", None)
+            return player
+    return None
 
 
 def make_structure(kind, owner, x, y, active=True):
@@ -5114,6 +5175,8 @@ class GameHandler(BaseHTTPRequestHandler):
                 self.join_room(data)
             elif parsed.path == "/api/action":
                 self.room_action(data)
+            elif parsed.path == "/api/attach":
+                self.attach_agent(data)
             else:
                 self.send_json(404, {"ok": False, "error": "接口不存在"})
         except ValueError as exc:
@@ -5166,6 +5229,33 @@ class GameHandler(BaseHTTPRequestHandler):
             payload = {"ok": True, "session": {"roomId": room_id, "playerId": player["id"], "token": player["token"]}, "room": public_room(room, viewer_id=player["id"])}
         self.send_json(200, payload)
 
+    def attach_agent(self, data):
+        """Exchange a browser-approved one-time code for the existing session."""
+        room_id = str(data.get("roomId", "")).strip().upper()
+        with LOCK:
+            room = ROOMS.get(room_id)
+        if not room:
+            self.send_json(404, {"ok": False, "error": "房间不存在"})
+            return
+        with room_lock(room):
+            cooling = agent_pair_cooldown(room)
+            if cooling:
+                self.send_json(429, {"ok": False,
+                                     "error": "尝试过于频繁，请 %d 秒后再试" % cooling})
+                return
+            player = redeem_agent_pair(room, data.get("pairCode"))
+            if not player:
+                note_agent_pair_failure(room)
+                self.send_json(403, {"ok": False, "error": "配对码无效或已过期"})
+                return
+            response = {
+                "ok": True,
+                "session": {"roomId": room_id, "playerId": player["id"],
+                            "token": player["token"]},
+                "playerName": player["name"],
+            }
+        self.send_json(200, response)
+
     def room_action(self, data):
         action = data.get("action")
         payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
@@ -5175,6 +5265,7 @@ class GameHandler(BaseHTTPRequestHandler):
             self.send_json(403, {"ok": False, "error": "会话已失效"})
             return
         drop_empty = False
+        pair_code = None
         with room_lock(room):
             room, player = authenticate(data.get("roomId"), data.get("playerId"), data.get("token"))
             if not room or not player:
@@ -5267,6 +5358,8 @@ class GameHandler(BaseHTTPRequestHandler):
                 if not message:
                     raise ValueError("消息不能为空")
                 post_player_chat(room, player, message)
+            elif action == "requestAgentPair":
+                pair_code = issue_agent_pair(player)
             elif action == "command":
                 handle_game_command(room, player, payload)
             elif action == "proposeAlliance":
@@ -5360,6 +5453,9 @@ class GameHandler(BaseHTTPRequestHandler):
             in_battle = action == "command" and room["status"] == "playing"
             response = {"ok": True, "room": public_room(
                 room, viewer_id=player["id"], full=not in_battle)}
+            if pair_code:
+                response["pairCode"] = pair_code
+                response["expiresIn"] = AGENT_PAIR_TTL
         if drop_empty:
             with LOCK:
                 live = ROOMS.get(room["id"])

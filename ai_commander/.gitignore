@@ -1,0 +1,4 @@
+# 你自己填的 LLM 凭据，绝不进版本库
+llm.json
+__pycache__/
+*.pyc
