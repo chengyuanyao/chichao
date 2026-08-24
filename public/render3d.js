@@ -1624,12 +1624,8 @@ function displayTheme(themeId) {
 // 硬切低模：InstancedMesh 的绘制调用本来就按兵种合批，数量阈值只会造成
 // 模型突然一起变成盒子，却没有省下任何 draw call。
 const UNIT_LOD_DISTANCE = 900;
-// 渲染出来的桥比碰撞尺寸长这么多倍，用来跨过做了抖动加宽的可见水面
+// 渲染出来的通道比碰撞尺寸长这么多倍，用来跨过做了抖动加宽的林带
 const BRIDGE_RENDER_SPAN = 2.0;
-// 桥面是刚体：DECK 板中心 y=2.2、厚 6，顶面 5.2。地面高度场（起伏/河床
-// 下沉/山体）在桥上是平的，单位/建筑/特效一律落在 5.2，否则会随地形
-// 起伏陷进或浮出桥面。
-const BRIDGE_DECK_Y = 5.2;
 
 /**
  * 单位模型的视觉放大系数（纯表现，不影响碰撞/选取，那些仍用服务端 size）。
@@ -2095,12 +2091,11 @@ export function createRenderer(canvas) {
   }
 
   /**
-   * 桥面刚体高度。返回 0..1：0 = 不在桥上；1 = 桥面核心区（碰撞盒内）；
-   * 0..1 之间 = 桥头过渡带（渲染加长的那一截，从桥面平滑落回河岸）。
-   * 桥面/过渡带必须跟地形起伏脱钩——否则桥头插进河岸土里、桥上单位
-   * 随滚动地形陷进或浮出桥面，整座桥全是穿模。
+   * 林间小路混合系数。返回 0..1：0 = 树林；1 = 小路核心区（通道碰撞盒内）；
+   * 0..1 之间 = 路沿过渡带（渲染加长的那一截，从土路平滑落回林床）。
+   * 树已经避开这块区域，这里就是森林里唯一的豁口。
    */
-  function bridgeDeckAt(x, y) {
+  function bridgeTrailAt(x, y) {
     const bridges = (state.terrain && state.terrain.bridges) || [];
     for (let i = 0; i < bridges.length; i++) {
       const b = bridges[i];
@@ -2167,12 +2162,6 @@ export function createRenderer(canvas) {
   }
 
   function groundHeight(x, y) {
-    const blend = bridgeDeckAt(x, y);
-    if (blend > 0) {
-      if (blend >= 1) return BRIDGE_DECK_Y;
-      const base = baseGroundHeight(x, y);
-      return base + (BRIDGE_DECK_Y - base) * blend;
-    }
     return baseGroundHeight(x, y);
   }
 
@@ -2400,6 +2389,13 @@ export function createRenderer(canvas) {
       r = r * (1 - stone * 0.72) + theme.forest[0] * stone;
       g = g * (1 - stone * 0.72) + theme.forest[1] * stone;
       b = b * (1 - stone * 0.72) + theme.forest[2] * stone;
+      // 林间小路：通道碰撞盒（含渲染过渡带）露出土路，树已避开这片区域
+      const trail = bridgeTrailAt(wx, wz);
+      if (trail > 0) {
+        r = r * (1 - trail) + theme.dirt[0] * trail;
+        g = g * (1 - trail) + theme.dirt[1] * trail;
+        b = b * (1 - trail) + theme.dirt[2] * trail;
+      }
       // 河道：深绿林床（树荫 + 腐殖土），上面再立树模型
       r = r * (1 - ravine) + 0.13 * ravine;
       g = g * (1 - ravine) + 0.24 * ravine;
@@ -2545,66 +2541,9 @@ export function createRenderer(canvas) {
       }
     }
 
-    // 桥梁：唯一能穿过树林的地方，必须一眼看得出来。桥面比路面略高，
-    // 两侧加护栏和桥墩，让它在林间「立」起来而不是一块贴图。
-    // 所有桥合并成一个网格：一张图上只有三五座桥，分开做剔除没意义，
-    // 合并后从五十多次绘制调用降到一次。
-    if (bridges.length) {
-      // 深色做旧木料：新光照 + 高曝光下原来的浅木色会晒成一块白板。
-      // 两种板色交替 + 深色底板缝，桥面才有「一块块木板」的读感。
-      const DECK = [0.16, 0.12, 0.075];
-      const PLANK = [0.46, 0.36, 0.22];
-      const PLANK_B = [0.34, 0.26, 0.155];
-      const PIER = [0.22, 0.19, 0.155];
-      const parts = [];
-      const slab = function (w, h, d, x, y, z, rgb) {
-        parts.push({
-          geo: new THREE.BoxGeometry(w, h, d),
-          matrix: new THREE.Matrix4().setPosition(x, y, z),
-          rgb: rgb
-        });
-      };
-      bridges.forEach(function (b) {
-        const along = b.w >= b.h;          // 桥的走向
-        // 渲染用的桥长要比碰撞尺寸长：岸线做了抖动加宽之后，可见水面比
-        // 服务端的碰撞河宽宽出不少，照原尺寸画的桥会「够不到两岸」。
-        // 碰撞尺寸是玩法数据（决定哪里能过河），一个字都不能动，
-        // 所以只把画出来的那一截加长。
-        const bw = along ? b.w * BRIDGE_RENDER_SPAN : b.w;
-        const bh = along ? b.h : b.h * BRIDGE_RENDER_SPAN;
-        slab(bw, 6, bh, b.x, 2.2, b.y, DECK);
-        // 桥板纹理：两种木色交替的枕木，板缝露出深色底板
-        const planks = Math.max(5, Math.round((along ? bw : bh) / 20));
-        for (let i = 0; i < planks; i++) {
-          const t = (i + 0.5) / planks - 0.5;
-          const wood = i % 2 ? PLANK_B : PLANK;
-          if (along) {
-            slab(bw / planks * 0.78, 1.4, bh * 0.94, b.x + t * bw, 5.6, b.y, wood);
-          } else {
-            slab(bw * 0.94, 1.4, bh / planks * 0.78, b.x, 5.6, b.y + t * bh, wood);
-          }
-        }
-        [-1, 1].forEach(function (side) {
-          if (along) {
-            // 侧缘纵梁 + 护栏 + 桥墩
-            slab(bw, 3.2, 7, b.x, 6.6, b.y + side * (bh / 2 - 3.5), PIER);
-            slab(bw, 6, 3.5, b.x, 11, b.y + side * (bh / 2 - 2), PLANK_B);
-            slab(9, 46, bh * 0.7, b.x + side * bw * 0.30, -20, b.y, PIER);
-          } else {
-            slab(7, 3.2, bh, b.x + side * (bw / 2 - 3.5), 6.6, b.y, PIER);
-            slab(3.5, 6, bh, b.x + side * (bw / 2 - 2), 11, b.y, PLANK_B);
-            slab(bw * 0.7, 46, 9, b.x, -20, b.y + side * bh * 0.30, PIER);
-          }
-        });
-      });
-      const bridgeMesh = new THREE.Mesh(
-        mergeParts(parts),
-        applyFogMask(new THREE.MeshLambertMaterial({ vertexColors: true })));
-      bridgeMesh.castShadow = state.shadows !== 'off';
-      bridgeMesh.receiveShadow = true;
-      bridgeMesh.frustumCulled = false;
-      terrainGroup.add(bridgeMesh);
-    }
+    // 林间小路：没有桥面模型 —— 通道碰撞盒在网格顶点色里画成土路
+    // （bridgeTrailAt），树已避开这片区域，森林在这里断开成一条豁口。
+    // 单位直接走在平地上，服务端寻路不变。
 
     // 地图边界：一圈向外倾斜下沉的裙边，颜色贴近雾色，让边缘融进远景而
     // 不是留下一道生硬的黑边
