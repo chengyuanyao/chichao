@@ -2095,10 +2095,35 @@ export function createRenderer(canvas) {
    * 0..1 之间 = 路沿过渡带（渲染加长的那一截，从土路平滑落回林床）。
    * 树已经避开这块区域，这里就是森林里唯一的豁口。
    */
+  function pointSegmentDistanceSq(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lengthSq = dx * dx + dy * dy;
+    let t = lengthSq > 0.001
+      ? ((px - x1) * dx + (py - y1) * dy) / lengthSq
+      : 0;
+    t = Math.max(0, Math.min(1, t));
+    const ox = px - (x1 + dx * t);
+    const oy = py - (y1 + dy * t);
+    return ox * ox + oy * oy;
+  }
+
   function bridgeTrailAt(x, y) {
     const bridges = (state.terrain && state.terrain.bridges) || [];
     for (let i = 0; i < bridges.length; i++) {
       const b = bridges[i];
+      if (Number.isFinite(b.x1) && Number.isFinite(b.y1) &&
+          Number.isFinite(b.x2) && Number.isFinite(b.y2)) {
+        const core = b.width * 0.5;
+        const feather = 55;
+        const distance = Math.sqrt(pointSegmentDistanceSq(
+          x, y, b.x1, b.y1, b.x2, b.y2));
+        if (distance <= core) return 1;
+        if (distance < core + feather) {
+          return 1 - (distance - core) / feather;
+        }
+        continue;
+      }
       const along = b.w >= b.h;
       const halfW = b.w * 0.5;
       const halfH = b.h * 0.5;
@@ -2490,6 +2515,15 @@ export function createRenderer(canvas) {
       const nearBridge = function (tx, ty) {
         for (let bi = 0; bi < bridges.length; bi++) {
           const b = bridges[bi];
+          if (Number.isFinite(b.x1) && Number.isFinite(b.y1) &&
+              Number.isFinite(b.x2) && Number.isFinite(b.y2)) {
+            const clearance = b.width * 0.5 + 65;
+            if (pointSegmentDistanceSq(
+                tx, ty, b.x1, b.y1, b.x2, b.y2) < clearance * clearance) {
+              return true;
+            }
+            continue;
+          }
           const along = b.w >= b.h;
           const hw = (along ? b.w * BRIDGE_RENDER_SPAN : b.w) * 0.5 + 55;
           const hh = (along ? b.h : b.h * BRIDGE_RENDER_SPAN) * 0.5 + 55;
@@ -2499,21 +2533,29 @@ export function createRenderer(canvas) {
         }
         return false;
       };
-      // 河道林带：每 20px 一棵 + 横向抖动，树冠几乎相接
+      // 河道林带：树量同时随长度和宽度增加；加厚后的五条分界带会形成
+      // 多排密林，而不是只把一排树横向拉散。
       for (let r = 0; r < rivers.length; r++) {
         const rv = rivers[r];
-        const len = Math.hypot(rv.x2 - rv.x1, rv.y2 - rv.y1);
+        const rdx = rv.x2 - rv.x1;
+        const rdy = rv.y2 - rv.y1;
+        const len = Math.hypot(rdx, rdy);
         const half = rv.width * 0.5;
-        const count = Math.max(8, Math.floor(len / 20));
+        const density = Math.max(1, rv.width / 150);
+        const count = Math.min(900, Math.max(8, Math.floor(len / 20 * density)));
+        const ux = len > 0.001 ? rdx / len : 1;
+        const uy = len > 0.001 ? rdy / len : 0;
+        const nx = -uy;
+        const ny = ux;
         for (let k = 0; k < count; k++) {
           const t = (k + 0.5) / count;
-          const cx = rv.x1 + (rv.x2 - rv.x1) * t;
-          const cy = rv.y1 + (rv.y2 - rv.y1) * t;
-          // 横向偏移落进林带内，再叠一层抖动让树不排成直线
-          const spread = half * (0.45 + treeRand(k + r * 131) * 0.9);
-          const ang = treeRand(k * 7.3 + r * 19) * Math.PI * 2;
-          const tx = cx + Math.cos(ang) * spread;
-          const ty = cy + Math.sin(ang) * spread;
+          const cx = rv.x1 + rdx * t;
+          const cy = rv.y1 + rdy * t;
+          const lateral = (treeRand(k + r * 131) * 2 - 1) * half * 0.94;
+          const alongJitter = (treeRand(k * 7.3 + r * 19) - 0.5) *
+            Math.max(16, len / count * 1.8);
+          const tx = cx + nx * lateral + ux * alongJitter;
+          const ty = cy + ny * lateral + uy * alongJitter;
           if (riverDepthAt(tx, ty) < 0.12) continue;
           if (nearBridge(tx, ty)) continue;
           placeTree(tx, ty, k + r * 211);

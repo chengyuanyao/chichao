@@ -357,55 +357,28 @@ MAPS = {
             (2670, 2443),
         ],
         "spawnLabels": ["北岗", "东北高地", "东南谷地", "西南谷地", "西北高地"],
-        # 五道径向密林带切开外环邻里通道：山壁外侧到地图边，只在外环留桥。
-        # 卡口内肩把陨坑外壁接到林带边，堵住抄近道。中庭、五条谷口和家矿都不封。
-        # 口袋矿挪到桥边干地上，储量不变。
+        # 五道 72° 径向密林带把有效发展圈均分成五块。内端继续向金矿环
+        # 推进，把五个入口收窄；中央仍保留约 1000px 半径的完整开放圈。
         "rivers": [
-            {"x1": 6176, "y1": 1582, "x2": 7303, "y2": 30, "width": 150},
-            {"x1": 6902, "y1": 3818, "x2": 9970, "y2": 4815, "width": 150},
-            {"x1": 5000, "y1": 5200, "x2": 5000, "y2": 6370, "width": 150},
-            {"x1": 3098, "y1": 3818, "x2": 30, "y2": 4815, "width": 150},
-            {"x1": 3824, "y1": 1582, "x2": 2697, "y2": 30, "width": 150},
+            {"x1": 5852, "y1": 2027, "x2": 7303, "y2": 30, "width": 800},
+            {"x1": 6379, "y1": 3648, "x2": 9970, "y2": 4815, "width": 800},
+            {"x1": 5000, "y1": 4650, "x2": 5000, "y2": 6370, "width": 800},
+            {"x1": 3621, "y1": 3648, "x2": 30, "y2": 4815, "width": 800},
+            {"x1": 4148, "y1": 2027, "x2": 2697, "y2": 30, "width": 800},
         ],
-        # 桥盒是狭长的林间通道：窄边只容 2-3 辆坦克并排，长边沿河跨过整条
-        # 林带——原来的方正路口改成一眼到底的隘口式小路。
+        # 每道密林只开一条贯穿式狭长小道。线段长度覆盖整条 800px 林带，
+        # 180px 路宽只容少量部队并排，形成真正可设防的单一卡口。
         "bridges": [
-            {"x": 6575, "y": 1032, "w": 320, "h": 560},
-            {"x": 7549, "y": 4028, "w": 560, "h": 320},
-            {"x": 5000, "y": 5880, "w": 320, "h": 560},
-            {"x": 2451, "y": 4028, "w": 560, "h": 320},
-            {"x": 3425, "y": 1032, "w": 320, "h": 560},
+            {"x": 6575, "y": 1032, "x1": 6009, "y1": 621, "x2": 7141, "y2": 1443, "width": 180},
+            {"x": 7549, "y": 4028, "x1": 7765, "y1": 3362, "x2": 7333, "y2": 4694, "width": 180},
+            {"x": 5000, "y": 5880, "x1": 5700, "y1": 5880, "x2": 4300, "y2": 5880, "width": 180},
+            {"x": 2451, "y": 4028, "x1": 2667, "y1": 4694, "x2": 2235, "y2": 3362, "width": 180},
+            {"x": 3425, "y": 1032, "x1": 2859, "y1": 1443, "x2": 3991, "y2": 621, "width": 180},
         ],
-        # 五块山壁围出陨坑，正中一块陨石核把金库撕成环形巷战；
-        # 五条宽谷对准各家出生点，外圈再留口袋矿和抄近路。
+        # 发展区内部不再随机塞独立森林/巨石；只保留中央陨石核，确保五家
+        # 沿各自扇区都能从宽谷口进入中央金矿环。
         "mountains": [
-            {"x": 5929, "y": 1922, "r": 500},
-            {"x": 6503, "y": 3688, "r": 500},
-            {"x": 5000, "y": 4780, "r": 500},
-            {"x": 3497, "y": 3688, "r": 500},
-            {"x": 4071, "y": 1922, "r": 500},
-            # 卡口内肩：把陨坑外壁接到林带边，堵住山壁外侧的抄近道。
-            {"x": 6340, "y": 1355, "r": 220},
-            {"x": 7168, "y": 3905, "r": 220},
-            {"x": 5000, "y": 5480, "r": 220},
-            {"x": 2832, "y": 3905, "r": 220},
-            {"x": 3660, "y": 1355, "r": 220},
             {"x": 5000, "y": 3200, "r": 250},
-            {"x": 6987, "y": 466, "r": 250},
-            {"x": 8215, "y": 4244, "r": 250},
-            {"x": 1785, "y": 4244, "r": 250},
-            {"x": 3013, "y": 466, "r": 250},
-            {"x": 320, "y": 3200, "r": 390},
-            {"x": 9680, "y": 3200, "r": 390},
-            {"x": 360, "y": 380, "r": 310},
-            {"x": 9640, "y": 380, "r": 310},
-            {"x": 360, "y": 6040, "r": 310},
-            {"x": 9640, "y": 6040, "r": 310},
-            {"x": 5000, "y": 6180, "r": 240},
-            {"x": 1750, "y": 1400, "r": 230},
-            {"x": 8250, "y": 1400, "r": 230},
-            {"x": 1750, "y": 5000, "r": 230},
-            {"x": 8250, "y": 5000, "r": 230},
         ],
         # 辐条进坑、坑内环路、外环绕行，再加两条贴核近路。
         "roads": [
@@ -419,31 +392,34 @@ MAPS = {
             {"x1": 5423, "y1": 3782, "x2": 4577, "y2": 3782, "width": 115},
             {"x1": 4577, "y1": 3782, "x2": 4315, "y2": 2978, "width": 115},
             {"x1": 4315, "y1": 2978, "x2": 5000, "y2": 2480, "width": 115},
-            {"x1": 5000, "y1": 750, "x2": 6575, "y2": 1032, "width": 110},
-            {"x1": 6575, "y1": 1032, "x2": 7330, "y2": 2443, "width": 110},
-            {"x1": 7330, "y1": 2443, "x2": 7549, "y2": 4028, "width": 110},
-            {"x1": 7549, "y1": 4028, "x2": 6440, "y2": 5182, "width": 110},
-            {"x1": 6440, "y1": 5182, "x2": 5000, "y2": 5880, "width": 110},
-            {"x1": 5000, "y1": 5880, "x2": 3560, "y2": 5182, "width": 110},
-            {"x1": 3560, "y1": 5182, "x2": 2451, "y2": 4028, "width": 110},
-            {"x1": 2451, "y1": 4028, "x2": 2670, "y2": 2443, "width": 110},
-            {"x1": 2670, "y1": 2443, "x2": 3425, "y2": 1032, "width": 110},
-            {"x1": 3425, "y1": 1032, "x2": 5000, "y2": 750, "width": 110},
+            {"x1": 5000, "y1": 750, "x2": 6009, "y2": 621, "width": 110},
+            {"x1": 7141, "y1": 1443, "x2": 7330, "y2": 2443, "width": 110},
+            {"x1": 7330, "y1": 2443, "x2": 7765, "y2": 3362, "width": 110},
+            {"x1": 7333, "y1": 4694, "x2": 6440, "y2": 5182, "width": 110},
+            {"x1": 6440, "y1": 5182, "x2": 5700, "y2": 5880, "width": 110},
+            {"x1": 4300, "y1": 5880, "x2": 3560, "y2": 5182, "width": 110},
+            {"x1": 3560, "y1": 5182, "x2": 2667, "y2": 4694, "width": 110},
+            {"x1": 2235, "y1": 3362, "x2": 2670, "y2": 2443, "width": 110},
+            {"x1": 2670, "y1": 2443, "x2": 2859, "y2": 1443, "width": 110},
+            {"x1": 3991, "y1": 621, "x2": 5000, "y2": 750, "width": 110},
             {"x1": 4315, "y1": 2978, "x2": 5000, "y2": 2890, "width": 100},
             {"x1": 5000, "y1": 2890, "x2": 5685, "y2": 2978, "width": 100},
             {"x1": 4577, "y1": 3782, "x2": 5000, "y2": 3510, "width": 100},
             {"x1": 5000, "y1": 3510, "x2": 5423, "y2": 3782, "width": 100},
-            # 五座外环桥上的加宽军路，小地图一眼能认出卡口。
-            {"x1": 6397, "y1": 903, "x2": 6753, "y2": 1161, "width": 140},
-            {"x1": 7617, "y1": 3819, "x2": 7481, "y2": 4237, "width": 140},
-            {"x1": 5220, "y1": 5880, "x2": 4780, "y2": 5880, "width": 140},
-            {"x1": 2519, "y1": 4237, "x2": 2383, "y2": 3819, "width": 140},
-            {"x1": 3247, "y1": 1161, "x2": 3603, "y2": 903, "width": 140},
+            # 五条卡口军路与实际长通道完全重合。
+            {"x1": 6009, "y1": 621, "x2": 7141, "y2": 1443, "width": 140},
+            {"x1": 7765, "y1": 3362, "x2": 7333, "y2": 4694, "width": 140},
+            {"x1": 5700, "y1": 5880, "x2": 4300, "y2": 5880, "width": 140},
+            {"x1": 2667, "y1": 4694, "x2": 2235, "y2": 3362, "width": 140},
+            {"x1": 2859, "y1": 1443, "x2": 3991, "y2": 621, "width": 140},
         ],
         # 比默认图更肥：每家多一片保底矿，公共矿多两处随机点，
-        # 中庭五处头奖围着陨石核（对准五条谷口），外加五处邻里口袋矿。
+        # 中庭五处头奖围着陨石核；五条林道两端各放一处邻里口袋矿。
         # 都按公共矿刷炮塔 / 突击兵 / 火箭兵守军。
         "homeOreAmounts": (26000, 19000, 17000, 21000),
+        # 家矿放在总部背向中央金库的一侧，给正面发展与出兵让路。
+        "homeOreBehind": True,
+        "homeOreDistance": 450,
         "publicOreCount": 6,
         "bonusResources": [
             # 中庭金库：原北/东南/西南三处加肥，再补东北、西北两处，围核一圈。
@@ -452,11 +428,16 @@ MAPS = {
             {"x": 5390, "y": 3460, "amount": 44000, "public": True},
             {"x": 4610, "y": 3460, "amount": 44000, "public": True},
             {"x": 4563, "y": 3058, "amount": 44000, "public": True},
-            {"x": 6756, "y": 1361, "amount": 26000, "public": True},
-            {"x": 7292, "y": 4302, "amount": 26000, "public": True},
-            {"x": 4660, "y": 5720, "amount": 26000, "public": True},
-            {"x": 2498, "y": 3656, "amount": 26000, "public": True},
-            {"x": 3794, "y": 961, "amount": 26000, "public": True},
+            {"x": 6009, "y": 621, "amount": 13000, "public": True},
+            {"x": 7141, "y": 1443, "amount": 13000, "public": True},
+            {"x": 7765, "y": 3362, "amount": 13000, "public": True},
+            {"x": 7333, "y": 4694, "amount": 13000, "public": True},
+            {"x": 5700, "y": 5880, "amount": 13000, "public": True},
+            {"x": 4300, "y": 5880, "amount": 13000, "public": True},
+            {"x": 2667, "y": 4694, "amount": 13000, "public": True},
+            {"x": 2235, "y": 3362, "amount": 13000, "public": True},
+            {"x": 2859, "y": 1443, "amount": 13000, "public": True},
+            {"x": 3991, "y": 621, "amount": 13000, "public": True},
         ],
     },
     "gold_crater_small": {
@@ -475,114 +456,90 @@ MAPS = {
         # 多出来的那位落在西北高地。
         "spawnPoints": [
             (3200, 750),
-            (4691, 2443),
-            (4122, 5182),
-            (2278, 5182),
-            (1709, 2443),
+            (5530, 2443),
+            (4640, 5182),
+            (1760, 5182),
+            (870, 2443),
         ],
         "spawnLabels": ["北岗", "东北高地", "东南谷地", "西南谷地", "西北高地"],
-        # 五道径向密林带切开外环邻里通道：山壁外侧到地图边，只在外环留桥。
-        # 卡口内肩把陨坑外壁接到林带边，堵住抄近道。中庭、五条谷口和家矿都不封。
-        # 口袋矿挪到桥边干地上，储量不变。
+        # 紧凑版也使用正五边形与五条 72° 分界线，不再横向挤压布局；
+        # 五块有效发展区完全同形、同面积，并同步收窄中央入口。
         "rivers": [
-            {"x1": 3953, "y1": 1582, "x2": 4674, "y2": 30, "width": 150},
-            {"x1": 4417, "y1": 3818, "x2": 6381, "y2": 4815, "width": 150},
-            {"x1": 3200, "y1": 5200, "x2": 3200, "y2": 6370, "width": 150},
-            {"x1": 1983, "y1": 3818, "x2": 19, "y2": 4815, "width": 150},
-            {"x1": 2447, "y1": 1582, "x2": 1726, "y2": 30, "width": 150},
+            {"x1": 4052, "y1": 2027, "x2": 5503, "y2": 30, "width": 800},
+            {"x1": 4579, "y1": 3648, "x2": 6370, "y2": 4230, "width": 800},
+            {"x1": 3200, "y1": 4650, "x2": 3200, "y2": 6370, "width": 800},
+            {"x1": 1821, "y1": 3648, "x2": 30, "y2": 4230, "width": 800},
+            {"x1": 2348, "y1": 2027, "x2": 897, "y2": 30, "width": 800},
         ],
-        # 桥盒是狭长的林间通道：窄边只容 2-3 辆坦克并排，长边沿河跨过整条
-        # 林带——原来的方正路口改成一眼到底的隘口式小路。
+        # 每条加厚林带中只有这一条 180px 宽的悠长小道可以横穿。
         "bridges": [
-            {"x": 4208, "y": 1032, "w": 320, "h": 560},
-            {"x": 4831, "y": 4028, "w": 560, "h": 320},
-            {"x": 3200, "y": 5880, "w": 320, "h": 560},
-            {"x": 1569, "y": 4028, "w": 560, "h": 320},
-            {"x": 2192, "y": 1032, "w": 320, "h": 560},
+            {"x": 4775, "y": 1032, "x1": 4209, "y1": 621, "x2": 5341, "y2": 1443, "width": 180},
+            {"x": 5749, "y": 4028, "x1": 5965, "y1": 3362, "x2": 5533, "y2": 4694, "width": 180},
+            {"x": 3200, "y": 5880, "x1": 3900, "y1": 5880, "x2": 2500, "y2": 5880, "width": 180},
+            {"x": 651, "y": 4028, "x1": 867, "y1": 4694, "x2": 435, "y2": 3362, "width": 180},
+            {"x": 1625, "y": 1032, "x1": 1059, "y1": 1443, "x2": 2191, "y2": 621, "width": 180},
         ],
-        # 五块山壁围出陨坑，正中一块陨石核把金库撕成环形巷战；
-        # 五条宽谷对准各家出生点，外圈再留口袋矿和抄近路。
+        # 发展区和中央入口不放散点森林巨石，只保留陨石核。
         "mountains": [
-            {"x": 3795, "y": 1922, "r": 500},
-            {"x": 4162, "y": 3688, "r": 500},
-            {"x": 3200, "y": 4780, "r": 500},
-            {"x": 2238, "y": 3688, "r": 500},
-            {"x": 2605, "y": 1922, "r": 500},
-            # 卡口内肩：把陨坑外壁接到林带边，堵住山壁外侧的抄近道。
-            {"x": 4058, "y": 1355, "r": 220},
-            {"x": 4588, "y": 3905, "r": 220},
-            {"x": 3200, "y": 5480, "r": 220},
-            {"x": 1812, "y": 3905, "r": 220},
-            {"x": 2342, "y": 1355, "r": 220},
-            # 陨石核：缩放后金库贴得更近，半径从 250 收到 210，
-            # 保住围核金库与守军哨位之间的环形通道。
             {"x": 3200, "y": 3200, "r": 210},
-            {"x": 4472, "y": 466, "r": 250},
-            {"x": 5258, "y": 4244, "r": 250},
-            {"x": 1142, "y": 4244, "r": 250},
-            {"x": 1928, "y": 466, "r": 250},
-            {"x": 205, "y": 3200, "r": 390},
-            {"x": 6195, "y": 3200, "r": 390},
-            {"x": 230, "y": 380, "r": 310},
-            {"x": 6170, "y": 380, "r": 310},
-            {"x": 230, "y": 6040, "r": 310},
-            {"x": 6170, "y": 6040, "r": 310},
-            {"x": 3200, "y": 6180, "r": 240},
-            {"x": 1120, "y": 1400, "r": 230},
-            {"x": 5280, "y": 1400, "r": 230},
-            {"x": 1120, "y": 5000, "r": 230},
-            {"x": 5280, "y": 5000, "r": 230},
         ],
         # 辐条进坑、坑内环路、外环绕行，再加两条贴核近路。
         "roads": [
             {"x1": 3200, "y1": 750, "x2": 3200, "y2": 2480, "width": 120},
-            {"x1": 4691, "y1": 2443, "x2": 3638, "y2": 2978, "width": 120},
-            {"x1": 4122, "y1": 5182, "x2": 3471, "y2": 3782, "width": 120},
-            {"x1": 2278, "y1": 5182, "x2": 2929, "y2": 3782, "width": 120},
-            {"x1": 1709, "y1": 2443, "x2": 2762, "y2": 2978, "width": 120},
-            {"x1": 3200, "y1": 2480, "x2": 3638, "y2": 2978, "width": 115},
-            {"x1": 3638, "y1": 2978, "x2": 3471, "y2": 3782, "width": 115},
-            {"x1": 3471, "y1": 3782, "x2": 2929, "y2": 3782, "width": 115},
-            {"x1": 2929, "y1": 3782, "x2": 2762, "y2": 2978, "width": 115},
-            {"x1": 2762, "y1": 2978, "x2": 3200, "y2": 2480, "width": 115},
-            {"x1": 3200, "y1": 750, "x2": 4208, "y2": 1032, "width": 110},
-            {"x1": 4208, "y1": 1032, "x2": 4691, "y2": 2443, "width": 110},
-            {"x1": 4691, "y1": 2443, "x2": 4831, "y2": 4028, "width": 110},
-            {"x1": 4831, "y1": 4028, "x2": 4122, "y2": 5182, "width": 110},
-            {"x1": 4122, "y1": 5182, "x2": 3200, "y2": 5880, "width": 110},
-            {"x1": 3200, "y1": 5880, "x2": 2278, "y2": 5182, "width": 110},
-            {"x1": 2278, "y1": 5182, "x2": 1569, "y2": 4028, "width": 110},
-            {"x1": 1569, "y1": 4028, "x2": 1709, "y2": 2443, "width": 110},
-            {"x1": 1709, "y1": 2443, "x2": 2192, "y2": 1032, "width": 110},
-            {"x1": 2192, "y1": 1032, "x2": 3200, "y2": 750, "width": 110},
-            {"x1": 2762, "y1": 2978, "x2": 3200, "y2": 2890, "width": 100},
-            {"x1": 3200, "y1": 2890, "x2": 3638, "y2": 2978, "width": 100},
-            {"x1": 2929, "y1": 3782, "x2": 3200, "y2": 3510, "width": 100},
-            {"x1": 3200, "y1": 3510, "x2": 3471, "y2": 3782, "width": 100},
-            # 五座外环桥上的加宽军路，小地图一眼能认出卡口。
-            {"x1": 4094, "y1": 903, "x2": 4322, "y2": 1161, "width": 140},
-            {"x1": 4875, "y1": 3819, "x2": 4788, "y2": 4237, "width": 140},
-            {"x1": 3341, "y1": 5880, "x2": 3059, "y2": 5880, "width": 140},
-            {"x1": 1612, "y1": 4237, "x2": 1525, "y2": 3819, "width": 140},
-            {"x1": 2078, "y1": 1161, "x2": 2306, "y2": 903, "width": 140},
+            {"x1": 5530, "y1": 2443, "x2": 3885, "y2": 2978, "width": 120},
+            {"x1": 4640, "y1": 5182, "x2": 3623, "y2": 3782, "width": 120},
+            {"x1": 1760, "y1": 5182, "x2": 2777, "y2": 3782, "width": 120},
+            {"x1": 870, "y1": 2443, "x2": 2515, "y2": 2978, "width": 120},
+            {"x1": 3200, "y1": 2480, "x2": 3885, "y2": 2978, "width": 115},
+            {"x1": 3885, "y1": 2978, "x2": 3623, "y2": 3782, "width": 115},
+            {"x1": 3623, "y1": 3782, "x2": 2777, "y2": 3782, "width": 115},
+            {"x1": 2777, "y1": 3782, "x2": 2515, "y2": 2978, "width": 115},
+            {"x1": 2515, "y1": 2978, "x2": 3200, "y2": 2480, "width": 115},
+            {"x1": 3200, "y1": 750, "x2": 4209, "y2": 621, "width": 110},
+            {"x1": 5341, "y1": 1443, "x2": 5530, "y2": 2443, "width": 110},
+            {"x1": 5530, "y1": 2443, "x2": 5965, "y2": 3362, "width": 110},
+            {"x1": 5533, "y1": 4694, "x2": 4640, "y2": 5182, "width": 110},
+            {"x1": 4640, "y1": 5182, "x2": 3900, "y2": 5880, "width": 110},
+            {"x1": 2500, "y1": 5880, "x2": 1760, "y2": 5182, "width": 110},
+            {"x1": 1760, "y1": 5182, "x2": 867, "y2": 4694, "width": 110},
+            {"x1": 435, "y1": 3362, "x2": 870, "y2": 2443, "width": 110},
+            {"x1": 870, "y1": 2443, "x2": 1059, "y2": 1443, "width": 110},
+            {"x1": 2191, "y1": 621, "x2": 3200, "y2": 750, "width": 110},
+            {"x1": 2515, "y1": 2978, "x2": 3200, "y2": 2890, "width": 100},
+            {"x1": 3200, "y1": 2890, "x2": 3885, "y2": 2978, "width": 100},
+            {"x1": 2777, "y1": 3782, "x2": 3200, "y2": 3510, "width": 100},
+            {"x1": 3200, "y1": 3510, "x2": 3623, "y2": 3782, "width": 100},
+            # 五条卡口军路与实际长通道完全重合。
+            {"x1": 4209, "y1": 621, "x2": 5341, "y2": 1443, "width": 140},
+            {"x1": 5965, "y1": 3362, "x2": 5533, "y2": 4694, "width": 140},
+            {"x1": 3900, "y1": 5880, "x2": 2500, "y2": 5880, "width": 140},
+            {"x1": 867, "y1": 4694, "x2": 435, "y2": 3362, "width": 140},
+            {"x1": 1059, "y1": 1443, "x2": 2191, "y2": 621, "width": 140},
         ],
         # 比默认图更肥：每家多一片保底矿，公共矿多两处随机点，
         # 中庭五处头奖围着陨石核（对准五条谷口），外加五处邻里口袋矿。
         # 都按公共矿刷炮塔 / 突击兵 / 火箭兵守军。
         "homeOreAmounts": (26000, 19000, 17000, 21000),
+        "homeOreBehind": True,
+        "homeOreDistance": 450,
         "publicOreCount": 6,
         "bonusResources": [
             # 中庭金库：原北/东南/西南三处加肥，再补东北、西北两处，围核一圈。
             {"x": 3200, "y": 2740, "amount": 56000, "public": True},
-            {"x": 3480, "y": 3058, "amount": 44000, "public": True},
-            {"x": 3450, "y": 3460, "amount": 44000, "public": True},
-            {"x": 2950, "y": 3460, "amount": 44000, "public": True},
-            {"x": 2920, "y": 3058, "amount": 44000, "public": True},
-            {"x": 4404, "y": 1361, "amount": 26000, "public": True},
-            {"x": 4667, "y": 4302, "amount": 26000, "public": True},
-            {"x": 2982, "y": 5720, "amount": 26000, "public": True},
-            {"x": 1599, "y": 3656, "amount": 26000, "public": True},
-            {"x": 2428, "y": 961, "amount": 26000, "public": True},
+            {"x": 3637, "y": 3058, "amount": 44000, "public": True},
+            {"x": 3590, "y": 3460, "amount": 44000, "public": True},
+            {"x": 2810, "y": 3460, "amount": 44000, "public": True},
+            {"x": 2763, "y": 3058, "amount": 44000, "public": True},
+            {"x": 4209, "y": 621, "amount": 13000, "public": True},
+            {"x": 5341, "y": 1443, "amount": 13000, "public": True},
+            {"x": 5965, "y": 3362, "amount": 13000, "public": True},
+            {"x": 5533, "y": 4694, "amount": 13000, "public": True},
+            {"x": 3900, "y": 5880, "amount": 13000, "public": True},
+            {"x": 2500, "y": 5880, "amount": 13000, "public": True},
+            {"x": 867, "y": 4694, "amount": 13000, "public": True},
+            {"x": 435, "y": 3362, "amount": 13000, "public": True},
+            {"x": 1059, "y": 1443, "amount": 13000, "public": True},
+            {"x": 2191, "y": 621, "amount": 13000, "public": True},
         ],
     },
 }
@@ -1698,7 +1655,8 @@ def start_game(room):
         "_publicViewCache": {},
         "terrain": {
             "rivers": [{"x1": r["x1"], "y1": r["y1"], "x2": r["x2"], "y2": r["y2"], "width": r["width"]} for r in rivers],
-            "bridges": [{"x": b["x"], "y": b["y"], "w": b["w"], "h": b["h"]} for b in bridges],
+            # 通道有旧式矩形与任意角度线段两种数据，完整下发给 3D / 小地图。
+            "bridges": [dict(b) for b in bridges],
             "mountains": [{"x": m["x"], "y": m["y"], "r": m["r"]} for m in mountains],
             "roads": [{"x1": r["x1"], "y1": r["y1"], "x2": r["x2"], "y2": r["y2"], "width": r["width"]} for r in roads],
             "theme": room_map.get("theme", "grassland"),
@@ -1834,23 +1792,38 @@ def start_game(room):
             game["units"].append(make_unit(loadout["infantry"], player["id"], x + toward_x * (75 + n * 16), y + toward_y * 70))
         game["units"].append(make_unit(loadout["armor"], player["id"], x + toward_x * 92, y + toward_y * 112))
         # 家矿要跟随出生方向，但不能随着大战场尺寸一起越推越远；否则恢复
-        # 9600×6000 后首轮回款会比小地图慢十几秒。短边地图仍用 20%，
-        # 大地图把矿区中心限制在距基地约 650 世界单位内。
+        # 9600×6000 后首轮回款会比小地图慢十几秒。普通地图把矿放在朝向
+        # 中央的一侧；赤金陨坑可用 homeOreBehind 把矿簇翻到总部后方。
         center_dx = center_x - x
         center_dy = center_y - y
         center_dist = max(1.0, math.hypot(center_dx, center_dy))
-        home_ore_factor = min(0.20, 650.0 / center_dist)
-        ore_x = x + center_dx * home_ore_factor
-        ore_y = y + center_dy * home_ore_factor
         # 默认三片保底矿；地图可用 homeOreAmounts 加片或加量，旧图数字不变。
         home_amounts = list(room_map.get("homeOreAmounts") or (22000, 16000, 14000))
-        home_offsets = (
-            (-toward_y * 62, toward_x * 62),
-            (toward_y * 58, -toward_x * 48),
-            (toward_x * 110, toward_y * 80),
-            (-toward_x * 95, toward_y * 125),
-            (toward_x * 40, -toward_y * 105),
-        )
+        if room_map.get("homeOreBehind"):
+            outward_x = -center_dx / center_dist
+            outward_y = -center_dy / center_dist
+            tangent_x, tangent_y = -outward_y, outward_x
+            ore_distance = float(room_map.get("homeOreDistance", 450.0))
+            ore_x = x + outward_x * ore_distance
+            ore_y = y + outward_y * ore_distance
+            # 两列两排：离总部 390–540，全部位于背向中央的一侧。
+            local_offsets = ((-100, -60), (100, -60), (-100, 90), (100, 90),
+                             (0, 210))
+            home_offsets = tuple(
+                (tangent_x * lateral + outward_x * radial,
+                 tangent_y * lateral + outward_y * radial)
+                for lateral, radial in local_offsets)
+        else:
+            home_ore_factor = min(0.20, 650.0 / center_dist)
+            ore_x = x + center_dx * home_ore_factor
+            ore_y = y + center_dy * home_ore_factor
+            home_offsets = (
+                (-toward_y * 62, toward_x * 62),
+                (toward_y * 58, -toward_x * 48),
+                (toward_x * 110, toward_y * 80),
+                (-toward_x * 95, toward_y * 125),
+                (toward_x * 40, -toward_y * 105),
+            )
         for index, amount in enumerate(home_amounts):
             if index >= len(home_offsets):
                 break
@@ -2442,7 +2415,7 @@ class Terrain(object):
     """
 
     __slots__ = ("rivers", "bridges", "mountains", "roads", "width", "height",
-                 "_river_shapes", "_bridge_boxes", "_mountain_shapes", "_road_shapes",
+                 "_river_shapes", "_bridge_shapes", "_mountain_shapes", "_road_shapes",
                  "_grid", "_cost", "_grid_w", "_grid_h", "_path_cache",
                  "_near_cache", "_camp_zones")
 
@@ -2465,13 +2438,27 @@ class Terrain(object):
                 min(x1, x1 + dx) - half, max(x1, x1 + dx) + half,
                 min(y1, y1 + dy) - half, max(y1, y1 + dy) + half,
                 x1, y1, dx, dy, dx * dx + dy * dy, half * half))
-        self._bridge_boxes = [
-            (float(bridge["x"]) - float(bridge["w"]) * 0.5,
-             float(bridge["x"]) + float(bridge["w"]) * 0.5,
-             float(bridge["y"]) - float(bridge["h"]) * 0.5,
-             float(bridge["y"]) + float(bridge["h"]) * 0.5)
-            for bridge in self.bridges
-        ]
+        # 兼容旧地图的轴对齐桥盒，同时支持赤金陨坑使用的任意角度长条通道。
+        # 紧凑 tuple: kind, bounds(4), start(2), delta(2), len², radius²。
+        self._bridge_shapes = []
+        for bridge in self.bridges:
+            if all(key in bridge for key in ("x1", "y1", "x2", "y2", "width")):
+                x1, y1 = float(bridge["x1"]), float(bridge["y1"])
+                dx = float(bridge["x2"]) - x1
+                dy = float(bridge["y2"]) - y1
+                half = float(bridge["width"]) * 0.5
+                self._bridge_shapes.append((
+                    1,
+                    min(x1, x1 + dx) - half, max(x1, x1 + dx) + half,
+                    min(y1, y1 + dy) - half, max(y1, y1 + dy) + half,
+                    x1, y1, dx, dy, dx * dx + dy * dy, half * half))
+            else:
+                bx, by = float(bridge["x"]), float(bridge["y"])
+                half_w = float(bridge["w"]) * 0.5
+                half_h = float(bridge["h"]) * 0.5
+                self._bridge_shapes.append((
+                    0, bx - half_w, bx + half_w, by - half_h, by + half_h,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
         self._mountain_shapes = [
             (float(m["x"]), float(m["y"]), float(m["r"]))
             for m in self.mountains
@@ -2496,6 +2483,30 @@ class Terrain(object):
 
     # --- water ---
 
+    def point_in_bridge(self, x, y):
+        """Return whether a point lies in a legacy bridge box or a trail capsule."""
+        for shape in self._bridge_shapes:
+            if x < shape[1] or x > shape[2] or y < shape[3] or y > shape[4]:
+                continue
+            if shape[0] == 0:
+                return True
+            x1, y1, dx, dy, length_sq, radius_sq = shape[5:11]
+            if length_sq < 0.001:
+                closest_x, closest_y = x1, y1
+            else:
+                t = ((x - x1) * dx + (y - y1) * dy) / length_sq
+                if t < 0.0:
+                    t = 0.0
+                elif t > 1.0:
+                    t = 1.0
+                closest_x = x1 + t * dx
+                closest_y = y1 + t * dy
+            bx = x - closest_x
+            by = y - closest_y
+            if bx * bx + by * by <= radius_sq:
+                return True
+        return False
+
     def point_in_water(self, x, y):
         for shape in self._river_shapes:
             if x < shape[0] or x > shape[1] or y < shape[2] or y > shape[3]:
@@ -2514,9 +2525,8 @@ class Terrain(object):
             wx = x - closest_x
             wy = y - closest_y
             if wx * wx + wy * wy < shape[9]:
-                for box in self._bridge_boxes:
-                    if box[0] <= x <= box[1] and box[2] <= y <= box[3]:
-                        return False
+                if self.point_in_bridge(x, y):
+                    return False
                 return True
         return False
 
@@ -2674,17 +2684,23 @@ class Terrain(object):
         if not self.segment_blocked(unit_x, unit_y, dest_x, dest_y):
             return None
         best_bridge = None
+        best_center = None
         best_cost = float("inf")
         for bridge in self.bridges:
-            bx, by = bridge["x"], bridge["y"]
+            if "x" in bridge and "y" in bridge:
+                bx, by = bridge["x"], bridge["y"]
+            else:
+                bx = (bridge["x1"] + bridge["x2"]) * 0.5
+                by = (bridge["y1"] + bridge["y2"]) * 0.5
             cost = (math.hypot(bx - unit_x, by - unit_y)
                     + math.hypot(dest_x - bx, dest_y - by))
             if cost < best_cost:
                 best_cost = cost
                 best_bridge = bridge
+                best_center = (bx, by)
         if not best_bridge:
             return None
-        return (best_bridge["x"], best_bridge["y"])
+        return best_center
 
     # --- A* navigation ---
 
@@ -2936,7 +2952,7 @@ def _scatter_forest_rocks(map_def, count, seed):
     """在空旷地带铺小尺寸山体（森林巨石），压缩可发展空间。
 
     巨石是普通的小山条目：视觉上渲染成岩石 + 树丛，玩法上是不可通行、
-    不可建造的阻挡。避开出生点空地（430px）、道路沿线、桥盒、地图边和
+    不可建造的阻挡。避开出生点空地（430px）、道路沿线、桥道、地图边和
     已有地形；同一张图每次生成结果一致（确定性种子）。
     """
     rng = random.Random(seed)
@@ -2975,6 +2991,9 @@ def _scatter_forest_rocks(map_def, count, seed):
 
 # 每张图按面积比例铺森林巨石；种子由地图名决定，同一张图每次相同。
 for _rock_map_id, _rock_map_def in MAPS.items():
+    # 赤金陨坑的阻挡全部集中在五条等分森林带；发展区内不再塞随机孤岛。
+    if _rock_map_id in ("gold_crater", "gold_crater_small"):
+        continue
     _rock_count = max(10, int(_rock_map_def["width"] * _rock_map_def["height"] / 2200000.0))
     _rock_seed = sum(ord(ch) for ch in _rock_map_id) + 0x5EED
     _rock_map_def["mountains"] = list(_rock_map_def.get("mountains") or []) + \

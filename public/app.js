@@ -3577,6 +3577,24 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     // 林间小路：土路色块 + 亮芯 + 描边，森林里的唯一豁口
     for (i = 0; i < bridges.length; i++) {
       var b = bridges[i];
+      if (Number.isFinite(b.x1) && Number.isFinite(b.y1) &&
+          Number.isFinite(b.x2) && Number.isFinite(b.y2)) {
+        var trailWidth = Math.max(3, b.width * (sx + sy) * 0.5);
+        c.save();
+        c.lineCap = 'round';
+        c.lineJoin = 'round';
+        c.beginPath();
+        c.moveTo(b.x1 * sx, b.y1 * sy);
+        c.lineTo(b.x2 * sx, b.y2 * sy);
+        c.strokeStyle = 'rgba(10,10,6,.5)';
+        c.lineWidth = trailWidth + 2;
+        c.stroke();
+        c.strokeStyle = 'rgba(196,164,102,.9)';
+        c.lineWidth = trailWidth;
+        c.stroke();
+        c.restore();
+        continue;
+      }
       var bx = (b.x - b.w / 2) * sx;
       var by = (b.y - b.h / 2) * sy;
       var bw = Math.max(3, b.w * sx);
