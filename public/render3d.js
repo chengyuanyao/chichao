@@ -2461,17 +2461,15 @@ export function createRenderer(canvas) {
         baseForest[0] * 0.72, baseForest[1] * 0.82, baseForest[2] * 0.72
       ];
       const TRUNK = [0.30, 0.20, 0.10];
-      const placeTree = function (tx, ty, seed, skirt) {
+      const placeTree = function (tx, ty, seed) {
         if (riverDepthAt(tx, ty) > 0.05 || mountainHeightAt(tx, ty) > 0.05) {
           // 树底落在实际地面上（含山丘），避免树干悬空或埋进坡里
           const gy = rollingHeight(tx, ty) + mountainHeightAt(tx, ty);
-          if (skirt) {
-            treeSlab(2.4, 1.6, 2.4, tx, gy + 0.8, ty, [0.10, 0.16, 0.08]);
-          }
           const big = treeRand(seed * 3.1 + 97) > 0.5;
           const trunkH = 3.2 + treeRand(seed + 53) * 2.6;
-          const crownR = big ? 5.4 : 3.9;
-          const crownH = big ? 5.6 : 4.2;
+          // 树冠放大 + 间距收紧：俯视树冠几乎相接，森林是密密麻麻的一片
+          const crownR = big ? 6.6 : 4.8;
+          const crownH = big ? 6.4 : 4.6;
           treeSlab(1.7, trunkH, 1.7, tx, gy + trunkH * 0.5, ty, TRUNK);
           const foliage = treeRand(seed * 5.7 + 41);
           const rgb = foliage > 0.72 ? FOLIAGE_DARK
@@ -2495,39 +2493,39 @@ export function createRenderer(canvas) {
         }
         return false;
       };
-      // 河道林带
+      // 河道林带：每 20px 一棵 + 横向抖动，树冠几乎相接
       for (let r = 0; r < rivers.length; r++) {
         const rv = rivers[r];
         const len = Math.hypot(rv.x2 - rv.x1, rv.y2 - rv.y1);
         const half = rv.width * 0.5;
-        const count = Math.max(6, Math.floor(len / 70));
+        const count = Math.max(8, Math.floor(len / 20));
         for (let k = 0; k < count; k++) {
           const t = (k + 0.5) / count;
           const cx = rv.x1 + (rv.x2 - rv.x1) * t;
           const cy = rv.y1 + (rv.y2 - rv.y1) * t;
           // 横向偏移落进林带内，再叠一层抖动让树不排成直线
-          const spread = half * (0.55 + treeRand(k + r * 131) * 0.8);
+          const spread = half * (0.45 + treeRand(k + r * 131) * 0.9);
           const ang = treeRand(k * 7.3 + r * 19) * Math.PI * 2;
           const tx = cx + Math.cos(ang) * spread;
           const ty = cy + Math.sin(ang) * spread;
           if (riverDepthAt(tx, ty) < 0.12) continue;
           if (nearBridge(tx, ty)) continue;
-          placeTree(tx, ty, k + r * 211, true);
+          placeTree(tx, ty, k + r * 211);
         }
       }
       // 山丘森林：每座山按半径撒树，山顶到山脚密度递减，
       // 大树/小树/三种绿色混出「各种森林」
       for (let mi = 0; mi < mountains.length; mi++) {
         const m = mountains[mi];
-        const mcount = Math.max(4, Math.round(m.r / 52));
+        const mcount = Math.max(6, Math.round(m.r / 22));
         for (let k = 0; k < mcount; k++) {
           const ang = treeRand(k * 3.7 + mi * 29) * Math.PI * 2;
-          const rad = m.r * (0.16 + treeRand(k * 1.9 + mi * 13) * 0.78);
+          const rad = m.r * (0.12 + treeRand(k * 1.9 + mi * 13) * 0.85);
           const tx = m.x + Math.cos(ang) * rad;
           const ty = m.y + Math.sin(ang) * rad;
           if (nearBridge(tx, ty)) continue;
           if (riverDepthAt(tx, ty) > 0.05) continue;
-          placeTree(tx, ty, k + mi * 977 + 5000, false);
+          placeTree(tx, ty, k + mi * 977 + 5000);
         }
       }
       if (forestParts.length) {
