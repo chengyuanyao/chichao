@@ -377,10 +377,11 @@ def main():
     assert "不设置生产快捷键" in readme
 
     # 可选模式「轨道天降」：大厅开关文案在，预警圈跟这发 radius 走。
-    assert "轨道天降" in index
-    assert "随机轨道打击，范围×5，默认关" in index
-    assert 'data-mode="orbital_rain"' in index
-    assert "orbitalRainToggle" in index
+    # 上面的房间上限循环把 index 重绑成了 int，这里读 hud（同一份 index.html）。
+    assert "轨道天降" in hud
+    assert "随机轨道打击，范围×5，默认关" in hud
+    assert 'data-mode="orbital_rain"' in hud
+    assert "orbitalRainToggle" in hud
     assert "轨道天降" in readme
     assert "setOrbitalRain" in app
     assert "function syncOrbitalRainToggle" in app
