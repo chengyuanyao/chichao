@@ -175,30 +175,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     if (repairHint) { repairHint.innerHTML = '<kbd>R</kbd> ' + copy.repairHint; }
   }
 
-  // Production hotkeys reuse the existing train action. S stays stop
-  // (tap) / camera (hold) — scout is D, not S. W/A/D still pan while
-  // held; a short tap trains when a producer is selected or implied.
-  var TRAIN_HOTKEYS = {
-    tech: {
-      KeyQ: 'rifle',
-      KeyW: 'dog',
-      KeyE: 'rocket',
-      KeyR: 'sniper',
-      KeyA: 'tank',
-      KeyD: 'scout',
-      KeyF: 'bomb_truck',
-      KeyZ: 'tesla'
-    },
-    magic: {
-      KeyQ: 'mage',
-      KeyW: 'frost',
-      KeyE: 'panther',
-      KeyR: 'imp',
-      KeyT: 'oracle',
-      KeyA: 'golem',
-      KeyF: 'hexling'
-    }
-  };
   var CONTROL_GROUP_JUMP_MS = 350;
 
   var STRUCTURE_ICONS = {
@@ -1241,8 +1217,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var stopKeyDownAt = 0;
   var controlGroups = {};
   var lastGroupTap = {};
-  var lastProducerId = null;
-  var cameraTrainKeyDownAt = {};
   var structureHpSnap = {};
   var structureAlertUntil = {};
   var displayedCash = 0;
@@ -2174,10 +2148,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     resultShown = false;
     selectedUnits.clear();
     selectedStructureId = null;
-    lastProducerId = null;
     controlGroups = {};
     lastGroupTap = {};
-    cameraTrainKeyDownAt = {};
     setScreen('home');
   }
 
@@ -2191,10 +2163,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       resultShown = false;
       selectedUnits.clear();
       selectedStructureId = null;
-      lastProducerId = null;
       controlGroups = {};
       lastGroupTap = {};
-      cameraTrainKeyDownAt = {};
       buildMode = null;
       commandMode = null;
       view3d.clearEntities();
@@ -2288,7 +2258,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     }
 
     applyFactionHud();
-    updateProductionHint();
     var repairBtn = $('#repairBtn');
     if (repairBtn) {
       repairBtn.classList.remove('hidden');
@@ -2538,13 +2507,11 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
         button.dataset.kind = kind;
         button.dataset.type = isBuilding ? 'building' : 'unit';
         // DOM 结构是与样式层的跨线契约（DESIGN_V3 第 1 条），顺序不可调
-        var hotkeyLetter = trainHotkeyLetter(kind);
         button.innerHTML =
           '<canvas class="command-portrait" width="96" height="72"></canvas>' +
           '<span class="command-progress"></span>' +
           '<strong class="command-name">' + definition.name + '</strong>' +
-          '<small class="command-status"></small>' +
-          (hotkeyLetter ? '<span class="command-hotkey">' + hotkeyLetter + '</span>' : '');
+          '<small class="command-status"></small>';
         // 肖像位图是共享缓存，这里只 blit 一份进卡片自己的画布
         var portraitCanvas = button.querySelector('.command-portrait');
         portraitCanvas.getContext('2d').drawImage(portraitFor(kind, isBuilding), 0, 0);
@@ -2615,8 +2582,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
           status.textContent = '◆ ' + definition.cost.toLocaleString('zh-CN');
         }
         button.disabled = !requirementsMet || me.cash < definition.cost || me.eliminated;
-        var unitHotkey = trainHotkeyLetter(kind);
-        button.title = definition.desc + (unitHotkey ? ' · ' + unitHotkey : '');
+        button.title = definition.desc;
       }
       button.style.setProperty('--progress', Math.max(0, Math.min(1, progress)) * 360 + 'deg');
       if (queued) {
@@ -2628,7 +2594,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   }
 
   function renderSelectionInfo() {
-    updateProductionHint();
     if (!roomState || !roomState.game) {
       return;
     }
@@ -2758,7 +2723,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     // the next snapshot drops them, so filter by live id + hp.
     if (!roomState || !roomState.game) {
       controlGroups = {};
-      lastProducerId = null;
       return;
     }
     var liveIds = new Set(roomState.game.units.filter(function (u) {
@@ -2774,123 +2738,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
         delete controlGroups[num];
       }
     });
-    if (lastProducerId && !roomState.game.structures.some(function (structure) {
-      return structure.id === lastProducerId && structure.owner === session.playerId
-        && structure.hp > 0;
-    })) {
-      lastProducerId = null;
-    }
-  }
-
-  function isProducerRole(role) {
-    return role === 'barracks' || role === 'factory';
-  }
-
-  function rememberProducer(structure) {
-    if (structure && session && structure.owner === session.playerId
-        && structure.hp > 0 && isProducerRole(structureRole(structure.kind))) {
-      lastProducerId = structure.id;
-    }
-  }
-
-  function currentProducer() {
-    if (!roomState || !roomState.game || !session) {
-      return null;
-    }
-    var ids = [];
-    if (selectedStructureId) {
-      ids.push(selectedStructureId);
-    }
-    if (lastProducerId && lastProducerId !== selectedStructureId) {
-      ids.push(lastProducerId);
-    }
-    for (var i = 0; i < ids.length; i++) {
-      var structure = roomState.game.structures.find(function (item) {
-        return item.id === ids[i];
-      });
-      if (structure && structure.owner === session.playerId && structure.hp > 0
-          && isProducerRole(structureRole(structure.kind))) {
-        return structure;
-      }
-    }
-    return null;
-  }
-
-  function productionHotkeysActive() {
-    return currentScreen === 'game' && !selectedUnits.size && !!currentProducer();
-  }
-
-  function trainKindForCode(code) {
-    var faction = isOwnMagicFaction() ? 'magic' : 'tech';
-    return (TRAIN_HOTKEYS[faction] || {})[code] || '';
-  }
-
-  function trainHotkeyLetter(kind) {
-    var faction = isOwnMagicFaction() ? 'magic' : 'tech';
-    var keys = TRAIN_HOTKEYS[faction] || {};
-    var codes = Object.keys(keys);
-    for (var i = 0; i < codes.length; i++) {
-      if (keys[codes[i]] === kind) {
-        return codes[i].slice(3);
-      }
-    }
-    return '';
-  }
-
-  function canTrainKind(kind) {
-    var definition = UNITS[kind];
-    if (!definition) {
-      return false;
-    }
-    return hasStructure(definition.producer)
-      && (definition.requires || []).every(hasStructure);
-  }
-
-  function tryTrainHotkey(code) {
-    if (!productionHotkeysActive()) {
-      return false;
-    }
-    var kind = trainKindForCode(code);
-    if (!kind || !canTrainKind(kind)) {
-      return false;
-    }
-    sendAction('command', { command: 'train', unitType: kind }).then(function () {
-      sound('confirm');
-    }).catch(function () {});
-    return true;
-  }
-
-  function productionHintText() {
-    var faction = isOwnMagicFaction() ? 'magic' : 'tech';
-    var keys = TRAIN_HOTKEYS[faction] || {};
-    var parts = [];
-    Object.keys(keys).forEach(function (code) {
-      var kind = keys[code];
-      if (!canTrainKind(kind)) {
-        return;
-      }
-      var name = (UNITS[kind] || {}).name || kind;
-      parts.push(code.slice(3) + name);
-    });
-    if (!parts.length) {
-      return '';
-    }
-    return parts.join('  ') + '  ·  S停止';
-  }
-
-  function updateProductionHint() {
-    var el = $('#productionHint');
-    if (!el) {
-      return;
-    }
-    var text = productionHotkeysActive() ? productionHintText() : '';
-    if (text) {
-      el.textContent = text;
-      el.classList.remove('hidden');
-    } else {
-      el.textContent = '';
-      el.classList.add('hidden');
-    }
   }
 
   // 本帧新出现的特效，交给 3D 层生成粒子后清空
@@ -3848,7 +3695,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       selectedUnits.clear();
       selectedStructureId = entity.id;
       sound('select');
-      rememberProducer(entity);
       if (session && entity.owner === session.playerId && structureRole(entity.kind) === 'hq') {
         sendAction('command', { command: 'tapHq', structureId: entity.id }).catch(function () {});
       }
@@ -4480,34 +4326,17 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       }
     } else if (event.code === 'KeyQ') {
       event.preventDefault();
-      if (!event.repeat && tryTrainHotkey('KeyQ')) {
-        return;
-      }
       setCommandMode('attackMove');
     } else if (event.code === 'KeyS') {
       event.preventDefault();
       // Tap S = stop. Hold S = camera pan (WASD). Immediate stop-on-keydown
       // cancelled marches while the player panned to pick another group.
-      // Do not steal S for scout — production scout is KeyD.
       if (!event.repeat && !stopKeyDownAt) {
         stopKeyDownAt = performance.now();
       }
     } else if (event.code === 'KeyR') {
       event.preventDefault();
-      if (!event.repeat && tryTrainHotkey('KeyR')) {
-        return;
-      }
       repairSelectedAtNearestBay();
-    } else if (event.code === 'KeyE' || event.code === 'KeyF' || event.code === 'KeyZ' || event.code === 'KeyT') {
-      if (!event.repeat && tryTrainHotkey(event.code)) {
-        event.preventDefault();
-      }
-    } else if (event.code === 'KeyW' || event.code === 'KeyA' || event.code === 'KeyD') {
-      // Hold = camera pan. Short tap trains when a producer is selected
-      // or last-selected barracks/factory is implied.
-      if (!event.repeat && productionHotkeysActive() && trainKindForCode(event.code)) {
-        cameraTrainKeyDownAt[event.code] = performance.now();
-      }
     } else if (event.code === 'KeyU') {
       event.preventDefault();
       if (selectedStructureId && roomState && roomState.game) {
@@ -4556,18 +4385,11 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       if (heldMs < 220 && currentScreen === 'game') {
         stopSelected();
       }
-    } else if (cameraTrainKeyDownAt[event.code]) {
-      var trainHeldMs = performance.now() - cameraTrainKeyDownAt[event.code];
-      delete cameraTrainKeyDownAt[event.code];
-      if (trainHeldMs < 220 && currentScreen === 'game') {
-        tryTrainHotkey(event.code);
-      }
     }
   });
   window.addEventListener('blur', function () {
     pressedKeys.clear();
     stopKeyDownAt = 0;
-    cameraTrainKeyDownAt = {};
   });
 
   createRoomBtn.addEventListener('click', createRoom);

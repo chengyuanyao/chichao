@@ -2496,20 +2496,24 @@ export function createRenderer(canvas) {
         if (riverDepthAt(tx, ty) > 0.05 || mountainHeightAt(tx, ty) > 0.05) {
           // 树底落在实际地面上（含山丘），避免树干悬空或埋进坡里
           const gy = rollingHeight(tx, ty) + mountainHeightAt(tx, ty);
-          const big = treeRand(seed * 3.1 + 97) > 0.5;
-          const trunkH = 3.2 + treeRand(seed + 53) * 2.6;
-          // 树冠放大 + 间距收紧：俯视树冠几乎相接，森林是密密麻麻的一片
-          const crownR = big ? 6.6 : 4.8;
-          const crownH = big ? 6.4 : 4.6;
-          treeSlab(1.7, trunkH, 1.7, tx, gy + trunkH * 0.5, ty, TRUNK);
+          const big = treeRand(seed * 3.1 + 97) > 0.38;
+          // 最高的魔法主堡约 144 高；森林树顶提高到约 147–178，
+          // 保证每棵成树都越过建筑天际线，并在远处形成连续林冠。
+          const trunkH = 68 + treeRand(seed + 53) * 22;
+          const trunkW = big ? 3.8 : 3.1;
+          const crownR = big ? 22 : 17;
+          const crownH = big ? 64 : 58;
+          treeSlab(trunkW, trunkH, trunkW, tx, gy + trunkH * 0.5, ty, TRUNK);
           const foliage = treeRand(seed * 5.7 + 41);
           const rgb = foliage > 0.72 ? FOLIAGE_DARK
             : (foliage > 0.3 ? FOLIAGE_A : FOLIAGE_B);
-          // 双层树冠：下层宽、上层窄，俯视有团簇感
-          treeSlab(crownR * 2.1, crownH, crownR * 2.1,
-                   tx, gy + trunkH + crownH * 0.5, ty, rgb);
-          treeSlab(crownR * 1.2, crownH * 0.8, crownR * 1.2,
-                   tx, gy + trunkH + crownH * 0.95, ty, rgb);
+          // 三层收尖树冠：底层互相搭接形成林墙，上层保持单棵树的高耸轮廓。
+          treeSlab(crownR * 2.1, crownH * 0.72, crownR * 2.1,
+                   tx, gy + trunkH + crownH * 0.28, ty, rgb);
+          treeSlab(crownR * 1.5, crownH * 0.68, crownR * 1.5,
+                   tx, gy + trunkH + crownH * 0.72, ty, rgb);
+          treeSlab(crownR * 0.86, crownH * 0.5, crownR * 0.86,
+                   tx, gy + trunkH + crownH * 1.12, ty, rgb);
         }
       };
       const nearBridge = function (tx, ty) {
@@ -2541,8 +2545,8 @@ export function createRenderer(canvas) {
         const rdy = rv.y2 - rv.y1;
         const len = Math.hypot(rdx, rdy);
         const half = rv.width * 0.5;
-        const density = Math.max(1, rv.width / 150);
-        const count = Math.min(900, Math.max(8, Math.floor(len / 20 * density)));
+        const density = Math.max(1, rv.width / 120);
+        const count = Math.min(1500, Math.max(12, Math.floor(len / 17 * density)));
         const ux = len > 0.001 ? rdx / len : 1;
         const uy = len > 0.001 ? rdy / len : 0;
         const nx = -uy;
@@ -2565,7 +2569,7 @@ export function createRenderer(canvas) {
       // 大树/小树/三种绿色混出「各种森林」
       for (let mi = 0; mi < mountains.length; mi++) {
         const m = mountains[mi];
-        const mcount = Math.max(6, Math.round(m.r / 22));
+        const mcount = Math.max(10, Math.round(m.r / 14));
         for (let k = 0; k < mcount; k++) {
           const ang = treeRand(k * 3.7 + mi * 29) * Math.PI * 2;
           const rad = m.r * (0.12 + treeRand(k * 1.9 + mi * 13) * 0.85);
