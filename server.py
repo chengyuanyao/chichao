@@ -3832,10 +3832,10 @@ BOT_PHASE_CLOSE = "close"
 BOT_SUICIDE_BLAST = UNIT_TYPES["bomb_truck"]["deathExplosion"]
 BOT_CHEAP_KINDS = frozenset((
     "rifle", "rocket", "sniper", "dog", "tesla",
-    "mage", "frost", "panther", "scout",
+    "mage", "frost", "imp", "oracle", "panther", "scout",
 ))
 BOT_INFANTRY_KINDS = frozenset((
-    "rifle", "rocket", "sniper", "tesla", "mage", "frost",
+    "rifle", "rocket", "sniper", "tesla", "mage", "frost", "imp", "oracle",
 ))
 BOT_MAGE_KINDS = frozenset(("mage", "frost"))
 BOT_LATE_UNITS = frozenset((
@@ -4185,9 +4185,11 @@ def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
     choices = []
     if magic:
         if "barracks" in roles:
-            choices.extend(("mage", "mage"))
-            if not opening:
-                choices.append("frost")
+            if opening:
+                choices.extend(("imp", "imp", "mage", "mage"))
+            else:
+                choices.extend(("imp", "mage", "frost"))
+                choices.append("oracle")
         if "factory" in roles:
             choices.extend(("panther", "panther"))
             if "repair" in roles:
@@ -4253,7 +4255,7 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         if magic:
             choices = []
             if "barracks" in roles:
-                choices.extend(("frost", "frost"))
+                choices.extend(("frost", "frost", "oracle"))
             if "factory" in roles:
                 choices.append("hexling")
             return choices
@@ -4283,7 +4285,7 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
             if "factory" in roles:
                 choices.extend(("golem", "panther"))
             if "barracks" in roles:
-                choices.extend(("frost", "mage"))
+                choices.extend(("frost", "mage", "imp"))
             return choices
         choices = []
         if "barracks" in roles:

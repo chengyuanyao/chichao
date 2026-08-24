@@ -274,6 +274,7 @@ def main():
     assert "look: 'fireball'" in render
     assert "look: 'meteor'" in render
     assert "look: 'crystal'" in render
+    assert "iris:" in render
     assert "function guessMuzzleKind" in render
     assert "kind === 'meteor'" in render
     assert "function emitIdleAura" in render
@@ -345,8 +346,22 @@ def main():
     assert "KeyQ: 'mage'" in app
     assert "KeyW: 'frost'" in app
     assert "KeyE: 'panther'" in app
+    assert "KeyR: 'imp'" in app
+    assert "KeyT: 'oracle'" in app
     assert "KeyA: 'golem'" in app
     assert "KeyF: 'hexling'" in app
+    assert catalog["units"]["imp"]["name"] == "晶刺"
+    assert catalog["units"]["oracle"]["name"] == "虹视使"
+    assert catalog["units"]["imp"]["producer"] == "mtemple"
+    assert catalog["units"]["oracle"]["producer"] == "mtemple"
+    assert catalog["units"]["imp"]["faction"] == "magic"
+    assert catalog["units"]["oracle"]["faction"] == "magic"
+    assert catalog["units"]["imp"]["repairable"] is False
+    assert catalog["units"]["oracle"]["repairable"] is False
+    assert "晶刺：晶体碎片人形" in render
+    assert "虹视使：细长远视者" in render
+    assert "晶刺：碎晶人形 + 肩刺" in app
+    assert "虹视使：细长袍 + 棱镜杖" in app
     assert "KeyS: 'scout'" not in app
     assert "Do not steal S for scout — production scout is KeyD." in app
     assert "function tryTrainHotkey(code)" in app

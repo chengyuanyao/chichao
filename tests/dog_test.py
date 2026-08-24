@@ -103,6 +103,7 @@ def main():
 
     print("\n=== Test 6: 自动索敌会扑 arcane 法师/女巫 ===")
     assert server.is_dog_prey("mage") and server.is_dog_prey("frost")
+    assert server.is_dog_prey("imp") and server.is_dog_prey("oracle")
     assert not server.is_dog_prey("tank")
     assert not server.is_dog_prey("dragon")
     for kind in ("mage", "frost"):
