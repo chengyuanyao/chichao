@@ -144,6 +144,13 @@
               <label class="field-label" for="mapSelectDropdown">选择战场</label>
               <select id="mapSelectDropdown"></select>
             </div>
+            <label id="orbitalRainRow" class="mode-toggle" data-mode="orbital_rain" for="orbitalRainToggle">
+              <input type="checkbox" id="orbitalRainToggle">
+              <span>
+                <strong>轨道天降</strong>
+                <em>随机轨道打击，范围×5，默认关</em>
+              </span>
+            </label>
           </section>
 
           <section class="panel chat-panel">
@@ -179,6 +186,7 @@
           </div>
         </div>
         <div id="matchClock" class="match-clock">00:00</div>
+        <div id="orbitalRainBadge" class="mode-badge hidden" title="随机轨道打击，范围×5">轨道天降</div>
         <div id="connectionBadge" class="connection-badge"><i></i> 已连接</div>
         <button id="gameMenuBtn" class="icon-button game-menu-button">☰</button>
       </header>

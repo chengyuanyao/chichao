@@ -569,6 +569,16 @@ STRIKE_IMPACT_STEP = 0.09  # 弹幕落弹节奏（秒/发）
 STRIKE_DAMAGE = 130.0      # 单发伤害（命中 super 甲种系数后再放大）
 STRIKE_SPLASH = 60.0       # 单发溅射半径
 
+# 可选大厅模式「轨道天降」：系统在随机可通行点投放 5 倍范围的轨道打击。
+# 半径/溅射写在每发 pending strike 上，不改上面的玩家超武常数。
+ORBITAL_RAIN_MODE = "orbital_rain"
+ORBITAL_RAIN_RADIUS = STRIKE_RADIUS * 5.0
+ORBITAL_RAIN_SPLASH = STRIKE_SPLASH * 5.0
+ORBITAL_RAIN_FIRST_MIN = 45.0
+ORBITAL_RAIN_FIRST_MAX = 60.0
+ORBITAL_RAIN_GAP_MIN = 40.0
+ORBITAL_RAIN_GAP_MAX = 55.0
+
 # Only completed core buildings extend construction territory. Defensive
 # structures deliberately do not, preventing turret chains across the map.
 BUILD_ANCHOR_RANGES = {
@@ -925,6 +935,9 @@ def public_entity_frame(game):
         "strikes": [{
             "owner": strike["owner"],
             "x": round(strike["x"], 1), "y": round(strike["y"], 1),
+            "radius": round(strike.get("radius", STRIKE_RADIUS), 1),
+            "splash": round(strike.get("splash", STRIKE_SPLASH), 1),
+            "system": bool(strike.get("system")),
             "warnUntil": round(strike["warnUntil"] - elapsed, 2),
             "fireUntil": round(strike["fireUntil"] - elapsed, 2),
         } for strike in game.get("pendingStrikes", [])],
@@ -1069,6 +1082,7 @@ def public_game(game, viewer_id=None, full=True):
             "winnerId": frame["winnerId"],
             "crates": frame["crates"],
             "strikes": frame["strikes"],
+            "orbitalRain": bool(game.get("orbitalRain")),
         }
         view_cache[view_key] = (frame["stamp"], dynamic)
 
@@ -1124,6 +1138,7 @@ def public_room(room, include_game=True, viewer_id=None, full=True):
         "createdAt": room["createdAt"],
         "serverTime": now(),
         "selectedMap": room.get("selectedMap", DEFAULT_MAP),
+        "orbitalRain": bool(room.get("orbitalRain") or (room.get("game") or {}).get("orbitalRain")),
         "mapConfig": {
             "id": room_map["id"],
             "name": room_map["name"],
@@ -1714,6 +1729,11 @@ def start_game(room):
         "separationClock": 0.0, "uid": new_id("g"),
         "_snapshotVersion": 0, "_publicEntityFrame": None,
         "_publicViewCache": {},
+        "pendingStrikes": [],
+        "orbitalRain": bool(room.get("orbitalRain")),
+        "nextOrbitalRainAt": (
+            random.uniform(ORBITAL_RAIN_FIRST_MIN, ORBITAL_RAIN_FIRST_MAX)
+            if room.get("orbitalRain") else None),
         "terrain": {
             "rivers": [{"x1": r["x1"], "y1": r["y1"], "x2": r["x2"], "y2": r["y2"], "width": r["width"]} for r in rivers],
             # 通道有旧式矩形与任意角度线段两种数据，完整下发给 3D / 小地图。
@@ -1925,6 +1945,8 @@ def start_game(room):
         for t in sorted(team_map):
             add_chat(room, "作战系统", "第%d队：%s" % (t, "、".join(team_map[t])), True)
     add_chat(room, "作战系统", "战斗开始：摧毁敌方指挥中心即可获胜。", True)
+    if game["orbitalRain"]:
+        add_chat(room, "作战系统", "本局模式：轨道天降（随机轨道打击，范围×5）。", True)
 
 
 def find_entity(game, entity_id, entity_index=None):
@@ -2285,6 +2307,38 @@ def issue_undeploy(game, player_id, structure_id):
     })
 
 
+def queue_strike(room, x, y, owner=None, radius=None, splash=None, system=False):
+    """把一发轨道打击写入 pendingStrikes。半径/溅射跟这发走，不改全局常数。"""
+    game = room["game"]
+    map_w = game["map"]["width"]
+    map_h = game["map"]["height"]
+    tx = clamp(float(x), 0, map_w)
+    ty = clamp(float(y), 0, map_h)
+    radius = STRIKE_RADIUS if radius is None else float(radius)
+    splash = STRIKE_SPLASH if splash is None else float(splash)
+    base = game["elapsed"] + STRIKE_WARNING
+    # 预先把弹着点散布好，落弹时按节奏依次结算
+    impacts = []
+    for _ in range(STRIKE_IMPACTS):
+        rr = math.sqrt(random.random()) * radius
+        ang = random.random() * math.pi * 2.0
+        impacts.append({
+            "x": tx + math.cos(ang) * rr,
+            "y": ty + math.sin(ang) * rr,
+            "fireAt": base + len(impacts) * STRIKE_IMPACT_STEP + random.random() * 0.05,
+        })
+    fire_until = impacts[-1]["fireAt"] if impacts else base
+    strike = {
+        "owner": owner, "x": tx, "y": ty,
+        "radius": radius, "splash": splash,
+        "warnUntil": base, "fireUntil": fire_until,
+        "impacts": impacts, "fired": 0,
+        "system": bool(system),
+    }
+    game.setdefault("pendingStrikes", []).append(strike)
+    return strike
+
+
 def issue_strike(room, player_id, x, y):
     """消耗一次超级武器充能，向目标点呼叫轨道打击。"""
     game = room["game"]
@@ -2293,29 +2347,94 @@ def issue_strike(room, player_id, x, y):
         raise ValueError("无法释放")
     if player.get("strikeCharges", 0) <= 0:
         raise ValueError("没有超级武器充能")
-    map_w = game["map"]["width"]
-    map_h = game["map"]["height"]
-    tx = clamp(float(x), 0, map_w)
-    ty = clamp(float(y), 0, map_h)
     player["strikeCharges"] -= 1
-    base = game["elapsed"] + STRIKE_WARNING
-    # 预先把弹着点散布好，落弹时按节奏依次结算
-    impacts = []
-    for _ in range(STRIKE_IMPACTS):
-        rr = math.sqrt(random.random()) * STRIKE_RADIUS
-        ang = random.random() * math.pi * 2.0
-        impacts.append({
-            "x": tx + math.cos(ang) * rr,
-            "y": ty + math.sin(ang) * rr,
-            "fireAt": base + (len(impacts)) * STRIKE_IMPACT_STEP + random.random() * 0.05,
-        })
-    fire_until = impacts[-1]["fireAt"] if impacts else base
-    game.setdefault("pendingStrikes", []).append({
-        "owner": player_id, "x": tx, "y": ty,
-        "warnUntil": base, "fireUntil": fire_until,
-        "impacts": impacts, "fired": 0,
-    })
+    queue_strike(room, x, y, owner=player_id,
+                 radius=STRIKE_RADIUS, splash=STRIKE_SPLASH, system=False)
     add_chat(room, "作战系统", "%s 呼叫了轨道打击！" % player.get("name", "指挥官"), True)
+
+
+def set_orbital_rain(room, player, enabled):
+    """房主在大厅开关「轨道天降」模式。"""
+    if room.get("status") != "lobby":
+        raise ValueError("战斗已经开始")
+    if not player or room.get("hostId") != player.get("id"):
+        raise ValueError("只有房主可以设置模式")
+    enabled = bool(enabled)
+    if bool(room.get("orbitalRain")) == enabled:
+        return enabled
+    room["orbitalRain"] = enabled
+    if enabled:
+        add_chat(room, "作战系统", "已开启可选模式：轨道天降。", True)
+    else:
+        add_chat(room, "作战系统", "已关闭可选模式：轨道天降。", True)
+    return enabled
+
+
+def pick_walkable_map_point(game, margin=160.0, attempts=48):
+    """均匀抽一个可通行点；抽不中就退回地图中心，避免 100% 落在山/水上。"""
+    terrain = game_terrain(game)
+    mw = float(game["map"]["width"])
+    mh = float(game["map"]["height"])
+    lo_x, hi_x = margin, mw - margin
+    lo_y, hi_y = margin, mh - margin
+    if hi_x <= lo_x or hi_y <= lo_y:
+        lo_x, hi_x, lo_y, hi_y = 0.0, mw, 0.0, mh
+    for _ in range(attempts):
+        x = random.uniform(lo_x, hi_x)
+        y = random.uniform(lo_y, hi_y)
+        if not terrain.blocked(x, y):
+            return x, y
+    return mw * 0.5, mh * 0.5
+
+
+def has_pending_system_strike(game):
+    for strike in game.get("pendingStrikes") or []:
+        if strike.get("system"):
+            return True
+    return False
+
+
+def schedule_orbital_rain(game, first=False):
+    if first:
+        delay = random.uniform(ORBITAL_RAIN_FIRST_MIN, ORBITAL_RAIN_FIRST_MAX)
+    else:
+        delay = random.uniform(ORBITAL_RAIN_GAP_MIN, ORBITAL_RAIN_GAP_MAX)
+    game["nextOrbitalRainAt"] = game.get("elapsed", 0.0) + delay
+    return game["nextOrbitalRainAt"]
+
+
+def issue_orbital_rain(room):
+    """系统投放一发 5 倍范围轨道打击：不耗充能，至多同时挂一发。"""
+    game = room.get("game")
+    if not game:
+        return None
+    if has_pending_system_strike(game):
+        return None
+    x, y = pick_walkable_map_point(game)
+    strike = queue_strike(
+        room, x, y, owner=None,
+        radius=ORBITAL_RAIN_RADIUS, splash=ORBITAL_RAIN_SPLASH, system=True)
+    add_chat(room, "轨道系统",
+             "轨道打击将在 (%.0f,%.0f) 落下" % (strike["x"], strike["y"]), True)
+    return strike
+
+
+def tick_orbital_rain(room):
+    """轨道天降：按节拍在随机可通行点呼叫系统打击。"""
+    game = room.get("game")
+    if not game or not game.get("orbitalRain"):
+        return
+    next_at = game.get("nextOrbitalRainAt")
+    if next_at is None:
+        schedule_orbital_rain(game, first=True)
+        return
+    if game["elapsed"] < next_at:
+        return
+    if has_pending_system_strike(game):
+        game["nextOrbitalRainAt"] = game["elapsed"] + 1.0
+        return
+    issue_orbital_rain(room)
+    schedule_orbital_rain(game, first=False)
 
 
 def handle_game_command(room, player, payload):
@@ -5026,11 +5145,12 @@ def tick_pending_strikes(room, dt, combat_spatial=None):
         while idx < len(impacts) and now_e >= impacts[idx]["fireAt"]:
             imp = impacts[idx]
             ix, iy = imp["x"], imp["y"]
-            # 友伤：不判阵营，圈内谁都炸
-            for entity in spatial_candidates(combat_spatial, ix, iy, STRIKE_SPLASH):
+            # 友伤：不判阵营，圈内谁都炸。溅射跟这发走，轨道天降是 5 倍。
+            splash = strike.get("splash", STRIKE_SPLASH)
+            for entity in spatial_candidates(combat_spatial, ix, iy, splash):
                 if entity.get("hp", 0) <= 0:
                     continue
-                if math.hypot(entity["x"] - ix, entity["y"] - iy) <= STRIKE_SPLASH:
+                if math.hypot(entity["x"] - ix, entity["y"] - iy) <= splash:
                     apply_damage(room, entity, STRIKE_DAMAGE, strike["owner"],
                                  "super", game)
             game["effects"].append({
@@ -5058,6 +5178,7 @@ def tick_game(room, dt):
     tick_structures(room, dt, combat_spatial)
     entity_index, combat_spatial = build_combat_indexes(game)
     tick_projectiles(room, dt, entity_index, combat_spatial)
+    tick_orbital_rain(room)
     tick_pending_strikes(room, dt, combat_spatial)
 
     for effect in game["effects"]:
@@ -5302,6 +5423,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 "players": {player["id"]: player}, "chat": [], "game": None,
                 "createdAt": now(),
                 "selectedMap": selected_map,
+                "orbitalRain": False,
                 "lock": threading.RLock(),
             }
             ROOMS[room_id] = room
@@ -5389,6 +5511,8 @@ class GameHandler(BaseHTTPRequestHandler):
                     for p in room["players"].values():
                         p["spawn"] = -1
                     add_chat(room, "作战系统", "地图已切换为「%s」。" % MAPS[map_id]["name"], True)
+            elif action == "setOrbitalRain":
+                set_orbital_rain(room, player, payload.get("enabled"))
             elif action == "addBot":
                 if room["hostId"] != player["id"] or room["status"] != "lobby":
                     raise ValueError("只有房主可以添加 AI")

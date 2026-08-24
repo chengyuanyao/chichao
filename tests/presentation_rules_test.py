@@ -376,6 +376,18 @@ def main():
     assert "Ctrl+1 / Ctrl+2 / Ctrl+3" in readme
     assert "不设置生产快捷键" in readme
 
+    # 可选模式「轨道天降」：大厅开关文案在，预警圈跟这发 radius 走。
+    assert "轨道天降" in index
+    assert "随机轨道打击，范围×5，默认关" in index
+    assert 'data-mode="orbital_rain"' in index
+    assert "orbitalRainToggle" in index
+    assert "轨道天降" in readme
+    assert "setOrbitalRain" in app
+    assert "function syncOrbitalRainToggle" in app
+    assert "strike.radius" in app
+    assert "vecScale.set(STRIKE_RADIUS," not in render
+    assert "const ringR = (s.radius > 0) ? s.radius : STRIKE_RADIUS_FALLBACK;" in render
+
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 
 

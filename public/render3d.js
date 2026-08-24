@@ -2886,7 +2886,7 @@ export function createRenderer(canvas) {
   }
 
   /* -------------------- 轨道打击落点标圈 -------------------- */
-  const STRIKE_RADIUS = 180;          // 与服务端 STRIKE_RADIUS 对齐
+  const STRIKE_RADIUS_FALLBACK = 180; // 旧快照缺 radius 时退回玩家超武半径
   let strikeMesh = null;
 
   function ensureStrikeMesh(capacity) {
@@ -2949,9 +2949,10 @@ export function createRenderer(canvas) {
         aOut = 0.5 * flick + 0.25;
         aIn = 0.8 * flick + 0.2;
       }
-      // 外圈：危险区
+      // 外圈：危险区。半径跟这发走，轨道天降是 5 倍圈。
+      const ringR = (s.radius > 0) ? s.radius : STRIKE_RADIUS_FALLBACK;
       quat.setFromAxisAngle(upAxis, rot);
-      matrix.compose(vecAux.set(s.x, gy, s.y), quat, vecScale.set(STRIKE_RADIUS, 1, STRIKE_RADIUS));
+      matrix.compose(vecAux.set(s.x, gy, s.y), quat, vecScale.set(ringR, 1, ringR));
       m.setMatrixAt(idx, matrix);
       alphas.array[idx] = aOut;
       colors.array[idx * 3] = r; colors.array[idx * 3 + 1] = g; colors.array[idx * 3 + 2] = b;

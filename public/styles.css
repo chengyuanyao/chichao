@@ -1275,6 +1275,59 @@ kbd {
   width: 100%;
 }
 
+.mode-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(201, 162, 75, 0.25);
+  color: #c9bd9d;
+  cursor: pointer;
+}
+
+.mode-toggle input[type="checkbox"] {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  accent-color: #c9a24b;
+}
+
+.mode-toggle strong {
+  display: block;
+  color: #ddd2b2;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.mode-toggle em {
+  display: block;
+  margin-top: 2px;
+  color: #8c8468;
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+.mode-toggle.disabled {
+  opacity: 0.78;
+  cursor: default;
+}
+
+.mode-badge {
+  flex: none;
+  margin-right: 6px;
+  padding: 6px 9px;
+  color: #ffd23e;
+  font: 700 9px var(--font-display);
+  letter-spacing: 0.12em;
+  border: 1px solid rgba(201, 162, 75, 0.45);
+  background: rgba(40, 20, 8, 0.65);
+}
+
 /* 聊天 */
 .chat-panel {
   display: grid;
