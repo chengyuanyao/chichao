@@ -2386,9 +2386,15 @@ export function createRenderer(canvas) {
       r = r * (1 - packed) + theme.packed[0] * packed;
       g = g * (1 - packed) + theme.packed[1] * packed;
       b = b * (1 - packed) + theme.packed[2] * packed;
-      r = r * (1 - stone * 0.72) + theme.forest[0] * stone;
-      g = g * (1 - stone * 0.72) + theme.forest[1] * stone;
-      b = b * (1 - stone * 0.72) + theme.forest[2] * stone;
+      // 大山整片森林，小尺寸的巨石丘保留岩石本色——森林里嵌着石头，
+      // 森林巨石区压缩可发展空间的同时还有地形读感。
+      const forestMix = Math.min(1, rock / 150);
+      r = r * (1 - stone * 0.72)
+        + (theme.forest[0] * forestMix + theme.rock[0] * (1 - forestMix)) * stone;
+      g = g * (1 - stone * 0.72)
+        + (theme.forest[1] * forestMix + theme.rock[1] * (1 - forestMix)) * stone;
+      b = b * (1 - stone * 0.72)
+        + (theme.forest[2] * forestMix + theme.rock[2] * (1 - forestMix)) * stone;
       // 林间小路：通道碰撞盒（含渲染过渡带）露出土路，树已避开这片区域
       const trail = bridgeTrailAt(wx, wz);
       if (trail > 0) {

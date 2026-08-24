@@ -367,14 +367,14 @@ MAPS = {
             {"x1": 3098, "y1": 3818, "x2": 30, "y2": 4815, "width": 150},
             {"x1": 3824, "y1": 1582, "x2": 2697, "y2": 30, "width": 150},
         ],
-        # 桥盒盖住河面与公路交叉，宽到坦克 / 攻城炮 / 晶兽并排都能过。
-        # 南桥矮一些，免得叠进南缘那座小山。
+        # 桥盒是狭长的林间通道：窄边只容 2-3 辆坦克并排，长边沿河跨过整条
+        # 林带——原来的方正路口改成一眼到底的隘口式小路。
         "bridges": [
-            {"x": 6575, "y": 1032, "w": 280, "h": 280},
-            {"x": 7549, "y": 4028, "w": 280, "h": 280},
-            {"x": 5000, "y": 5880, "w": 280, "h": 120},
-            {"x": 2451, "y": 4028, "w": 280, "h": 280},
-            {"x": 3425, "y": 1032, "w": 280, "h": 280},
+            {"x": 6575, "y": 1032, "w": 320, "h": 560},
+            {"x": 7549, "y": 4028, "w": 560, "h": 320},
+            {"x": 5000, "y": 5880, "w": 320, "h": 560},
+            {"x": 2451, "y": 4028, "w": 560, "h": 320},
+            {"x": 3425, "y": 1032, "w": 320, "h": 560},
         ],
         # 五块山壁围出陨坑，正中一块陨石核把金库撕成环形巷战；
         # 五条宽谷对准各家出生点，外圈再留口袋矿和抄近路。
@@ -491,14 +491,14 @@ MAPS = {
             {"x1": 1983, "y1": 3818, "x2": 19, "y2": 4815, "width": 150},
             {"x1": 2447, "y1": 1582, "x2": 1726, "y2": 30, "width": 150},
         ],
-        # 桥盒盖住河面与公路交叉，宽到坦克 / 攻城炮 / 晶兽并排都能过。
-        # 南桥矮一些，免得叠进南缘那座小山。
+        # 桥盒是狭长的林间通道：窄边只容 2-3 辆坦克并排，长边沿河跨过整条
+        # 林带——原来的方正路口改成一眼到底的隘口式小路。
         "bridges": [
-            {"x": 4208, "y": 1032, "w": 280, "h": 280},
-            {"x": 4831, "y": 4028, "w": 280, "h": 280},
-            {"x": 3200, "y": 5880, "w": 280, "h": 120},
-            {"x": 1569, "y": 4028, "w": 280, "h": 280},
-            {"x": 2192, "y": 1032, "w": 280, "h": 280},
+            {"x": 4208, "y": 1032, "w": 320, "h": 560},
+            {"x": 4831, "y": 4028, "w": 560, "h": 320},
+            {"x": 3200, "y": 5880, "w": 320, "h": 560},
+            {"x": 1569, "y": 4028, "w": 560, "h": 320},
+            {"x": 2192, "y": 1032, "w": 320, "h": 560},
         ],
         # 五块山壁围出陨坑，正中一块陨石核把金库撕成环形巷战；
         # 五条宽谷对准各家出生点，外圈再留口袋矿和抄近路。
@@ -2921,6 +2921,66 @@ def terrain_for_map(map_def):
     return cached
 
 
+def _point_segment_distance(px, py, road):
+    """点到道路线段的距离（路是宽度数据，这里只按中心线判断）。"""
+    x1, y1, x2, y2 = road["x1"], road["y1"], road["x2"], road["y2"]
+    dx, dy = x2 - x1, y2 - y1
+    length_sq = dx * dx + dy * dy
+    if length_sq < 0.001:
+        return math.hypot(px - x1, py - y1)
+    t = clamp(((px - x1) * dx + (py - y1) * dy) / length_sq, 0.0, 1.0)
+    return math.hypot(px - (x1 + dx * t), py - (y1 + dy * t))
+
+
+def _scatter_forest_rocks(map_def, count, seed):
+    """在空旷地带铺小尺寸山体（森林巨石），压缩可发展空间。
+
+    巨石是普通的小山条目：视觉上渲染成岩石 + 树丛，玩法上是不可通行、
+    不可建造的阻挡。避开出生点空地（430px）、道路沿线、桥盒、地图边和
+    已有地形；同一张图每次生成结果一致（确定性种子）。
+    """
+    rng = random.Random(seed)
+    terrain = Terrain(
+        map_def.get("rivers"), map_def.get("bridges"),
+        map_def["width"], map_def["height"],
+        map_def.get("mountains"), map_def.get("roads"))
+    terrain._ensure_grid()
+    spawns = map_def["spawnPoints"]
+    roads = map_def.get("roads") or []
+    bridges = map_def.get("bridges") or []
+    rocks = []
+    attempts = 0
+    while len(rocks) < count and attempts < count * 600:
+        attempts += 1
+        x = rng.uniform(170, map_def["width"] - 170)
+        y = rng.uniform(170, map_def["height"] - 170)
+        r = rng.uniform(64, 132)
+        if terrain.blocked(x, y, r) or terrain.point_in_mountain(x, y, r + 240):
+            continue
+        if any(math.hypot(x - sx, y - sy) < 560 for sx, sy in spawns):
+            continue
+        if any(math.hypot(x - b["x"], y - b["y"]) < 240 for b in bridges):
+            continue
+        if any(math.hypot(x - r["x"], y - r["y"]) < 210
+               for r in map_def.get("bonusResources") or []):
+            continue
+        if any(_point_segment_distance(x, y, road) < 145 for road in roads):
+            continue
+        if any(math.hypot(x - rx, y - ry) < r + rr + 200
+               for rx, ry, rr in rocks):
+            continue
+        rocks.append((round(x), round(y), round(r)))
+    return [{"x": rx, "y": ry, "r": rr} for rx, ry, rr in rocks]
+
+
+# 每张图按面积比例铺森林巨石；种子由地图名决定，同一张图每次相同。
+for _rock_map_id, _rock_map_def in MAPS.items():
+    _rock_count = max(10, int(_rock_map_def["width"] * _rock_map_def["height"] / 2200000.0))
+    _rock_seed = sum(ord(ch) for ch in _rock_map_id) + 0x5EED
+    _rock_map_def["mountains"] = list(_rock_map_def.get("mountains") or []) + \
+        _scatter_forest_rocks(_rock_map_def, _rock_count, _rock_seed)
+
+
 def game_terrain(game):
     """Terrain context for a running game (falls back to open ground)."""
     return (game or {}).get("terrainCtx") or FLAT_TERRAIN
@@ -3019,17 +3079,21 @@ def move_toward(terrain, entity, target_x, target_y, speed, dt, stop_distance=0.
             ny = mdy / mdist
             new_x = entity["x"] + nx * intended
             new_y = entity["y"] + ny * intended
-            if not terrain.blocked(new_x, new_y):
+            # 移动判定带单位半径 padding：中心点踩进"距水/山 < size/2"的
+            # 临界带时任何一步都会入阻挡，单位会被卡死在桥盒边/河岸边
+            # （分离力还会把它顶在边缘）。带 padding 后单位自动保持距离，
+            # 临界卡死从根上消失。
+            if not terrain.blocked(new_x, new_y, entity.get("size", 20.0) * 0.5):
                 entity["x"] = clamp(new_x, entity["size"], terrain.width - entity["size"])
                 entity["y"] = clamp(new_y, entity["size"], terrain.height - entity["size"])
             else:
                 # 正前方被山/河挡住（贴边行军或被挤出路径）：沿单轴滑行，
                 # 避免一贴边就整个停住。
                 step_x = entity["x"] + nx * intended
-                if not terrain.blocked(step_x, entity["y"]):
+                if not terrain.blocked(step_x, entity["y"], entity.get("size", 20.0) * 0.5):
                     entity["x"] = clamp(step_x, entity["size"], terrain.width - entity["size"])
                 step_y = entity["y"] + ny * intended
-                if not terrain.blocked(entity["x"], step_y):
+                if not terrain.blocked(entity["x"], step_y, entity.get("size", 20.0) * 0.5):
                     entity["y"] = clamp(step_y, entity["size"], terrain.height - entity["size"])
 
     new_dx = move_target_x - entity["x"]
@@ -3059,10 +3123,10 @@ def move_toward(terrain, entity, target_x, target_y, speed, dt, stop_distance=0.
                 # 先把自己推出阻挡再重算，否则新路径仍以临界位置为起点，
                 # 第一段方向永远撞阻挡，每 0.5s 循环一次卡到天荒地老。
                 size = entity.get("size", 20.0)
-                if terrain.blocked(entity["x"], entity["y"], size * 0.5):
+                if terrain.blocked(entity["x"], entity["y"], size * 1.2):
                     entity["x"], entity["y"] = terrain.nearest_open_point(
                         entity["x"], entity["y"], entity["x"], entity["y"],
-                        size * 0.5)
+                        size * 1.2)
                 return False
         else:
             entity["_stuck"] = 0.0
