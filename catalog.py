@@ -12,7 +12,7 @@ from __future__ import print_function
 VEHICLE_KINDS = frozenset((
     "tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv",
     "v3", "overlord", "prism", "bomb_truck",
-    "golem", "dragon", "warden", "colossus", "mharvester", "mmcv",
+    "golem", "dragon", "warden", "colossus", "comet", "mharvester", "mmcv",
 ))
 
 # 死亡/贴脸引爆的玻璃大炮。钢铁是轻甲载具，秘法会对位是魔导活体（非载具）。
@@ -235,6 +235,17 @@ UNIT_TYPES = {
         "projectile": "crystal", "projectileSpeed": 460.0, "splash": 24.0,
         "sight": 380.0, "armor": ("heavy", "light"), "damageType": "magic",
     },
+    # 坠星台：秘法会对位东风快递。超远曲射彗星，弹速慢能被看见躲。
+    # missile ×1.50 拆建筑（190×1.5=285），满血 2400 总部一发拆不掉。
+    # 轻甲发射台，圣泉二级后才许召唤。对机动步兵很差。
+    "comet": {
+        "name": "坠星台", "cost": 2000, "hp": 280, "speed": 36.0,
+        "damage": 190.0, "range": 520.0, "cooldown": 5.2,
+        "size": 22.0, "build": 18.0, "producer": "mcircle",
+        "requires": ["mspring"],
+        "projectile": "comet", "projectileSpeed": 165.0, "splash": 110.0,
+        "sight": 300.0, "armor": "light", "damageType": "missile",
+    },
     # 裂地晶兽：缺的攻城行。siege ×1.8 拆建筑，对单位很差，对位攻城炮/光棱。
     # 600 血不再一碰就碎，仍远低于晶铠 1040 / 巨龙 1100 / 天启 2000。
     "colossus": {
@@ -363,7 +374,7 @@ MAGIC_STRUCTURES = frozenset((
 ))
 MAGIC_UNITS = frozenset((
     "mharvester", "mmcv", "mage", "frost", "imp", "oracle",
-    "golem", "panther", "dragon", "warden", "colossus", "hexling",
+    "golem", "panther", "dragon", "warden", "colossus", "comet", "hexling",
 ))
 
 _STRUCTURE_ROLES = {

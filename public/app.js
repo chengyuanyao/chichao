@@ -51,6 +51,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     dragon: { icon: '✹', desc: '重型远程火球，大溅射压轴 · 需圣泉' },
     warden: { icon: '⛊', desc: '晶铠前排，混甲抗磁暴/狙击/军犬 · 需圣泉' },
     colossus: { icon: '☄', desc: '远程晶陨，专拆建筑 · 需圣泉' },
+    comet: { icon: '✺', desc: '超远程坠星，曲射拆建筑，弹速慢能躲 · 需圣泉' },
     mharvester: { icon: '◈', desc: '自动采集水晶' },
     mmcv: { icon: '⬡', desc: '可展开为魔法主堡' },
     hexling: { icon: '✶', desc: '符核魔仆，贴脸或阵亡引爆；非载具，军犬能扑' }
@@ -175,30 +176,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     if (repairHint) { repairHint.innerHTML = '<kbd>R</kbd> ' + copy.repairHint; }
   }
 
-  // Production hotkeys reuse the existing train action. S stays stop
-  // (tap) / camera (hold) — scout is D, not S. W/A/D still pan while
-  // held; a short tap trains when a producer is selected or implied.
-  var TRAIN_HOTKEYS = {
-    tech: {
-      KeyQ: 'rifle',
-      KeyW: 'dog',
-      KeyE: 'rocket',
-      KeyR: 'sniper',
-      KeyA: 'tank',
-      KeyD: 'scout',
-      KeyF: 'bomb_truck',
-      KeyZ: 'tesla'
-    },
-    magic: {
-      KeyQ: 'mage',
-      KeyW: 'frost',
-      KeyE: 'panther',
-      KeyR: 'imp',
-      KeyT: 'oracle',
-      KeyA: 'golem',
-      KeyF: 'hexling'
-    }
-  };
   var CONTROL_GROUP_JUMP_MS = 350;
 
   var STRUCTURE_ICONS = {
@@ -238,7 +215,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1,
     mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, panther: 1, dragon: 1,
-    warden: 1, colossus: 1, mharvester: 1, mmcv: 1, hexling: 1
+    warden: 1, colossus: 1, comet: 1, mharvester: 1, mmcv: 1, hexling: 1
   };
 
   function pRect(c, x, y, w, h, fill) {
@@ -974,6 +951,23 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       pCirc(c, 44, 36, 2.8, P_ARCANE);
       pCirc(c, 44, 36, 1.2, '#f2e6ff');
     },
+    comet: function (c) {
+      // 坠星台：重型石座 + 黑曜发射架 + 待发彗核，不是东风火箭也不是裂地兽
+      pShadow(c, 50, 61, 30);
+      pRect(c, 26, 50, 44, 10, P_STONE);
+      pPoly(c, [[24, 50], [72, 50], [66, 40], [30, 40]], P_DARK);
+      pPoly(c, [[30, 40], [64, 40], [58, 32], [36, 32]], '#2a2433');
+      pRect(c, 44, 18, 8, 16, '#1a1620');
+      pRect(c, 38, 22, 4, 14, P_STONE);
+      pRect(c, 54, 22, 4, 14, P_STONE);
+      pCirc(c, 48, 16, 8.5, P_CRYSTAL);
+      pCirc(c, 48, 16, 5.2, P_ARCANE);
+      pCirc(c, 48, 16, 2.2, '#f2e6ff');
+      pPoly(c, [[42, 10], [48, 2], [54, 10]], P_FROST);
+      pLine(c, 48, 24, 48, 38, 2, P_ARCANE);
+      pCirc(c, 32, 46, 1.6, P_ARCANE);
+      pCirc(c, 64, 46, 1.6, P_ARCANE);
+    },
     mharvester: function (c) {
       pShadow(c, 48, 60, 26);
       // 悬浮底座托着一簇参差水晶
@@ -1161,7 +1155,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, theme: 'grassland', spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
     narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
     triple_pass: { id: 'triple_pass', name: '三岔隘口', width: 5400, height: 4200, maxPlayers: 3, theme: 'arid', spawnLabels: ['西境营地', '东北营地', '东南营地'], spawnPoints: [[700,2100],[3700,368],[3700,3832]] },
-    gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。外环邻里路口被熔水河切开，只能从公路桥过。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]] },
+    gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。外环邻里路口被密林切开，只能从林间小路穿过。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]] },
     gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '赤金陨坑的紧凑版：五方围着陨石核打，地图小一圈，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[4691,2443],[4122,5182],[2278,5182],[1709,2443]] },
     island_hop: { id: 'island_hop', name: '三谷争夺', width: 7200, height: 6000, maxPlayers: 4, theme: 'grassland', spawnLabels: ['西北高地', '东北高地', '西南高地', '东南高地'], spawnPoints: [[900,900],[6300,900],[900,5100],[6300,5100]] },
     urban_siege: { id: 'urban_siege', name: '围城战', width: 6400, height: 6400, maxPlayers: 4, theme: 'urban', spawnLabels: ['西区', '北区', '东区', '南区'], spawnPoints: [[900,3200],[3200,900],[5500,3200],[3200,5500]] },
@@ -1241,8 +1235,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var stopKeyDownAt = 0;
   var controlGroups = {};
   var lastGroupTap = {};
-  var lastProducerId = null;
-  var cameraTrainKeyDownAt = {};
   var structureHpSnap = {};
   var structureAlertUntil = {};
   var displayedCash = 0;
@@ -2174,10 +2166,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     resultShown = false;
     selectedUnits.clear();
     selectedStructureId = null;
-    lastProducerId = null;
     controlGroups = {};
     lastGroupTap = {};
-    cameraTrainKeyDownAt = {};
     setScreen('home');
   }
 
@@ -2191,10 +2181,8 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       resultShown = false;
       selectedUnits.clear();
       selectedStructureId = null;
-      lastProducerId = null;
       controlGroups = {};
       lastGroupTap = {};
-      cameraTrainKeyDownAt = {};
       buildMode = null;
       commandMode = null;
       view3d.clearEntities();
@@ -2288,7 +2276,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     }
 
     applyFactionHud();
-    updateProductionHint();
     var repairBtn = $('#repairBtn');
     if (repairBtn) {
       repairBtn.classList.remove('hidden');
@@ -2538,13 +2525,11 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
         button.dataset.kind = kind;
         button.dataset.type = isBuilding ? 'building' : 'unit';
         // DOM 结构是与样式层的跨线契约（DESIGN_V3 第 1 条），顺序不可调
-        var hotkeyLetter = trainHotkeyLetter(kind);
         button.innerHTML =
           '<canvas class="command-portrait" width="96" height="72"></canvas>' +
           '<span class="command-progress"></span>' +
           '<strong class="command-name">' + definition.name + '</strong>' +
-          '<small class="command-status"></small>' +
-          (hotkeyLetter ? '<span class="command-hotkey">' + hotkeyLetter + '</span>' : '');
+          '<small class="command-status"></small>';
         // 肖像位图是共享缓存，这里只 blit 一份进卡片自己的画布
         var portraitCanvas = button.querySelector('.command-portrait');
         portraitCanvas.getContext('2d').drawImage(portraitFor(kind, isBuilding), 0, 0);
@@ -2615,8 +2600,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
           status.textContent = '◆ ' + definition.cost.toLocaleString('zh-CN');
         }
         button.disabled = !requirementsMet || me.cash < definition.cost || me.eliminated;
-        var unitHotkey = trainHotkeyLetter(kind);
-        button.title = definition.desc + (unitHotkey ? ' · ' + unitHotkey : '');
+        button.title = definition.desc;
       }
       button.style.setProperty('--progress', Math.max(0, Math.min(1, progress)) * 360 + 'deg');
       if (queued) {
@@ -2628,7 +2612,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   }
 
   function renderSelectionInfo() {
-    updateProductionHint();
     if (!roomState || !roomState.game) {
       return;
     }
@@ -2758,7 +2741,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     // the next snapshot drops them, so filter by live id + hp.
     if (!roomState || !roomState.game) {
       controlGroups = {};
-      lastProducerId = null;
       return;
     }
     var liveIds = new Set(roomState.game.units.filter(function (u) {
@@ -2774,123 +2756,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
         delete controlGroups[num];
       }
     });
-    if (lastProducerId && !roomState.game.structures.some(function (structure) {
-      return structure.id === lastProducerId && structure.owner === session.playerId
-        && structure.hp > 0;
-    })) {
-      lastProducerId = null;
-    }
-  }
-
-  function isProducerRole(role) {
-    return role === 'barracks' || role === 'factory';
-  }
-
-  function rememberProducer(structure) {
-    if (structure && session && structure.owner === session.playerId
-        && structure.hp > 0 && isProducerRole(structureRole(structure.kind))) {
-      lastProducerId = structure.id;
-    }
-  }
-
-  function currentProducer() {
-    if (!roomState || !roomState.game || !session) {
-      return null;
-    }
-    var ids = [];
-    if (selectedStructureId) {
-      ids.push(selectedStructureId);
-    }
-    if (lastProducerId && lastProducerId !== selectedStructureId) {
-      ids.push(lastProducerId);
-    }
-    for (var i = 0; i < ids.length; i++) {
-      var structure = roomState.game.structures.find(function (item) {
-        return item.id === ids[i];
-      });
-      if (structure && structure.owner === session.playerId && structure.hp > 0
-          && isProducerRole(structureRole(structure.kind))) {
-        return structure;
-      }
-    }
-    return null;
-  }
-
-  function productionHotkeysActive() {
-    return currentScreen === 'game' && !selectedUnits.size && !!currentProducer();
-  }
-
-  function trainKindForCode(code) {
-    var faction = isOwnMagicFaction() ? 'magic' : 'tech';
-    return (TRAIN_HOTKEYS[faction] || {})[code] || '';
-  }
-
-  function trainHotkeyLetter(kind) {
-    var faction = isOwnMagicFaction() ? 'magic' : 'tech';
-    var keys = TRAIN_HOTKEYS[faction] || {};
-    var codes = Object.keys(keys);
-    for (var i = 0; i < codes.length; i++) {
-      if (keys[codes[i]] === kind) {
-        return codes[i].slice(3);
-      }
-    }
-    return '';
-  }
-
-  function canTrainKind(kind) {
-    var definition = UNITS[kind];
-    if (!definition) {
-      return false;
-    }
-    return hasStructure(definition.producer)
-      && (definition.requires || []).every(hasStructure);
-  }
-
-  function tryTrainHotkey(code) {
-    if (!productionHotkeysActive()) {
-      return false;
-    }
-    var kind = trainKindForCode(code);
-    if (!kind || !canTrainKind(kind)) {
-      return false;
-    }
-    sendAction('command', { command: 'train', unitType: kind }).then(function () {
-      sound('confirm');
-    }).catch(function () {});
-    return true;
-  }
-
-  function productionHintText() {
-    var faction = isOwnMagicFaction() ? 'magic' : 'tech';
-    var keys = TRAIN_HOTKEYS[faction] || {};
-    var parts = [];
-    Object.keys(keys).forEach(function (code) {
-      var kind = keys[code];
-      if (!canTrainKind(kind)) {
-        return;
-      }
-      var name = (UNITS[kind] || {}).name || kind;
-      parts.push(code.slice(3) + name);
-    });
-    if (!parts.length) {
-      return '';
-    }
-    return parts.join('  ') + '  ·  S停止';
-  }
-
-  function updateProductionHint() {
-    var el = $('#productionHint');
-    if (!el) {
-      return;
-    }
-    var text = productionHotkeysActive() ? productionHintText() : '';
-    if (text) {
-      el.textContent = text;
-      el.classList.remove('hidden');
-    } else {
-      el.textContent = '';
-      el.classList.add('hidden');
-    }
   }
 
   // 本帧新出现的特效，交给 3D 层生成粒子后清空
@@ -3516,43 +3381,49 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     var bridges = terrain.bridges || [];
     var swatch = mapDisplayTheme(terrain.theme).minimap;
     var i;
-    // 山地：灰色径向渐变外缘淡出到草色，再加放射棱脊笔触画出山体走向
+    // 森林山丘：绿径向渐变外缘淡出到草色，树点按山体散布。
+    // 每座山用哈希取三种绿调之一，树点大小/密度也不同 —— 各种森林。
+    var forestTones = ['rgba(48,92,40,.95)', 'rgba(64,104,44,.9)', 'rgba(36,78,32,.95)'];
+    var forestDark = ['rgba(28,58,26,.9)', 'rgba(38,66,28,.85)', 'rgba(22,48,22,.9)'];
     for (i = 0; i < mountains.length; i++) {
       var m = mountains[i];
       var mx = m.x * sx;
       var my = m.y * sy;
       var mr = Math.max(3, m.r * sx);
+      var tone = forestTones[Math.floor(cellHash(i, 7) * forestTones.length)];
+      var toneDark = forestDark[Math.floor(cellHash(i, 11) * forestDark.length)];
       var grad = c.createRadialGradient(mx, my, 1, mx, my, mr);
-      grad.addColorStop(0, swatch.mountain);
-      grad.addColorStop(0.65, 'rgba(59,63,46,.85)');
-      grad.addColorStop(1, 'rgba(59,63,46,0)');
+      grad.addColorStop(0, tone);
+      grad.addColorStop(0.6, toneDark);
+      grad.addColorStop(1, 'rgba(30,60,24,0)');
       c.fillStyle = grad;
       c.beginPath();
       c.arc(mx, my, mr, 0, Math.PI * 2);
       c.fill();
-      c.lineWidth = 1;
-      for (var k = 0; k < 6; k++) {
-        var ang = (k / 6) * Math.PI * 2 + cellHash(i + 31, k) * 0.9;
-        var len = mr * (0.55 + cellHash(k, i + 17) * 0.35);
-        // 朝西北的棱脊受光、其余背光，圆丘立刻有了体积
-        c.strokeStyle = (ang > Math.PI * 0.9 && ang < Math.PI * 1.6) ?
-          'rgba(243,233,212,.30)' : 'rgba(10,10,6,.28)';
+      // 树点：沿径向随机散布，团簇感来自大小/深浅交替
+      var trees = Math.max(4, Math.round(mr * 0.55));
+      for (var k = 0; k < trees; k++) {
+        var tr = mr * (0.14 + cellHash(i * 7 + k, 3) * 0.8);
+        var ta = cellHash(i + k * 13, 5) * Math.PI * 2;
+        var tpx = mx + Math.cos(ta) * tr;
+        var tpy = my + Math.sin(ta) * tr;
+        var ts = 1.1 + cellHash(i * 3 + k, 9) * 1.8;
+        c.fillStyle = cellHash(i + k, 17) > 0.5 ? tone : toneDark;
         c.beginPath();
-        c.moveTo(mx, my);
-        c.lineTo(mx + Math.cos(ang) * len, my + Math.sin(ang) * len);
-        c.stroke();
+        c.arc(tpx, tpy, ts, 0, Math.PI * 2);
+        c.fill();
       }
     }
-    // 沟壑：干土外发光 → 深色底 → 亮土色芯，三遍各画完整条沟，
+    // 树林带：深绿外发光 → 深色林底 → 亮绿芯线，三遍各画完整条林带，
     // 分段折线的接头会被同一遍的圆头笔帽自然焊上
     if (rivers.length) {
       c.save();
       c.lineCap = 'round';
       c.lineJoin = 'round';
       var passes = [
-        ['rgba(82,58,36,.35)', 6, 0],
-        ['#33241a', 2.5, 0],
-        ['#5b3f28', 0, 0.55]
+        ['rgba(34,64,28,.35)', 6, 0],
+        ['#14280f', 2.5, 0],
+        ['#2b5422', 0, 0.55]
       ];
       for (var p = 0; p < passes.length; p++) {
         c.strokeStyle = passes[p][0];
@@ -3568,24 +3439,36 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       }
       c.restore();
     }
-    // 桥梁：亮木面 + 桥板细缝 + 描边，在沟壑上要一眼认出「这里能过」
+    // 林间小路：土路色块 + 亮芯 + 描边，森林里的唯一豁口
     for (i = 0; i < bridges.length; i++) {
       var b = bridges[i];
+      if (Number.isFinite(b.x1) && Number.isFinite(b.y1) &&
+          Number.isFinite(b.x2) && Number.isFinite(b.y2)) {
+        var trailWidth = Math.max(3, b.width * (sx + sy) * 0.5);
+        c.save();
+        c.lineCap = 'round';
+        c.lineJoin = 'round';
+        c.beginPath();
+        c.moveTo(b.x1 * sx, b.y1 * sy);
+        c.lineTo(b.x2 * sx, b.y2 * sy);
+        c.strokeStyle = 'rgba(10,10,6,.5)';
+        c.lineWidth = trailWidth + 2;
+        c.stroke();
+        c.strokeStyle = 'rgba(196,164,102,.9)';
+        c.lineWidth = trailWidth;
+        c.stroke();
+        c.restore();
+        continue;
+      }
       var bx = (b.x - b.w / 2) * sx;
       var by = (b.y - b.h / 2) * sy;
       var bw = Math.max(3, b.w * sx);
       var bh = Math.max(3, b.h * sy);
-      c.fillStyle = '#8f7530';
+      c.fillStyle = 'rgba(116,88,52,.95)';
       c.fillRect(bx, by, bw, bh);
-      c.fillStyle = '#e6c87a';
-      c.fillRect(bx, by, bw, 1);
-      c.fillStyle = 'rgba(10,10,6,.35)';
-      if (bw >= bh) {
-        for (var px = bx + 3; px < bx + bw - 1; px += 3) { c.fillRect(px, by, 1, bh); }
-      } else {
-        for (var py = by + 3; py < by + bh - 1; py += 3) { c.fillRect(bx, py, bw, 1); }
-      }
-      c.strokeStyle = 'rgba(10,10,6,.5)';
+      c.fillStyle = 'rgba(196,164,102,.75)';
+      c.fillRect(bx + 1, by + 1, Math.max(1, bw - 2), Math.max(1, bh - 2));
+      c.strokeStyle = 'rgba(10,10,6,.45)';
       c.lineWidth = 1;
       c.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
     }
@@ -3830,7 +3713,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       selectedUnits.clear();
       selectedStructureId = entity.id;
       sound('select');
-      rememberProducer(entity);
       if (session && entity.owner === session.playerId && structureRole(entity.kind) === 'hq') {
         sendAction('command', { command: 'tapHq', structureId: entity.id }).catch(function () {});
       }
@@ -4462,34 +4344,17 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       }
     } else if (event.code === 'KeyQ') {
       event.preventDefault();
-      if (!event.repeat && tryTrainHotkey('KeyQ')) {
-        return;
-      }
       setCommandMode('attackMove');
     } else if (event.code === 'KeyS') {
       event.preventDefault();
       // Tap S = stop. Hold S = camera pan (WASD). Immediate stop-on-keydown
       // cancelled marches while the player panned to pick another group.
-      // Do not steal S for scout — production scout is KeyD.
       if (!event.repeat && !stopKeyDownAt) {
         stopKeyDownAt = performance.now();
       }
     } else if (event.code === 'KeyR') {
       event.preventDefault();
-      if (!event.repeat && tryTrainHotkey('KeyR')) {
-        return;
-      }
       repairSelectedAtNearestBay();
-    } else if (event.code === 'KeyE' || event.code === 'KeyF' || event.code === 'KeyZ' || event.code === 'KeyT') {
-      if (!event.repeat && tryTrainHotkey(event.code)) {
-        event.preventDefault();
-      }
-    } else if (event.code === 'KeyW' || event.code === 'KeyA' || event.code === 'KeyD') {
-      // Hold = camera pan. Short tap trains when a producer is selected
-      // or last-selected barracks/factory is implied.
-      if (!event.repeat && productionHotkeysActive() && trainKindForCode(event.code)) {
-        cameraTrainKeyDownAt[event.code] = performance.now();
-      }
     } else if (event.code === 'KeyU') {
       event.preventDefault();
       if (selectedStructureId && roomState && roomState.game) {
@@ -4538,18 +4403,11 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       if (heldMs < 220 && currentScreen === 'game') {
         stopSelected();
       }
-    } else if (cameraTrainKeyDownAt[event.code]) {
-      var trainHeldMs = performance.now() - cameraTrainKeyDownAt[event.code];
-      delete cameraTrainKeyDownAt[event.code];
-      if (trainHeldMs < 220 && currentScreen === 'game') {
-        tryTrainHotkey(event.code);
-      }
     }
   });
   window.addEventListener('blur', function () {
     pressedKeys.clear();
     stopKeyDownAt = 0;
-    cameraTrainKeyDownAt = {};
   });
 
   createRoomBtn.addEventListener('click', createRoom);

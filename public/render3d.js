@@ -669,6 +669,43 @@ const UNIT_BUILDERS = {
     };
   },
 
+  comet: function () {
+    // 坠星台：重型石座底盘上的黑曜发射架，托着一颗待发晶彗。
+    // 远看是曲射台，不是东风竖火箭，也不是裂地晶兽的四足鞍塔。
+    const cradle = new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.72);
+    const body = [
+      taperedBox(36, 24, 30, 20, 8.4, 0, 7.8, 0, MAT.magicStone),
+      taperedBox(22, 20, 18, 16, 4.2, -1.2, 13.6, 0, MAT.slate),
+      box(28, 3.6, 1.6, -2, 10.4, 11.2, MAT.slate),
+      box(28, 3.6, 1.6, -2, 10.4, -11.2, MAT.slate),
+      box(4.8, 8.2, 4.8, 10.4, 5.2, 7.2, MAT.magicStone),
+      box(4.8, 8.2, 4.8, 10.4, 5.2, -7.2, MAT.magicStone),
+      box(5.2, 8.6, 5.2, -10.8, 5.4, 7.6, MAT.magicStone),
+      box(5.2, 8.6, 5.2, -10.8, 5.4, -7.6, MAT.magicStone),
+      taperedBox(8.4, 8.0, 5.6, 5.2, 6.2, 2.4, 18.4, 0, MAT.slate),
+      cyl(2.4, 3.2, 18, 8, 8.6, 24.0, 0, MAT.crystal, cradle),
+      cyl(3.6, 3.6, 3.2, 8, 2.2, 16.8, 0, MAT.slate, cradle),
+      box(1.6, 16, 2.2, 8.2, 16.4, 6.8, MAT.slate),
+      box(1.6, 16, 2.2, 8.2, 16.4, -6.8, MAT.slate),
+      sph(3.4, 8, 14.8, 30.2, 0, MAT.crystal),
+      pyr(1.15, 4.4, 4, 16.6, 34.6, 0, MAT.crystal),
+      taperedBox(6.2, 3.4, 2.4, 1.6, 2.4, -16.4, 12.2, 0, MAT.crystal)
+    ];
+    return {
+      body: body,
+      glow: [
+        sph(2.6, 7, 14.8, 30.2, 0, MAT.arcaneGlow),
+        sph(1.1, 6, 16.8, 35.2, 0, MAT.frostGlow),
+        cyl(1.35, 1.35, 0.55, 8, 9.4, 24.6, 0, MAT.frostGlow, cradle),
+        cyl(10.4, 10.4, 0.22, 12, 0, 0.42, 0, MAT.arcaneGlow),
+        box(16, 0.45, 0.45, -2, 12.2, 11.6, MAT.frostGlow),
+        box(16, 0.45, 0.45, -2, 12.2, -11.6, MAT.frostGlow),
+        sph(0.7, 5, 8.6, 18.8, 4.2, MAT.arcaneGlow),
+        sph(0.7, 5, 8.6, 18.8, -4.2, MAT.arcaneGlow)
+      ]
+    };
+  },
+
   mharvester: function () {
     // 浮游晶簇：悬浮底座上托着一簇水晶，底部悬浮光环（无履带，靠浮空）
     const body = [
@@ -1526,6 +1563,7 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.40, 0.32, 0.20],
     packed: [0.38, 0.33, 0.24],
     rock: [0.46, 0.44, 0.40],
+    forest: [0.20, 0.38, 0.15],
     skirt: 0x4a5638,
     pad: 0x5a4e3a,
     fog: 0x9ec8d8,
@@ -1539,7 +1577,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0x9ab4c4,
     rim: 0xa8e2f2,
     tex: [0.90, 1.00, 0.76],
-    minimap: { base: '#3f5234', dry: 'rgba(196,176,96,.14)', light: 'rgba(232,236,196,', dark: 'rgba(8,16,6,', mountain: '#a89f8a' }
+    minimap: { base: '#3f5234', dry: 'rgba(196,176,96,.14)', light: 'rgba(232,236,196,', dark: 'rgba(8,16,6,', mountain: '#4d7a3c' }
   },
   arid: {
     id: 'arid',
@@ -1549,6 +1587,7 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.56, 0.38, 0.18],
     packed: [0.52, 0.38, 0.22],
     rock: [0.56, 0.46, 0.34],
+    forest: [0.30, 0.40, 0.13],
     skirt: 0x6a5a3a,
     pad: 0x6a5840,
     fog: 0xc8b894,
@@ -1562,7 +1601,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0xc4b090,
     rim: 0xe8d4a0,
     tex: [1.00, 0.90, 0.68],
-    minimap: { base: '#6a5a38', dry: 'rgba(220,180,90,.16)', light: 'rgba(236,212,150,', dark: 'rgba(28,18,8,', mountain: '#b8a078' }
+    minimap: { base: '#6a5a38', dry: 'rgba(220,180,90,.16)', light: 'rgba(236,212,150,', dark: 'rgba(28,18,8,', mountain: '#7a8a3c' }
   },
   urban: {
     id: 'urban',
@@ -1572,6 +1611,7 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.34, 0.32, 0.28],
     packed: [0.36, 0.35, 0.32],
     rock: [0.40, 0.39, 0.38],
+    forest: [0.15, 0.27, 0.15],
     skirt: 0x3a3c38,
     pad: 0x3e3c38,
     fog: 0x8a9aaa,
@@ -1585,7 +1625,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0x8a9aaa,
     rim: 0xa8c0d0,
     tex: [0.88, 0.90, 0.86],
-    minimap: { base: '#3a3e38', dry: 'rgba(160,156,140,.14)', light: 'rgba(200,204,196,', dark: 'rgba(8,10,10,', mountain: '#8a8680' }
+    minimap: { base: '#3a3e38', dry: 'rgba(160,156,140,.14)', light: 'rgba(200,204,196,', dark: 'rgba(8,10,10,', mountain: '#3a5c3a' }
   },
   crater: {
     id: 'crater',
@@ -1595,6 +1635,7 @@ export const MAP_DISPLAY_THEMES = {
     dirt: [0.48, 0.30, 0.18],
     packed: [0.46, 0.32, 0.22],
     rock: [0.50, 0.38, 0.32],
+    forest: [0.13, 0.25, 0.11],
     skirt: 0x5a3a28,
     pad: 0x5a4030,
     fog: 0xb88870,
@@ -1608,7 +1649,7 @@ export const MAP_DISPLAY_THEMES = {
     fill: 0xc09070,
     rim: 0xf0b080,
     tex: [1.00, 0.78, 0.62],
-    minimap: { base: '#5a3a28', dry: 'rgba(220,140,70,.16)', light: 'rgba(236,180,120,', dark: 'rgba(24,10,6,', mountain: '#a88870' }
+    minimap: { base: '#5a3a28', dry: 'rgba(220,140,70,.16)', light: 'rgba(236,180,120,', dark: 'rgba(24,10,6,', mountain: '#3c5c2c' }
   }
 };
 
@@ -1620,7 +1661,7 @@ function displayTheme(themeId) {
 // 硬切低模：InstancedMesh 的绘制调用本来就按兵种合批，数量阈值只会造成
 // 模型突然一起变成盒子，却没有省下任何 draw call。
 const UNIT_LOD_DISTANCE = 900;
-// 渲染出来的桥比碰撞尺寸长这么多倍，用来跨过做了抖动加宽的可见水面
+// 渲染出来的通道比碰撞尺寸长这么多倍，用来跨过做了抖动加宽的林带
 const BRIDGE_RENDER_SPAN = 2.0;
 
 /**
@@ -1635,7 +1676,7 @@ const UNIT_VISUAL_SCALE = {
   artillery: 1.28, harvester: 1.16, mcv: 1.30, v3: 1.28,
   overlord: 1.30, prism: 1.28, bomb_truck: 1.32,
   mage: 2.15, frost: 2.15, imp: 2.05, oracle: 2.15, golem: 1.42, panther: 1.7, dragon: 1.34,
-  warden: 1.40, colossus: 1.38, hexling: 2.05,
+  warden: 1.40, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30
 };
 
@@ -2087,6 +2128,60 @@ export function createRenderer(canvas) {
   }
 
   /**
+   * 林间小路混合系数。返回 0..1：0 = 树林；1 = 小路核心区（通道碰撞盒内）；
+   * 0..1 之间 = 路沿过渡带（渲染加长的那一截，从土路平滑落回林床）。
+   * 树已经避开这块区域，这里就是森林里唯一的豁口。
+   */
+  function pointSegmentDistanceSq(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lengthSq = dx * dx + dy * dy;
+    let t = lengthSq > 0.001
+      ? ((px - x1) * dx + (py - y1) * dy) / lengthSq
+      : 0;
+    t = Math.max(0, Math.min(1, t));
+    const ox = px - (x1 + dx * t);
+    const oy = py - (y1 + dy * t);
+    return ox * ox + oy * oy;
+  }
+
+  function bridgeTrailAt(x, y) {
+    const bridges = (state.terrain && state.terrain.bridges) || [];
+    for (let i = 0; i < bridges.length; i++) {
+      const b = bridges[i];
+      if (Number.isFinite(b.x1) && Number.isFinite(b.y1) &&
+          Number.isFinite(b.x2) && Number.isFinite(b.y2)) {
+        const core = b.width * 0.5;
+        const feather = 55;
+        const distance = Math.sqrt(pointSegmentDistanceSq(
+          x, y, b.x1, b.y1, b.x2, b.y2));
+        if (distance <= core) return 1;
+        if (distance < core + feather) {
+          return 1 - (distance - core) / feather;
+        }
+        continue;
+      }
+      const along = b.w >= b.h;
+      const halfW = b.w * 0.5;
+      const halfH = b.h * 0.5;
+      const renderHalfW = along ? halfW * BRIDGE_RENDER_SPAN : halfW;
+      const renderHalfH = along ? halfH : halfH * BRIDGE_RENDER_SPAN;
+      const dx = Math.abs(x - b.x);
+      const dy = Math.abs(y - b.y);
+      if (dx > renderHalfW || dy > renderHalfH) continue;
+      let blend = 1;
+      if (dx > halfW) {
+        blend = Math.min(blend, 1 - (dx - halfW) / (renderHalfW - halfW));
+      }
+      if (dy > halfH) {
+        blend = Math.min(blend, 1 - (dy - halfH) / (renderHalfH - halfH));
+      }
+      if (blend > 0) return blend;
+    }
+    return 0;
+  }
+
+  /**
    * 地表高度。地形网格、道路贴花、单位与建筑的落点都用这一个函数，
    * 否则各算各的就会出现「单位悬空」「路飘在坡上」这类错位。
    */
@@ -2101,7 +2196,7 @@ export function createRenderer(canvas) {
       + Math.sin(x * 0.028 + y * 0.019) * 0.8;
   }
 
-  function groundHeight(x, y) {
+  function baseGroundHeight(x, y) {
     if (heightField) {
       const hf = heightField;
       const gx = THREE.MathUtils.clamp(x / hf.width * hf.segX, 0, hf.segX);
@@ -2120,11 +2215,16 @@ export function createRenderer(canvas) {
     const key = (kx << 16) | (ky & 0xffff);
     const cached = _ghCache.get(key);
     if (cached !== undefined) return cached;
-    const depth = riverDepthAt(x, y);
+    // 河道不挖深槽：渲染成平地树林（riverDepthAt 只用于着色与种树），
+    // 桥从林间跨过。视觉上比下沉沟壑清楚，也不用担心桥头插进土里。
     const roll = rollingHeight(x, y);
-    const result = roll - depth * depth * 66 + mountainHeightAt(x, y);
+    const result = roll + mountainHeightAt(x, y);
     _ghCache.set(key, result);
     return result;
+  }
+
+  function groundHeight(x, y) {
+    return baseGroundHeight(x, y);
   }
 
   function spawnWearAt(x, y) {
@@ -2316,7 +2416,7 @@ export function createRenderer(canvas) {
       const wz = pos.getZ(i) + mh / 2;
       const depth = riverDepthAt(wx, wz);
       const rock = mountainHeightAt(wx, wz);
-      const height = rollingHeight(wx, wz) - depth * depth * 66 + rock;
+      const height = rollingHeight(wx, wz) + rock;
       heights[i] = height;
       pos.setY(i, height);
 
@@ -2348,12 +2448,26 @@ export function createRenderer(canvas) {
       r = r * (1 - packed) + theme.packed[0] * packed;
       g = g * (1 - packed) + theme.packed[1] * packed;
       b = b * (1 - packed) + theme.packed[2] * packed;
-      r = r * (1 - stone * 0.72) + theme.rock[0] * stone;
-      g = g * (1 - stone * 0.72) + theme.rock[1] * stone;
-      b = b * (1 - stone * 0.72) + theme.rock[2] * stone;
-      r = r * (1 - ravine) + 0.42 * ravine;
-      g = g * (1 - ravine) + 0.34 * ravine;
-      b = b * (1 - ravine) + 0.24 * ravine;
+      // 大山整片森林，小尺寸的巨石丘保留岩石本色——森林里嵌着石头，
+      // 森林巨石区压缩可发展空间的同时还有地形读感。
+      const forestMix = Math.min(1, rock / 150);
+      r = r * (1 - stone * 0.72)
+        + (theme.forest[0] * forestMix + theme.rock[0] * (1 - forestMix)) * stone;
+      g = g * (1 - stone * 0.72)
+        + (theme.forest[1] * forestMix + theme.rock[1] * (1 - forestMix)) * stone;
+      b = b * (1 - stone * 0.72)
+        + (theme.forest[2] * forestMix + theme.rock[2] * (1 - forestMix)) * stone;
+      // 林间小路：通道碰撞盒（含渲染过渡带）露出土路，树已避开这片区域
+      const trail = bridgeTrailAt(wx, wz);
+      if (trail > 0) {
+        r = r * (1 - trail) + theme.dirt[0] * trail;
+        g = g * (1 - trail) + theme.dirt[1] * trail;
+        b = b * (1 - trail) + theme.dirt[2] * trail;
+      }
+      // 河道：深绿林床（树荫 + 腐殖土），上面再立树模型
+      r = r * (1 - ravine) + 0.13 * ravine;
+      g = g * (1 - ravine) + 0.24 * ravine;
+      b = b * (1 - ravine) + 0.12 * ravine;
       r *= topo; g *= topo; b *= topo;
       colors[i * 3] = r;
       colors[i * 3 + 1] = g;
@@ -2379,72 +2493,144 @@ export function createRenderer(canvas) {
     };
     _ghCache.clear();
 
-    // 河道不画水面：按干涸的沟壑处理。地形已沿河挖出一条深槽（groundHeight
-    // 里的 riverDepthAt），沟底由上面的顶点着色压成土岩色，桥跨在槽上。
-    // 没有水，也没有蓝板子 —— 走到河边看到的是真的过不去的深沟。
+    // 河道与山丘都不画水面/岩石：渲染成树林（riverDepthAt / mountainHeightAt
+    // 决定林带位置），桥从林间跨过。没有水，也没有岩石 —— 走到林边看到的
+    // 是真的过不去的密林，一眼就能看出桥是唯一的通路。
     waterMesh = null;
 
-    // 桥梁：唯一能跨过沟壑的地方，必须一眼看得出来。桥面比路面略高，
-    // 两侧加护栏和桥墩，让它在深沟上「立」起来而不是一块贴图。
-    // 所有桥合并成一个网格：一张图上只有三五座桥，分开做剔除没意义，
-    // 合并后从五十多次绘制调用降到一次。
+    // 树林：沿河道与山丘撒树，桥盒（含渲染加长段）两侧留出桥头空地。
+    // 所有树干 + 树冠合并进一个网格，一次绘制调用。
     const bridges = (state.terrain && state.terrain.bridges) || [];
-    if (bridges.length) {
-      // 深色做旧木料：新光照 + 高曝光下原来的浅木色会晒成一块白板。
-      // 两种板色交替 + 深色底板缝，桥面才有「一块块木板」的读感。
-      const DECK = [0.16, 0.12, 0.075];
-      const PLANK = [0.46, 0.36, 0.22];
-      const PLANK_B = [0.34, 0.26, 0.155];
-      const PIER = [0.22, 0.19, 0.155];
-      const parts = [];
-      const slab = function (w, h, d, x, y, z, rgb) {
-        parts.push({
+    const rivers = (state.terrain && state.terrain.rivers) || [];
+    const mountains = (state.terrain && state.terrain.mountains) || [];
+    if (rivers.length || mountains.length) {
+      const forestParts = [];
+      const treeSlab = function (w, h, d, x, y, z, rgb) {
+        forestParts.push({
           geo: new THREE.BoxGeometry(w, h, d),
           matrix: new THREE.Matrix4().setPosition(x, y, z),
           rgb: rgb
         });
       };
-      bridges.forEach(function (b) {
-        const along = b.w >= b.h;          // 桥的走向
-        // 渲染用的桥长要比碰撞尺寸长：岸线做了抖动加宽之后，可见水面比
-        // 服务端的碰撞河宽宽出不少，照原尺寸画的桥会「够不到两岸」。
-        // 碰撞尺寸是玩法数据（决定哪里能过河），一个字都不能动，
-        // 所以只把画出来的那一截加长。
-        const bw = along ? b.w * BRIDGE_RENDER_SPAN : b.w;
-        const bh = along ? b.h : b.h * BRIDGE_RENDER_SPAN;
-        slab(bw, 6, bh, b.x, 2.2, b.y, DECK);
-        // 桥板纹理：两种木色交替的枕木，板缝露出深色底板
-        const planks = Math.max(5, Math.round((along ? bw : bh) / 20));
-        for (let i = 0; i < planks; i++) {
-          const t = (i + 0.5) / planks - 0.5;
-          const wood = i % 2 ? PLANK_B : PLANK;
-          if (along) {
-            slab(bw / planks * 0.78, 1.4, bh * 0.94, b.x + t * bw, 5.6, b.y, wood);
-          } else {
-            slab(bw * 0.94, 1.4, bh / planks * 0.78, b.x, 5.6, b.y + t * bh, wood);
+      // 确定性哈希：同一张图每次打开树的位置不变
+      const treeRand = function (n) {
+        const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+        return s - Math.floor(s);
+      };
+      // 树冠色板：每张图从主题森林色派生三种色调，山与河道各自取用，
+      // 同图里不同位置也会出现深浅变化 ——「各种森林」而不是一种绿。
+      const baseForest = theme.forest;
+      const FOLIAGE_A = baseForest;
+      const FOLIAGE_B = [
+        Math.min(1, baseForest[0] * 1.35), Math.min(1, baseForest[1] * 1.3),
+        Math.min(1, baseForest[2] * 1.35)
+      ];
+      const FOLIAGE_DARK = [
+        baseForest[0] * 0.72, baseForest[1] * 0.82, baseForest[2] * 0.72
+      ];
+      const TRUNK = [0.30, 0.20, 0.10];
+      const placeTree = function (tx, ty, seed) {
+        if (riverDepthAt(tx, ty) > 0.05 || mountainHeightAt(tx, ty) > 0.05) {
+          // 树底落在实际地面上（含山丘），避免树干悬空或埋进坡里
+          const gy = rollingHeight(tx, ty) + mountainHeightAt(tx, ty);
+          const big = treeRand(seed * 3.1 + 97) > 0.38;
+          // 最高的魔法主堡约 144 高；森林树顶提高到约 147–178，
+          // 保证每棵成树都越过建筑天际线，并在远处形成连续林冠。
+          const trunkH = 68 + treeRand(seed + 53) * 22;
+          const trunkW = big ? 3.8 : 3.1;
+          const crownR = big ? 22 : 17;
+          const crownH = big ? 64 : 58;
+          treeSlab(trunkW, trunkH, trunkW, tx, gy + trunkH * 0.5, ty, TRUNK);
+          const foliage = treeRand(seed * 5.7 + 41);
+          const rgb = foliage > 0.72 ? FOLIAGE_DARK
+            : (foliage > 0.3 ? FOLIAGE_A : FOLIAGE_B);
+          // 三层收尖树冠：底层互相搭接形成林墙，上层保持单棵树的高耸轮廓。
+          treeSlab(crownR * 2.1, crownH * 0.72, crownR * 2.1,
+                   tx, gy + trunkH + crownH * 0.28, ty, rgb);
+          treeSlab(crownR * 1.5, crownH * 0.68, crownR * 1.5,
+                   tx, gy + trunkH + crownH * 0.72, ty, rgb);
+          treeSlab(crownR * 0.86, crownH * 0.5, crownR * 0.86,
+                   tx, gy + trunkH + crownH * 1.12, ty, rgb);
+        }
+      };
+      const nearBridge = function (tx, ty) {
+        for (let bi = 0; bi < bridges.length; bi++) {
+          const b = bridges[bi];
+          if (Number.isFinite(b.x1) && Number.isFinite(b.y1) &&
+              Number.isFinite(b.x2) && Number.isFinite(b.y2)) {
+            const clearance = b.width * 0.5 + 65;
+            if (pointSegmentDistanceSq(
+                tx, ty, b.x1, b.y1, b.x2, b.y2) < clearance * clearance) {
+              return true;
+            }
+            continue;
+          }
+          const along = b.w >= b.h;
+          const hw = (along ? b.w * BRIDGE_RENDER_SPAN : b.w) * 0.5 + 55;
+          const hh = (along ? b.h : b.h * BRIDGE_RENDER_SPAN) * 0.5 + 55;
+          if (Math.abs(tx - b.x) < hw && Math.abs(ty - b.y) < hh) {
+            return true;
           }
         }
-        [-1, 1].forEach(function (side) {
-          if (along) {
-            // 侧缘纵梁 + 护栏 + 桥墩
-            slab(bw, 3.2, 7, b.x, 6.6, b.y + side * (bh / 2 - 3.5), PIER);
-            slab(bw, 6, 3.5, b.x, 11, b.y + side * (bh / 2 - 2), PLANK_B);
-            slab(9, 46, bh * 0.7, b.x + side * bw * 0.30, -20, b.y, PIER);
-          } else {
-            slab(7, 3.2, bh, b.x + side * (bw / 2 - 3.5), 6.6, b.y, PIER);
-            slab(3.5, 6, bh, b.x + side * (bw / 2 - 2), 11, b.y, PLANK_B);
-            slab(bw * 0.7, 46, 9, b.x, -20, b.y + side * bh * 0.30, PIER);
-          }
-        });
-      });
-      const bridgeMesh = new THREE.Mesh(
-        mergeParts(parts),
-        applyFogMask(new THREE.MeshLambertMaterial({ vertexColors: true })));
-      bridgeMesh.castShadow = state.shadows !== 'off';
-      bridgeMesh.receiveShadow = true;
-      bridgeMesh.frustumCulled = false;
-      terrainGroup.add(bridgeMesh);
+        return false;
+      };
+      // 河道林带：树量同时随长度和宽度增加；加厚后的五条分界带会形成
+      // 多排密林，而不是只把一排树横向拉散。
+      for (let r = 0; r < rivers.length; r++) {
+        const rv = rivers[r];
+        const rdx = rv.x2 - rv.x1;
+        const rdy = rv.y2 - rv.y1;
+        const len = Math.hypot(rdx, rdy);
+        const half = rv.width * 0.5;
+        const density = Math.max(1, rv.width / 120);
+        const count = Math.min(1500, Math.max(12, Math.floor(len / 17 * density)));
+        const ux = len > 0.001 ? rdx / len : 1;
+        const uy = len > 0.001 ? rdy / len : 0;
+        const nx = -uy;
+        const ny = ux;
+        for (let k = 0; k < count; k++) {
+          const t = (k + 0.5) / count;
+          const cx = rv.x1 + rdx * t;
+          const cy = rv.y1 + rdy * t;
+          const lateral = (treeRand(k + r * 131) * 2 - 1) * half * 0.94;
+          const alongJitter = (treeRand(k * 7.3 + r * 19) - 0.5) *
+            Math.max(16, len / count * 1.8);
+          const tx = cx + nx * lateral + ux * alongJitter;
+          const ty = cy + ny * lateral + uy * alongJitter;
+          if (riverDepthAt(tx, ty) < 0.12) continue;
+          if (nearBridge(tx, ty)) continue;
+          placeTree(tx, ty, k + r * 211);
+        }
+      }
+      // 山丘森林：每座山按半径撒树，山顶到山脚密度递减，
+      // 大树/小树/三种绿色混出「各种森林」
+      for (let mi = 0; mi < mountains.length; mi++) {
+        const m = mountains[mi];
+        const mcount = Math.max(10, Math.round(m.r / 14));
+        for (let k = 0; k < mcount; k++) {
+          const ang = treeRand(k * 3.7 + mi * 29) * Math.PI * 2;
+          const rad = m.r * (0.12 + treeRand(k * 1.9 + mi * 13) * 0.85);
+          const tx = m.x + Math.cos(ang) * rad;
+          const ty = m.y + Math.sin(ang) * rad;
+          if (nearBridge(tx, ty)) continue;
+          if (riverDepthAt(tx, ty) > 0.05) continue;
+          placeTree(tx, ty, k + mi * 977 + 5000);
+        }
+      }
+      if (forestParts.length) {
+        const forestMesh = new THREE.Mesh(
+          mergeParts(forestParts),
+          applyFogMask(new THREE.MeshLambertMaterial({ vertexColors: true })));
+        forestMesh.castShadow = state.shadows !== 'off';
+        forestMesh.receiveShadow = true;
+        forestMesh.frustumCulled = false;
+        terrainGroup.add(forestMesh);
+      }
     }
+
+    // 林间小路：没有桥面模型 —— 通道碰撞盒在网格顶点色里画成土路
+    // （bridgeTrailAt），树已避开这片区域，森林在这里断开成一条豁口。
+    // 单位直接走在平地上，服务端寻路不变。
 
     // 地图边界：一圈向外倾斜下沉的裙边，颜色贴近雾色，让边缘融进远景而
     // 不是留下一道生硬的黑边
@@ -3320,6 +3506,16 @@ export function createRenderer(canvas) {
         sph(2.0, 6, -1.2, 14.2, 0, MAT.arcaneGlow)
       ];
     }
+    if (kind === 'comet') {
+      return [
+        taperedBox(36, 24, 30, 20, 8.4, 0, 7.8, 0, MAT.magicStone),
+        box(4.8, 8.2, 4.8, 10.4, 5.2, 7.2, MAT.magicStone),
+        box(4.8, 8.2, 4.8, 10.4, 5.2, -7.2, MAT.magicStone),
+        cyl(2.4, 3.2, 18, 7, 8.6, 24.0, 0, MAT.crystal,
+          new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.72)),
+        sph(3.4, 7, 14.8, 30.2, 0, MAT.arcaneGlow)
+      ];
+    }
     if (kind === 'mharvester') {
       return [
         taperedBox(16, 14, 18, 16, 4, 0, 6, 0, MAT.darkSteel),
@@ -3667,7 +3863,9 @@ export function createRenderer(canvas) {
     // 虹视：细长棱晶束，几乎无弧
     iris: { len: 38, thick: 0.62, color: 0xffc8f0, arc: 0, look: 'beam' },
     // 晶陨：裂地高弧攻城弹
-    meteor: { len: 24, thick: 3.1, color: 0xc9a0ff, arc: 118, look: 'meteor' }
+    meteor: { len: 24, thick: 3.1, color: 0xc9a0ff, arc: 118, look: 'meteor' },
+    // 坠星：东风同档慢弹高弧，晶彗核 + 长尾，能被看见躲
+    comet: { len: 34, thick: 3.4, color: 0xe8d0ff, arc: 140, look: 'comet' }
   };
 
   function ensureStyledMesh(existing, geo, needed) {
@@ -4185,6 +4383,42 @@ export function createRenderer(canvas) {
           life: 11, maxLife: 11, hold: true, r: 0.08, g: 0.04, b: 0.12
         });
         flashAt(x, y, 0xd6a6ff);
+      } else if (kind === 'comet') {
+        burst(fireLayer, 16, function () {
+          const a = rand() * TAU;
+          const sp = 110 + rand() * 200;
+          return {
+            x: x, y: 9, z: y,
+            vx: Math.cos(a) * sp, vy: 40 + rand() * 100, vz: Math.sin(a) * sp,
+            life: 0.4 + rand() * 0.28, maxLife: 0.68,
+            size: 8 + rand() * 7, grow: true,
+            r: 1.85, g: 0.7, b: 2.3
+          };
+        });
+        burst(fireLayer, 10, function () {
+          const a = rand() * TAU;
+          const sp = 160 + rand() * 190;
+          return {
+            x: x, y: 3 + rand() * 5, z: y,
+            vx: Math.cos(a) * sp, vy: 14 + rand() * 36, vz: Math.sin(a) * sp,
+            life: 0.26 + rand() * 0.18, maxLife: 0.44,
+            size: 4 + rand() * 4,
+            r: 2.2, g: 1.5, b: 2.5
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 16, growth: 110, alpha: 0.74,
+          life: 0.46, maxLife: 0.46, r: 0.9, g: 0.48, b: 1.25
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 8, growth: 62, alpha: 0.46,
+          life: 0.3, maxLife: 0.3, r: 1.2, g: 0.62, b: 1.5
+        });
+        scorchLayer.spawn({
+          x: x, y: y, radius: 36 + rand() * 10, growth: 0, alpha: 0.48,
+          life: 13, maxLife: 13, hold: true, r: 0.1, g: 0.04, b: 0.16
+        });
+        flashAt(x, y, 0xf2e6ff);
       } else if (kind === 'iris') {
         burst(fireLayer, 6, function () {
           const a = rand() * TAU;
@@ -4323,6 +4557,36 @@ export function createRenderer(canvas) {
           life: 1.6, maxLife: 1.6, hold: true, r: 0.12, g: 0.05, b: 0.18
         });
         flashAt(x, y, 0xd6a6ff);
+      } else if (kind === 'comet') {
+        burst(fireLayer, 10, function () {
+          const a = rand() * TAU;
+          return {
+            x: x + (rand() - 0.5) * 10, y: 22 + rand() * 10, z: y + (rand() - 0.5) * 10,
+            vx: Math.cos(a) * 42, vy: 36 + rand() * 48, vz: Math.sin(a) * 42,
+            life: 0.22 + rand() * 0.14, maxLife: 0.36,
+            size: 8 + rand() * 6,
+            r: 1.85, g: 0.7, b: 2.3
+          };
+        });
+        burst(fireLayer, 7, function () {
+          const a = rand() * TAU;
+          return {
+            x: x, y: 2 + rand() * 3, z: y,
+            vx: Math.cos(a) * 64, vy: 10 + rand() * 18, vz: Math.sin(a) * 64,
+            life: 0.26 + rand() * 0.14, maxLife: 0.4,
+            size: 4 + rand() * 3,
+            r: 1.55, g: 0.55, b: 2.1
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 10, growth: 86, alpha: 0.6,
+          life: 0.36, maxLife: 0.36, r: 0.9, g: 0.45, b: 1.2
+        });
+        scorchLayer.spawn({
+          x: x, y: y, radius: 20, growth: 12, alpha: 0.3,
+          life: 1.8, maxLife: 1.8, hold: true, r: 0.14, g: 0.05, b: 0.2
+        });
+        flashAt(x, y, 0xf2e6ff);
       } else {
         burst(fireLayer, 5, function () {
           const a = rand() * TAU;
@@ -4758,6 +5022,13 @@ export function createRenderer(canvas) {
         life: 0.3, maxLife: 0.3, size: 5.4 + Math.random() * 4.2,
         r: 1.75, g: 0.68, b: 2.25
       });
+    } else if (look === 'comet') {
+      emit(fireLayer, {
+        x: x + (Math.random() - 0.5) * 8, y: height, z: y + (Math.random() - 0.5) * 8,
+        vx: (Math.random() - 0.5) * 14, vy: -10 + Math.random() * 7, vz: (Math.random() - 0.5) * 14,
+        life: 0.36, maxLife: 0.36, size: 6.4 + Math.random() * 5,
+        r: 1.9, g: 0.75, b: 2.35
+      });
     } else if (look === 'bolt') {
       emit(fireLayer, {
         x: x, y: height, z: y,
@@ -4779,13 +5050,13 @@ export function createRenderer(canvas) {
     if (useSimple) return;
     const kind = vis.unit.kind;
     if (kind !== 'frost' && kind !== 'dragon' && kind !== 'mage'
-        && kind !== 'warden' && kind !== 'colossus'
+        && kind !== 'warden' && kind !== 'colossus' && kind !== 'comet'
         && kind !== 'bomb_truck' && kind !== 'hexling'
         && kind !== 'imp' && kind !== 'oracle') return;
     if (fireLayer.list.length > state.particleBudget * 0.5) return;
     const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6
       : kind === 'bomb_truck' ? 7 : kind === 'hexling' ? 6
-      : kind === 'colossus' ? 7 : kind === 'warden' ? 4
+      : kind === 'colossus' ? 7 : kind === 'comet' ? 6 : kind === 'warden' ? 4
       : kind === 'oracle' ? 4 : kind === 'imp' ? 3 : 3.5;
     if (Math.random() > dt * rate) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
@@ -4832,6 +5103,17 @@ export function createRenderer(canvas) {
           r: 1.7, g: 0.7, b: 2.2
         });
       }
+    } else if (kind === 'comet') {
+      const mx = vis.x + Math.cos(vis.dir) * 8 * scale;
+      const mz = vis.y + Math.sin(vis.dir) * 8 * scale;
+      emit(fireLayer, {
+        x: mx + (Math.random() - 0.5) * 6,
+        y: gy + 22 * scale * 0.55 + Math.random() * 8,
+        z: mz + (Math.random() - 0.5) * 6,
+        vx: (Math.random() - 0.5) * 5, vy: 10 + Math.random() * 8, vz: (Math.random() - 0.5) * 5,
+        life: 0.4, maxLife: 0.4, size: 4.6 + Math.random() * 3.4,
+        r: 1.85, g: 0.72, b: 2.3
+      });
     } else if (kind === 'warden') {
       emit(fireLayer, {
         x: vis.x + (Math.random() - 0.5) * 8,
@@ -5198,6 +5480,15 @@ export function createRenderer(canvas) {
           writeTracer(shards, shardCount++, p.x, height - 1.2, p.y, yaw + 0.4, 6.4, 1.8, 1.8, 0xb46bff);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len * 1.55, style.thick * 0.42, style.thick * 0.42, 0xf2e6ff);
+        } else if (look === 'comet') {
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 5.4, 5.4, 5.4, 0xf4e8ff);
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 3.1, 3.1, 3.1, 0xb46bff);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(shards, shardCount++, p.x, height + 2.2, p.y, yaw, 11.4, 3.2, 3.2, 0xe8d0ff);
+          writeTracer(shards, shardCount++, p.x, height - 1.6, p.y, yaw + 0.38, 8.2, 2.2, 2.2, 0x9a7fd0);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len * 1.85, style.thick * 0.48, style.thick * 0.48, 0xf2e6ff);
         } else if (look === 'bolt') {
           writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 2.15, 2.15, 2.15, 0xf0d0ff);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,

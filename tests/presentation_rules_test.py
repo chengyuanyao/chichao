@@ -37,6 +37,7 @@ def make_room():
 def main():
     app = read("public/app.js")
     render = read("public/render3d.js")
+    styles = read("public/styles.css")
 
     assert "radar" not in server.STRUCTURE_TYPES
     assert "全景雷达" not in app
@@ -82,6 +83,13 @@ def main():
     assert "var renderScaleSteps = [1, 0.90, 0.80, 0.70, 0.60];" in app
     assert "timestamp - lastHudOverlayAt >= 50" in app
     assert "game.units.length >" not in render
+
+    # 侧栏的隐式网格列和三列生产网格都必须允许缩到 0；否则在浏览器
+    # 缩放或高 DPI 下，canvas 的固有宽度会把第三列撑出侧栏并被裁掉。
+    assert "grid-template-columns: minmax(0, 1fr);" in styles
+    assert styles.count("grid-template-columns: repeat(3, minmax(0, 1fr));") >= 2
+    assert ".command-sidebar > *" in styles
+    assert "max-width: 100%;" in styles
 
     # Other live maps stay mountain-only; the two crater maps are rim-bridge maps.
     crater_ids = ("gold_crater", "gold_crater_small")
@@ -178,6 +186,12 @@ def main():
     assert catalog["units"]["dragon"]["requires"] == ["mspring"]
     assert catalog["units"]["warden"]["requires"] == ["mspring"]
     assert catalog["units"]["colossus"]["requires"] == ["mspring"]
+    assert catalog["units"]["comet"]["requires"] == ["mspring"]
+    assert catalog["units"]["comet"]["name"] == "坠星台"
+    assert catalog["units"]["comet"]["repairable"] is True
+    assert catalog["units"]["comet"]["producer"] == "mcircle"
+    assert catalog["units"]["comet"]["faction"] == "magic"
+    assert catalog["units"]["comet"]["cost"] == 2000
 
     assert server.select_lan_ips(
         ["127.0.0.1", "192.168.1.5", "10.18.0.2", "10.0.0.1"]
@@ -253,6 +267,8 @@ def main():
     assert "晶铠卫士：晶体铠甲前排" in render
     assert "裂地晶兽：四足晶兽驮晶陨鞍塔" in render
     assert "裂地晶兽：四足晶兽 + 背上晶陨鞍塔" in app
+    assert "坠星台：重型石座底盘上的黑曜发射架" in render
+    assert "坠星台：重型石座 + 黑曜发射架 + 待发彗核" in app
     assert "自爆卡车：轮式药箱车" in render
     assert "爆裂魔仆：矮小符核活体" in render
     assert "type === 'blast'" in render
@@ -273,10 +289,12 @@ def main():
     assert "look: 'shard'" in render
     assert "look: 'fireball'" in render
     assert "look: 'meteor'" in render
+    assert "look: 'comet'" in render
     assert "look: 'crystal'" in render
     assert "iris:" in render
     assert "function guessMuzzleKind" in render
     assert "kind === 'meteor'" in render
+    assert "kind === 'comet'" in render
     assert "function emitIdleAura" in render
     assert "步兵有持枪手臂，远看是人不是积木" in render
     assert "主堡顶是石穹加晶刺，不是叠方块" in render
@@ -324,8 +342,8 @@ def main():
     assert "heldMs < 220 && currentScreen === 'game'" in app
     assert "stopKeyDownAt = performance.now();" in app
 
-    # Playability QoL: double-click same-kind (visible/rendered only),
-    # control groups 1-3, production hotkeys. S stays stop — scout is D.
+    # Playability QoL: double-click same-kind (visible/rendered only) and
+    # control groups 1-3 remain, while production hotkeys are fully removed.
     assert "function selectAllOfType(worldX, worldY, additive)" in app
     assert "function unitIsCurrentlySeen(unit)" in app
     assert "view3d.isVisible && !view3d.isVisible(visual.x, visual.y)" in app
@@ -334,22 +352,7 @@ def main():
     assert "CONTROL_GROUP_JUMP_MS = 350" in app
     assert "event.code >= 'Digit1' && event.code <= 'Digit3'" in app
     assert "function pruneControlGroups()" in app
-    assert "var TRAIN_HOTKEYS = {" in app
-    assert "KeyQ: 'rifle'" in app
-    assert "KeyW: 'dog'" in app
-    assert "KeyE: 'rocket'" in app
-    assert "KeyR: 'sniper'" in app
-    assert "KeyA: 'tank'" in app
-    assert "KeyD: 'scout'" in app
-    assert "KeyF: 'bomb_truck'" in app
-    assert "KeyZ: 'tesla'" in app
-    assert "KeyQ: 'mage'" in app
-    assert "KeyW: 'frost'" in app
-    assert "KeyE: 'panther'" in app
-    assert "KeyR: 'imp'" in app
-    assert "KeyT: 'oracle'" in app
-    assert "KeyA: 'golem'" in app
-    assert "KeyF: 'hexling'" in app
+    assert "TRAIN_HOTKEYS" not in app
     assert catalog["units"]["imp"]["name"] == "晶刺"
     assert catalog["units"]["oracle"]["name"] == "虹视使"
     assert catalog["units"]["imp"]["producer"] == "mtemple"
@@ -362,18 +365,16 @@ def main():
     assert "虹视使：细长远视者" in render
     assert "晶刺：碎晶人形 + 肩刺" in app
     assert "虹视使：细长袍 + 棱镜杖" in app
-    assert "KeyS: 'scout'" not in app
-    assert "Do not steal S for scout — production scout is KeyD." in app
-    assert "function tryTrainHotkey(code)" in app
-    assert "command: 'train', unitType: kind" in app
-    assert "cameraTrainKeyDownAt[event.code] = performance.now();" in app
-    assert "trainHeldMs < 220 && currentScreen === 'game'" in app
-    assert "id=\"productionHint\"" in hud
-    assert "function updateProductionHint()" in app
-    assert "S停止" in app
+    assert "tryTrainHotkey" not in app
+    assert "trainHotkeyLetter" not in app
+    assert "cameraTrainKeyDownAt" not in app
+    assert "command-hotkey" not in app
+    assert "command-hotkey" not in styles
+    assert "id=\"productionHint\"" not in hud
+    assert "production-hint" not in styles
     assert "双击己方单位" in readme
     assert "Ctrl+1 / Ctrl+2 / Ctrl+3" in readme
-    assert "S 仍是停止，不用来出猎犬" in readme
+    assert "不设置生产快捷键" in readme
 
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 

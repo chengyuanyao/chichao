@@ -1634,6 +1634,9 @@ kbd {
   bottom: 0;
   isolation: isolate;
   display: grid;
+  /* 单列必须允许收缩；部分浏览器缩放 / 高 DPI 组合会按卡片的
+     intrinsic width 撑大隐式列，随后被 overflow-x 裁掉。 */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto;
   width: var(--sidebar-w);
   border-left: 1px solid var(--brass-dark);
@@ -1646,6 +1649,10 @@ kbd {
     inset 1px 0 0 rgba(255, 255, 255, 0.07);
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.command-sidebar > * {
+  min-width: 0;
 }
 
 /* 模块之间的机加工接缝 */
@@ -1917,7 +1924,9 @@ kbd {
 .command-tabs {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   padding: 7px 10px 14px;
   background: rgba(10, 10, 6, 0.4);
@@ -1939,6 +1948,7 @@ kbd {
 .command-tab {
   position: relative;
   z-index: 0;
+  min-width: 0;
   height: 30px;
   border: 0;
   background: none;
@@ -1999,11 +2009,14 @@ kbd {
 
 .command-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-content: start;
   gap: 8px;
   padding: 10px 12px 12px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .command-grid::before {
@@ -2020,6 +2033,8 @@ kbd {
   position: relative;
   z-index: 0;
   isolation: isolate;
+  width: 100%;
+  min-width: 0;
   min-height: 96px;
   padding: 5px 5px 6px;
   border: 0;
@@ -2079,6 +2094,8 @@ kbd {
   z-index: 1;
   display: block;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   height: auto;
   margin: 0 0 4px;
   border: 1px solid var(--brass-dark);
@@ -2147,30 +2164,6 @@ kbd {
 
 .command-card.ready::before {
   border-color: var(--hazard);
-}
-
-.command-hotkey {
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  z-index: 4;
-  min-width: 14px;
-  padding: 1px 3px;
-  border: 1px solid rgba(201, 162, 75, 0.55);
-  background: rgba(10, 10, 6, 0.82);
-  color: var(--lcd);
-  font: 700 8px/1 var(--font-mono);
-  pointer-events: none;
-}
-
-.production-hint {
-  margin: 2px 8px 4px;
-  color: rgba(232, 209, 150, 0.88);
-  font: 8px/1.45 var(--font-mono);
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* 队列数徽章：深底黄铜圈 */

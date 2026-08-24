@@ -106,6 +106,7 @@ def main():
     assert server.is_dog_prey("imp") and server.is_dog_prey("oracle")
     assert not server.is_dog_prey("tank")
     assert not server.is_dog_prey("dragon")
+    assert not server.is_dog_prey("comet")
     for kind in ("mage", "frost"):
         room, a, b = make_room("DOG-" + kind)
         game = room["game"]
