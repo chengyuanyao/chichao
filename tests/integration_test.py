@@ -102,6 +102,13 @@ def main():
     })
     beta = beta_data["session"]
 
+    # Browser-approved AI co-pilot pairing: never expose tokens in /api/rooms.
+    pair_code = action(alpha, "requestAgentPair")["pairCode"]
+    paired = call("/api/attach", {"roomId": room_id, "pairCode": pair_code})
+    assert paired["session"] == alpha
+    reused = call("/api/attach", {"roomId": room_id, "pairCode": pair_code}, 403)
+    assert reused["ok"] is False
+
     action(alpha, "addBot")
     action(beta, "ready", {"ready": True})
     started = action(alpha, "start")["room"]
