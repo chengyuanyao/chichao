@@ -3494,6 +3494,13 @@ def separate_units(terrain, units):
         for near_x in range(cell_x - 1, cell_x + 2):
             for near_y in range(cell_y - 1, cell_y + 2):
                 for second in cells.get((near_x, near_y), ()):
+                    # 自爆单位贴脸引爆，不能被分离力推出引爆距离：坦克这类
+                    # 大目标的分离半径 (16+20)×1.15≈41 远大于引爆距离
+                    # 22+20×0.35≈29，追上了却永远差一步，跟着走不自爆。
+                    # 敢死队无视碰撞：能穿进单位群直扑目标。
+                    if (first.get("kind") in SUICIDE_KINDS
+                            or second.get("kind") in SUICIDE_KINDS):
+                        continue
                     dx = second["x"] - first["x"]
                     dy = second["y"] - first["y"]
                     dist_sq = dx * dx + dy * dy
