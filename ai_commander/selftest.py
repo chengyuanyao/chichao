@@ -433,7 +433,7 @@ def test_regressions():
                  [s for s in game6["structures"] if s["owner"] == bot6["id"]])
     targets = set(truck.get("targetId") for truck in trucks)
     check("自爆车凑够一波就出发", None not in targets, str(targets))
-    check("自爆车只砸建筑，不去撞步兵（640 块换一个步兵不划算）",
+    check("自爆车只砸建筑，不去撞步兵（1000 块换一个步兵不划算）",
           all(server.find_entity(game6, tid) is not None
               and str(tid).startswith("s") for tid in targets),
           str(targets))

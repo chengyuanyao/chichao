@@ -157,7 +157,7 @@ cooldown / range）和 `server.DAMAGE_MULTIPLIER`（`apply_damage` 真正查的�
 
 接管的是整个 `tick_bots`，所以内置 AI 那几件事也得自己接着做，别丢：自爆单位
 **单独按波次砸建筑**（`_launch_suicides`，不进野战编制——`_score_target` 会把它
-送去撞步兵，640 块换一个步兵）、躲开进家的敌方自爆车（`bot_evade_suicide`）、
+送去撞步兵，1000 块换一个步兵）、躲开进家的敌方自爆车（`bot_evade_suicide`）、
 基地车折叠转移（`bot_maybe_pack`）、血量低于 45% 的兵不跟着推进。
 
 ## 离线对战结果

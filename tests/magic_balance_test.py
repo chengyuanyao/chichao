@@ -83,7 +83,10 @@ def main():
     server.apply_damage(room, familiar, dog_bite, a["id"], "bite", game)
     assert familiar["hp"] > 0
     assert abs((before - familiar["hp"]) - bite_arcane) < 0.1
-    print("  640/160/122.4/700/r120 对齐，魔仆一口不死: PASS")
+    assert truck["cost"] == 1000
+    assert truck["build"] == 8.5
+    assert truck["speed"] == 97.9
+    print("  1000/8.5/97.9/160/700/r120 对齐，魔仆一口不死: PASS")
 
     print("\n=== Test 3: 经济甲种与钢铁对齐，采矿仍结算 ===")
     assert server.UNIT_TYPES["mharvester"]["armor"] == "heavy"
