@@ -258,20 +258,25 @@ def main():
     assert "function makeBuildingPadTexture()" in render
     assert "尘土围裙略大于新地基" in render
     assert "指挥中心：矮宽地堡 + 两侧翼楼 + 收束主塔" in render
-    assert "法力塔：两根收束晶柱托一颗中心法力球" in render
+    assert "法力塔：细针晶柱 + 绕轨碎晶" in render
+    assert "水晶精炼所：横置晶液大釜" in render
+    assert "奥术圣殿：露天新月门" in render
+    assert "召唤法阵：多层平面符环 + 悬浮核" in render
+    assert "圣泉：石碗泉盆 + 上升泉光" in render
+    assert "奥术塔：扭转尖塔 + 武器晶碟" in render
     assert "teamOrOwn4" in render
     assert "armyTimeUniform" in render
     assert "躯干走橄榄布甲" in render
-    assert "长袍法师：暗紫袍是固有色" in render
-    assert "冰霜女巫：苍蓝袍 + 冰晶头冠" in render
+    assert "奥术法师：高挑长袍施法者，暗紫袍 + 金饰法杖" in render
+    assert "冰霜女巫：宽檐帽 + 苍白斗篷 + 霜环" in render
     assert "秘法巨龙：拉长的翼展剪影" in render
-    assert "晶铠卫士：晶体铠甲前排" in render
+    assert "晶铠卫士：持盾板甲骑士" in render
     assert "裂地晶兽：四足晶兽驮晶陨鞍塔" in render
     assert "裂地晶兽：四足晶兽 + 背上晶陨鞍塔" in app
-    assert "坠星台：重型石座底盘上的黑曜发射架" in render
-    assert "坠星台：重型石座 + 黑曜发射架 + 待发彗核" in app
+    assert "坠星台：厚重发射底盘 + 竖直晶炮" in render
+    assert "坠星台：厚重底盘 + 竖直晶炮" in app
     assert "自爆卡车：轮式药箱车" in render
-    assert "爆裂魔仆：矮小符核活体" in render
+    assert "爆裂魔仆：脉冲不稳的符核魔球" in render
     assert "type === 'blast'" in render
     assert catalog["units"]["bomb_truck"]["name"] == "自爆卡车"
     assert catalog["units"]["hexling"]["name"] == "爆裂魔仆"
@@ -298,7 +303,7 @@ def main():
     assert "kind === 'comet'" in render
     assert "function emitIdleAura" in render
     assert "步兵有持枪手臂，远看是人不是积木" in render
-    assert "主堡顶是石穹加晶刺，不是叠方块" in render
+    assert "魔法主堡：双尖塔托浮空金冠，不是矮方堡" in render
 
     # 彩蛋挂钩：视觉件只锁字符串，触发逻辑在 easter_egg_test。
     # 陨坑木牌 / 撒点草木已从地图上拆掉，不能再被字符串锁住。
@@ -362,10 +367,11 @@ def main():
     assert catalog["units"]["oracle"]["faction"] == "magic"
     assert catalog["units"]["imp"]["repairable"] is False
     assert catalog["units"]["oracle"]["repairable"] is False
-    assert "晶刺：晶体碎片人形" in render
-    assert "虹视使：细长远视者" in render
-    assert "晶刺：碎晶人形 + 肩刺" in app
-    assert "虹视使：细长袍 + 棱镜杖" in app
+    assert "晶刺：贴地锯齿晶螨" in render
+    assert "虹视使：细长棱晶杖 + 发光面罩" in render
+    assert "晶刺：贴地晶螨 + 锯齿背刺" in app
+    assert "虹视使：细长杖 + 发光面罩" in app
+    assert "爆裂魔仆：脉冲符核魔球" in app
     assert "tryTrainHotkey" not in app
     assert "trainHotkeyLetter" not in app
     assert "cameraTrainKeyDownAt" not in app

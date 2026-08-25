@@ -208,9 +208,14 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var P_ARCANE = '#b46bff';
   var P_FROST = '#9fe8ff';
   var P_FIRE = '#ff8a3a';
-  var P_CRYSTAL = '#9a7fd0';
+  var P_CRYSTAL = '#7a8cff';
   var P_STONE = '#5b5566';
-  var P_ROBE = '#4a3a5e';
+  var P_ROBE = '#2a1848';
+  var P_GOLDSTONE = '#c4a05a';
+  var P_GOLDTRIM = '#e0c25a';
+  var P_RUNE = '#5ef0ff';
+  var P_VIOLET = '#3a2060';
+  var P_MITE = '#8ad4ff';
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1,
@@ -708,174 +713,152 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     /* ---- 秘法会（魔法阵营）建筑 ---- */
     mhq: function (c) {
       pShadow(c, 48, 59, 28);
-      // 阶梯圣城 + 中央法塔
-      pPoly(c, [[22, 58], [74, 58], [66, 42], [30, 42]], P_STONE);
-      pPoly(c, [[74, 58], [58, 58], [55, 42], [66, 42]], 'rgba(10,10,6,.24)');
-      pPoly(c, [[34, 42], [62, 42], [57, 22], [41, 22]], '#4a4257');
-      // 塔顶悬浮巨水晶 + 环绕符环
-      pPoly(c, [[48, 6], [54, 14], [48, 22], [42, 14]], P_ARCANE);
-      c.strokeStyle = P_FROST; c.lineWidth = 1.5;
-      c.beginPath(); c.ellipse(48, 14, 11, 4, 0, 0, Math.PI * 2); c.stroke();
-      // 奥术窗 + 顶边高光
-      pRect(c, 44, 30, 3, 6, P_ARCANE);
-      pRect(c, 51, 30, 3, 6, P_ARCANE);
-      pLine(c, 31, 41.5, 65, 41.5, 1.5, 'rgba(180,107,255,.5)');
+      // 双尖塔托浮空金冠
+      pPoly(c, [[22, 58], [74, 58], [66, 46], [30, 46]], P_GOLDSTONE);
+      pPoly(c, [[74, 58], [58, 58], [55, 46], [66, 46]], 'rgba(10,10,6,.22)');
+      pPoly(c, [[30, 46], [42, 46], [40, 14], [32, 14]], P_GOLDSTONE);
+      pPoly(c, [[54, 46], [66, 46], [64, 10], [56, 10]], P_GOLDSTONE);
+      pLine(c, 33, 28, 39, 28, 2, P_GOLDTRIM);
+      pLine(c, 57, 24, 63, 24, 2, P_GOLDTRIM);
+      c.strokeStyle = P_GOLDTRIM; c.lineWidth = 2;
+      c.beginPath(); c.ellipse(48, 12, 12, 4, 0, 0, Math.PI * 2); c.stroke();
+      pCirc(c, 48, 12, 3.2, P_RUNE);
+      pCirc(c, 48, 12, 1.4, '#f2e6ff');
+      pRect(c, 44, 48, 8, 8, P_RUNE);
     },
     mpower: function (c) {
-      pShadow(c, 48, 59, 24);
-      // 两根相对的水晶塔
-      pPoly(c, [[34, 56], [42, 56], [40, 20], [36, 20]], P_CRYSTAL);
-      pPoly(c, [[54, 56], [62, 56], [60, 20], [56, 20]], P_CRYSTAL);
-      // 塔身符环
-      c.strokeStyle = P_ARCANE; c.lineWidth = 2;
-      c.beginPath(); c.ellipse(38, 30, 6, 2.5, 0, 0, Math.PI * 2); c.stroke();
-      c.beginPath(); c.ellipse(58, 30, 6, 2.5, 0, 0, Math.PI * 2); c.stroke();
-      // 共同托起的悬浮法力球
-      pCirc(c, 48, 13, 5, P_ARCANE);
-      pCirc(c, 48, 13, 2, '#f2e6ff');
+      pShadow(c, 48, 59, 20);
+      // 细针晶柱 + 绕轨碎晶
+      pPoly(c, [[32, 58], [64, 58], [58, 50], [38, 50]], P_GOLDSTONE);
+      pPoly(c, [[45, 50], [51, 50], [49, 10], [47, 10]], P_GOLDTRIM);
+      pLine(c, 48, 18, 48, 46, 2, P_RUNE);
+      c.strokeStyle = P_RUNE; c.lineWidth = 1.6;
+      c.beginPath(); c.ellipse(48, 20, 8, 3, 0, 0, Math.PI * 2); c.stroke();
+      pCirc(c, 60, 18, 3.2, P_GOLDTRIM);
+      pCirc(c, 60, 18, 1.4, P_RUNE);
     },
     mrefinery: function (c) {
-      pShadow(c, 44, 58, 28);
-      pRect(c, 24, 40, 36, 18, P_STONE);
-      pRect(c, 56, 40, 8, 18, 'rgba(10,10,6,.22)');
-      // 中央待炼巨晶 + 环绕符筒
-      pPoly(c, [[38, 40], [44, 16], [50, 40]], P_CRYSTAL);
-      pPoly(c, [[44, 16], [47.5, 24], [44, 40]], 'rgba(243,233,212,.18)');
-      c.strokeStyle = P_ARCANE; c.lineWidth = 2;
-      c.beginPath(); c.ellipse(44, 32, 10, 3.5, 0, 0, Math.PI * 2); c.stroke();
-      // 卸晶槽 + 寒蓝晶堆（对应矿厂的金矿堆）
-      pRect(c, 62, 30, 8, 26, P_DARK);
-      pCirc(c, 22, 55, 3.5, P_FROST);
-      pCirc(c, 29, 57, 4, P_FROST);
-      pCirc(c, 25, 52, 1.2, '#ffffff');
-      pLine(c, 18, 40.5, 58, 40.5, 1.5, 'rgba(159,232,255,.5)');
+      pShadow(c, 46, 58, 30);
+      // 横置晶液大釜
+      pRect(c, 20, 40, 52, 16, P_GOLDSTONE);
+      pCirc(c, 20, 48, 8, P_GOLDSTONE);
+      pCirc(c, 72, 48, 8, P_GOLDSTONE);
+      pRect(c, 26, 36, 40, 8, P_RUNE);
+      pCirc(c, 46, 40, 4, '#d6efff');
+      pCirc(c, 22, 56, 3.2, P_FROST);
+      pCirc(c, 30, 58, 3.6, P_FROST);
+      pLine(c, 18, 40.5, 70, 40.5, 1.5, P_GOLDTRIM);
     },
     mtemple: function (c) {
       pShadow(c, 48, 59, 26);
-      // 三角亭顶 + 双柱 + 亭心悬浮符文石
-      pPoly(c, [[28, 34], [68, 34], [48, 20]], P_STONE);
-      pRect(c, 32, 34, 5, 20, '#4a4257');
-      pRect(c, 59, 34, 5, 20, '#4a4257');
-      pPoly(c, [[48, 30], [53, 38], [48, 46], [43, 38]], P_ARCANE);
-      pCirc(c, 48, 38, 1.6, '#f2e6ff');
-      pRect(c, 26, 54, 44, 5, P_STONE);
-      pLine(c, 30, 33.5, 66, 33.5, 1.5, 'rgba(180,107,255,.5)');
+      // 露天新月门
+      pRect(c, 22, 54, 52, 5, P_GOLDSTONE);
+      c.strokeStyle = P_GOLDSTONE; c.lineWidth = 7;
+      c.beginPath(); c.arc(48, 42, 16, Math.PI * 1.05, Math.PI * 1.95); c.stroke();
+      c.strokeStyle = P_RUNE; c.lineWidth = 2;
+      c.beginPath(); c.arc(48, 42, 12, Math.PI * 1.08, Math.PI * 1.92); c.stroke();
+      pPoly(c, [[42, 22], [48, 12], [54, 22]], P_GOLDTRIM);
+      pCirc(c, 48, 40, 2.2, P_RUNE);
     },
     mcircle: function (c) {
       pShadow(c, 48, 60, 30);
-      pRect(c, 20, 52, 56, 8, P_STONE);
-      // 地面召唤阵纹（透视双环）
-      c.strokeStyle = P_ARCANE; c.lineWidth = 2;
-      c.beginPath(); c.ellipse(48, 50, 24, 6, 0, 0, Math.PI * 2); c.stroke();
-      c.beginPath(); c.ellipse(48, 50, 15, 3.6, 0, 0, Math.PI * 2); c.stroke();
-      // 竖立符文环 + 环心奥术漩涡
-      c.strokeStyle = P_CRYSTAL; c.lineWidth = 3.5;
-      c.beginPath(); c.ellipse(48, 29, 9, 16, 0, 0, Math.PI * 2); c.stroke();
-      pCirc(c, 48, 29, 6, P_ARCANE);
-      pCirc(c, 48, 29, 2.4, '#f2e6ff');
+      // 多层平面符环 + 悬浮核
+      pRect(c, 18, 52, 60, 6, P_GOLDSTONE);
+      c.strokeStyle = P_GOLDTRIM; c.lineWidth = 2.2;
+      c.beginPath(); c.ellipse(48, 50, 26, 7, 0, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = P_RUNE; c.lineWidth = 1.8;
+      c.beginPath(); c.ellipse(48, 50, 16, 4.2, 0, 0, Math.PI * 2); c.stroke();
+      pCirc(c, 48, 28, 6, P_GOLDTRIM);
+      pCirc(c, 48, 28, 3.4, P_RUNE);
+      pCirc(c, 48, 28, 1.4, '#f2e6ff');
     },
     mspring: function (c) {
       pShadow(c, 48, 60, 28);
-      // 石砌泉盆 + 泉心寒蓝圣水，对位维修厂的龙门剪影
-      pPoly(c, [[22, 56], [74, 56], [66, 44], [30, 44]], P_STONE);
-      pPoly(c, [[74, 56], [58, 56], [55, 44], [66, 44]], 'rgba(10,10,6,.24)');
-      pCirc(c, 48, 42, 11, P_FROST);
-      pCirc(c, 48, 42, 6, '#d6efff');
-      pCirc(c, 48, 40, 2.2, '#ffffff');
-      c.strokeStyle = P_ARCANE; c.lineWidth = 1.6;
-      c.beginPath(); c.ellipse(48, 42, 14, 5, 0, 0, Math.PI * 2); c.stroke();
-      pLine(c, 48, 42, 48, 22, 2, P_FROST);
-      pCirc(c, 48, 20, 3.2, P_ARCANE);
-      pCirc(c, 48, 20, 1.4, '#f2e6ff');
+      // 石碗泉盆 + 上升泉光
+      pPoly(c, [[22, 56], [74, 56], [64, 42], [32, 42]], P_GOLDSTONE);
+      pPoly(c, [[74, 56], [58, 56], [54, 42], [64, 42]], 'rgba(10,10,6,.22)');
+      c.strokeStyle = P_GOLDTRIM; c.lineWidth = 2;
+      c.beginPath(); c.ellipse(48, 42, 16, 5, 0, 0, Math.PI * 2); c.stroke();
+      pCirc(c, 48, 42, 8, P_FROST);
+      pCirc(c, 48, 42, 4, '#d6efff');
+      pLine(c, 48, 42, 48, 18, 3, P_RUNE);
+      pCirc(c, 48, 16, 3.4, P_FROST);
     },
     mtower: function (c) {
       pShadow(c, 48, 59, 18);
-      // 石座 + 收束水晶尖塔
-      pPoly(c, [[36, 58], [60, 58], [55, 48], [41, 48]], P_STONE);
-      pPoly(c, [[43, 48], [53, 48], [50, 18], [46, 18]], P_CRYSTAL);
-      // 塔顶悬浮晶核 + 符环
-      pPoly(c, [[48, 8], [53, 15], [48, 22], [43, 15]], P_ARCANE);
-      pCirc(c, 48, 15, 1.6, '#f2e6ff');
-      c.strokeStyle = P_FROST; c.lineWidth = 1.4;
-      c.beginPath(); c.ellipse(48, 15, 9, 3.5, 0, 0, Math.PI * 2); c.stroke();
+      // 扭转尖塔 + 武器晶碟
+      pPoly(c, [[36, 58], [60, 58], [54, 48], [42, 48]], P_GOLDSTONE);
+      pPoly(c, [[44, 48], [50, 48], [54, 28], [46, 22]], P_GOLDSTONE);
+      pPoly(c, [[46, 28], [52, 20], [48, 12], [44, 20]], P_GOLDTRIM);
+      c.strokeStyle = P_GOLDTRIM; c.lineWidth = 2.4;
+      c.beginPath(); c.ellipse(62, 22, 8, 5, -0.4, 0, Math.PI * 2); c.stroke();
+      pCirc(c, 68, 20, 2.2, P_RUNE);
     },
     /* ---- 秘法会（魔法阵营）单位 ---- */
     mage: function (c) {
       pShadow(c, 48, 60, 20);
-      // 长袍 + 尖顶兜帽 + 阴影里的脸
-      pPoly(c, [[34, 60], [62, 60], [55, 30], [41, 30]], P_ROBE);
-      pPoly(c, [[62, 60], [50, 60], [50, 30], [55, 30]], 'rgba(10,10,6,.28)');
-      pPoly(c, [[40, 32], [56, 32], [48, 16]], P_ROBE);
-      pCirc(c, 48, 30, 5.5, P_OUT);
-      pCirc(c, 46, 29.5, 1, P_ARCANE);
-      pCirc(c, 50, 29.5, 1, P_ARCANE);
-      // 前举法杖 + 杖顶奥术法球 + 一缕紫光
-      pLine(c, 60, 56, 70, 20, 2.6, P_DARK);
-      pCirc(c, 70, 18, 3.6, P_ARCANE);
-      pCirc(c, 70, 18, 1.6, '#f2e6ff');
-      pLine(c, 74, 16, 90, 12, 1.6, P_ARCANE);
+      // 高挑长袍 + 金帽沿 + 青符杖
+      pPoly(c, [[34, 60], [62, 60], [55, 28], [41, 28]], P_ROBE);
+      pPoly(c, [[62, 60], [50, 60], [50, 28], [55, 28]], 'rgba(10,10,6,.28)');
+      pPoly(c, [[40, 30], [56, 30], [48, 12]], P_ROBE);
+      pLine(c, 38, 30, 58, 30, 2, P_GOLDTRIM);
+      pCirc(c, 48, 28, 5.2, P_OUT);
+      pCirc(c, 46, 27.5, 1, P_RUNE);
+      pCirc(c, 50, 27.5, 1, P_RUNE);
+      pLine(c, 60, 56, 72, 16, 2.6, P_GOLDTRIM);
+      pCirc(c, 72, 14, 3.6, P_RUNE);
+      pCirc(c, 72, 14, 1.6, '#f2e6ff');
     },
     frost: function (c) {
-      pShadow(c, 48, 60, 20);
-      // 苍蓝长袍 + 冻边 + 苍白面容
-      pPoly(c, [[34, 60], [62, 60], [55, 30], [41, 30]], '#6d8aa0');
-      pPoly(c, [[62, 60], [50, 60], [50, 30], [55, 30]], 'rgba(10,10,6,.22)');
-      pPoly(c, [[33, 60], [63, 60], [60, 54], [36, 54]], P_FROST);
+      pShadow(c, 48, 60, 22);
+      // 宽檐帽 + 苍白斗篷 + 霜环
+      pPoly(c, [[32, 60], [64, 60], [56, 30], [40, 30]], '#6d8aa0');
+      pPoly(c, [[64, 60], [50, 60], [50, 30], [56, 30]], 'rgba(10,10,6,.22)');
+      pPoly(c, [[30, 60], [66, 60], [62, 54], [34, 54]], P_FROST);
       pCirc(c, 48, 30, 6, '#e9f3fb');
-      // 冰晶头冠：三枚冰棱
-      pPoly(c, [[42, 27], [44.5, 16], [47, 26]], P_FROST);
-      pPoly(c, [[46, 26], [48, 13], [50, 26]], '#d6efff');
-      pPoly(c, [[49, 26], [51.5, 16], [54, 27]], P_FROST);
-      // 冰霜法杖 + 杖顶寒晶簇
+      pPoly(c, [[26, 28], [70, 28], [64, 24], [32, 24]], '#8ab0c4');
+      pPoly(c, [[42, 24], [48, 10], [54, 24]], P_FROST);
       pLine(c, 60, 56, 70, 20, 2.4, P_FROST);
       pPoly(c, [[70, 10], [74, 18], [70, 26], [66, 18]], P_FROST);
-      pPoly(c, [[70, 8], [72, 15], [70, 16], [68, 15]], '#ffffff');
       pCirc(c, 70, 18, 1.6, '#ffffff');
     },
     imp: function (c) {
-      // 晶刺：碎晶人形 + 肩刺，不是袍子法师也不是符核魔仆
-      pShadow(c, 48, 60, 16);
-      pRect(c, 42, 46, 4, 12, P_STONE);
-      pRect(c, 50, 46, 4, 12, P_STONE);
-      pPoly(c, [[38, 52], [58, 52], [54, 28], [42, 28]], P_CRYSTAL);
-      pPoly(c, [[58, 52], [50, 52], [50, 28], [54, 28]], 'rgba(10,10,6,.26)');
-      pPoly(c, [[44, 28], [48, 14], [52, 28]], P_ARCANE);
-      pPoly(c, [[36, 30], [40, 18], [44, 32]], P_CRYSTAL);
-      pPoly(c, [[52, 32], [56, 18], [60, 30]], P_CRYSTAL);
-      pCirc(c, 48, 38, 3.4, P_ARCANE);
-      pCirc(c, 48, 38, 1.4, '#f2e6ff');
-      pLine(c, 58, 44, 72, 22, 2.2, P_CRYSTAL);
-      pPoly(c, [[70, 14], [76, 22], [70, 26], [66, 20]], P_ARCANE);
+      // 晶刺：贴地晶螨 + 锯齿背刺
+      pShadow(c, 48, 60, 20);
+      pRect(c, 30, 50, 3, 8, P_CRYSTAL);
+      pRect(c, 40, 50, 3, 8, P_CRYSTAL);
+      pRect(c, 54, 50, 3, 8, P_CRYSTAL);
+      pRect(c, 64, 50, 3, 8, P_CRYSTAL);
+      pPoly(c, [[26, 52], [70, 50], [66, 38], [32, 40]], P_MITE);
+      pPoly(c, [[64, 44], [78, 40], [76, 34], [66, 36]], P_CRYSTAL);
+      pPoly(c, [[40, 38], [44, 24], [48, 38]], P_MITE);
+      pPoly(c, [[50, 38], [54, 22], [58, 38]], P_CRYSTAL);
+      pCirc(c, 48, 42, 2.4, P_RUNE);
     },
     oracle: function (c) {
-      // 虹视使：细长袍 + 棱镜杖，面罩一眼是远视者
-      pShadow(c, 48, 60, 18);
-      pPoly(c, [[38, 60], [58, 60], [54, 26], [42, 26]], P_ROBE);
-      pPoly(c, [[58, 60], [50, 60], [50, 26], [54, 26]], 'rgba(10,10,6,.28)');
-      pPoly(c, [[42, 28], [54, 28], [48, 12]], P_ROBE);
-      pRect(c, 42, 24, 12, 4, P_CRYSTAL);
-      pCirc(c, 48, 26, 1.4, '#f2e6ff');
-      pLine(c, 58, 56, 74, 10, 2.2, P_DARK);
-      pPoly(c, [[74, 4], [80, 12], [74, 16], [68, 10]], P_FROST);
-      pPoly(c, [[74, 6], [78, 12], [74, 14], [70, 10]], P_ARCANE);
-      pCirc(c, 74, 11, 1.4, '#ffffff');
-      pLine(c, 80, 8, 92, 4, 1.4, P_FROST);
+      // 虹视使：细长杖 + 发光面罩
+      pShadow(c, 48, 60, 16);
+      pPoly(c, [[40, 60], [56, 60], [53, 22], [43, 22]], P_VIOLET);
+      pPoly(c, [[56, 60], [50, 60], [50, 22], [53, 22]], 'rgba(10,10,6,.28)');
+      pRect(c, 40, 22, 16, 5, P_CRYSTAL);
+      pRect(c, 42, 23.4, 12, 2.2, P_RUNE);
+      pCirc(c, 48, 24.5, 1.3, '#ffffff');
+      pLine(c, 56, 54, 80, 6, 2.0, P_GOLDTRIM);
+      pPoly(c, [[80, 2], [86, 10], [80, 14], [74, 8]], P_FROST);
+      pLine(c, 86, 6, 94, 2, 1.4, P_RUNE);
     },
     golem: function (c) {
       pShadow(c, 48, 61, 30);
-      // 厚重岩躯 + 巨石双臂 + 水晶拳
-      pPoly(c, [[30, 60], [66, 60], [60, 28], [36, 28]], P_STONE);
+      // 厚重岩元素：暖灰褐，不是紫晶人
+      pPoly(c, [[30, 60], [66, 60], [60, 28], [36, 28]], '#6a5a48');
       pPoly(c, [[66, 60], [50, 60], [50, 28], [60, 28]], 'rgba(10,10,6,.28)');
-      pCirc(c, 46, 24, 6.5, P_STONE);
-      pRect(c, 24, 34, 8, 20, '#4a4453');
-      pRect(c, 64, 34, 8, 20, '#4a4453');
-      pRect(c, 24, 52, 8, 7, P_CRYSTAL);
-      pRect(c, 64, 52, 8, 7, P_CRYSTAL);
-      // 胸口奥术核心 + 双眼
-      pCirc(c, 48, 42, 4.5, P_ARCANE);
-      pCirc(c, 48, 42, 2, '#f2e6ff');
-      pCirc(c, 44, 23, 1.2, P_ARCANE);
-      pCirc(c, 48, 23, 1.2, P_ARCANE);
+      pCirc(c, 46, 24, 6.5, '#6a5a48');
+      pRect(c, 22, 34, 9, 20, '#4a4034');
+      pRect(c, 65, 34, 9, 20, '#4a4034');
+      pCirc(c, 48, 42, 4.2, P_RUNE);
+      pCirc(c, 48, 42, 1.8, '#f2e6ff');
+      pCirc(c, 44, 23, 1.1, P_RUNE);
+      pCirc(c, 48, 23, 1.1, P_RUNE);
     },
     panther: function (c) {
       pShadow(c, 48, 60, 28);
@@ -914,19 +897,17 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     },
     warden: function (c) {
       pShadow(c, 48, 61, 28);
-      // 晶铠卫士：比傀儡更像披甲构装——盾 + 晶刃，不是又一坨岩石
-      pPoly(c, [[34, 60], [62, 60], [58, 28], [38, 28]], P_STONE);
+      // 晶铠卫士：持盾板甲骑士
+      pPoly(c, [[36, 60], [62, 60], [58, 28], [40, 28]], P_VIOLET);
       pPoly(c, [[62, 60], [50, 60], [50, 28], [58, 28]], 'rgba(10,10,6,.26)');
-      pPoly(c, [[36, 42], [60, 42], [57, 30], [39, 30]], P_CRYSTAL);
-      pCirc(c, 47, 24, 6, P_STONE);
-      pPoly(c, [[18, 34], [32, 30], [34, 56], [16, 54]], P_CRYSTAL);
-      pPoly(c, [[18, 34], [26, 32], [26, 54], [16, 54]], 'rgba(243,233,212,.18)');
-      pLine(c, 64, 56, 78, 16, 3.2, P_DARK);
-      pPoly(c, [[76, 8], [82, 18], [76, 24], [70, 18]], P_ARCANE);
-      pCirc(c, 48, 38, 3.4, P_ARCANE);
-      pCirc(c, 48, 38, 1.4, '#f2e6ff');
-      pCirc(c, 45, 23, 1.1, P_ARCANE);
-      pCirc(c, 49, 23, 1.1, P_ARCANE);
+      pLine(c, 38, 42, 60, 42, 2, P_GOLDTRIM);
+      pCirc(c, 48, 22, 6, P_VIOLET);
+      pPoly(c, [[46, 16], [48, 8], [50, 16]], P_GOLDTRIM);
+      pRect(c, 43, 21, 10, 2.2, P_RUNE);
+      pPoly(c, [[16, 32], [32, 28], [34, 58], [14, 54]], P_GOLDTRIM);
+      pPoly(c, [[18, 34], [30, 32], [31, 54], [16, 52]], P_VIOLET);
+      pLine(c, 64, 56, 78, 16, 3.0, P_GOLDTRIM);
+      pPoly(c, [[76, 8], [82, 18], [76, 24], [70, 18]], P_CRYSTAL);
     },
     colossus: function (c) {
       pShadow(c, 50, 62, 32);
@@ -952,72 +933,62 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       pCirc(c, 44, 36, 1.2, '#f2e6ff');
     },
     comet: function (c) {
-      // 坠星台：重型石座 + 黑曜发射架 + 待发彗核，不是东风火箭也不是裂地兽
+      // 坠星台：厚重底盘 + 竖直晶炮
       pShadow(c, 50, 61, 30);
-      pRect(c, 26, 50, 44, 10, P_STONE);
-      pPoly(c, [[24, 50], [72, 50], [66, 40], [30, 40]], P_DARK);
-      pPoly(c, [[30, 40], [64, 40], [58, 32], [36, 32]], '#2a2433');
-      pRect(c, 44, 18, 8, 16, '#1a1620');
-      pRect(c, 38, 22, 4, 14, P_STONE);
-      pRect(c, 54, 22, 4, 14, P_STONE);
-      pCirc(c, 48, 16, 8.5, P_CRYSTAL);
-      pCirc(c, 48, 16, 5.2, P_ARCANE);
-      pCirc(c, 48, 16, 2.2, '#f2e6ff');
-      pPoly(c, [[42, 10], [48, 2], [54, 10]], P_FROST);
-      pLine(c, 48, 24, 48, 38, 2, P_ARCANE);
-      pCirc(c, 32, 46, 1.6, P_ARCANE);
-      pCirc(c, 64, 46, 1.6, P_ARCANE);
+      pRect(c, 22, 50, 52, 10, P_GOLDSTONE);
+      pPoly(c, [[22, 50], [74, 50], [68, 40], [28, 40]], '#4a3a22');
+      pRect(c, 44, 12, 8, 30, P_MITE);
+      pRect(c, 38, 20, 4, 18, P_GOLDTRIM);
+      pRect(c, 54, 20, 4, 18, P_GOLDTRIM);
+      pCirc(c, 48, 12, 6, P_RUNE);
+      pCirc(c, 48, 12, 2.2, '#f2e6ff');
+      pPoly(c, [[44, 8], [48, 2], [52, 8]], P_FROST);
     },
     mharvester: function (c) {
       pShadow(c, 48, 60, 26);
-      // 悬浮底座托着一簇参差水晶
-      pPoly(c, [[28, 52], [68, 52], [62, 46], [34, 46]], P_DARK);
-      pPoly(c, [[40, 46], [44, 24], [48, 46]], P_CRYSTAL);
-      pPoly(c, [[48, 46], [53, 30], [57, 46]], '#8a6fc0');
-      pPoly(c, [[33, 46], [37, 33], [41, 46]], '#8a6fc0');
-      // 悬浮光环 + 主晶顶光 + 底座悬浮核心
-      pLine(c, 30, 55.5, 66, 55.5, 1.5, P_FROST);
-      pCirc(c, 44, 22, 1.6, P_ARCANE);
-      pCirc(c, 48, 49, 2, P_ARCANE);
+      pPoly(c, [[28, 52], [68, 52], [62, 46], [34, 46]], P_GOLDSTONE);
+      pPoly(c, [[40, 46], [44, 24], [48, 46]], P_MITE);
+      pPoly(c, [[48, 46], [53, 30], [57, 46]], P_CRYSTAL);
+      pPoly(c, [[33, 46], [37, 33], [41, 46]], P_GOLDTRIM);
+      pLine(c, 30, 55.5, 66, 55.5, 1.5, P_RUNE);
+      pCirc(c, 44, 22, 1.6, P_RUNE);
+      pCirc(c, 48, 49, 2, P_RUNE);
     },
     mmcv: function (c) {
       pShadow(c, 48, 61, 28);
-      // 悬浮平台 + 竖立符文环 + 环心漩涡
-      pPoly(c, [[22, 52], [74, 52], [66, 45], [30, 45]], P_STONE);
-      c.strokeStyle = P_CRYSTAL; c.lineWidth = 4;
+      pPoly(c, [[22, 52], [74, 52], [66, 45], [30, 45]], P_GOLDSTONE);
+      c.strokeStyle = P_GOLDTRIM; c.lineWidth = 4;
       c.beginPath(); c.ellipse(48, 33, 8, 14, 0, 0, Math.PI * 2); c.stroke();
-      pCirc(c, 48, 33, 5, P_ARCANE);
+      pCirc(c, 48, 33, 5, P_RUNE);
       pCirc(c, 48, 33, 2, '#f2e6ff');
-      pRect(c, 32, 40, 4, 8, '#4a4453');
-      pRect(c, 60, 40, 4, 8, '#4a4453');
-      pLine(c, 26, 55.5, 70, 55.5, 1.5, P_FROST);
+      pRect(c, 32, 40, 4, 8, P_GOLDSTONE);
+      pRect(c, 60, 40, 4, 8, P_GOLDSTONE);
+      pLine(c, 26, 55.5, 70, 55.5, 1.5, P_RUNE);
     },
     hexling: function (c) {
-      // 爆裂魔仆：矮小符核活体 + 腰环 + 胸口晶核，不是卡车剪影
-      pShadow(c, 48, 60, 18);
-      pRect(c, 40, 46, 4, 12, P_STONE);
-      pRect(c, 52, 46, 4, 12, P_STONE);
-      pPoly(c, [[36, 50], [60, 50], [56, 30], [40, 30]], P_CRYSTAL);
-      pPoly(c, [[60, 50], [50, 50], [50, 30], [56, 30]], 'rgba(10,10,6,.26)');
-      pCirc(c, 48, 26, 7, P_STONE);
-      pPoly(c, [[44, 22], [48, 12], [52, 22]], P_ARCANE);
-      pCirc(c, 48, 38, 4.2, P_ARCANE);
-      pCirc(c, 48, 38, 1.8, '#f2e6ff');
-      c.strokeStyle = P_FROST; c.lineWidth = 1.8;
-      c.beginPath(); c.ellipse(48, 42, 12, 4, 0, 0, Math.PI * 2); c.stroke();
-      pCirc(c, 45, 24, 1.1, P_ARCANE);
-      pCirc(c, 51, 24, 1.1, P_ARCANE);
+      // 爆裂魔仆：脉冲符核魔球
+      pShadow(c, 48, 60, 16);
+      pCirc(c, 48, 36, 14, P_VIOLET);
+      pCirc(c, 48, 36, 9, P_FIRE);
+      pCirc(c, 48, 36, 4.2, '#ffe0a0');
+      c.strokeStyle = P_GOLDTRIM; c.lineWidth = 2;
+      c.beginPath(); c.ellipse(48, 36, 16, 5, 0, 0, Math.PI * 2); c.stroke();
+      pPoly(c, [[44, 22], [48, 12], [52, 22]], P_FIRE);
+      pRect(c, 40, 48, 3, 8, P_VIOLET);
+      pRect(c, 53, 48, 3, 8, P_VIOLET);
     }
   };
 
   // 深红内衬 + 低透明放射线 + 径向明暗：所有肖像共用的底子。
-  // magic 时换暗紫，与钢铁军团的深红底阵营对撞一眼可辨。
-  function portraitBackdrop(c, w, h, magic) {
-    c.fillStyle = magic ? '#2a1140' : '#4a1013';
+  // 秘法会建筑走暖金底，作战单位走冷紫底，钢铁军团仍是深红。
+  function portraitBackdrop(c, w, h, magic, isBuilding) {
+    c.fillStyle = magic ? (isBuilding ? '#3a2410' : '#1a1040') : '#4a1013';
     c.fillRect(0, 0, w, h);
     c.save();
     c.translate(w / 2, h * 0.62);
-    c.fillStyle = magic ? 'rgba(150,80,220,.16)' : 'rgba(200,36,30,.16)';
+    c.fillStyle = magic
+      ? (isBuilding ? 'rgba(224,180,70,.16)' : 'rgba(80,180,230,.14)')
+      : 'rgba(200,36,30,.16)';
     for (var i = 0; i < 12; i++) {
       var a0 = i * Math.PI / 6;
       c.beginPath();
@@ -1028,9 +999,13 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     }
     c.restore();
     var g = c.createRadialGradient(w / 2, h * 0.45, 8, w / 2, h * 0.5, w * 0.72);
-    if (magic) {
-      g.addColorStop(0, 'rgba(96,44,150,.5)');
-      g.addColorStop(0.55, 'rgba(42,17,64,0)');
+    if (magic && isBuilding) {
+      g.addColorStop(0, 'rgba(160,110,40,.5)');
+      g.addColorStop(0.55, 'rgba(58,36,16,0)');
+      g.addColorStop(1, 'rgba(10,10,6,.6)');
+    } else if (magic) {
+      g.addColorStop(0, 'rgba(50,40,140,.5)');
+      g.addColorStop(0.55, 'rgba(26,16,64,0)');
       g.addColorStop(1, 'rgba(10,10,6,.6)');
     } else {
       g.addColorStop(0, 'rgba(90,18,22,.5)');
@@ -1069,7 +1044,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     cv.width = PORTRAIT_W;
     cv.height = PORTRAIT_H;
     var c = cv.getContext('2d');
-    portraitBackdrop(c, PORTRAIT_W, PORTRAIT_H, !!MAGIC_KINDS[kind]);
+    portraitBackdrop(c, PORTRAIT_W, PORTRAIT_H, !!MAGIC_KINDS[kind], isBuilding);
     var painter = PORTRAIT_PAINTERS[kind];
     if (painter) {
       c.save();
