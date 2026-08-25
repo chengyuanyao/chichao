@@ -579,6 +579,9 @@ ORBITAL_RAIN_FIRST_MAX = 60.0
 ORBITAL_RAIN_GAP_MIN = 40.0
 ORBITAL_RAIN_GAP_MAX = 55.0
 
+# 可选大厅开关「中立守卫」：公共矿守军。缺省开启，与现行对局一致。
+NEUTRAL_CAMPS_MODE = "neutral_camps"
+
 # Only completed core buildings extend construction territory. Defensive
 # structures deliberately do not, preventing turret chains across the map.
 BUILD_ANCHOR_RANGES = {
@@ -1083,6 +1086,7 @@ def public_game(game, viewer_id=None, full=True):
             "crates": frame["crates"],
             "strikes": frame["strikes"],
             "orbitalRain": bool(game.get("orbitalRain")),
+            "neutrals": neutrals_enabled(game),
         }
         view_cache[view_key] = (frame["stamp"], dynamic)
 
@@ -1139,6 +1143,7 @@ def public_room(room, include_game=True, viewer_id=None, full=True):
         "serverTime": now(),
         "selectedMap": room.get("selectedMap", DEFAULT_MAP),
         "orbitalRain": bool(room.get("orbitalRain") or (room.get("game") or {}).get("orbitalRain")),
+        "neutrals": neutrals_enabled(room, room.get("game")),
         "mapConfig": {
             "id": room_map["id"],
             "name": room_map["name"],
@@ -1443,8 +1448,18 @@ def neutral_guard_position(game, resource, base_angle, preferred_radius, size):
     return None
 
 
+def neutrals_enabled(*sources):
+    """中立守卫开关：缺省开启；任一来源显式 False 则关闭。"""
+    for source in sources:
+        if source is not None and source.get("neutrals") is False:
+            return False
+    return True
+
+
 def spawn_neutral_ore_camp(game, resource, rng):
     """为一处公共矿生成固定炮塔与机动守军。"""
+    if not neutrals_enabled(game):
+        return
     camp_id = new_id("n")
     camp = {
         "id": camp_id, "resourceId": resource["id"],
@@ -1510,6 +1525,9 @@ def spawn_neutral_ore_camp(game, resource, rng):
 
 def refresh_neutral_camps(game):
     """刷新公共矿锁；只有所属建筑和守军全部阵亡才解锁。"""
+    if not neutrals_enabled(game):
+        game["_guardedNeutralCampIds"] = set()
+        return
     camps = game.get("neutralCamps", [])
     if not camps:
         game["_guardedNeutralCampIds"] = set()
@@ -1618,10 +1636,11 @@ def add_random_resources(game, count, spawn_points):
         raise RuntimeError("无法为地图生成足够的随机矿区")
 
     # 守军使用独立随机源，避免模型编队的随机数影响下一局公共矿坐标。
-    guard_rng = random.Random(int(game["map"]["seed"]) ^ 0x6E657574)
-    for resource in public_resources:
-        spawn_neutral_ore_camp(game, resource, guard_rng)
-    refresh_neutral_camps(game)
+    if neutrals_enabled(game):
+        guard_rng = random.Random(int(game["map"]["seed"]) ^ 0x6E657574)
+        for resource in public_resources:
+            spawn_neutral_ore_camp(game, resource, guard_rng)
+        refresh_neutral_camps(game)
 
 
 def _spawn_index(value, total_spawns):
@@ -1731,6 +1750,7 @@ def start_game(room):
         "_publicViewCache": {},
         "pendingStrikes": [],
         "orbitalRain": bool(room.get("orbitalRain")),
+        "neutrals": neutrals_enabled(room),
         "nextOrbitalRainAt": (
             random.uniform(ORBITAL_RAIN_FIRST_MIN, ORBITAL_RAIN_FIRST_MAX)
             if room.get("orbitalRain") else None),
@@ -1919,7 +1939,7 @@ def start_game(room):
             public=bool(bonus.get("public", True)))
         if resource.get("public"):
             bonus_public.append(resource)
-    if bonus_public:
+    if bonus_public and neutrals_enabled(game):
         bonus_rng = random.Random(int(game["map"]["seed"]) ^ 0xB0A05E)
         for resource in bonus_public:
             spawn_neutral_ore_camp(game, resource, bonus_rng)
@@ -1947,6 +1967,8 @@ def start_game(room):
     add_chat(room, "作战系统", "战斗开始：摧毁敌方指挥中心即可获胜。", True)
     if game["orbitalRain"]:
         add_chat(room, "作战系统", "本局模式：轨道天降（随机轨道打击，范围×5）。", True)
+    if not game.get("neutrals", True):
+        add_chat(room, "作战系统", "本局已关闭中立守卫：公共矿区可直接采集。", True)
 
 
 def find_entity(game, entity_id, entity_index=None):
@@ -2351,6 +2373,23 @@ def issue_strike(room, player_id, x, y):
     queue_strike(room, x, y, owner=player_id,
                  radius=STRIKE_RADIUS, splash=STRIKE_SPLASH, system=False)
     add_chat(room, "作战系统", "%s 呼叫了轨道打击！" % player.get("name", "指挥官"), True)
+
+
+def set_neutrals(room, player, enabled):
+    """房主在大厅开关「中立守卫」。"""
+    if room.get("status") != "lobby":
+        raise ValueError("战斗已经开始")
+    if not player or room.get("hostId") != player.get("id"):
+        raise ValueError("只有房主可以设置模式")
+    enabled = bool(enabled)
+    if neutrals_enabled(room) == enabled:
+        return enabled
+    room["neutrals"] = enabled
+    if enabled:
+        add_chat(room, "作战系统", "已开启可选模式：中立守卫。", True)
+    else:
+        add_chat(room, "作战系统", "已关闭可选模式：中立守卫。", True)
+    return enabled
 
 
 def set_orbital_rain(room, player, enabled):
@@ -5169,7 +5208,8 @@ def tick_game(room, dt):
     game["elapsed"] += dt
     terrain = game_terrain(game)
     # 采矿结算前先刷新守军存活状态，保证最后一名守卫阵亡后的下一帧即解锁。
-    refresh_neutral_camps(game)
+    if neutrals_enabled(game):
+        refresh_neutral_camps(game)
     spawn_crates(game, terrain, dt)
     tick_crates(room, dt)
     entity_index, combat_spatial = build_combat_indexes(game)
@@ -5424,6 +5464,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 "createdAt": now(),
                 "selectedMap": selected_map,
                 "orbitalRain": False,
+                "neutrals": True,
                 "lock": threading.RLock(),
             }
             ROOMS[room_id] = room
@@ -5513,6 +5554,8 @@ class GameHandler(BaseHTTPRequestHandler):
                     add_chat(room, "作战系统", "地图已切换为「%s」。" % MAPS[map_id]["name"], True)
             elif action == "setOrbitalRain":
                 set_orbital_rain(room, player, payload.get("enabled"))
+            elif action == "setNeutrals":
+                set_neutrals(room, player, payload.get("enabled"))
             elif action == "addBot":
                 if room["hostId"] != player["id"] or room["status"] != "lobby":
                     raise ValueError("只有房主可以添加 AI")

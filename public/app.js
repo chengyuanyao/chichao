@@ -1154,6 +1154,9 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var orbitalRainRow = $('#orbitalRainRow');
   var orbitalRainToggle = $('#orbitalRainToggle');
   var orbitalRainBadge = $('#orbitalRainBadge');
+  var neutralCampsRow = $('#neutralCampsRow');
+  var neutralCampsToggle = $('#neutralCampsToggle');
+  var neutralCampsBadge = $('#neutralCampsBadge');
   var BUILTIN_MAPS = {
     north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, theme: 'grassland', spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
     narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
@@ -1878,6 +1881,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     renderMapPreview(mapConfig);
     renderMapSelect(me, roomState);
     syncOrbitalRainToggle(me, roomState);
+    syncNeutralCampsToggle(me, roomState);
 
     // Only rebuild the roster DOM when something actually changed.
     // Rebuilding on every SSE tick destroys open dropdowns instantly.
@@ -2134,6 +2138,13 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     return !!(state.game && state.game.orbitalRain);
   }
 
+  function roomHasNeutrals(state) {
+    if (!state) { return true; }
+    if (state.neutrals === false) { return false; }
+    if (state.game && state.game.neutrals === false) { return false; }
+    return true;
+  }
+
   function syncOrbitalRainToggle(me, state) {
     if (!orbitalRainToggle) { return; }
     var on = roomHasOrbitalRain(state);
@@ -2144,6 +2155,19 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     orbitalRainToggle.disabled = !canEdit;
     if (orbitalRainRow) {
       orbitalRainRow.classList.toggle('disabled', !canEdit);
+    }
+  }
+
+  function syncNeutralCampsToggle(me, state) {
+    if (!neutralCampsToggle) { return; }
+    var on = roomHasNeutrals(state);
+    if (neutralCampsToggle.checked !== on) {
+      neutralCampsToggle.checked = on;
+    }
+    var canEdit = !!(me && me.isHost && state && state.status === 'lobby');
+    neutralCampsToggle.disabled = !canEdit;
+    if (neutralCampsRow) {
+      neutralCampsRow.classList.toggle('disabled', !canEdit);
     }
   }
 
@@ -2299,6 +2323,9 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     }
     if (orbitalRainBadge) {
       orbitalRainBadge.classList.toggle('hidden', !roomHasOrbitalRain(roomState));
+    }
+    if (neutralCampsBadge) {
+      neutralCampsBadge.classList.toggle('hidden', !roomHasNeutrals(roomState));
     }
 
     applyFactionHud();
@@ -4534,6 +4561,13 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     orbitalRainToggle.addEventListener('change', function () {
       sendAction('setOrbitalRain', { enabled: orbitalRainToggle.checked }).catch(function () {
         if (roomState) { syncOrbitalRainToggle(ownPlayer(), roomState); }
+      });
+    });
+  }
+  if (neutralCampsToggle) {
+    neutralCampsToggle.addEventListener('change', function () {
+      sendAction('setNeutrals', { enabled: neutralCampsToggle.checked }).catch(function () {
+        if (roomState) { syncNeutralCampsToggle(ownPlayer(), roomState); }
       });
     });
   }
