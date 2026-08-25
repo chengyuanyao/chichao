@@ -1151,6 +1151,9 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var mapSpawnPreviews = $('#mapSpawnPreviews');
   var mapSelectHost = $('#mapSelectHost');
   var mapSelectDropdown = $('#mapSelectDropdown');
+  var orbitalRainRow = $('#orbitalRainRow');
+  var orbitalRainToggle = $('#orbitalRainToggle');
+  var orbitalRainBadge = $('#orbitalRainBadge');
   var BUILTIN_MAPS = {
     north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, theme: 'grassland', spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
     narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
@@ -1874,6 +1877,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
 
     renderMapPreview(mapConfig);
     renderMapSelect(me, roomState);
+    syncOrbitalRainToggle(me, roomState);
 
     // Only rebuild the roster DOM when something actually changed.
     // Rebuilding on every SSE tick destroys open dropdowns instantly.
@@ -2124,6 +2128,25 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     }
   }
 
+  function roomHasOrbitalRain(state) {
+    if (!state) { return false; }
+    if (state.orbitalRain) { return true; }
+    return !!(state.game && state.game.orbitalRain);
+  }
+
+  function syncOrbitalRainToggle(me, state) {
+    if (!orbitalRainToggle) { return; }
+    var on = roomHasOrbitalRain(state);
+    if (orbitalRainToggle.checked !== on) {
+      orbitalRainToggle.checked = on;
+    }
+    var canEdit = !!(me && me.isHost && state && state.status === 'lobby');
+    orbitalRainToggle.disabled = !canEdit;
+    if (orbitalRainRow) {
+      orbitalRainRow.classList.toggle('disabled', !canEdit);
+    }
+  }
+
   function renderChat(container, messages, limit) {
     var key = messages.map(function (m) { return m.id; }).join(',');
     var localKey = container.id + ':' + key;
@@ -2273,6 +2296,9 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       var charges = me.strikeCharges || 0;
       strikeBtn.classList.toggle('hidden', charges <= 0);
       strikeBtn.classList.toggle('ready', charges > 0);
+    }
+    if (orbitalRainBadge) {
+      orbitalRainBadge.classList.toggle('hidden', !roomHasOrbitalRain(roomState));
     }
 
     applyFactionHud();
@@ -3618,6 +3644,16 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       miniCtx.arc(ping.x * sx, ping.y * sy, 6 + ping.ttl, 0, Math.PI * 2);
       miniCtx.stroke();
     });
+    // 轨道打击预警圈：半径跟服务端这发走（玩家 180，轨道天降 900）
+    (roomState.game.strikes || []).forEach(function (strike) {
+      var ringR = ((strike.radius > 0) ? strike.radius : 180) * sx;
+      var warning = strike.warnUntil > 0;
+      miniCtx.strokeStyle = warning ? 'rgba(255,200,64,.9)' : 'rgba(255,70,48,.85)';
+      miniCtx.lineWidth = warning ? 1.5 : 2;
+      miniCtx.beginPath();
+      miniCtx.arc(strike.x * sx, strike.y * sy, Math.max(4, ringR), 0, Math.PI * 2);
+      miniCtx.stroke();
+    });
     // 透视相机下可视区是个梯形，把四个屏幕角投到地面上画出来
     var corners = [
       view3d.screenToWorld(0, 0),
@@ -4494,6 +4530,13 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   startGameBtn.addEventListener('click', function () {
     sendAction('start').then(function () { sound('start'); }).catch(function () {});
   });
+  if (orbitalRainToggle) {
+    orbitalRainToggle.addEventListener('change', function () {
+      sendAction('setOrbitalRain', { enabled: orbitalRainToggle.checked }).catch(function () {
+        if (roomState) { syncOrbitalRainToggle(ownPlayer(), roomState); }
+      });
+    });
+  }
   lobbyChatForm.addEventListener('submit', function (event) {
     event.preventDefault();
     var message = lobbyChatInput.value.trim();
