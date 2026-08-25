@@ -13,8 +13,15 @@
 
 如果服务器没有运行：
 
+- **Windows 图形启动器：** 双击 `SteelFrontLauncher.exe`，点击“启动服务器”；同一个按键可停止服务，全程不显示控制台窗口。
 - **Windows：** 双击 `start-game.bat`
 - **Linux / macOS：** 在项目目录执行 `./start-game.sh`（或 `bash start-game.sh`）
+
+`SteelFrontLauncher.exe` 是一个很薄的启动外壳，不把游戏代码打包进去。它每次都直接
+运行仓库当前的 `server.py`，因此执行 `git pull` 后无需重新编译，下一次点击启动就是
+最新代码。Python 3 仍需安装在电脑上；启动错误会写入根目录的 `launcher.log`。
+只有修改了启动器自身的 `launcher/SteelFrontLauncher.cs` 时，开发者才需要运行
+`powershell -ExecutionPolicy Bypass -File launcher/build-launcher.ps1` 重新生成 EXE。
 
 启动后窗口里会直接打印两个地址：本机访问用的 `127.0.0.1`，以及**自动探测到的局域网地址**——把后者发给队友。保持该窗口开启；关闭窗口即停止服务。
 

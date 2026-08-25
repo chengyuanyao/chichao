@@ -6,4 +6,5 @@
 # 二进制资源不做任何行尾转换。
 *.png binary
 *.jpg binary
+*.exe binary
 *.svg -text
