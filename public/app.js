@@ -111,7 +111,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   // 与 server.BUILD_ANCHOR_RANGES 一样按 role 索引；魔法主堡/法力塔等换皮
   // 建筑通过 STRUCTURE_ROLES 映射到同一半径，否则鬼影永远是红的。
   var BUILD_ANCHOR_RANGES = { hq: 360, power: 220, refinery: 250, barracks: 220, factory: 270, repair: 240 };
-  var ENEMY_BUILD_EXCLUSION = 440;
 
   function structureRole(kind) { return STRUCTURE_ROLES[kind] || null; }
   function unitRole(kind) { return UNIT_ROLES[kind] || null; }
@@ -1141,7 +1140,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     triple_pass: { id: 'triple_pass', name: '三岔隘口', width: 5400, height: 4200, maxPlayers: 3, theme: 'arid', spawnLabels: ['西境营地', '东北营地', '东南营地'], spawnPoints: [[700,2100],[3700,368],[3700,3832]] },
     gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。外环邻里路口被密林切开，只能从林间小路穿过。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]] },
     gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '赤金陨坑的紧凑版：五方围着陨石核打，地图小一圈，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[4691,2443],[4122,5182],[2278,5182],[1709,2443]] },
-    central_scramble: { id: 'central_scramble', name: '五车争疆', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在中央同时落地。先抢方向再展开；中央一片小矿，外围五片矿每局随机且没有中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
+    central_scramble: { id: 'central_scramble', name: '五车争疆', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在中央同时落地。先抢方向再展开；中央和外围五片随机矿均为十倍储量，且没有中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
     island_hop: { id: 'island_hop', name: '三谷争夺', width: 7200, height: 6000, maxPlayers: 4, theme: 'grassland', spawnLabels: ['西北高地', '东北高地', '西南高地', '东南高地'], spawnPoints: [[900,900],[6300,900],[900,5100],[6300,5100]] },
     urban_siege: { id: 'urban_siege', name: '围城战', width: 6400, height: 6400, maxPlayers: 4, theme: 'urban', spawnLabels: ['西区', '北区', '东区', '南区'], spawnPoints: [[900,3200],[3200,900],[5500,3200],[3200,5500]] },
     valley_clash: { id: 'valley_clash', name: '峡谷交锋', width: 6400, height: 4800, maxPlayers: 4, theme: 'grassland', spawnLabels: ['左路前哨', '左路后哨', '右路前哨', '右路后哨'], spawnPoints: [[800,1800],[800,3000],[5600,1800],[5600,3000]] }
@@ -3568,13 +3567,6 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       return s.hp > 0 && Math.hypot(s.x - x, s.y - y) < s.size + definition.size + 18;
     });
     if (collision) {
-      return false;
-    }
-    var enemyZone = roomState.game.structures.some(function (s) {
-      return !isFriendly(s.owner) && s.hp > 0 &&
-        Math.hypot(s.x - x, s.y - y) < ENEMY_BUILD_EXCLUSION + s.size * 0.35;
-    });
-    if (enemyZone) {
       return false;
     }
     return !roomState.game.resources.some(function (r) {

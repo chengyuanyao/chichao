@@ -394,11 +394,12 @@ const UNIT_BUILDERS = {
 
   /* ==================== 秘法会（魔法阵营）模型 ==================== */
   mage: function () {
-    // 奥术法师：高挑长袍施法者，暗紫袍 + 金饰法杖。团队色只在肩饰，远看是人不是紫盒子。
+    // 奥术法师：高挑长袍施法者，暗紫袍 + 金饰法杖；肩饰和背部披挂用玩家色标明归属。
     const body = [
       taperedBox(8.8, 8.8, 3.4, 3.4, 13.2, 0, 7.2, 0, MAT.robe),
       cyl(4.6, 4.8, 0.42, 10, 0, 1.05, 0, MAT.goldTrim),       // 金袍摆
       box(4.4, 1.6, 7.6, 0, 13.4, 0, 0.9),                     // 肩饰（团队色）
+      box(6.2, 0.70, 6.6, -2.0, 11.4, 0, 0.86),              // 俯视可见的玩家色披挂
       box(4.8, 0.38, 7.8, 0, 14.3, 0, MAT.goldTrim),
       sph(2.45, 8, 0, 16.0, 0, MAT.sandArmor),
       taperedBox(3.4, 3.4, 0.55, 0.55, 4.4, 0, 18.6, 0, MAT.robe),
@@ -428,6 +429,7 @@ const UNIT_BUILDERS = {
       taperedBox(10.4, 10.4, 3.8, 3.8, 11.6, 0, 6.4, 0, MAT.frostRobe),
       cyl(5.6, 6.0, 0.55, 12, 0, 1.02, 0, MAT.iceShard),
       box(4.2, 1.4, 7.4, 0, 12.4, 0, 0.72),
+      box(6.0, 0.70, 6.4, -2.0, 10.8, 0, 0.88),              // 玩家色披挂
       box(3.2, 1.6, 4.2, 0.4, 13.2, 3.6, MAT.iceShard),
       box(3.2, 1.6, 4.2, 0.4, 13.2, -3.6, MAT.iceShard),
       sph(2.3, 8, 0, 14.6, 0, [0.86, 0.94, 1.0]),
@@ -465,7 +467,8 @@ const UNIT_BUILDERS = {
       pyr(0.55, 2.2, 4, -1.4, 6.2, 1.5, MAT.miteCrystal),
       pyr(0.55, 2.2, 4, -1.4, 6.2, -1.5, MAT.miteCrystal),
       pyr(0.48, 2.0, 4, -3.4, 5.8, 0, MAT.crystal),
-      pyr(0.42, 2.4, 4, 6.2, 4.0, 0, MAT.miteCrystal, ROT_Z90)
+      pyr(0.42, 2.4, 4, 6.2, 4.0, 0, MAT.miteCrystal, ROT_Z90),
+      box(6.4, 0.70, 4.8, -0.4, 5.4, 0, 0.92)               // 玩家色背甲
     ];
     [3.2, 0.2, -2.8].forEach(function (px) {
       [2.4, -2.4].forEach(function (pz) {
@@ -488,6 +491,7 @@ const UNIT_BUILDERS = {
     const body = [
       taperedBox(5.6, 5.6, 2.2, 2.2, 15.4, 0, 8.4, 0, MAT.deepViolet),
       box(2.8, 1.1, 5.4, 0, 16.2, 0, 0.70),
+      box(5.2, 0.65, 5.8, -1.8, 13.8, 0, 0.88),              // 玩家色披肩
       sph(2.05, 8, 0, 18.0, 0, MAT.sandArmor),
       box(5.4, 1.15, 2.4, 1.2, 18.2, 0, MAT.crystal),          // 面罩骨
       box(1.5, 1.7, 3.6, 0.6, 13.6, 2.8, MAT.deepViolet),
@@ -517,6 +521,7 @@ const UNIT_BUILDERS = {
       sph(2.1, 6, 4.6, 18.8, 0, MAT.slate),
       box(5.4, 10.2, 5.4, 1.0, 9.6, 7.2, MAT.magicStone),
       box(5.4, 10.2, 5.4, 1.0, 9.6, -7.2, MAT.magicStone),
+      box(9.0, 0.90, 6.6, -1.0, 16.2, 0, 0.88),              // 玩家色胸背甲
       taperedBox(5.0, 5.0, 3.0, 3.0, 4.6, 2.6, 4.4, 7.4, MAT.goldStoneDark),
       taperedBox(5.0, 5.0, 3.0, 3.0, 4.6, 2.6, 4.4, -7.4, MAT.goldStoneDark),
       box(4.8, 7.0, 5.2, 0, 3.4, 3.4, MAT.slate),
@@ -544,6 +549,7 @@ const UNIT_BUILDERS = {
       box(3.0, 1.8, 2.2, 13.2, 6.6, 0, MAT.magicHide),
       box(0.9, 2.4, 1.0, 8.8, 9.6, 1.3, MAT.magicHide),
       box(0.9, 2.4, 1.0, 8.8, 9.6, -1.3, MAT.magicHide),
+      taperedBox(10.0, 6.8, 8.2, 5.6, 1.2, -1.0, 8.8, 0, 0.94), // 玩家色鞍甲
       cyl(0.55, 0.32, 7.4, 6, -10.2, 7.0, 0, MAT.magicHide, tailRot),
       torus(2.15, 0.22, 6, 10, 8.4, 7.0, 0, MAT.goldTrim, ROT_X90)
     ];
@@ -590,7 +596,8 @@ const UNIT_BUILDERS = {
       box(2.4, 4.5, 2.4, -8.4, 2.9, 3.6, MAT.dragonScale),
       box(2.4, 4.5, 2.4, -8.4, 2.9, -3.6, MAT.dragonScale),
       box(3.5, 1.15, 2.4, 7.8, 1.0, 4.3, MAT.dragonScale),
-      box(3.5, 1.15, 2.4, 7.8, 1.0, -4.3, MAT.dragonScale)
+      box(3.5, 1.15, 2.4, 7.8, 1.0, -4.3, MAT.dragonScale),
+      box(14.0, 0.75, 6.2, -2.0, 12.3, 0, 0.90)              // 玩家色背甲
     ];
     const glow = [
       sph(1.7, 7, 27.2, 14.3, 0, MAT.fireGlow),
@@ -605,6 +612,7 @@ const UNIT_BUILDERS = {
       body.push(boxOrient(11, 0.55, 0.75, -4.6, 13.2, side * 17.2, MAT.dragonScale, side * 0.08, side * 0.66, -0.04));
       body.push(boxOrient(22, 0.22, 15.0, -3.4, 13.4, side * 16.0, MAT.wingMembrane, side * 0.18, side * 0.48, 0.08));
       body.push(boxOrient(14, 0.18, 11.4, -11.0, 14.4, side * 23.6, MAT.wingMembrane, side * 0.24, side * 0.82, 0.05));
+      body.push(boxOrient(14, 0.34, 3.4, -2.0, 13.9, side * 17.0, 0.86, side * 0.18, side * 0.48, 0.08));
       glow.push(boxOrient(15, 0.14, 0.4, -2.0, 13.8, side * 14.6, MAT.fireGlow, side * 0.18, side * 0.48, 0.08));
     });
     return { body: body, glow: glow };
@@ -621,6 +629,7 @@ const UNIT_BUILDERS = {
       pyr(0.55, 2.6, 4, 2.6, 23.0, 0, MAT.goldTrim),
       box(3.4, 7.0, 3.4, 1.1, 10.0, 5.2, MAT.plateViolet),
       box(3.4, 7.0, 3.4, 1.1, 10.0, -5.2, MAT.plateViolet),
+      box(8.2, 0.85, 5.8, -0.2, 15.8, 0, 0.92),              // 玩家色胸背甲
       box(3.0, 6.0, 3.2, 0, 3.1, 2.6, MAT.slate),
       box(3.0, 6.0, 3.2, 0, 3.1, -2.6, MAT.slate),
       box(1.5, 13.2, 8.8, 2.4, 10.8, 8.2, MAT.goldTrim),
@@ -656,6 +665,7 @@ const UNIT_BUILDERS = {
       pyr(0.52, 2.2, 4, -0.6, 15.2, 0, MAT.goldTrim),
       pyr(0.44, 1.8, 4, -6.0, 14.8, 0, MAT.goldTrim),
       taperedBox(10.4, 10.2, 8.2, 8.0, 4.4, -2.2, 17.0, 0, MAT.slate),
+      taperedBox(15.2, 9.8, 12.4, 7.6, 1.1, -1.2, 15.2, 0, 0.88), // 玩家色鞍甲
       taperedBox(7.4, 7.0, 5.2, 5.0, 3.8, -1.4, 20.6, 0, MAT.miteCrystal),
       cyl(1.95, 2.45, 22, 8, 10.6, 23.0, 0, MAT.miteCrystal, barrel),
       cyl(2.9, 2.9, 3.4, 8, 20.6, 27.2, 0, MAT.goldTrim, barrel),
@@ -695,6 +705,7 @@ const UNIT_BUILDERS = {
     const body = [
       taperedBox(36, 24, 30, 20, 7.6, 0, 7.2, 0, MAT.goldStoneDark),
       taperedBox(22, 20, 18, 16, 3.6, -1.0, 12.4, 0, MAT.slate),
+      taperedBox(27, 16, 23, 13, 1.0, -1.0, 12.3, 0, 0.88),  // 玩家色发射平台顶板
       box(28, 3.2, 1.6, -2, 9.6, 11.2, MAT.goldTrim),
       box(28, 3.2, 1.6, -2, 9.6, -11.2, MAT.goldTrim),
       box(5.2, 7.6, 5.2, 10.6, 4.8, 7.4, MAT.goldStone),
@@ -728,6 +739,9 @@ const UNIT_BUILDERS = {
     // 浮游晶簇：暖金悬浮座托青晶簇，阵营色淡，不跟作战单位抢剪影。
     const body = [
       taperedBox(16, 14, 18, 16, 4, 0, 6, 0, MAT.goldStoneDark),
+      taperedBox(15, 12, 13, 10, 1.0, 0, 8.5, 0, 0.90),      // 玩家色浮台上盖
+      box(12, 0.8, 1.8, 0, 8.7, 7.0, 0.96),
+      box(12, 0.8, 1.8, 0, 8.7, -7.0, 0.96),
       taperedBox(7, 7, 2.5, 2.5, 12, -2, 14, 0, MAT.miteCrystal),
       taperedBox(5, 5, 1.8, 1.8, 9, 5, 12, 3, MAT.miteCrystal),
       taperedBox(5, 5, 1.8, 1.8, 9, 4, 12, -4, MAT.miteCrystal),
@@ -749,6 +763,7 @@ const UNIT_BUILDERS = {
     const body = [
       sph(3.6, 9, 0, 7.2, 0, MAT.crystal),
       sph(2.15, 8, 0, 7.2, 0, MAT.deepViolet),
+      torus(4.2, 0.45, 6, 12, 0, 7.2, 0, 0.94, ROT_X90),     // 玩家色识别环
       pyr(0.7, 2.6, 4, 0, 11.6, 0, MAT.crystal),
       pyr(0.55, 2.2, 4, 2.4, 9.4, 1.6, MAT.crystal),
       pyr(0.55, 2.2, 4, -2.2, 9.2, -1.4, MAT.crystal),
@@ -771,6 +786,9 @@ const UNIT_BUILDERS = {
     // 迁徙法阵：暖金悬浮台 + 竖立金环，环心青符漩涡。经济载具，不是圣殿也非法阵平台。
     const body = [
       taperedBox(22, 16, 24, 18, 5, 0, 6, 0, MAT.goldStone),
+      taperedBox(19, 13, 16, 10, 1.2, 0, 9.0, 0, 0.92),      // 玩家色平台上盖
+      box(2.6, 7.4, 3.5, -8, 9.0, 0, 0.84),                 // 玩家色环架
+      box(2.6, 7.4, 3.5, 8, 9.0, 0, 0.84),
       cyl(9, 9, 2, 12, 0, 16, 0, MAT.goldTrim, ROT_Z90),
       box(3, 8, 3, -8, 8, 0, MAT.goldStoneDark),
       box(3, 8, 3, 8, 8, 0, MAT.goldStoneDark)
@@ -1266,7 +1284,9 @@ function structureParts(kind, size) {
   } else if (kind === 'mpower') {
     // 法力塔：细针晶柱 + 绕轨碎晶。单针剪影，不是主堡双塔，也不是钢铁双线圈。
     taper(HULL, s * 1.12, s * 0.92, s * 0.86, s * 0.70, s * 0.28, 0, s * 0.14 + 3.4, 0, MAT.goldStone);
+    taper(TEAM, s * 1.02, s * 0.82, s * 0.82, s * 0.64, s * 0.10, 0, s * 0.36 + 3.4, 0, 0.92);
     add(HULL, new THREE.CylinderGeometry(s * 0.16, s * 0.20, s * 0.18, 8), 0, s * 0.32 + 3.4, 0, MAT.goldTrim);
+    add(TEAM, new THREE.TorusGeometry(s * 0.20, s * 0.035, 6, 12), 0, s * 0.56 + 3.4, 0, 0.96, ROT_X90);
     taper(HULL, s * 0.16, s * 0.16, s * 0.035, s * 0.035, s * 1.92, 0, s * 1.12 + 3.4, 0, MAT.goldStone);
     [0.72, 1.12, 1.48].forEach(function (h) {
       add(HULL, new THREE.TorusGeometry(s * 0.12, s * 0.018, 6, 12), 0, s * h, 0, MAT.goldTrim, ROT_X90);
@@ -1276,12 +1296,14 @@ function structureParts(kind, size) {
   } else if (kind === 'mrefinery') {
     // 水晶精炼所：横置晶液大釜。宽扁水平剪影，不是竖塔。
     taper(HULL, s * 1.48, s * 1.18, s * 1.34, s * 1.04, s * 0.28, 0, s * 0.14 + 3.4, 0, MAT.goldStone);
+    taper(TEAM, s * 1.34, s * 1.04, s * 1.22, s * 0.92, s * 0.10, 0, s * 0.34 + 3.4, 0, 0.90);
     add(HULL, new THREE.CylinderGeometry(s * 0.38, s * 0.38, s * 1.22, 14),
       0, s * 0.48 + 3.4, 0, MAT.goldStone, ROT_Z90);
     add(HULL, new THREE.TorusGeometry(s * 0.40, s * 0.05, 6, 16),
       s * 0.58, s * 0.48 + 3.4, 0, MAT.goldTrim, ROT_Z90);
     add(HULL, new THREE.TorusGeometry(s * 0.40, s * 0.05, 6, 16),
       -s * 0.58, s * 0.48 + 3.4, 0, MAT.goldTrim, ROT_Z90);
+    add(TEAM, new THREE.BoxGeometry(s * 1.08, s * 0.10, s * 0.66), 0, s * 0.54 + 3.4, -s * 0.18, 0.94);
     add(GLOW, new THREE.BoxGeometry(s * 1.08, s * 0.10, s * 0.58), 0, s * 0.58 + 3.4, 0, MAT.runeCyan);
     add(GLOW, new THREE.SphereGeometry(s * 0.16, 10, 6), 0, s * 0.68 + 3.4, 0, MAT.frostGlow);
     taper(HULL, s * 0.42, s * 0.48, s * 0.32, s * 0.36, s * 0.52, -s * 0.62, s * 0.26 + 3.4, 0, MAT.goldStoneDark);
@@ -1302,6 +1324,7 @@ function structureParts(kind, size) {
     // 召唤法阵：多层平面符环 + 悬浮核。极矮平台，竖向几乎没有体量，和圣殿月门对撞。
     taper(HULL, s * 1.52, s * 1.32, s * 1.38, s * 1.18, s * 0.18, 0, s * 0.09 + 3.4, 0, MAT.goldStone);
     add(HULL, new THREE.CylinderGeometry(s * 0.72, s * 0.78, s * 0.10, 20), 0, s * 0.22 + 3.4, 0, MAT.goldStoneDark);
+    add(TEAM, new THREE.TorusGeometry(s * 0.76, s * 0.085, 6, 22), 0, s * 0.31 + 3.4, 0, 0.96, ROT_X90);
     add(HULL, new THREE.TorusGeometry(s * 0.82, s * 0.045, 6, 22), 0, s * 0.28 + 3.4, 0, MAT.goldTrim, ROT_X90);
     add(GLOW, new THREE.TorusGeometry(s * 0.68, s * 0.028, 6, 20), 0, s * 0.30 + 3.4, 0, MAT.runeCyan, ROT_X90);
     add(GLOW, new THREE.TorusGeometry(s * 0.42, s * 0.022, 6, 16), 0, s * 0.30 + 3.4, 0, MAT.frostGlow, ROT_X90);
@@ -1315,6 +1338,7 @@ function structureParts(kind, size) {
     // 圣泉：石碗泉盆 + 上升泉光。碗形开口朝天，不是龙门也不是竖塔。
     taper(HULL, s * 1.32, s * 1.16, s * 1.18, s * 1.04, s * 0.20, 0, s * 0.10 + 3.4, 0, MAT.goldStone);
     add(HULL, new THREE.CylinderGeometry(s * 0.58, s * 0.42, s * 0.36, 16), 0, s * 0.34 + 3.4, 0, MAT.goldStone);
+    add(TEAM, new THREE.TorusGeometry(s * 0.64, s * 0.095, 6, 18), 0, s * 0.51 + 3.4, 0, 0.96, ROT_X90);
     add(HULL, new THREE.TorusGeometry(s * 0.58, s * 0.07, 6, 18), 0, s * 0.50 + 3.4, 0, MAT.goldTrim, ROT_X90);
     add(GLOW, new THREE.CylinderGeometry(s * 0.48, s * 0.54, s * 0.08, 16), 0, s * 0.44 + 3.4, 0, MAT.frostGlow);
     add(GLOW, new THREE.CylinderGeometry(s * 0.10, s * 0.18, s * 0.72, 10), 0, s * 0.92, 0, MAT.runeCyan);
@@ -1326,6 +1350,7 @@ function structureParts(kind, size) {
   } else if (kind === 'mtower') {
     // 奥术塔：扭转尖塔 + 武器晶碟。旋转头是碟而不是一簇碎晶。
     taper(HULL, s * 1.18, s * 1.18, s * 0.82, s * 0.82, s * 0.28, 0, s * 0.14 + 3.4, 0, MAT.goldStone);
+    taper(TEAM, s * 1.08, s * 1.08, s * 0.78, s * 0.78, s * 0.11, 0, s * 0.34 + 3.4, 0, 0.94);
     for (let i = 0; i < 5; i++) {
       const a = i * 0.55;
       add(HULL, new THREE.CylinderGeometry(s * (0.16 - i * 0.02), s * (0.18 - i * 0.02), s * 0.30, 8),
@@ -1376,6 +1401,8 @@ function arcaneHeadParts(size) {
   const dish = new THREE.Matrix4().makeRotationY(Math.PI / 2);
   c.add(HULL, new THREE.TorusGeometry(s * 0.32, s * 0.05, 6, 16),
     -s * 0.04, 0, 0, MAT.goldTrim, dish);
+  c.add(TEAM, new THREE.TorusGeometry(s * 0.40, s * 0.075, 6, 16),
+    -s * 0.04, 0, 0, 0.96, dish);
   c.add(HULL, new THREE.CylinderGeometry(s * 0.26, s * 0.08, s * 0.16, 12),
     s * 0.02, 0, 0, MAT.goldStone, ROT_Z90);
   c.add(GLOW, new THREE.CylinderGeometry(s * 0.10, s * 0.02, s * 0.72, 8),
@@ -3449,7 +3476,8 @@ export function createRenderer(canvas) {
       const shaft = kind === 'frost' ? MAT.iceShard : MAT.goldTrim;
       const parts = [
         taperedBox(kind === 'frost' ? 10.2 : 8.8, kind === 'frost' ? 10.2 : 8.8, 3.6, 3.6, 12.4, 0, 6.8, 0, robe),
-        box(4, 1.6, 7, 0, 13.2, 0, 0.9),
+        box(6.0, 1.6, 7, -0.4, 13.2, 0, 0.9),                 // 玩家色肩饰
+        box(5.8, 0.65, 6.0, -2.0, 10.8, 0, 0.84),            // 玩家色披挂
         box(2.0, 2.0, 4.4, 1.0, 11.4, 4.0, robe),
         cyl(0.38, 0.38, 14, 6, 5.6, 9.0, 2.6, shaft, ROT_Z90),
         sph(1.8, 6, 12.6, 9.0, 2.6, orb)
@@ -3465,6 +3493,7 @@ export function createRenderer(canvas) {
     if (kind === 'imp') {
       return [
         taperedBox(8.4, 6.2, 5.2, 4.4, 3.4, 0.6, 3.4, 0, MAT.miteCrystal),
+        box(6.4, 0.70, 4.8, -0.4, 5.4, 0, 0.92),             // 玩家色背甲
         pyr(0.7, 2.4, 4, 1.0, 6.4, 0, MAT.miteCrystal),
         box(1.1, 2.4, 1.1, 3.0, 1.3, 2.2, MAT.crystal),
         box(1.1, 2.4, 1.1, 3.0, 1.3, -2.2, MAT.crystal),
@@ -3474,6 +3503,7 @@ export function createRenderer(canvas) {
     if (kind === 'oracle') {
       return [
         taperedBox(5.6, 5.6, 2.2, 2.2, 15.0, 0, 8.2, 0, MAT.deepViolet),
+        box(5.2, 0.65, 5.8, -1.8, 13.8, 0, 0.88),            // 玩家色披肩
         box(5.2, 1.1, 2.2, 1.2, 18.0, 0, MAT.prismGlow),
         cyl(0.24, 0.28, 20, 6, 7.0, 11.0, 2.2, MAT.goldTrim, ROT_Z90),
         sph(1.2, 6, 17.2, 11.0, 2.2, MAT.prismGlow)
@@ -3482,13 +3512,18 @@ export function createRenderer(canvas) {
     if (kind === 'golem') {
       return [
         taperedBox(12, 10, 9, 7.4, 12, 0, 10.4, 0, MAT.magicStone),
+        box(9.0, 0.90, 6.6, -1.0, 15.8, 0, 0.88),            // 玩家色胸背甲
         box(5, 10, 5, 1, 9.4, 7, MAT.magicStone),
         box(5, 10, 5, 1, 9.4, -7, MAT.magicStone),
         sph(1.7, 6, 4.8, 11.2, 0, MAT.runeCyan)
       ];
     }
     if (kind === 'panther') {
-      const quad = [box(18, 4.2, 4.6, 0.2, 5.4, 0, MAT.magicHide), box(5, 3.4, 4, 10.2, 7.2, 0, MAT.magicHide)];
+      const quad = [
+        box(18, 4.2, 4.6, 0.2, 5.4, 0, MAT.magicHide),
+        box(5, 3.4, 4, 10.2, 7.2, 0, MAT.magicHide),
+        taperedBox(10.0, 6.8, 8.2, 5.6, 1.2, -1.0, 8.8, 0, 0.94) // 玩家色鞍甲
+      ];
       [5.8, -6.0].forEach(function (px) {
         [1.7, -1.7].forEach(function (pz) {
           quad.push(box(1.35, 4.6, 1.35, px, 2.3, pz, MAT.magicHide));
@@ -3497,8 +3532,9 @@ export function createRenderer(canvas) {
       return quad;
     }
     if (kind === 'dragon') {
-      return [
+      const dragon = [
         taperedBox(28, 11, 20, 8, 7.2, -2, 8.2, 0, MAT.scaleHide),
+        box(14.0, 0.75, 6.2, -2.0, 12.3, 0, 0.90),
         taperedBox(7, 4, 5, 3, 4, 12.2, 12.0, 0, MAT.scaleHide),
         taperedBox(6.2, 4.2, 4.8, 3.0, 3.4, 20.4, 14.6, 0, MAT.scaleHide),
         boxOrient(22, 0.28, 15.4, -2.8, 13.4, 16.0, MAT.wingMembrane, 0.18, 0.48, 0.08),
@@ -3506,10 +3542,16 @@ export function createRenderer(canvas) {
         taperedBox(10, 2.2, 5, 1.1, 2.0, -18.4, 7.5, 0, MAT.scaleHide),
         sph(1.6, 6, 26.6, 14.2, 0, MAT.fireGlow)
       ];
+      [1, -1].forEach(function (side) {
+        dragon.push(boxOrient(14, 0.34, 3.4, -2.0, 13.9, side * 17.0, 0.86,
+          side * 0.18, side * 0.48, 0.08));
+      });
+      return dragon;
     }
     if (kind === 'warden') {
       return [
         taperedBox(10.4, 8.2, 7.2, 5.8, 11, 0, 10.2, 0, MAT.plateViolet),
+        box(8.2, 0.85, 5.8, -0.2, 15.8, 0, 0.92),            // 玩家色胸背甲
         box(1.5, 13, 8.6, 2.4, 10.8, 8.2, MAT.goldTrim),
         cyl(0.38, 0.5, 16, 6, 6.2, 10.6, -3.4, MAT.goldTrim, ROT_Z90),
         sph(1.15, 6, 4.0, 12.0, 0, MAT.runeCyan)
@@ -3518,6 +3560,7 @@ export function createRenderer(canvas) {
     if (kind === 'colossus') {
       return [
         taperedBox(26, 14.4, 20, 11.6, 8.6, 0.2, 10.4, 0, MAT.magicStone),
+        taperedBox(15.2, 9.8, 12.4, 7.6, 1.1, -1.2, 15.2, 0, 0.88),
         box(4.6, 8.6, 4.6, 8.8, 4.5, 6.0, MAT.magicStone),
         box(4.6, 8.6, 4.6, 8.8, 4.5, -6.0, MAT.magicStone),
         box(5.0, 9.0, 5.0, -8.4, 4.7, 6.4, MAT.magicStone),
@@ -3530,6 +3573,7 @@ export function createRenderer(canvas) {
     if (kind === 'comet') {
       return [
         taperedBox(36, 24, 30, 20, 7.6, 0, 7.2, 0, MAT.goldStoneDark),
+        taperedBox(27, 16, 23, 13, 1.0, -1.0, 12.3, 0, 0.88), // 玩家色发射平台顶板
         box(5.2, 7.6, 5.2, 10.6, 4.8, 7.4, MAT.goldStone),
         box(5.2, 7.6, 5.2, 10.6, 4.8, -7.4, MAT.goldStone),
         cyl(2.15, 2.85, 22, 7, 0.8, 28.4, 0, MAT.miteCrystal),
@@ -3539,6 +3583,7 @@ export function createRenderer(canvas) {
     if (kind === 'mharvester') {
       return [
         taperedBox(16, 14, 18, 16, 4, 0, 6, 0, MAT.goldStoneDark),
+        taperedBox(15, 12, 13, 10, 1.0, 0, 8.5, 0, 0.90),    // 玩家色浮台上盖
         taperedBox(7, 7, 2.5, 2.5, 12, -2, 14, 0, MAT.miteCrystal),
         sph(2, 6, 0, 8.5, 0, MAT.runeCyan)
       ];
@@ -3546,12 +3591,14 @@ export function createRenderer(canvas) {
     if (kind === 'mmcv') {
       return [
         taperedBox(22, 16, 24, 18, 5, 0, 6, 0, MAT.goldStone),
+        taperedBox(19, 13, 16, 10, 1.2, 0, 9.0, 0, 0.92),    // 玩家色平台上盖
         cyl(9, 9, 2, 10, 0, 16, 0, MAT.goldTrim, ROT_Z90)
       ];
     }
     if (kind === 'hexling') {
       return [
         sph(3.6, 8, 0, 7.2, 0, MAT.crystal),
+        torus(4.2, 0.45, 6, 12, 0, 7.2, 0, 0.94, ROT_X90),   // 玩家色识别环
         sph(2.2, 7, 0, 7.2, 0, MAT.fireGlow),
         cyl(3.6, 3.6, 0.22, 10, 0, 6.4, 0, MAT.fireGlow)
       ];

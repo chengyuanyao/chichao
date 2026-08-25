@@ -134,17 +134,34 @@ def main():
     print("  Friendly fire disabled: PASS")
 
     print("\n=== Test 4: Build zone sharing ===")
-    # outside_enemy_build_zone: teammate structures don't block
     hq_a1 = next(s for s in game2["structures"] if s["owner"] == team_a1["id"] and s["kind"] == "hq")
-    # Test that placing near teammate is not blocked by enemy zone check
-    far_from_b = hq_a1["x"] + 10, hq_a1["y"] + 10
-    result = server.outside_enemy_build_zone(game2, team_a1["id"], far_from_b[0], far_from_b[1])
-    assert result is True
-
     # construction_anchor_near: teammate buildings provide anchor
     anchor_from_teammate = server.construction_anchor_near(
         game2, team_a1["id"], teammate_hq["x"] + 100, teammate_hq["y"] + 100)
     assert anchor_from_teammate is True, "teammate HQ should provide build anchor"
+
+    # Enemy proximity must not override a valid friendly construction anchor.
+    # This is important on central-scramble starts where several MCVs deploy together.
+    power_size = server.STRUCTURE_TYPES["power"]["size"]
+    build_spot = None
+    for distance in (180, 220, 260, 300, 340):
+        for dx, dy in ((distance, 0), (-distance, 0), (0, distance), (0, -distance)):
+            x, y = hq_a1["x"] + dx, hq_a1["y"] + dy
+            if server.position_clear(game2, x, y, power_size):
+                build_spot = (x, y, dx, dy)
+                break
+        if build_spot:
+            break
+    assert build_spot is not None, "need a clear build spot near the friendly HQ"
+    x, y, dx, dy = build_spot
+    length = max(1.0, (dx * dx + dy * dy) ** 0.5)
+    enemy_hq_close = server.make_structure(
+        "hq", team_b1["id"], x + dx / length * 220, y + dy / length * 220, True)
+    game2["structures"].append(enemy_hq_close)
+    placed = server.place_structure(room2, team_a1["id"], "power", x, y, free=True)
+    assert placed["owner"] == team_a1["id"], "enemy proximity should not cancel a friendly anchor"
+    game2["structures"].remove(placed)
+    game2["structures"].remove(enemy_hq_close)
 
     print("  Build zone sharing: PASS")
 

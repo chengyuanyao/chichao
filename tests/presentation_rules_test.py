@@ -155,6 +155,9 @@ def main():
     assert "BUILD_ANCHOR_RANGES[structureRole(s.kind)]" in app
     server_src = read("server.py")
     assert 'BUILD_ANCHOR_RANGES.get(structure_role(structure["kind"]))' in server_src
+    assert "ENEMY_BUILD_EXCLUSION" not in app
+    assert "ENEMY_BUILD_EXCLUSION" not in server_src
+    assert "outside_enemy_build_zone" not in server_src
     assert "def player_has_command(" in server_src
 
     # 大厅/文档不能再写已删除的火焰兵，也不能只提 Windows bat。
@@ -304,6 +307,42 @@ def main():
     assert "function emitIdleAura" in render
     assert "步兵有持枪手臂，远看是人不是积木" in render
     assert "魔法主堡：双尖塔托浮空金冠，不是矮方堡" in render
+
+    # 秘法会既要保留固定紫/蓝的阵营材质，也必须在近景、远景和建筑上
+    # 留出足够大的玩家色识别面，不能再出现整只构装或整座建筑不随玩家变色。
+    assert "背部披挂用玩家色标明归属" in render
+    assert "玩家色鞍甲" in render
+    assert "玩家色平台上盖" in render
+    assert "玩家色浮台上盖" in render
+    magic_near = render[render.index("/* ==================== 秘法会（魔法阵营）模型 ==================== */"):
+                        render.index("tank: function ()", render.index("/* ==================== 秘法会（魔法阵营）模型 ==================== */"))]
+    for signature in (
+            "box(6.2, 0.70, 6.6", "box(6.0, 0.70, 6.4",
+            "box(6.4, 0.70, 4.8", "box(5.2, 0.65, 5.8",
+            "box(9.0, 0.90, 6.6", "taperedBox(10.0, 6.8",
+            "box(14.0, 0.75, 6.2", "box(8.2, 0.85, 5.8",
+            "taperedBox(15.2, 9.8", "taperedBox(27, 16",
+            "taperedBox(15, 12", "taperedBox(19, 13",
+            "torus(4.2, 0.45"):
+        assert signature in magic_near, "magic unit lost owner-color marker: %s" % signature
+    magic_lod = render[render.index("/* ---- 秘法会 LOD ---- */"):
+                       render.index("return infantry;", render.index("/* ---- 秘法会 LOD ---- */"))]
+    for signature in (
+            "box(6.0, 1.6, 7", "box(5.8, 0.65, 6.0",
+            "box(6.4, 0.70, 4.8", "box(5.2, 0.65, 5.8",
+            "box(9.0, 0.90, 6.6", "taperedBox(10.0, 6.8",
+            "box(14.0, 0.75, 6.2", "box(8.2, 0.85, 5.8",
+            "taperedBox(15.2, 9.8", "taperedBox(27, 16",
+            "taperedBox(15, 12", "taperedBox(19, 13",
+            "torus(4.2, 0.45"):
+        assert signature in magic_lod, "magic LOD lost owner-color marker: %s" % signature
+    magic_buildings = render[render.index("} else if (kind === 'mhq')"):
+                             render.index("return c.parts;", render.index("} else if (kind === 'mhq')"))]
+    for kind in ("mhq", "mpower", "mrefinery", "mtemple", "mcircle", "mspring", "mtower"):
+        start = magic_buildings.index("kind === '%s'" % kind)
+        next_start = magic_buildings.find("kind === '", start + 10)
+        branch = magic_buildings[start:next_start if next_start >= 0 else len(magic_buildings)]
+        assert "TEAM" in branch, "magic structure has no owner-color surface: %s" % kind
 
     # 彩蛋挂钩：视觉件只锁字符串，触发逻辑在 easter_egg_test。
     # 陨坑木牌 / 撒点草木已从地图上拆掉，不能再被字符串锁住。

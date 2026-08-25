@@ -582,7 +582,7 @@ MAPS = {
         "theme": "grassland",
         "briefing": (
             "五名指挥官只带一辆折叠基地车，在中央矿脉旁同时落地。"
-            "先抢方向再展开：中央只有一小片矿，外围每局随机生成五片无守军矿区。"
+            "先抢方向再展开：中央是一片巨型矿脉，外围每局随机生成五片大型无守军矿区。"
         ),
         # 五辆基地车停在中央 190 半径的小环上：彼此都在视野内，但不发生
         # 单位分离。这里是落地点，不是固定发展区；玩家应先驶离中央再展开。
@@ -622,10 +622,12 @@ MAPS = {
         ],
         "packedStart": True,
         "neutralOreGuards": False,
-        # 总矿区数为 6：中央固定一小片，外围五片每局重新随机。
+        # 总矿区数为 6：中央固定一片，外围五片每局重新随机；两者储量均为
+        # 常规值的 10 倍，让五人高强度混战不会迅速挖空整张地图。
         "publicOreCount": 5,
+        "publicOreAmountMultiplier": 10,
         "bonusResources": [
-            {"x": 2000, "y": 2000, "amount": 9000, "public": True},
+            {"x": 2000, "y": 2000, "amount": 90000, "public": True},
         ],
     },
 }
@@ -680,7 +682,6 @@ BUILD_ANCHOR_RANGES = {
     "factory": 270.0,
     "repair": 240.0,
 }
-ENEMY_BUILD_EXCLUSION = 440.0
 
 # 补给箱：地图上随机掉落的奖励道具
 CRATE_TYPES = {
@@ -1888,7 +1889,8 @@ def resource_is_guarded(game, resource):
     return camp_id in guarded_ids
 
 
-def add_random_resources(game, count, spawn_points, guarded=True):
+def add_random_resources(game, count, spawn_points, guarded=True,
+                         amount_multiplier=1.0):
     """在出生区之外放置随机公共矿区。
 
     出生点附近的保底矿由 ``start_game`` 单独生成；这里的矿只负责争夺区，
@@ -1955,7 +1957,7 @@ def add_random_resources(game, count, spawn_points, guarded=True):
 
         # 公共矿量有波动，但限制在可读的整千数，地图每次重开会变化又不会
         # 因极端随机值破坏经济节奏。
-        amount = rng.randint(18, 28) * 1000
+        amount = int(rng.randint(18, 28) * 1000 * amount_multiplier)
         public_resources.append(add_resource(game, x, y, amount, public=True))
         placed += 1
 
@@ -2286,7 +2288,8 @@ def start_game(room):
     # 各家保留一片稳定的开局矿；其余争夺矿每局随机散布在出生区之外。
     add_random_resources(
         game, int(room_map.get("publicOreCount", 4)), spawn_points,
-        guarded=neutral_ore_guards)
+        guarded=neutral_ore_guards,
+        amount_multiplier=room_map.get("publicOreAmountMultiplier", 1.0))
 
     # 折叠开局的人类玩家完全自行选址。AI 没有人拖动基地车，给它写入一个
     # 私有的外环目标；bot_maybe_pack 会先沿放射路驶离中央，到点后再展开。
@@ -2360,16 +2363,6 @@ def construction_anchor_near(game, player_id, x, y):
     return False
 
 
-def outside_enemy_build_zone(game, player_id, x, y):
-    for structure in game["structures"]:
-        if is_friendly(game, structure["owner"], player_id) or structure["hp"] <= 0:
-            continue
-        limit = ENEMY_BUILD_EXCLUSION + structure["size"] * 0.35
-        if math.hypot(structure["x"] - x, structure["y"] - y) < limit:
-            return False
-    return True
-
-
 def position_clear(game, x, y, size):
     # 山体和水面都不能建造；山体额外留出建筑半径的余量，免得半个建筑嵌进山里
     if game_terrain(game).blocked(x, y, size * 0.6):
@@ -2402,8 +2395,6 @@ def place_structure(room, player_id, kind, x, y, free=False):
             raise ValueError("缺少前置建筑")
     if not construction_anchor_near(game, player_id, x, y):
         raise ValueError("建筑必须靠近已完成的核心基地建筑")
-    if not outside_enemy_build_zone(game, player_id, x, y):
-        raise ValueError("不能在敌方控制区内建造")
     if not position_clear(game, x, y, definition["size"]):
         raise ValueError("这里无法放置建筑")
     if not free:
