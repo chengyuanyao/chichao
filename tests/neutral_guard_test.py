@@ -144,6 +144,8 @@ def check_leash(room):
 
 
 def expected_public_camps(map_def):
+    if not map_def.get("neutralOreGuards", True):
+        return 0
     bonus = sum(1 for resource in map_def.get("bonusResources") or ()
                 if resource.get("public", True))
     return int(map_def.get("publicOreCount", 4)) + bonus

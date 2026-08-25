@@ -1157,12 +1157,16 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var neutralCampsRow = $('#neutralCampsRow');
   var neutralCampsToggle = $('#neutralCampsToggle');
   var neutralCampsBadge = $('#neutralCampsBadge');
+  var combatRewardsRow = $('#combatRewardsRow');
+  var combatRewardsToggle = $('#combatRewardsToggle');
+  var combatRewardsBadge = $('#combatRewardsBadge');
   var BUILTIN_MAPS = {
     north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, theme: 'grassland', spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
     narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
     triple_pass: { id: 'triple_pass', name: '三岔隘口', width: 5400, height: 4200, maxPlayers: 3, theme: 'arid', spawnLabels: ['西境营地', '东北营地', '东南营地'], spawnPoints: [[700,2100],[3700,368],[3700,3832]] },
     gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。外环邻里路口被密林切开，只能从林间小路穿过。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]] },
     gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '赤金陨坑的紧凑版：五方围着陨石核打，地图小一圈，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[4691,2443],[4122,5182],[2278,5182],[1709,2443]] },
+    central_scramble: { id: 'central_scramble', name: '五车争疆', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在中央同时落地。先抢方向再展开；中央一片小矿，外围五片矿每局随机且没有中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
     island_hop: { id: 'island_hop', name: '三谷争夺', width: 7200, height: 6000, maxPlayers: 4, theme: 'grassland', spawnLabels: ['西北高地', '东北高地', '西南高地', '东南高地'], spawnPoints: [[900,900],[6300,900],[900,5100],[6300,5100]] },
     urban_siege: { id: 'urban_siege', name: '围城战', width: 6400, height: 6400, maxPlayers: 4, theme: 'urban', spawnLabels: ['西区', '北区', '东区', '南区'], spawnPoints: [[900,3200],[3200,900],[5500,3200],[3200,5500]] },
     valley_clash: { id: 'valley_clash', name: '峡谷交锋', width: 6400, height: 4800, maxPlayers: 4, theme: 'grassland', spawnLabels: ['左路前哨', '左路后哨', '右路前哨', '右路后哨'], spawnPoints: [[800,1800],[800,3000],[5600,1800],[5600,3000]] }
@@ -1810,11 +1814,24 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
 
   function applyRoomState(state) {
     var previousStatus = roomState && roomState.status;
+    var previousRewardTotal = null;
+    if (roomState && roomState.players && session) {
+      var previousMe = roomState.players.find(function (p) { return p.id === session.playerId; });
+      if (previousMe) { previousRewardTotal = previousMe.combatRewardsEarned || 0; }
+    }
     if (state.maps) { cachedMaps = state.maps; }
     if (!hydrateGame(state.game, state.mapConfig)) {
       delete state.game;
     }
     roomState = state;
+    if (previousRewardTotal !== null && state.status === 'playing' && previousStatus === 'playing' &&
+        roomHasCombatRewards(state) && state.players) {
+      var rewardedMe = state.players.find(function (p) { return p.id === session.playerId; });
+      var nextRewardTotal = rewardedMe ? (rewardedMe.combatRewardsEarned || 0) : previousRewardTotal;
+      if (nextRewardTotal > previousRewardTotal) {
+        toast('战斗奖励 +$' + (nextRewardTotal - previousRewardTotal).toLocaleString('zh-CN'), 'success');
+      }
+    }
     if (state.players) {
       var nextPaletteKey = (session && session.playerId || '') + '|' + state.players.map(function (p) {
         return p.id + ':' + p.color + ':' + (p.team || 0);
@@ -1882,6 +1899,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     renderMapSelect(me, roomState);
     syncOrbitalRainToggle(me, roomState);
     syncNeutralCampsToggle(me, roomState);
+    syncCombatRewardsToggle(me, roomState);
 
     // Only rebuild the roster DOM when something actually changed.
     // Rebuilding on every SSE tick destroys open dropdowns instantly.
@@ -2160,14 +2178,34 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
 
   function syncNeutralCampsToggle(me, state) {
     if (!neutralCampsToggle) { return; }
-    var on = roomHasNeutrals(state);
+    var mapAllowsNeutrals = !(state && state.mapConfig && state.mapConfig.neutralOreGuards === false);
+    var on = mapAllowsNeutrals && roomHasNeutrals(state);
     if (neutralCampsToggle.checked !== on) {
       neutralCampsToggle.checked = on;
     }
-    var canEdit = !!(me && me.isHost && state && state.status === 'lobby');
+    var canEdit = !!(mapAllowsNeutrals && me && me.isHost && state && state.status === 'lobby');
     neutralCampsToggle.disabled = !canEdit;
     if (neutralCampsRow) {
       neutralCampsRow.classList.toggle('disabled', !canEdit);
+    }
+  }
+
+  function roomHasCombatRewards(state) {
+    if (!state) { return false; }
+    if (state.combatRewards) { return true; }
+    return !!(state.game && state.game.combatRewards);
+  }
+
+  function syncCombatRewardsToggle(me, state) {
+    if (!combatRewardsToggle) { return; }
+    var on = roomHasCombatRewards(state);
+    if (combatRewardsToggle.checked !== on) {
+      combatRewardsToggle.checked = on;
+    }
+    var canEdit = !!(me && me.isHost && state && state.status === 'lobby');
+    combatRewardsToggle.disabled = !canEdit;
+    if (combatRewardsRow) {
+      combatRewardsRow.classList.toggle('disabled', !canEdit);
     }
   }
 
@@ -2326,6 +2364,9 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     }
     if (neutralCampsBadge) {
       neutralCampsBadge.classList.toggle('hidden', !roomHasNeutrals(roomState));
+    }
+    if (combatRewardsBadge) {
+      combatRewardsBadge.classList.toggle('hidden', !roomHasCombatRewards(roomState));
     }
 
     applyFactionHud();
@@ -4222,10 +4263,13 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     $('#resultKicker').textContent = won ? 'MISSION ACCOMPLISHED' : 'MISSION FAILED';
     $('#resultTitle').textContent = won ? '战斗胜利' : '战线失守';
     $('#resultText').textContent = won ? '敌方指挥体系已经瓦解，战区控制权已确认。' : '你的' + factionCopy().hq + '已被摧毁，部队退出战区。';
+    var rewardStat = roomHasCombatRewards(roomState) ?
+      '<div><span>战利资金</span><strong>$' + (me ? Math.floor(me.combatRewardsEarned || 0).toLocaleString('zh-CN') : 0) + '</strong></div>' : '';
     $('#resultStats').innerHTML =
       '<div><span>击毁单位</span><strong>' + (me ? me.kills : 0) + '</strong></div>' +
       '<div><span>损失单位</span><strong>' + (me ? me.unitsLost : 0) + '</strong></div>' +
       '<div><span>采集资金</span><strong>$' + (me ? Math.floor(me.harvested).toLocaleString('zh-CN') : 0) + '</strong></div>' +
+      rewardStat +
       '<div><span>作战时间</span><strong>' + $('#matchClock').textContent + '</strong></div>';
     $('#resultModal').classList.remove('hidden');
     sound(won ? 'complete' : 'error');
@@ -4568,6 +4612,13 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     neutralCampsToggle.addEventListener('change', function () {
       sendAction('setNeutrals', { enabled: neutralCampsToggle.checked }).catch(function () {
         if (roomState) { syncNeutralCampsToggle(ownPlayer(), roomState); }
+      });
+    });
+  }
+  if (combatRewardsToggle) {
+    combatRewardsToggle.addEventListener('change', function () {
+      sendAction('setCombatRewards', { enabled: combatRewardsToggle.checked }).catch(function () {
+        if (roomState) { syncCombatRewardsToggle(ownPlayer(), roomState); }
       });
     });
   }

@@ -94,6 +94,7 @@ def check_map(map_id, map_def):
         "valley_clash": (6400, 4800),
         "gold_crater": (10000, 6400),
         "gold_crater_small": (6400, 6400),
+        "central_scramble": (4000, 4000),
     }
     assert (width, height) == expected_sizes[map_id], \
         "%s: 地图尺寸意外变化 (%dx%d)" % (map_id, width, height)

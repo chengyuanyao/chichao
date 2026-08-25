@@ -545,6 +545,61 @@ MAPS = {
             {"x": 2191, "y": 621, "amount": 13000, "public": True},
         ],
     },
+    "central_scramble": {
+        "id": "central_scramble",
+        "name": "五车争疆",
+        "width": 4000,
+        "height": 4000,
+        "maxPlayers": 5,
+        "theme": "grassland",
+        "briefing": (
+            "五名指挥官只带一辆折叠基地车，在中央矿脉旁同时落地。"
+            "先抢方向再展开：中央只有一小片矿，外围每局随机生成五片无守军矿区。"
+        ),
+        # 五辆基地车停在中央 190 半径的小环上：彼此都在视野内，但不发生
+        # 单位分离。这里是落地点，不是固定发展区；玩家应先驶离中央再展开。
+        "spawnPoints": [
+            (2000, 1810),
+            (2181, 1941),
+            (2112, 2154),
+            (1888, 2154),
+            (1819, 1941),
+        ],
+        "spawnLabels": ["中央北位", "中央东北位", "中央东南位", "中央西南位", "中央西北位"],
+        "rivers": [],
+        "bridges": [],
+        # 外围四处岩丘给展开后的基地留出天然侧翼；中央 560 范围由森林
+        # 散布器强制留空，确保五辆基地车开局能向任意方向驶离。
+        "mountains": [
+            {"x": 650, "y": 650, "r": 250},
+            {"x": 3350, "y": 650, "r": 250},
+            {"x": 3350, "y": 3350, "r": 250},
+            {"x": 650, "y": 3350, "r": 250},
+        ],
+        # 五条放射路只负责把基地车迅速送出中央，不预先划定玩家领地。
+        "roads": [
+            {"x1": 2000, "y1": 1810, "x2": 2000, "y2": 500, "width": 115},
+            {"x1": 2181, "y1": 1941, "x2": 3427, "y2": 1536, "width": 115},
+            {"x1": 2112, "y1": 2154, "x2": 2882, "y2": 3214, "width": 115},
+            {"x1": 1888, "y1": 2154, "x2": 1118, "y2": 3214, "width": 115},
+            {"x1": 1819, "y1": 1941, "x2": 573, "y2": 1536, "width": 115},
+        ],
+        # 人类玩家自行选方向；AI 使用同席位的外环点驶离中央后自动展开。
+        "botDeployPoints": [
+            (2000, 500),
+            (3427, 1536),
+            (2882, 3214),
+            (1118, 3214),
+            (573, 1536),
+        ],
+        "packedStart": True,
+        "neutralOreGuards": False,
+        # 总矿区数为 6：中央固定一小片，外围五片每局重新随机。
+        "publicOreCount": 5,
+        "bonusResources": [
+            {"x": 2000, "y": 2000, "amount": 9000, "public": True},
+        ],
+    },
 }
 COMBAT_CELL_SIZE = 256.0
 SEPARATION_CELL_SIZE = 64.0
@@ -581,6 +636,11 @@ ORBITAL_RAIN_GAP_MAX = 55.0
 
 # 可选大厅开关「中立守卫」：公共矿守军。缺省开启，与现行对局一致。
 NEUTRAL_CAMPS_MODE = "neutral_camps"
+
+# 可选大厅模式「战斗奖励」：奖励只认敌方玩家实体的最后一击。
+# 比例刻意保持较低，鼓励主动交战但不让领先方靠击杀迅速滚起经济雪球。
+COMBAT_REWARD_UNIT_RATE = 0.08
+COMBAT_REWARD_STRUCTURE_RATE = 0.05
 
 # Only completed core buildings extend construction territory. Defensive
 # structures deliberately do not, preventing turret chains across the map.
@@ -804,6 +864,7 @@ def public_player(room, player, viewer_id=None):
         "kills": player.get("kills", 0),
         "unitsLost": player.get("unitsLost", 0),
         "harvested": int(player.get("harvested", 0)),
+        "combatRewardsEarned": int(player.get("combatRewardsEarned", 0)),
         "powerSupply": supply,
         "powerUse": usage,
         "buildQueue": [dict(item) for item in player.get("buildQueue", [])]
@@ -1087,6 +1148,7 @@ def public_game(game, viewer_id=None, full=True):
             "strikes": frame["strikes"],
             "orbitalRain": bool(game.get("orbitalRain")),
             "neutrals": neutrals_enabled(game),
+            "combatRewards": bool(game.get("combatRewards")),
         }
         view_cache[view_key] = (frame["stamp"], dynamic)
 
@@ -1125,6 +1187,7 @@ PUBLIC_MAPS = {
         "mountains": m.get("mountains", []),
         "roads": m.get("roads", []),
         "resources": m.get("bonusResources", []),
+        "neutralOreGuards": bool(m.get("neutralOreGuards", True)),
     }
     for mid, m in MAPS.items()
 }
@@ -1143,7 +1206,9 @@ def public_room(room, include_game=True, viewer_id=None, full=True):
         "serverTime": now(),
         "selectedMap": room.get("selectedMap", DEFAULT_MAP),
         "orbitalRain": bool(room.get("orbitalRain") or (room.get("game") or {}).get("orbitalRain")),
-        "neutrals": neutrals_enabled(room, room.get("game")),
+        "neutrals": (neutrals_enabled(room, room.get("game"))
+                     and bool(room_map.get("neutralOreGuards", True))),
+        "combatRewards": bool(room.get("combatRewards") or (room.get("game") or {}).get("combatRewards")),
         "mapConfig": {
             "id": room_map["id"],
             "name": room_map["name"],
@@ -1154,6 +1219,7 @@ def public_room(room, include_game=True, viewer_id=None, full=True):
             "spawnPoints": room_map["spawnPoints"],
             "theme": room_map.get("theme", "grassland"),
             "briefing": room_map.get("briefing", ""),
+            "neutralOreGuards": bool(room_map.get("neutralOreGuards", True)),
         },
     }
     # The map catalogue only drives the lobby's map picker; re-sending it eight
@@ -1561,7 +1627,7 @@ def resource_is_guarded(game, resource):
     return camp_id in guarded_ids
 
 
-def add_random_resources(game, count, spawn_points):
+def add_random_resources(game, count, spawn_points, guarded=True):
     """在出生区之外放置随机公共矿区。
 
     出生点附近的保底矿由 ``start_game`` 单独生成；这里的矿只负责争夺区，
@@ -1636,7 +1702,7 @@ def add_random_resources(game, count, spawn_points):
         raise RuntimeError("无法为地图生成足够的随机矿区")
 
     # 守军使用独立随机源，避免模型编队的随机数影响下一局公共矿坐标。
-    if neutrals_enabled(game):
+    if guarded and neutrals_enabled(game):
         guard_rng = random.Random(int(game["map"]["seed"]) ^ 0x6E657574)
         for resource in public_resources:
             spawn_neutral_ore_camp(game, resource, guard_rng)
@@ -1750,7 +1816,10 @@ def start_game(room):
         "_publicViewCache": {},
         "pendingStrikes": [],
         "orbitalRain": bool(room.get("orbitalRain")),
-        "neutrals": neutrals_enabled(room),
+        # 地图可以硬性关闭中立守军；五车争疆即使房间总开关开启也保持无守军。
+        "neutrals": (neutrals_enabled(room)
+                     and bool(room_map.get("neutralOreGuards", True))),
+        "combatRewards": bool(room.get("combatRewards")),
         "nextOrbitalRainAt": (
             random.uniform(ORBITAL_RAIN_FIRST_MIN, ORBITAL_RAIN_FIRST_MAX)
             if room.get("orbitalRain") else None),
@@ -1871,6 +1940,7 @@ def start_game(room):
         player["kills"] = 0
         player["unitsLost"] = 0
         player["harvested"] = 0
+        player["combatRewardsEarned"] = 0
         player["buildQueue"] = []
         player["strikeCharges"] = 0
         sp = player_spawns[player["id"]]
@@ -1878,9 +1948,15 @@ def start_game(room):
         x, y = spawn_points[sp]
         toward_x = 1 if x < center_x else -1
         toward_y = 1 if y < center_y else -1
-        # 按阵营发出生装备：科技(指挥中心/电站/精炼厂/采矿车 + 突击兵/坦克)，
+        # 五车争疆只发一辆折叠基地车；没有预建建筑、矿车或作战单位。
+        # 其他地图继续按阵营发完整出生装备：科技(指挥中心/电站/精炼厂/采矿车 + 突击兵/坦克)，
         # 魔法(主堡/法力塔/精炼所/浮游晶簇 + 法师/傀儡)。kind 全部取自阵营装备表。
         loadout = faction_loadout(player.get("faction", "tech"))
+        if room_map.get("packedStart"):
+            command = make_unit(loadout["mcv"], player["id"], x, y)
+            command["dir"] = math.atan2(y - center_y, x - center_x)
+            game["units"].append(command)
+            continue
         start_hq = make_structure(loadout["hq"], player["id"], x, y, True)
         start_hq["packable"] = True
         game["structures"].append(start_hq)
@@ -1939,14 +2015,36 @@ def start_game(room):
             public=bool(bonus.get("public", True)))
         if resource.get("public"):
             bonus_public.append(resource)
-    if bonus_public and neutrals_enabled(game):
+    neutral_ore_guards = bool(room_map.get("neutralOreGuards", True))
+    if bonus_public and neutral_ore_guards and neutrals_enabled(game):
         bonus_rng = random.Random(int(game["map"]["seed"]) ^ 0xB0A05E)
         for resource in bonus_public:
             spawn_neutral_ore_camp(game, resource, bonus_rng)
         refresh_neutral_camps(game)
 
     # 各家保留一片稳定的开局矿；其余争夺矿每局随机散布在出生区之外。
-    add_random_resources(game, int(room_map.get("publicOreCount", 4)), spawn_points)
+    add_random_resources(
+        game, int(room_map.get("publicOreCount", 4)), spawn_points,
+        guarded=neutral_ore_guards)
+
+    # 折叠开局的人类玩家完全自行选址。AI 没有人拖动基地车，给它写入一个
+    # 私有的外环目标；bot_maybe_pack 会先沿放射路驶离中央，到点后再展开。
+    if room_map.get("packedStart"):
+        bot_deploy_points = room_map.get("botDeployPoints") or spawn_points
+        for player in players:
+            if not player.get("isBot"):
+                continue
+            command = next((unit for unit in game["units"]
+                            if unit["owner"] == player["id"] and unit["hp"] > 0
+                            and unit_role(unit["kind"]) == "mcv"), None)
+            if command is None:
+                continue
+            target_x, target_y = bot_deploy_points[player_spawns[player["id"]]]
+            hq_kind = UNIT_TYPES[command["kind"]].get("deploysInto", "hq")
+            target_x, target_y = find_open_start_point(
+                game, target_x, target_y, STRUCTURE_TYPES[hq_kind]["size"])
+            command["_openingDeployX"] = target_x
+            command["_openingDeployY"] = target_y
 
     room["game"] = game
     room["status"] = "playing"
@@ -2406,6 +2504,23 @@ def set_orbital_rain(room, player, enabled):
         add_chat(room, "作战系统", "已开启可选模式：轨道天降。", True)
     else:
         add_chat(room, "作战系统", "已关闭可选模式：轨道天降。", True)
+    return enabled
+
+
+def set_combat_rewards(room, player, enabled):
+    """房主在大厅开关「战斗奖励」模式，开战后设置锁定。"""
+    if room.get("status") != "lobby":
+        raise ValueError("战斗已经开始")
+    if not player or room.get("hostId") != player.get("id"):
+        raise ValueError("只有房主可以设置模式")
+    enabled = bool(enabled)
+    if bool(room.get("combatRewards")) == enabled:
+        return enabled
+    room["combatRewards"] = enabled
+    if enabled:
+        add_chat(room, "作战系统", "已开启可选模式：战斗奖励。", True)
+    else:
+        add_chat(room, "作战系统", "已关闭可选模式：战斗奖励。", True)
     return enabled
 
 
@@ -3569,6 +3684,33 @@ def emit_dog_kill_egg(room, game, source_unit, target):
     return True
 
 
+def award_combat_reward(room, game, source_owner, target):
+    """按最后一击发放战利金；友军、自毁和中立目标均不产生奖励。"""
+    if not game or not game.get("combatRewards"):
+        return 0
+    source = room["players"].get(source_owner)
+    target_owner = room["players"].get(target.get("owner"))
+    if not source or not target_owner:
+        return 0
+    if is_friendly(game, source_owner, target.get("owner")):
+        return 0
+    if target.get("id", "").startswith("u"):
+        definition = UNIT_TYPES.get(target.get("kind"), {})
+        rate = COMBAT_REWARD_UNIT_RATE
+    elif target.get("id", "").startswith("s"):
+        definition = STRUCTURE_TYPES.get(target.get("kind"), {})
+        rate = COMBAT_REWARD_STRUCTURE_RATE
+    else:
+        return 0
+    cost = max(0.0, float(definition.get("cost", 0)))
+    reward = int(math.floor(cost * rate))
+    if reward <= 0:
+        return 0
+    source["cash"] = source.get("cash", 0) + reward
+    source["combatRewardsEarned"] = source.get("combatRewardsEarned", 0) + reward
+    return reward
+
+
 def apply_damage(room, target, damage, source_owner, damage_type=None, game=None, source_id=None):
     if target["hp"] <= 0:
         return
@@ -3591,12 +3733,14 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
         target["constructionDamage"] = target.get("constructionDamage", 0.0) + applied
     if target["hp"] <= 0:
         target["hp"] = 0
+        game_state = game or room.get("game")
         owner = room["players"].get(target["owner"])
         source = room["players"].get(source_owner)
         if owner and target["id"].startswith("u"):
             owner["unitsLost"] += 1
         if source and source_owner != target["owner"]:
             source["kills"] += 1
+            award_combat_reward(room, game_state, source_owner, target)
         if source_id and game and source_owner != target["owner"]:
             source_unit = None
             for u in game["units"]:
@@ -3619,7 +3763,6 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
                 emit_dog_kill_egg(room, game, source_unit, target)
         # 自爆单位被打死也要炸。game 可能由调用方传入，缺了就用房间里的。
         if target["id"].startswith("u"):
-            game_state = game or room.get("game")
             if game_state:
                 trigger_death_explosion(room, target, game_state)
 
@@ -4815,8 +4958,6 @@ def bot_evade_suicide(game, bot, inbound):
 
 def bot_maybe_pack(game, bot, roles, elapsed):
     """前 3 分钟不收总部。只有起点明显丢了且还有基地车时才转移。"""
-    if elapsed < BOT_PACK_SECONDS:
-        return
     mcv = None
     for unit in game["units"]:
         if (unit["owner"] == bot["id"] and unit["hp"] > 0
@@ -4824,6 +4965,31 @@ def bot_maybe_pack(game, bot, roles, elapsed):
             mcv = unit
             break
     hq = bot_own_hq(game, bot["id"])
+    # 地图专属折叠开局：AI 先驶出所有玩家挤在一起的中央落地区，再展开。
+    # 这条在 3 分钟折叠保护之前执行；没有私有目标的普通基地车不受影响。
+    if (hq is None and mcv is not None
+            and mcv.get("_openingDeployX") is not None
+            and mcv.get("_openingDeployY") is not None):
+        target_x = mcv["_openingDeployX"]
+        target_y = mcv["_openingDeployY"]
+        if math.hypot(mcv["x"] - target_x, mcv["y"] - target_y) > 65.0:
+            try:
+                issue_move(game, bot["id"], {mcv["id"]}, target_x, target_y)
+            except ValueError:
+                pass
+        else:
+            try:
+                issue_deploy(game, bot["id"], {mcv["id"]})
+            except ValueError:
+                # 目标在行驶过程中被建筑占住时，从当前位置找最近的展开空地。
+                hq_kind = UNIT_TYPES[mcv["kind"]].get("deploysInto", "hq")
+                retry_x, retry_y = find_open_start_point(
+                    game, mcv["x"], mcv["y"], STRUCTURE_TYPES[hq_kind]["size"])
+                mcv["_openingDeployX"] = retry_x
+                mcv["_openingDeployY"] = retry_y
+        return
+    if elapsed < BOT_PACK_SECONDS:
+        return
     if hq is not None and hq.get("packable"):
         lost = (hq["hp"] / float(hq["maxHp"]) < 0.22
                 and bot_enemies_in_base(game, bot["id"])
@@ -5465,6 +5631,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 "selectedMap": selected_map,
                 "orbitalRain": False,
                 "neutrals": True,
+                "combatRewards": False,
                 "lock": threading.RLock(),
             }
             ROOMS[room_id] = room
@@ -5556,6 +5723,8 @@ class GameHandler(BaseHTTPRequestHandler):
                 set_orbital_rain(room, player, payload.get("enabled"))
             elif action == "setNeutrals":
                 set_neutrals(room, player, payload.get("enabled"))
+            elif action == "setCombatRewards":
+                set_combat_rewards(room, player, payload.get("enabled"))
             elif action == "addBot":
                 if room["hostId"] != player["id"] or room["status"] != "lobby":
                     raise ValueError("只有房主可以添加 AI")

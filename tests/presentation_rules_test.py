@@ -111,6 +111,7 @@ def main():
         "valley_clash": (6400, 4800),
         "gold_crater": (10000, 6400),
         "gold_crater_small": (6400, 6400),
+        "central_scramble": (4000, 4000),
     }
     assert {map_id: (map_def["width"], map_def["height"])
             for map_id, map_def in server.MAPS.items()} == expected_sizes

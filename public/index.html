@@ -158,6 +158,13 @@
                 <em>矿区中立单位，可关闭</em>
               </span>
             </label>
+            <label id="combatRewardsRow" class="mode-toggle" data-mode="combat_rewards" for="combatRewardsToggle">
+              <input type="checkbox" id="combatRewardsToggle">
+              <span>
+                <strong>战斗奖励</strong>
+                <em>击毁单位返还8%，建筑返还5%，默认关</em>
+              </span>
+            </label>
           </section>
 
           <section class="panel chat-panel">
@@ -193,6 +200,7 @@
           </div>
         </div>
         <div id="matchClock" class="match-clock">00:00</div>
+        <div id="combatRewardsBadge" class="mode-badge hidden" title="击毁敌军获得战利资金">战斗奖励</div>
         <div id="orbitalRainBadge" class="mode-badge hidden" title="随机轨道打击，范围×5">轨道天降</div>
         <div id="neutralCampsBadge" class="mode-badge hidden" title="矿区中立单位">中立守卫</div>
         <div id="connectionBadge" class="connection-badge"><i></i> 已连接</div>
