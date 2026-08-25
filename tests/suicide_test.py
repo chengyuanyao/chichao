@@ -69,12 +69,19 @@ def main():
         assert definition["deathExplosion"]["damage"] > 0
         assert definition["deathExplosion"]["radius"] > 0
         assert "chainRadius" not in definition["deathExplosion"]
-    # 造价/血/速/爆炸对齐。皮相/生产者仍分阵营。
+    # 造价/训练/移速/血/爆炸对齐。皮相/生产者仍分阵营。
     for field in ("cost", "hp", "speed", "build", "damageType"):
         assert truck[field] == hexling[field], (field, truck[field], hexling[field])
     for field in ("damage", "radius", "damageType"):
         assert truck["deathExplosion"][field] == hexling["deathExplosion"][field], (
             field, truck["deathExplosion"][field], hexling["deathExplosion"][field])
+    assert truck["cost"] == 1000
+    assert hexling["cost"] == 1000
+    assert truck["build"] == 8.5
+    assert hexling["build"] == 8.5
+    assert truck["speed"] == 97.9
+    assert hexling["speed"] == 97.9
+    assert truck["hp"] == 160
     assert truck["deathExplosion"]["damage"] == 700.0
     assert truck["deathExplosion"]["radius"] == 120.0
     bite_to_hexling = (
@@ -101,6 +108,10 @@ def main():
     assert catalog["units"]["bomb_truck"]["repairable"] is True
     assert catalog["units"]["hexling"]["repairable"] is False
     assert catalog["units"]["hexling"]["faction"] == "magic"
+    assert catalog["units"]["bomb_truck"]["cost"] == catalog["units"]["hexling"]["cost"]
+    assert catalog["units"]["bomb_truck"]["build"] == catalog["units"]["hexling"]["build"]
+    assert catalog["units"]["bomb_truck"]["cost"] == 1000
+    assert catalog["units"]["bomb_truck"]["build"] == 8.5
     print("  定义/阵营/载具不对称: PASS")
 
     print("\n=== Test 2: 工厂/法阵训练，跨阵营拒绝 ===")

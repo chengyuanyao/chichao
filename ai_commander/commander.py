@@ -390,7 +390,7 @@ class Commander(object):
                  and unit_role(unit["kind"]) not in ("harvester", "mcv")
                  and unit.get("order") != "repair"
                  and codex.is_combat_unit(unit["kind"])]
-        # 自爆单位不进野战编制：它们撞上去就没了，跟着主力冲等于拿 640 块
+        # 自爆单位不进野战编制：它们撞上去就没了，跟着主力冲等于拿 1000 块
         # 换一个步兵。单独按波次去砸建筑。
         suicides = [unit for unit in field if unit["kind"] in SUICIDE_KINDS]
         army = [unit for unit in field if unit["kind"] not in SUICIDE_KINDS]
@@ -502,7 +502,7 @@ class Commander(object):
 
         `_score_target` 会挑「倍率×残血×距离」最优的目标，对自爆车来说那多半
         是一个步兵——explosive 对 infantry ×1.80，可它撞上去就没了。目标限定
-        为总部或贴着总部的建筑团，才对得起 640 块的造价。
+        为总部或贴着总部的建筑团，才对得起 1000 块的造价。
         """
         if len(suicides) < BOT_SUICIDE_WAVE:
             return

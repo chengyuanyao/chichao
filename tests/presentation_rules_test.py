@@ -288,6 +288,12 @@ def main():
     assert catalog["units"]["hexling"]["producer"] == "mcircle"
     assert catalog["units"]["bomb_truck"]["cost"] == catalog["units"]["hexling"]["cost"]
     assert catalog["units"]["bomb_truck"]["build"] == catalog["units"]["hexling"]["build"]
+    assert catalog["units"]["bomb_truck"]["cost"] == 1000
+    assert catalog["units"]["hexling"]["cost"] == 1000
+    assert catalog["units"]["bomb_truck"]["build"] == 8.5
+    assert catalog["units"]["hexling"]["build"] == 8.5
+    assert server.UNIT_TYPES["bomb_truck"]["speed"] == server.UNIT_TYPES["hexling"]["speed"]
+    assert server.UNIT_TYPES["bomb_truck"]["speed"] == 97.9
     hud = read("public/index.html")
     assert "魔导甲怕磁暴/狙击×1.6" in hud
     assert "魔导甲怕磁暴/狙击×2.0" not in hud

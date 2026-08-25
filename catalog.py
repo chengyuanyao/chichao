@@ -127,13 +127,14 @@ UNIT_TYPES = {
     },
     # 自爆卡车：中期玻璃大炮。工厂就能出，不卡维修厂。无常规火力，
     # 贴近或阵亡时炸开。轻甲载具：军犬咬不动，磁暴/火箭能拆。
-    # 爆炸 700 / 半径 120，与爆裂魔仆对齐。贴脸总部约 770 伤
+    # 造价 1000 / 训练 8.5 / 移速 97.9，与爆裂魔仆对齐（贵、慢造、慢走）。
+    # 爆炸 700 / 半径 120 未改。贴脸总部约 770 伤
     # （2400 的 32%），单车拆不掉满血指挥中心；三四辆叠炸才够。
     # 邻近自爆只吃 700 溅射，不会连带引爆。
     "bomb_truck": {
-        "name": "自爆卡车", "cost": 640, "hp": 160, "speed": 122.4,
+        "name": "自爆卡车", "cost": 1000, "hp": 160, "speed": 97.9,
         "damage": 0.0, "range": 22.0, "cooldown": 0.0,
-        "size": 16.0, "build": 6.5, "producer": "factory",
+        "size": 16.0, "build": 8.5, "producer": "factory",
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
         "sight": 350.0, "armor": "light", "damageType": "explosive",
         "deathExplosion": {
@@ -257,12 +258,13 @@ UNIT_TYPES = {
         "sight": 300.0, "armor": ("heavy", "light"), "damageType": "siege",
     },
     # 爆裂魔仆：秘法会对位自爆单位，不是卡车。符核活体，法阵召唤。
-    # 造价/血/速/爆炸与卡车对齐（700 / 120）。邻近自爆不连带。
-    # 魔导甲、不算载具：军犬能扑，但一口咬不死（160 血，咬 90）。圣泉修不了。
+    # 造价/训练/移速/血/爆炸与卡车对齐（1000 / 8.5 / 97.9 / 160 / 700 / 120）。
+    # 邻近自爆不连带。魔导甲、不算载具：军犬能扑，但一口咬不死（160 血，咬 90）。
+    # 圣泉修不了。
     "hexling": {
-        "name": "爆裂魔仆", "cost": 640, "hp": 160, "speed": 122.4,
+        "name": "爆裂魔仆", "cost": 1000, "hp": 160, "speed": 97.9,
         "damage": 0.0, "range": 22.0, "cooldown": 0.0,
-        "size": 11.0, "build": 6.5, "producer": "mcircle",
+        "size": 11.0, "build": 8.5, "producer": "mcircle",
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
         "sight": 350.0, "armor": "arcane", "damageType": "explosive",
         "deathExplosion": {
