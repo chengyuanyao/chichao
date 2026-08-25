@@ -204,6 +204,9 @@
         <div id="orbitalRainBadge" class="mode-badge hidden" title="随机轨道打击，范围×5">轨道天降</div>
         <div id="neutralCampsBadge" class="mode-badge hidden" title="矿区中立单位">中立守卫</div>
         <div id="connectionBadge" class="connection-badge"><i></i> 已连接</div>
+        <button id="agentPanelBtn" class="agent-panel-button" title="打开 AI 副官">
+          <i></i><span>AI 副官</span>
+        </button>
         <button id="gameMenuBtn" class="icon-button game-menu-button">☰</button>
       </header>
 
@@ -329,6 +332,32 @@
           </form>
         </div>
 
+        <section id="agentPanel" class="agent-panel hidden" aria-label="AI 副官对话">
+          <header class="agent-panel-header">
+            <div>
+              <strong>AI 副官</strong>
+              <span id="agentStatus"><i></i>未连接</span>
+            </div>
+            <div class="agent-panel-actions">
+              <button id="stopAgentBtn" type="button" class="hidden">停止副官</button>
+              <button id="agentPanelCloseBtn" type="button" aria-label="收起 AI 副官">×</button>
+            </div>
+          </header>
+          <div id="agentMessages" class="agent-messages"></div>
+          <div id="agentConnectActions" class="agent-connect-actions">
+            <button id="startServerAgentBtn" type="button">
+              <strong>启动服务器副官</strong><small>使用服务器配置的 LLM</small>
+            </button>
+            <button id="pairAgentBtn" type="button">
+              <strong>连接本地副官</strong><small>配对本机 rts-agent / LLM</small>
+            </button>
+          </div>
+          <form id="agentForm" class="agent-form">
+            <input id="agentInput" maxlength="800" placeholder="连接副官后即可下令…" autocomplete="off" disabled>
+            <button id="agentSendBtn" type="submit" disabled>发送</button>
+          </form>
+        </section>
+
         <div class="control-legend">
           <span><kbd>左键</kbd> 选择</span>
           <span><kbd>右键</kbd> 移动 / 攻击</span>
@@ -346,7 +375,6 @@
           <h2>作战菜单</h2>
           <p>多人战斗不会暂停。</p>
           <button id="resumeBtn" class="button primary full">返回战场</button>
-          <button id="pairAgentBtn" class="button secondary full">连接 AI 副官</button>
           <button id="leaveGameBtn" class="button danger full">离开本局</button>
           <button id="openSettingsBtn" class="button secondary full">系统设置</button>
         </div>

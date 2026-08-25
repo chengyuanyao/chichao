@@ -1584,6 +1584,35 @@ kbd {
   color: var(--warn);
 }
 
+.agent-panel-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 11px;
+  flex: none;
+  border: 1px solid #4c462a;
+  background: rgba(14, 15, 9, 0.88);
+  color: #a89f8a;
+  font: 700 9px var(--font-display);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.agent-panel-button i,
+#agentStatus i {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 7px currentColor;
+}
+
+.agent-panel-button.connected { color: var(--ok); }
+.agent-panel-button.thinking { color: var(--warn); }
+.agent-panel-button.error { color: var(--bad); }
+
 .game-menu-button {
   width: 38px;
   height: 38px;
@@ -2809,6 +2838,213 @@ kbd {
   font-size: 10px;
 }
 
+/* AI 副官与战场聊天共用左下通信区；打开副官时由 JS 暂时隐藏战场聊天。 */
+.agent-panel {
+  position: absolute;
+  z-index: 25;
+  left: 16px;
+  bottom: 52px;
+  display: grid;
+  grid-template-rows: 44px minmax(0, 1fr) auto 42px;
+  width: min(430px, calc(100vw - var(--sidebar-w) - 32px));
+  height: min(300px, calc(100vh - var(--topbar-h) - 90px));
+  border: 1px solid var(--brass-dark);
+  outline: 1px solid rgba(0, 0, 0, 0.9);
+  background:
+    var(--metal-brush),
+    linear-gradient(180deg, rgba(38, 40, 27, 0.98), rgba(13, 14, 8, 0.97));
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.58), inset 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.agent-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 0 13px;
+  border-bottom: 1px solid rgba(201, 162, 75, 0.32);
+  background: linear-gradient(90deg, rgba(90, 18, 22, 0.42), transparent 70%);
+}
+
+.agent-panel-header > div {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.agent-panel-header strong {
+  color: var(--brass-bright);
+  font: 700 12px var(--font-display);
+  letter-spacing: 0.12em;
+}
+
+#agentStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #847b63;
+  font: 9px var(--font-mono);
+}
+
+#agentStatus.connected { color: var(--ok); }
+#agentStatus.thinking { color: var(--warn); }
+#agentStatus.error { color: var(--bad); }
+
+.agent-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#stopAgentBtn {
+  padding: 4px 9px;
+  border: 1px solid rgba(198, 66, 60, 0.6);
+  background: rgba(90, 18, 22, 0.4);
+  color: #e8b2ac;
+  font: 9px var(--font-mono);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+#stopAgentBtn:hover:not(:disabled) {
+  border-color: var(--bad);
+  color: var(--ivory);
+}
+
+#stopAgentBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+#agentPanelCloseBtn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.agent-messages {
+  min-height: 0;
+  padding: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #4b452e #111208;
+}
+
+.agent-message {
+  max-width: 91%;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--brass-dark);
+  background: rgba(8, 9, 5, 0.62);
+  color: #d5ccb7;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.agent-message.user {
+  margin-left: auto;
+  border-left: 0;
+  border-right: 2px solid var(--crimson-bright);
+  background: rgba(90, 18, 22, 0.34);
+  color: var(--ivory);
+}
+
+.agent-message.system,
+.agent-message.event {
+  max-width: 100%;
+  border-color: var(--warn);
+  background: rgba(65, 49, 12, 0.28);
+  color: #d6bd78;
+  font-size: 10px;
+}
+
+.agent-connect-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 0 6px 6px;
+  background: rgba(7, 7, 4, 0.72);
+}
+
+.agent-connect-actions button {
+  min-width: 0;
+  min-height: 45px;
+  padding: 6px 8px;
+  border: 1px solid var(--brass-dark);
+  background: linear-gradient(180deg, rgba(76, 67, 38, 0.92), rgba(29, 27, 16, 0.96));
+  color: var(--brass-bright);
+  cursor: pointer;
+}
+
+.agent-connect-actions strong,
+.agent-connect-actions small {
+  display: block;
+}
+
+.agent-connect-actions strong {
+  font: 700 9px var(--font-display);
+  letter-spacing: 0.04em;
+}
+
+.agent-connect-actions small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--muted);
+  font: 8px var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-connect-actions button:hover:not(:disabled) {
+  border-color: var(--brass-bright);
+  background: linear-gradient(180deg, rgba(105, 83, 38, 0.96), rgba(42, 34, 17, 0.98));
+}
+
+.agent-connect-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.agent-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 62px;
+  gap: 6px;
+  padding: 6px;
+  border-top: 1px solid rgba(201, 162, 75, 0.3);
+  background: rgba(7, 7, 4, 0.72);
+}
+
+.agent-form input {
+  min-width: 0;
+  border: 1px solid #4c462a;
+  outline: 0;
+  background: var(--lcd-well);
+  color: var(--ivory);
+  padding: 0 10px;
+  font: 11px var(--font-ui);
+}
+
+.agent-form input:focus { border-color: var(--brass); }
+
+.agent-form button {
+  border: 1px solid var(--brass-dark);
+  background: linear-gradient(180deg, #71302a, #48110f);
+  color: var(--brass-bright);
+  font: 700 9px var(--font-display);
+  cursor: pointer;
+}
+
+.agent-form button:disabled,
+.agent-form input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .control-legend {
   position: absolute;
   z-index: 10;
@@ -3137,9 +3373,20 @@ kbd {
   .lobby-header {
     grid-template-columns: 130px 1fr 190px;
   }
+
+  .agent-panel-button span { display: none; }
+  .agent-panel-button { width: 38px; justify-content: center; padding: 0; }
 }
 
 @media (max-width: 620px) {
+  .agent-panel {
+    left: 8px;
+    bottom: 48px;
+    width: calc(100vw - 16px);
+  }
+  .agent-connect-actions {
+    grid-template-columns: 1fr;
+  }
   .home-screen {
     padding-top: 28px;
   }

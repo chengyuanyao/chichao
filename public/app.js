@@ -1208,6 +1208,13 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var battleChatMessages = $('#battleChatMessages');
   var battleChatForm = $('#battleChatForm');
   var battleChatInput = $('#battleChatInput');
+  var battleChat = $('.battle-chat');
+  var agentPanel = $('#agentPanel');
+  var agentMessages = $('#agentMessages');
+  var agentInput = $('#agentInput');
+  var agentForm = $('#agentForm');
+  var agentStatus = $('#agentStatus');
+  var agentPanelBtn = $('#agentPanelBtn');
   var connectionBadge = $('#connectionBadge');
 
   var session = null;
@@ -1217,6 +1224,13 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   var roomRefreshTimer = null;
   var lastRoomRenderKey = '';
   var lastChatRenderKey = '';
+  var lastAgentRenderKey = '';
+  var activeAgentPair = null;
+  // 服务端只在有新消息时才下发副官对话正文，静默帧里 agent.messages 是缺失
+  // 的；这里留一份本地副本，状态变化重绘时不至于把历史清空。
+  var agentMessageCache = [];
+  var agentMessageRevision = -1;
+  var agentStopPending = false;
   var gameKey = null;
   var resultShown = false;
   var activeTab = 'buildings';
@@ -1832,6 +1846,7 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
         toast('战斗奖励 +$' + (nextRewardTotal - previousRewardTotal).toLocaleString('zh-CN'), 'success');
       }
     }
+    renderAgentPanel(state.agent);
     if (state.players) {
       var nextPaletteKey = (session && session.playerId || '') + '|' + state.players.map(function (p) {
         return p.id + ':' + p.color + ':' + (p.team || 0);
@@ -2233,6 +2248,165 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     container.scrollTop = container.scrollHeight;
   }
 
+  function setAgentPanelOpen(open, focusInput) {
+    agentPanel.classList.toggle('hidden', !open);
+    battleChat.classList.toggle('hidden', open);
+    if (open && focusInput && !agentInput.disabled) {
+      agentInput.focus();
+    } else if (!open) {
+      // 隐藏期间 scrollHeight 恒为 0，renderBattleChat 的自动滚动等于没跑，
+      // 重新显示时要自己滚回最新一条。
+      battleChatMessages.scrollTop = battleChatMessages.scrollHeight;
+      canvas.focus();
+    }
+  }
+
+  function agentStatusCopy(agent) {
+    var labels = {
+      offline: '未连接', pairing: '等待配对', connecting: '正在初始化',
+      online: '在线', thinking: '思考中', degraded: '规则模式', error: '异常'
+    };
+    return labels[(agent && agent.status) || 'offline'] || '未连接';
+  }
+
+  function renderAgentPanel(agent) {
+    agent = agent || { connected: false, status: 'offline', messages: [] };
+    if (agent.connected && activeAgentPair) { activeAgentPair = null; }
+    if (activeAgentPair && Date.now() >= activeAgentPair.expiresAt) {
+      activeAgentPair = null;
+    }
+
+    var statusName = agent.status || 'offline';
+    var statusClass = agent.connected ? 'connected' : '';
+    if (statusName === 'thinking') { statusClass = 'thinking'; }
+    if (statusName === 'error') { statusClass = 'error'; }
+    agentStatus.className = statusClass;
+    agentStatus.innerHTML = '<i></i>' + agentStatusCopy(agent);
+    agentStatus.title = agent.detail || '';
+    agentPanelBtn.classList.toggle('connected', !!agent.connected && statusName !== 'thinking');
+    agentPanelBtn.classList.toggle('thinking', statusName === 'thinking');
+    agentPanelBtn.classList.toggle('error', statusName === 'error');
+    agentPanelBtn.title = (agent.detail || agentStatusCopy(agent)) +
+      (agent.model ? ' · ' + agent.model : '');
+
+    var canSend = !!agent.connected;
+    agentInput.disabled = !canSend;
+    $('#agentSendBtn').disabled = !canSend;
+    agentInput.placeholder = canSend ? '向 AI 副官下令…' : '请先连接本地或服务器 AI 副官…';
+
+    var serverBtn = $('#startServerAgentBtn');
+    var connectActions = $('#agentConnectActions');
+    if (connectActions) {
+      connectActions.classList.toggle('hidden', !!agent.connected);
+    }
+    // 配对/初始化期间副官还没上线，但已经占着位置了，此时不能再点一次启动。
+    var busy = !!agent.connected || statusName === 'pairing' || statusName === 'connecting';
+    if (serverBtn) {
+      serverBtn.disabled = !agent.serverAvailable || busy;
+      serverBtn.title = agent.serverAvailable ? '' :
+        '服务器未配置 RTS_AGENT_DIR / RTS_AGENT_PYTHON';
+    }
+    var stopBtn = $('#stopAgentBtn');
+    if (stopBtn) {
+      // 服务器副官卡死时也要能收：只认 serverManaged，不看是否还在心跳。
+      stopBtn.classList.toggle('hidden', !agent.serverManaged);
+      stopBtn.disabled = agentStopPending;
+    }
+    var pairBtn = $('#pairAgentBtn');
+    if (pairBtn) {
+      pairBtn.disabled = !!agent.connected || !!agent.serverManaged;
+      var pairTitle = pairBtn.querySelector('strong');
+      if (pairTitle) {
+        pairTitle.textContent = activeAgentPair ? '重新生成配对码' : '连接本地副官';
+      }
+    }
+
+    if (agent.messages) {
+      agentMessageCache = agent.messages;
+      agentMessageRevision = agent.revision || 0;
+    }
+    var messages = agentMessageCache;
+    var pairKey = activeAgentPair ? activeAgentPair.code : '';
+    var key = statusName + ':' + agentMessageRevision + ':' + pairKey;
+    if (key === lastAgentRenderKey) { return; }
+    lastAgentRenderKey = key;
+    agentMessages.innerHTML = '';
+    if (!messages.length && !activeAgentPair) {
+      var empty = document.createElement('p');
+      empty.className = 'agent-message system';
+      empty.textContent = '尚未连接 AI 副官。请直接在下方选择服务器副官，或连接本机 rts-agent。';
+      agentMessages.appendChild(empty);
+    }
+    messages.forEach(function (message) {
+      var line = document.createElement('p');
+      line.className = 'agent-message ' + (message.role || 'system');
+      line.textContent = message.message || '';
+      agentMessages.appendChild(line);
+    });
+    if (activeAgentPair) {
+      var pairLine = document.createElement('p');
+      pairLine.className = 'agent-message system';
+      pairLine.textContent = '本地副官配对码：' + activeAgentPair.code +
+        '\n在 rts-agent 的模式 3 中输入房间号 ' + (roomState ? roomState.id : '') +
+        ' 和此配对码。配对码两分钟内有效。';
+      agentMessages.appendChild(pairLine);
+    }
+    agentMessages.scrollTop = agentMessages.scrollHeight;
+  }
+
+  async function requestLocalAgentPair() {
+    var button = $('#pairAgentBtn');
+    button.disabled = true;
+    try {
+      var data = await sendAction('requestAgentPair');
+      var code = data.pairCode || '';
+      activeAgentPair = { code: code, expiresAt: Date.now() + (data.expiresIn || 120) * 1000 };
+      lastAgentRenderKey = '';
+      setAgentPanelOpen(true, false);
+      renderAgentPanel(roomState && roomState.agent);
+      $('#gameMenu').classList.add('hidden');
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).catch(function () {});
+      }
+      toast('本地 AI 副官配对码已生成', 'success');
+    } catch (err) {
+      toast(err.message || '生成配对码失败', 'error');
+    } finally {
+      renderAgentPanel(roomState && roomState.agent);
+    }
+  }
+
+  async function startServerAgent() {
+    var button = $('#startServerAgentBtn');
+    button.disabled = true;
+    try {
+      var data = await sendAction('startServerAgent');
+      if (roomState && data.agent) { roomState.agent = data.agent; }
+      $('#gameMenu').classList.add('hidden');
+      setAgentPanelOpen(true, false);
+      toast('服务器 AI 副官正在启动', 'success');
+    } catch (err) {
+      toast(err.message || '服务器 AI 副官启动失败', 'error');
+    } finally {
+      renderAgentPanel(roomState && roomState.agent);
+    }
+  }
+
+  async function stopServerAgent() {
+    agentStopPending = true;
+    $('#stopAgentBtn').disabled = true;
+    try {
+      var data = await sendAction('stopServerAgent');
+      if (roomState && data.agent) { roomState.agent = data.agent; }
+      toast('服务器 AI 副官已停止', 'success');
+    } catch (err) {
+      toast(err.message || '停止服务器 AI 副官失败', 'error');
+    } finally {
+      agentStopPending = false;
+      renderAgentPanel(roomState && roomState.agent);
+    }
+  }
+
   async function leaveRoom() {
     if (session) {
       try {
@@ -2253,6 +2427,11 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     selectedStructureId = null;
     controlGroups = {};
     lastGroupTap = {};
+    activeAgentPair = null;
+    lastAgentRenderKey = '';
+    agentMessageCache = [];
+    agentMessageRevision = -1;
+    setAgentPanelOpen(false, false);
     setScreen('home');
   }
 
@@ -3920,6 +4099,28 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     $('#strikeBtn').classList.remove('active');
   }
 
+  function openGameMenu() {
+    cancelModes();
+    battleChatForm.classList.add('hidden');
+    agentPanel.classList.add('hidden');
+    battleChat.classList.remove('hidden');
+    $('#gameMenu').classList.remove('hidden');
+    $('#resumeBtn').focus();
+  }
+
+  function closeGameMenu() {
+    $('#gameMenu').classList.add('hidden');
+    canvas.focus();
+  }
+
+  function toggleGameMenu() {
+    if ($('#gameMenu').classList.contains('hidden')) {
+      openGameMenu();
+    } else {
+      closeGameMenu();
+    }
+  }
+
   // 下达指令反馈（水波纹效果已移除，保留函数避免调用处报错）
   function markOrder(x, y, type) {}
 
@@ -4400,12 +4601,36 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
 
   window.addEventListener('resize', resizeCanvas);
   window.addEventListener('keydown', function (event) {
-    var editing = event.target instanceof HTMLInputElement;
-    if (editing) {
-      if (event.code === 'Escape' && currentScreen === 'game') {
+    if (event.code === 'Escape' && currentScreen === 'game') {
+      event.preventDefault();
+      // The result dialog is intentionally not dismissible: the player must
+      // choose its explicit return action.
+      if (!$('#resultModal').classList.contains('hidden')) {
+        return;
+      }
+      if (!agentPanel.classList.contains('hidden')) {
+        setAgentPanelOpen(false, false);
+        return;
+      }
+      // Settings are opened from the tactical menu, so Escape returns there.
+      if (!$('#settingsModal').classList.contains('hidden')) {
+        $('#settingsModal').classList.add('hidden');
+        openGameMenu();
+        return;
+      }
+      // The first Escape while chatting only cancels chat input.
+      if (!battleChatForm.classList.contains('hidden')) {
         battleChatForm.classList.add('hidden');
         canvas.focus();
+        return;
       }
+      toggleGameMenu();
+      return;
+    }
+    var editing = event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLTextAreaElement ||
+      event.target instanceof HTMLSelectElement || event.target.isContentEditable;
+    if (editing) {
       return;
     }
     if (currentScreen !== 'game') {
@@ -4486,10 +4711,13 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
       centerOnBase();
     } else if (event.code === 'Enter') {
       event.preventDefault();
+      // 副官面板占着 .battle-chat 的位置，此时聊天框是 display:none，
+      // focus() 会静默失败、按键继续走单位热键。先收面板再开聊天。
+      if (!agentPanel.classList.contains('hidden')) {
+        setAgentPanelOpen(false, false);
+      }
       battleChatForm.classList.remove('hidden');
       battleChatInput.focus();
-    } else if (event.code === 'Escape') {
-      cancelModes();
     } else if (event.code === 'KeyY' && activeProposalFromId) {
       event.preventDefault();
       sendAction('acceptAlliance', {}).catch(function () {});
@@ -4667,20 +4895,35 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
   $('#counterToggle').addEventListener('click', function () {
     $('#counterPanel').classList.toggle('open');
   });
-  $('#gameMenuBtn').addEventListener('click', function () { $('#gameMenu').classList.remove('hidden'); });
-  $('#resumeBtn').addEventListener('click', function () { $('#gameMenu').classList.add('hidden'); canvas.focus(); });
-  $('#pairAgentBtn').addEventListener('click', function () {
-    var button = $('#pairAgentBtn');
-    button.disabled = true;
-    sendAction('requestAgentPair').then(function (data) {
-      var code = data.pairCode || '';
-      window.prompt('AI 副官配对码（2 分钟内有效、仅可使用一次）\n在 play.bat 模式3的玩家名称栏直接输入此码：', code);
-    }).catch(function (err) {
-      toast(err.message || '生成配对码失败', 'error');
-    }).finally(function () {
-      button.disabled = false;
+  agentPanelBtn.addEventListener('click', function () {
+    setAgentPanelOpen(agentPanel.classList.contains('hidden'), true);
+  });
+  $('#agentPanelCloseBtn').addEventListener('click', function () {
+    setAgentPanelOpen(false, false);
+  });
+  agentForm.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var message = agentInput.value.trim();
+    if (!message || agentInput.disabled) { return; }
+    agentInput.value = '';
+    agentInput.disabled = true;
+    $('#agentSendBtn').disabled = true;
+    sendAction('agentUserMessage', { message: message }).then(function (data) {
+      if (roomState && data.agent) { roomState.agent = data.agent; }
+      lastAgentRenderKey = '';
+      renderAgentPanel(data.agent || (roomState && roomState.agent));
+      if (roomState && roomState.agent && roomState.agent.connected) { agentInput.focus(); }
+    }).catch(function () {}).finally(function () {
+      var connected = !!(roomState && roomState.agent && roomState.agent.connected);
+      agentInput.disabled = !connected;
+      $('#agentSendBtn').disabled = !connected;
     });
   });
+  $('#gameMenuBtn').addEventListener('click', openGameMenu);
+  $('#resumeBtn').addEventListener('click', closeGameMenu);
+  $('#startServerAgentBtn').addEventListener('click', startServerAgent);
+  $('#stopAgentBtn').addEventListener('click', stopServerAgent);
+  $('#pairAgentBtn').addEventListener('click', requestLocalAgentPair);
   $('#leaveGameBtn').addEventListener('click', function () {
     $('#gameMenu').classList.add('hidden');
     leaveRoom();

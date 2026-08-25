@@ -126,12 +126,30 @@ ai_commander\start-ai.bat 18081         # Windows
 
 ### 连接 AI 副官（外部 agent）
 
-游戏中按 Esc，点击「连接 AI 副官」即可生成一个 8 位配对码。配对码 2 分钟内有效且
-只能使用一次；在 `rts-agent` 的 `play.bat` 选择模式3并输入该码，即可让副官接入当前
-浏览器玩家。服务端不会在公开房间列表中泄露玩家 token，也不需要手工查找浏览器存储。
+战斗顶部的「AI 副官」会打开左下角私有对话窗口；玩家输入、LLM 回答、战场告警和执行
+回执只对本人可见，不会混进多人聊天。支持两种接法：
 
-`rts-agent` 是独立于本仓库的项目，本仓库这一侧只提供 `/api/attach` 这个换取会话的
-接口；没有它也不影响正常游戏。
+- **本机 LLM / 自带副官**：点击战斗顶部「AI 副官」→「连接本地副官」生成 8 位配对码；在玩家
+  电脑上的 `rts-agent/play.bat` 选择模式 3，输入房间号和配对码。模型地址与 API Key
+  留在玩家电脑上，游戏服务器不会读取。
+- **服务器 LLM / 公共副官**：管理员在服务器的 `rts-agent/.env.local` 配好 LLM，玩家打开
+  副官窗口后点击「启动服务器副官」即可。服务器为每名玩家启动隔离的 headless agent 进程，
+  对话历史、视野和控制会话互不共享。副官窗口标题栏的「停止副官」随时可以收掉它，
+  离开本局和分出胜负时服务器也会自动收（headless 副官自己不会退出）。
+
+服务器模式会自动探测相邻的 `CC/rts-agent` 或 `rts-agent` 目录；其它部署布局可在启动游戏
+服务器前设置：
+
+```bash
+export RTS_AGENT_DIR=/opt/rts-agent
+export RTS_AGENT_PYTHON=/opt/rts-agent/.venv/bin/python
+export RTS_AGENT_MAX_PROCESSES=12
+python3 server.py
+```
+
+`rts-agent` 的 `LLM_BASE_URL` 既可以填服务器本机的 Ollama/vLLM 兼容地址，也可以填远端
+OpenAI 兼容服务。未配置 LLM 时，规则执行器仍可自动生产、巡逻和作战，但自然语言对话
+会在副官窗口明确显示为不可用。
 
 ## 技术说明
 

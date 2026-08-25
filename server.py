@@ -18,6 +18,7 @@ import re
 import signal
 import socket
 import socketserver
+import subprocess
 import sys
 import threading
 import time
@@ -45,7 +46,7 @@ from catalog import (
 import easter_eggs
 
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PUBLIC_ROOT = os.path.join(ROOT, "public")
 # 高位端口：8080 在装了 WSL2 / Hyper-V / Docker 的 Windows 上常被系统预留，
@@ -69,6 +70,33 @@ RUNNING = True
 AGENT_PAIR_TTL = 120
 AGENT_PAIR_MAX_FAILS = 10   # 同一房间连续猜错这么多次就冷却
 AGENT_PAIR_COOLDOWN = 60
+AGENT_HEARTBEAT_TTL = 4.0
+AGENT_MESSAGE_LIMIT = 24
+AGENT_INPUT_LIMIT = 80
+
+# 可选的服务器副官。默认尝试当前工作区常见布局，也允许部署时显式指定。
+# 每位玩家对应一个隔离的 rts-agent 进程；LLM 地址和密钥仍由 rts-agent 自己
+# 的 .env.local 管理，游戏服务器永远不读取或下发密钥。
+_agent_dir_candidates = [
+    os.environ.get("RTS_AGENT_DIR", "").strip(),
+    os.path.abspath(os.path.join(ROOT, "..", "CC", "rts-agent")),
+    os.path.abspath(os.path.join(ROOT, "..", "rts-agent")),
+]
+RTS_AGENT_DIR = next((path for path in _agent_dir_candidates
+                      if path and os.path.isfile(os.path.join(path, "run.py"))), "")
+RTS_AGENT_PYTHON = os.environ.get("RTS_AGENT_PYTHON", "").strip()
+_agent_python_candidates = [RTS_AGENT_PYTHON] if RTS_AGENT_PYTHON else [
+    os.path.join(RTS_AGENT_DIR, ".venv", "bin", "python"),
+    os.path.join(RTS_AGENT_DIR, ".venv", "Scripts", "python.exe"),
+]
+RTS_AGENT_EXECUTABLE = next((path for path in _agent_python_candidates
+                             if path and os.path.isfile(path)), "")
+MAX_SERVER_AGENTS = max(1, int(os.environ.get("RTS_AGENT_MAX_PROCESSES", "12")))
+SERVER_AGENT_PROCESSES = {}
+# 已占位但进程还没创建出来的副官。进程创建放在 room_lock 之外，这个集合负责
+# 在那段窗口里挡住重复启动，也让期间的停止请求能取消掉还没落地的进程。
+SERVER_AGENT_PENDING = set()
+SERVER_AGENT_LOCK = threading.Lock()
 
 
 def room_lock(room):
@@ -761,6 +789,15 @@ def clean_text(value, maximum, fallback):
     return value[:maximum] or fallback
 
 
+def clean_agent_text(value, maximum=800):
+    """Clean private assistant text while preserving readable line breaks."""
+    if not isinstance(value, str):
+        return ""
+    value = value.replace("\r\n", "\n").replace("\r", "\n")
+    value = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", value).strip()
+    return value[:maximum]
+
+
 def new_id(prefix):
     return prefix + uuid.uuid4().hex[:10]
 
@@ -1193,7 +1230,8 @@ PUBLIC_MAPS = {
 }
 
 
-def public_room(room, include_game=True, viewer_id=None, full=True):
+def public_room(room, include_game=True, viewer_id=None, full=True,
+                agent_messages=True):
     room_map = MAPS.get(room.get("selectedMap", DEFAULT_MAP), MAPS[DEFAULT_MAP])
     result = {
         "id": room["id"],
@@ -1241,6 +1279,12 @@ def public_room(room, include_game=True, viewer_id=None, full=True):
             proposer = room["players"].get(prop["from"])
             if proposer:
                 result["incomingProposal"] = {"fromId": proposer["id"], "fromName": proposer["name"]}
+    # Co-pilot conversation is private to the authenticated player. It is not
+    # placed on player objects or the public room list, so teammates and other
+    # LAN users never receive its prompts or replies.
+    if viewer_id and viewer_id in room.get("players", {}):
+        result["agent"] = public_agent_channel(
+            room["players"][viewer_id], agent_messages)
     return result
 
 
@@ -1353,6 +1397,102 @@ def authenticate(room_id, player_id, token):
     return room, player
 
 
+def ensure_agent_channel(player):
+    """Return the private browser <-> rts-agent mailbox for one human."""
+    channel = player.get("agentChannel")
+    if not isinstance(channel, dict):
+        channel = {
+            "nextInputId": 1,
+            "inputs": [],
+            "messages": [],
+            "revision": 0,
+            "lastSeen": 0,
+            "status": "offline",
+            "detail": "",
+            "provider": "",
+            "model": "",
+            "serverManaged": False,
+        }
+        player["agentChannel"] = channel
+    return channel
+
+
+def mark_agent_offline(player):
+    """Reset one co-pilot mailbox to a clean disconnected state.
+
+    Pending inputs are dropped on purpose: orders typed at the old co-pilot
+    must not be replayed by whatever agent attaches next.
+    """
+    channel = ensure_agent_channel(player)
+    was_connected = agent_is_connected(player)
+    channel["lastSeen"] = 0
+    channel["status"] = "offline"
+    channel["detail"] = ""
+    channel["serverManaged"] = False
+    channel["inputs"] = []
+    player.pop("agentPair", None)
+    return was_connected
+
+
+def append_agent_message(player, role, message):
+    """Append one private co-pilot line; never place it in public room chat."""
+    channel = ensure_agent_channel(player)
+    role = role if role in ("user", "assistant", "system", "event") else "system"
+    text = clean_agent_text(message)
+    if not text:
+        return None
+    channel["revision"] = int(channel.get("revision", 0)) + 1
+    item = {
+        "id": channel["revision"],
+        "role": role,
+        "message": text,
+        "time": now(),
+    }
+    channel["messages"].append(item)
+    channel["messages"] = channel["messages"][-AGENT_MESSAGE_LIMIT:]
+    return item
+
+
+def agent_is_connected(player):
+    channel = ensure_agent_channel(player)
+    return now() - float(channel.get("lastSeen", 0) or 0) < AGENT_HEARTBEAT_TTL
+
+
+def server_agent_python():
+    """Resolve the interpreter used for optional server-managed agents."""
+    return RTS_AGENT_EXECUTABLE
+
+
+def server_agent_available():
+    return bool(RTS_AGENT_DIR and server_agent_python())
+
+
+def public_agent_channel(player, include_messages=True):
+    channel = ensure_agent_channel(player)
+    pair = player.get("agentPair")
+    if (channel.get("status") == "pairing" and isinstance(pair, dict)
+            and pair.get("expires", 0) < now()):
+        player.pop("agentPair", None)
+        channel["status"] = "offline"
+        channel["detail"] = "配对码已过期"
+    connected = agent_is_connected(player)
+    current_status = channel.get("status", "offline")
+    status = current_status if connected or current_status in ("pairing", "error") else "offline"
+    result = {
+        "connected": connected,
+        "status": status,
+        "detail": channel.get("detail", ""),
+        "provider": channel.get("provider", ""),
+        "model": channel.get("model", ""),
+        "revision": channel.get("revision", 0),
+        "serverAvailable": server_agent_available(),
+        "serverManaged": bool(channel.get("serverManaged")),
+    }
+    if include_messages:
+        result["messages"] = [dict(item) for item in channel.get("messages", [])]
+    return result
+
+
 def issue_agent_pair(player):
     """Create a short-lived, one-use code for attaching an AI co-pilot.
 
@@ -1360,6 +1500,11 @@ def issue_agent_pair(player):
     public room list never exposes player tokens, so another LAN user cannot
     silently take over a player merely by knowing their name.
     """
+    channel = ensure_agent_channel(player)
+    channel["status"] = "pairing"
+    channel["detail"] = "等待 rts-agent 输入配对码"
+    channel["inputs"] = []
+    channel["serverManaged"] = False
     code = uuid.uuid4().hex[:8].upper()
     player["agentPair"] = {"code": code, "expires": now() + AGENT_PAIR_TTL}
     return code
@@ -1406,9 +1551,125 @@ def redeem_agent_pair(room, code):
         if pair.get("code") == code and not player.get("isBot"):
             player.pop("agentPair", None)
             player["lastSeen"] = current
+            channel = ensure_agent_channel(player)
+            channel["inputs"] = []
+            channel["lastSeen"] = current
+            channel["status"] = "connecting"
+            channel["detail"] = "副官正在初始化"
+            append_agent_message(player, "system", "AI 副官已连接，正在初始化模型与战术执行器。")
             room.pop("agentPairGate", None)
             return player
     return None
+
+
+def _server_agent_key(room_id, player_id):
+    return "%s:%s" % (room_id, player_id)
+
+
+def stop_server_agent(room_id, player_id):
+    """Stop a server-managed co-pilot without making the player leave."""
+    key = _server_agent_key(room_id, player_id)
+    with SERVER_AGENT_LOCK:
+        # 从 PENDING 里摘掉即等于取消：launch_server_agent 发现占位没了会把
+        # 刚创建出来的进程立刻收掉，不会留下没人管的副官。
+        SERVER_AGENT_PENDING.discard(key)
+        process = SERVER_AGENT_PROCESSES.pop(key, None)
+    if process is not None and process.poll() is None:
+        try:
+            process.terminate()
+        except OSError:
+            pass
+
+
+def stop_server_agents_for_room(room_id):
+    prefix = str(room_id) + ":"
+    with SERVER_AGENT_LOCK:
+        keys = set(key for key in SERVER_AGENT_PROCESSES if key.startswith(prefix))
+        keys.update(key for key in SERVER_AGENT_PENDING if key.startswith(prefix))
+    for key in keys:
+        stop_server_agent(room_id, key.split(":", 1)[1])
+
+
+def reap_server_agents():
+    with SERVER_AGENT_LOCK:
+        dead = [key for key, process in SERVER_AGENT_PROCESSES.items()
+                if process.poll() is not None]
+        for key in dead:
+            SERVER_AGENT_PROCESSES.pop(key, None)
+
+
+def prepare_server_agent(room, player):
+    """Validate and reserve one server-managed co-pilot slot.
+
+    只做校验和占位，不创建进程：fork/exec 在 Windows 上动辄上百毫秒，压在
+    room_lock 里会直接卡住这个房间 20Hz 的模拟。真正的拉起交给调用方在锁外
+    调 launch_server_agent。
+    """
+    python = server_agent_python()
+    if not RTS_AGENT_DIR or not python:
+        raise ValueError("服务器未配置 rts-agent；请设置 RTS_AGENT_DIR 和 RTS_AGENT_PYTHON")
+    if agent_is_connected(player):
+        raise ValueError("已有 AI 副官连接，请先停止原副官")
+    key = _server_agent_key(room["id"], player["id"])
+    with SERVER_AGENT_LOCK:
+        if key in SERVER_AGENT_PENDING:
+            raise ValueError("服务器 AI 副官正在启动")
+        old = SERVER_AGENT_PROCESSES.get(key)
+        if old is not None and old.poll() is None:
+            raise ValueError("服务器 AI 副官已经在运行，请先停止原副官")
+        SERVER_AGENT_PROCESSES.pop(key, None)
+        live_count = sum(1 for process in SERVER_AGENT_PROCESSES.values()
+                         if process.poll() is None)
+        if live_count + len(SERVER_AGENT_PENDING) >= MAX_SERVER_AGENTS:
+            raise ValueError("服务器 AI 副官已达到并发上限")
+        SERVER_AGENT_PENDING.add(key)
+
+    code = issue_agent_pair(player)
+    ensure_agent_channel(player)["serverManaged"] = True
+    append_agent_message(player, "system", "服务器 AI 副官正在启动，将使用服务器配置的 LLM。")
+    return {
+        "key": key,
+        "roomId": room["id"],
+        "playerId": player["id"],
+        "command": [
+            python, os.path.join(RTS_AGENT_DIR, "run.py"),
+            "--base", "http://127.0.0.1:%d" % PORT,
+            "--possess", "%s:%s" % (room["id"], code),
+            "--headless", "--full-control",
+        ],
+    }
+
+
+def launch_server_agent(request):
+    """Spawn a reserved co-pilot outside every room lock.
+
+    Returns "" on success or a Chinese error string the caller can surface.
+    """
+    key = request["key"]
+    try:
+        process = subprocess.Popen(
+            request["command"],
+            cwd=RTS_AGENT_DIR,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, ValueError) as exc:
+        with SERVER_AGENT_LOCK:
+            SERVER_AGENT_PENDING.discard(key)
+        return "服务器 AI 副官启动失败：%s" % exc
+    with SERVER_AGENT_LOCK:
+        cancelled = key not in SERVER_AGENT_PENDING
+        SERVER_AGENT_PENDING.discard(key)
+        if not cancelled:
+            SERVER_AGENT_PROCESSES[key] = process
+    if cancelled:
+        # 启动窗口里玩家离开或点了停止，这个进程已经没有归属了。
+        try:
+            process.terminate()
+        except OSError:
+            pass
+        return "服务器 AI 副官已取消启动"
+    return ""
 
 
 def make_structure(kind, owner, x, y, active=True):
@@ -5196,6 +5457,7 @@ def check_elimination_and_victory(room, force=False):
     force 用于玩家中途离开等弃权情形：不等开局 15 秒缓冲，立即定胜负。
     """
     game = room["game"]
+    was_finished = room["status"] == "finished"
     for player in room["players"].values():
         if player["eliminated"]:
             continue
@@ -5226,6 +5488,10 @@ def check_elimination_and_victory(room, force=False):
             room["status"] = "finished"
             team_winners = [p["name"] for p in alive]
             add_chat(room, "作战系统", "队伍 %s 赢得了本局战斗！" % ("、".join(team_winners)), True)
+    # headless 副官打完不会自己退出，而它每 0.7 秒的心跳又会刷新 lastSeen，
+    # 房间因此永远达不到过期阈值。分出胜负就地收掉，进程和房间才能回收。
+    if room["status"] == "finished" and not was_finished:
+        stop_server_agents_for_room(room["id"])
 
 
 def remove_destroyed_and_check(room):
@@ -5431,6 +5697,7 @@ def game_loop():
         cleanup_clock += dt
         if cleanup_clock > 30:
             cleanup_clock = 0
+            reap_server_agents()
             cutoff = now() - 60 * 60 * 3
             with LOCK:
                 stale = []
@@ -5441,6 +5708,7 @@ def game_loop():
                         stale.append(room_id)
                 for room_id in stale:
                     ROOMS.pop(room_id, None)
+                    stop_server_agents_for_room(room_id)
         elapsed = time.time() - current
         time.sleep(max(0.005, 0.05 - elapsed))
 
@@ -5696,6 +5964,8 @@ class GameHandler(BaseHTTPRequestHandler):
             return
         drop_empty = False
         pair_code = None
+        agent_response = None
+        server_agent_launch = None
         with room_lock(room):
             room, player = authenticate(data.get("roomId"), data.get("playerId"), data.get("token"))
             if not room or not player:
@@ -5795,7 +6065,67 @@ class GameHandler(BaseHTTPRequestHandler):
                     raise ValueError("消息不能为空")
                 post_player_chat(room, player, message)
             elif action == "requestAgentPair":
+                if agent_is_connected(player):
+                    raise ValueError("已有 AI 副官连接，请先停止原副官")
+                # 重发配对码会清掉 serverManaged 标记。放任它盖过一个还在跑的
+                # 服务器副官，那个进程就再也没有按钮能停了。
+                if ensure_agent_channel(player).get("serverManaged"):
+                    raise ValueError("服务器 AI 副官正在运行，请先停止它")
                 pair_code = issue_agent_pair(player)
+            elif action == "startServerAgent":
+                server_agent_launch = prepare_server_agent(room, player)
+                agent_response = {"agent": public_agent_channel(player)}
+            elif action == "stopServerAgent":
+                if not ensure_agent_channel(player).get("serverManaged"):
+                    raise ValueError("当前没有服务器 AI 副官")
+                stop_server_agent(room["id"], player["id"])
+                mark_agent_offline(player)
+                append_agent_message(player, "system", "服务器 AI 副官已停止。")
+                agent_response = {"agent": public_agent_channel(player)}
+            elif action == "agentUserMessage":
+                if not agent_is_connected(player):
+                    raise ValueError("AI 副官尚未连接")
+                message = clean_text(payload.get("message"), 800, "")
+                if not message:
+                    raise ValueError("消息不能为空")
+                channel = ensure_agent_channel(player)
+                input_id = int(channel.get("nextInputId", 1))
+                channel["nextInputId"] = input_id + 1
+                channel["inputs"].append({
+                    "id": input_id,
+                    "message": message,
+                    "time": now(),
+                })
+                channel["inputs"] = channel["inputs"][-AGENT_INPUT_LIMIT:]
+                append_agent_message(player, "user", message)
+                agent_response = {"agent": public_agent_channel(player)}
+            elif action == "agentPoll":
+                channel = ensure_agent_channel(player)
+                channel["lastSeen"] = now()
+                status = str(payload.get("status") or channel.get("status") or "online")
+                if status not in ("connecting", "online", "thinking", "degraded", "error"):
+                    status = "online"
+                channel["status"] = status
+                channel["detail"] = clean_text(payload.get("detail"), 160, "")
+                channel["provider"] = clean_text(payload.get("provider"), 40, "")
+                channel["model"] = clean_text(payload.get("model"), 100, "")
+                try:
+                    after_id = max(0, int(payload.get("afterId", 0)))
+                except (TypeError, ValueError):
+                    after_id = 0
+                pending = [dict(item) for item in channel.get("inputs", [])
+                           if int(item.get("id", 0)) > after_id][:20]
+                agent_response = {"inputs": pending, "agent": public_agent_channel(player, False)}
+            elif action == "agentReply":
+                channel = ensure_agent_channel(player)
+                channel["lastSeen"] = now()
+                role = str(payload.get("role") or "assistant")
+                append_agent_message(player, role, payload.get("message"))
+                agent_response = {"agent": public_agent_channel(player)}
+            elif action == "agentDisconnect":
+                if mark_agent_offline(player):
+                    append_agent_message(player, "system", "AI 副官已断开。")
+                agent_response = {"agent": public_agent_channel(player)}
             elif action == "command":
                 handle_game_command(room, player, payload)
             elif action == "proposeAlliance":
@@ -5853,6 +6183,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 add_chat(room, "作战系统", "%s 退出了当前队伍。" % player["name"], True)
             elif action == "leave":
                 name = player["name"]
+                stop_server_agent(room["id"], player["id"])
                 if room["status"] == "lobby":
                     room["players"].pop(player["id"], None)
                     add_chat(room, "作战系统", "%s 离开了房间。" % name, True)
@@ -5880,18 +6211,39 @@ class GameHandler(BaseHTTPRequestHandler):
                 raise ValueError("未知操作")
             # 指令可能在两个模拟 tick 之间直接改变建筑/队列；REST 响应必须看到
             # 新状态，不能复用刚才 SSE 建出的旧快照。
-            if action != "leave":
+            if action not in ("leave", "agentUserMessage", "agentPoll",
+                              "agentReply", "agentDisconnect",
+                              "startServerAgent", "stopServerAgent"):
                 invalidate_game_snapshot(room.get("game"))
             # 战斗中的指令响应只回动态数据。地图、地形、矿点布局、视距表一局
             # 之内不变，客户端在首帧就缓存好了；过去每条移动指令都附一份 full
             # 快照，客户端收到后会把整个 3D 世界推倒重建 —— 两万顶点的地形
             # 网格、近三千株草木、两张迷雾画布、全部道路与矿脉，点一下卡一下。
             in_battle = action == "command" and room["status"] == "playing"
-            response = {"ok": True, "room": public_room(
-                room, viewer_id=player["id"], full=not in_battle)}
+            if agent_response is not None:
+                response = {"ok": True}
+                response.update(agent_response)
+            else:
+                # 战斗中每条指令都回一份对话历史纯属浪费：SSE 125ms 内就会
+                # 补上，客户端也按 revision 去重。
+                response = {"ok": True, "room": public_room(
+                    room, viewer_id=player["id"], full=not in_battle,
+                    agent_messages=not in_battle)}
             if pair_code:
                 response["pairCode"] = pair_code
                 response["expiresIn"] = AGENT_PAIR_TTL
+        if server_agent_launch is not None:
+            error = launch_server_agent(server_agent_launch)
+            if error:
+                with room_lock(room):
+                    owner = room["players"].get(server_agent_launch["playerId"])
+                    if owner:
+                        mark_agent_offline(owner)
+                        channel = ensure_agent_channel(owner)
+                        channel["status"] = "error"
+                        channel["detail"] = error
+                        append_agent_message(owner, "system", error)
+                raise ValueError(error)
         if drop_empty:
             with LOCK:
                 live = ROOMS.get(room["id"])
@@ -5926,6 +6278,9 @@ class GameHandler(BaseHTTPRequestHandler):
             # stream, so it always gets a fresh full frame.
             first_frame = True
             full_game_uid = None
+            # 副官对话可以轻松涨到一帧游戏数据的好几倍，而它只在有新消息时才
+            # 变。这里记住已经发出去的 revision，静默期就只发状态不发正文。
+            sent_agent_revision = -1
             while RUNNING:
                 with room_lock(room):
                     live, player = authenticate(room_id, player_id, token)
@@ -5937,7 +6292,10 @@ class GameHandler(BaseHTTPRequestHandler):
                     # again once the match actually starts.
                     full = first_frame or (game_uid is not None
                                            and game_uid != full_game_uid)
-                    snapshot = public_room(live, viewer_id=player["id"], full=full)
+                    agent_revision = int(ensure_agent_channel(player).get("revision", 0))
+                    send_agent_messages = full or agent_revision != sent_agent_revision
+                    snapshot = public_room(live, viewer_id=player["id"], full=full,
+                                           agent_messages=send_agent_messages)
                     status = live["status"]
                 # Encoding stays outside the lock so it never blocks the sim.
                 payload = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
@@ -5945,6 +6303,8 @@ class GameHandler(BaseHTTPRequestHandler):
                 self.wfile.write(message)
                 self.wfile.flush()
                 first_frame = False
+                if send_agent_messages:
+                    sent_agent_revision = agent_revision
                 if full and game_uid is not None:
                     full_game_uid = game_uid
                 time.sleep(0.125 if status == "playing" else 0.45)
@@ -6125,6 +6485,12 @@ def main():
             server.handle_request()
     finally:
         RUNNING = False
+        with SERVER_AGENT_LOCK:
+            agent_keys = set(SERVER_AGENT_PROCESSES)
+            agent_keys.update(SERVER_AGENT_PENDING)
+        for key in agent_keys:
+            room_id, player_id = key.split(":", 1)
+            stop_server_agent(room_id, player_id)
         server.server_close()
         print("服务器已停止。")
     return 0
