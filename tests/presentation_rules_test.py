@@ -389,6 +389,16 @@ def main():
     assert "vecScale.set(STRIKE_RADIUS," not in render
     assert "const ringR = (s.radius > 0) ? s.radius : STRIKE_RADIUS_FALLBACK;" in render
 
+    # 可选开关「中立守卫」：默认开，大厅文案与房主同步函数在。
+    assert "中立守卫" in hud
+    assert "矿区中立单位，可关闭" in hud
+    assert 'data-mode="neutral_camps"' in hud
+    assert "neutralCampsToggle" in hud
+    assert "中立守卫" in readme
+    assert "setNeutrals" in app
+    assert "function syncNeutralCampsToggle" in app
+    assert "function roomHasNeutrals" in app
+
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 
 

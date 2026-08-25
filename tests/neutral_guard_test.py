@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 
 
-def make_room(map_id="north_conflict", seed=7301):
+def make_room(map_id="north_conflict", seed=7301, neutrals=None):
     random.seed(seed)
     alpha = server.create_human("守矿甲", server.COLORS[0])
     beta = server.create_human("守矿乙", server.COLORS[1])
@@ -25,6 +25,8 @@ def make_room(map_id="north_conflict", seed=7301):
         "chat": [], "game": None, "createdAt": time.time(),
         "selectedMap": map_id,
     }
+    if neutrals is not None:
+        room["neutrals"] = neutrals
     server.start_game(room)
     return room, alpha
 
@@ -33,6 +35,11 @@ def camp_entities(game, camp):
     ids = set(camp["guardIds"])
     return [entity for entity in game["units"] + game["structures"]
             if entity["id"] in ids]
+
+
+def living_neutrals(game):
+    return [entity for entity in game["units"] + game["structures"]
+            if entity.get("owner") == server.NEUTRAL_OWNER and entity["hp"] > 0]
 
 
 def check_spawn_and_lock(room, alpha):
@@ -156,12 +163,116 @@ def check_all_maps_spawn_camps():
                        for entity in guards), map_id
 
 
-def main():
+def check_default_on_spawns_camps():
     room, alpha = make_room()
+    game = room["game"]
+    assert game.get("neutrals") is True
+    lobby = server.public_room(room, viewer_id=alpha["id"])
+    assert lobby["neutrals"] is True
+    view = server.public_game(game, alpha["id"], full=True)
+    assert view["neutrals"] is True
     check_spawn_and_lock(room, alpha)
     check_leash(room)
+
+
+def check_flag_off_no_guards():
+    room, alpha = make_room(neutrals=False)
+    game = room["game"]
+    assert game.get("neutrals") is False
+    public_ore = [resource for resource in game["resources"] if resource.get("public")]
+    assert len(public_ore) == 4, len(public_ore)
+    assert game.get("neutralCamps") == []
+    assert living_neutrals(game) == []
+    assert all(not resource.get("guarded") for resource in public_ore)
+    assert all(not resource.get("neutralCampId") for resource in public_ore)
+
+    server.refresh_neutral_camps(game)
+    assert game.get("neutralCamps") == []
+    assert living_neutrals(game) == []
+    assert all(not resource.get("guarded") for resource in public_ore)
+
+    before_units = len(game["units"])
+    before_structures = len(game["structures"])
+    server.spawn_neutral_ore_camp(game, public_ore[0], random.Random(1))
+    assert game.get("neutralCamps") == []
+    assert living_neutrals(game) == []
+    assert len(game["units"]) == before_units
+    assert len(game["structures"]) == before_structures
+
+    harvester = next(unit for unit in game["units"]
+                     if unit["owner"] == alpha["id"] and unit["kind"] == "harvester")
+    target = public_ore[0]
+    for resource in game["resources"]:
+        if resource is not target:
+            resource["amount"] = 0.0
+    harvester["x"], harvester["y"] = target["x"], target["y"]
+    harvester["cargo"] = 0.0
+    harvester["harvestTarget"] = target["id"]
+    harvester["returnTarget"] = None
+    harvester["order"] = "guard"
+    server.tick_harvester(room, harvester, 0.5)
+    assert harvester["cargo"] > 0.0, "关闭中立守卫后公共矿应立即可采"
+
+    crater, _alpha = make_room("gold_crater", seed=7501, neutrals=False)
+    crater_game = crater["game"]
+    crater_public = [resource for resource in crater_game["resources"]
+                     if resource.get("public")]
+    assert crater_public
+    assert crater_game.get("neutralCamps") == []
+    assert living_neutrals(crater_game) == []
+    assert all(not resource.get("guarded") for resource in crater_public)
+
+
+def check_lobby_toggle_and_lock():
+    host = server.create_human("房主", server.COLORS[0])
+    guest = server.create_human("访客", server.COLORS[1])
+    lobby_room = {
+        "id": "GUARD2", "name": "大厅守卫开关", "status": "lobby",
+        "hostId": host["id"],
+        "players": {host["id"]: host, guest["id"]: guest},
+        "chat": [], "game": None, "createdAt": time.time(),
+    }
+    assert server.neutrals_enabled(lobby_room) is True
+    guest_view = server.public_room(lobby_room, viewer_id=guest["id"])
+    assert guest_view["neutrals"] is True
+    try:
+        server.set_neutrals(lobby_room, guest, False)
+        raise AssertionError("访客不该能关中立守卫")
+    except ValueError as exc:
+        assert "房主" in str(exc)
+    server.set_neutrals(lobby_room, host, False)
+    assert lobby_room["neutrals"] is False
+    guest_view = server.public_room(lobby_room, viewer_id=guest["id"])
+    assert guest_view["neutrals"] is False
+    server.start_game(lobby_room)
+    assert lobby_room["game"]["neutrals"] is False
+    playing = server.public_room(lobby_room, viewer_id=guest["id"], full=True)
+    assert playing["neutrals"] is False
+    assert playing["game"]["neutrals"] is False
+    try:
+        server.set_neutrals(lobby_room, host, True)
+        raise AssertionError("开战后不该还能改")
+    except ValueError as exc:
+        assert "开始" in str(exc)
+
+
+def check_lobby_label():
+    index = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              "public", "index.html"), "r", encoding="utf-8").read()
+    assert "中立守卫" in index
+    assert "矿区中立单位，可关闭" in index
+    assert 'data-mode="neutral_camps"' in index
+    assert "neutralCampsToggle" in index
+    assert server.NEUTRAL_CAMPS_MODE == "neutral_camps"
+
+
+def main():
+    check_default_on_spawns_camps()
+    check_flag_off_no_guards()
+    check_lobby_toggle_and_lock()
+    check_lobby_label()
     check_all_maps_spawn_camps()
-    print("neutral guards ok: public ore stays locked and pulled guards return to their posts")
+    print("neutral guards ok: public ore stays locked, toggle off skips camps, pulled guards return")
 
 
 if __name__ == "__main__":
