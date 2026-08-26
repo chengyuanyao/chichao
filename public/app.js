@@ -1,4 +1,8 @@
-import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
+import {
+  createRenderer,
+  MAP_DISPLAY_THEMES,
+  UNIT_VISUAL_PICK_SCALE
+} from './render3d.js';
 
 (function () {
   'use strict';
@@ -3896,7 +3900,10 @@ import { createRenderer, MAP_DISPLAY_THEMES } from './render3d.js';
     roomState.game.units.forEach(function (unit) {
       var visual = view3d.visualPosition(unit.id) || unit;
       var dist = Math.hypot(visual.x - worldX, visual.y - worldY);
-      var tolerance = unit.size + 8 / camera.zoom;
+      // 玩法碰撞仍使用服务端 size；点选额外覆盖长法杖、龙翼等可见轮廓，
+      // 防止点在模型上却选不中。密集部队依旧由最近中心优先消歧。
+      var visualTolerance = unit.size * (UNIT_VISUAL_PICK_SCALE[unit.kind] || 1);
+      var tolerance = Math.max(unit.size + 8 / camera.zoom, visualTolerance);
       if (dist <= tolerance && dist < bestDistance) {
         best = unit;
         bestDistance = dist;

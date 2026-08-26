@@ -337,15 +337,15 @@ export function createPostFX(renderer) {
       tScene: { value: null },
       tBloomNear: { value: null },
       tBloomFar: { value: null },
-      uBloom: { value: 0.65 },
-      // 偏 Apple/Google 的干净画面：暗角收敛把四角打开，暖调与饱和往下压一档
-      // 让画面更中性、更平。饱和度仍 >1 保住 RTS 靠色相分队/辨兵种的可读性。
+      // 写实材质需要看得见粗糙表面，辉光/曝光太高会把它们重新洗成塑料。
+      // 队伍辨识主要交给哑光识别色，小灯和爆炸仍能正常进 bloom。
+      uBloom: { value: 0.46 },
       uVignette: { value: 0.20 },
       uScanline: { value: 0.0 },
-      uExposure: { value: 1.6 },
-      uWarmth: { value: 0.26 },
-      uSaturation: { value: 1.08 },
-      uContrast: { value: 1.02 },
+      uExposure: { value: 1.46 },
+      uWarmth: { value: 0.20 },
+      uSaturation: { value: 1.02 },
+      uContrast: { value: 1.03 },
       uTonemap: { value: 0.0 },
       uTime: { value: 0 },
       uResolution: { value: new THREE.Vector2(1, 1) }

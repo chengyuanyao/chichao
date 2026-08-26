@@ -267,9 +267,57 @@ def main():
     assert "召唤法阵：多层平面符环 + 悬浮核" in render
     assert "圣泉：石碗泉盆 + 上升泉光" in render
     assert "奥术塔：扭转尖塔 + 武器晶碟" in render
-    assert "teamOrOwn4" in render
+    assert "teamOrOwn7-real-" in render
     assert "armyTimeUniform" in render
-    assert "躯干走橄榄布甲" in render
+    # 写实升级必须保持合批边界：共享压缩贴图替代旧的四次片元 hash，
+    # 地面/森林/金矿仍沿用各自原有 Mesh，不允许为细节再叠额外绘制批次。
+    assert "function makeArmySurfaceTexture()" in render
+    assert "uniform sampler2D uArmySurface" in render
+    assert "const CLOTH_UNIT_KINDS = { mage: 1, frost: 1, oracle: 1 }" in render
+    assert "surfaceKind === 'cloth' ? 2" in render
+    assert "gRoughness = 0.92; gBumpScale = 0.20" in render
+    assert "function makeUnitShadowTexture()" in render
+    assert "map: makeUnitShadowTexture()" in render
+    assert "armyHash(" not in render
+    assert "function makeOreVeinTexture()" in render
+    assert "map: makeOreVeinTexture()" in render
+    for texture in (
+        "army-real-atlas.webp",
+        "ground-real.webp",
+        "foliage-real.webp",
+        "ore-real.webp",
+    ):
+        assert os.path.isfile(os.path.join(ROOT, "public", "assets", "textures", texture))
+        assert texture in render
+    # 近景用低面数倒角和圆肢体去掉积木轮廓；远景必须退回 12 面方盒控制面数。
+    assert "function chamferedBoxGeometry(w, h, d)" in render
+    assert "geo: chamferedBoxGeometry(w, h, d)" in render
+    assert "function plainBox(w, h, d" in render
+    assert "const box = plainBox;" in render
+    assert "function plainTaperedBox(" in render
+    assert "const taperedBox = plainTaperedBox;" in render
+    assert "两点之间的圆肢体" in render
+    assert "function profiledVolume(profile, radiusX, radiusZ" in render
+    assert "new THREE.LatheGeometry(points" in render
+    assert "运行时仍是一个 InstancedMesh，不增加 draw call" in render
+    assert "大头积木人" in render
+    assert "groundTexture.repeat.set(mw / 420, mh / 420);" in render
+    assert "同一棵树的三层树冠分别压暗、保持、提亮" in render
+    assert "真人比例重做" in render
+    # 秘法会比例校正只变换已有零件，不能靠新增独立 Mesh/实例硬堆体量；
+    # 近景、远景和点选半径必须一起更新，玩法 size 则保持与钢铁对位一致。
+    assert "function scalePartList(parts, sx, sy, sz)" in render
+    assert "function scaleUnitModel(model, sx, sy, sz)" in render
+    assert "}, 1.65, 1.25, 1.65);" in render
+    assert "}, 1.65, 1.42, 1.65);" in render
+    assert "scalePartList(wingBody, 1.0, 1.0, 0.82)" in render
+    assert "scalePartList(wings, 1.0, 1.0, 0.82)" in render
+    assert "export const UNIT_VISUAL_PICK_SCALE" in render
+    assert "UNIT_VISUAL_PICK_SCALE" in app
+    assert "Math.max(unit.size + 8 / camera.zoom, visualTolerance)" in app
+    assert server.UNIT_TYPES["mharvester"]["size"] == server.UNIT_TYPES["harvester"]["size"]
+    assert server.UNIT_TYPES["mmcv"]["size"] == server.UNIT_TYPES["mcv"]["size"]
+    assert server.UNIT_TYPES["golem"]["size"] == server.UNIT_TYPES["tank"]["size"]
     assert "奥术法师：高挑长袍施法者，暗紫袍 + 金饰法杖" in render
     assert "冰霜女巫：宽檐帽 + 苍白斗篷 + 霜环" in render
     assert "秘法巨龙：拉长的翼展剪影" in render
@@ -311,7 +359,7 @@ def main():
     assert "kind === 'meteor'" in render
     assert "kind === 'comet'" in render
     assert "function emitIdleAura" in render
-    assert "步兵有持枪手臂，远看是人不是积木" in render
+    assert "手臂在肘部转折后共同托枪" in render
     assert "魔法主堡：双尖塔托浮空金冠，不是矮方堡" in render
 
     # 秘法会既要保留固定紫/蓝的阵营材质，也必须在近景、远景和建筑上
@@ -323,14 +371,21 @@ def main():
     magic_near = render[render.index("/* ==================== 秘法会（魔法阵营）模型 ==================== */"):
                         render.index("tank: function ()", render.index("/* ==================== 秘法会（魔法阵营）模型 ==================== */"))]
     for signature in (
-            "box(6.2, 0.70, 6.6", "box(6.0, 0.70, 6.4",
-            "box(6.4, 0.70, 4.8", "box(5.2, 0.65, 5.8",
-            "box(9.0, 0.90, 6.6", "taperedBox(10.0, 6.8",
+            "ellipsoid(3.6, 0.48, 3.55", "chamferedBox(5.8, 0.55, 6.1",
+            "box(6.4, 0.70, 4.8", "chamferedBox(5.0, 0.52, 5.5",
+            "ellipsoid(4.55, 0.62, 3.4", "taperedBox(10.0, 6.8",
             "box(14.0, 0.75, 6.2", "box(8.2, 0.85, 5.8",
             "taperedBox(15.2, 9.8", "taperedBox(27, 16",
-            "taperedBox(15, 12", "taperedBox(19, 13",
+            "profiledVolume(deckProfile, 7.8, 6.5", "taperedBox(19, 13",
             "torus(4.2, 0.45"):
         assert signature in magic_near, "magic unit lost owner-color marker: %s" % signature
+    # 样板近景的主体轮廓必须是连续曲面；这四个块状旧签名不能重新混回来。
+    for blocky_signature in (
+            "taperedBox(8.8, 8.8, 3.4, 3.4",
+            "box(5.4, 10.2, 5.4",
+            "taperedBox(16, 14, 18, 16",
+            "new THREE.BoxGeometry(s * 0.20, s * 0.36, s * 0.03)"):
+        assert blocky_signature not in magic_near
     magic_lod = render[render.index("/* ---- 秘法会 LOD ---- */"):
                        render.index("return infantry;", render.index("/* ---- 秘法会 LOD ---- */"))]
     for signature in (
