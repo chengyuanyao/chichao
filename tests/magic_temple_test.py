@@ -84,8 +84,8 @@ def main():
     assert oracle["damage"] == 48.0
     assert imp["cooldown"] == 0.7
     assert oracle["cooldown"] == 1.55
-    assert imp["sight"] == 360.0
-    assert oracle["sight"] == 470.0
+    assert imp["sight"] == round(imp["range"] * 1.10, 3)
+    assert oracle["sight"] == round(oracle["range"] * 1.10, 3)
     # 不抄钢铁突击/狙击数字
     assert imp["cost"] != server.UNIT_TYPES["rifle"]["cost"]
     assert oracle["cost"] != server.UNIT_TYPES["sniper"]["cost"]

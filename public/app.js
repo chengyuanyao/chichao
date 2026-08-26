@@ -1,7 +1,8 @@
 import {
   createRenderer,
   MAP_DISPLAY_THEMES,
-  UNIT_VISUAL_PICK_SCALE
+  UNIT_VISUAL_PICK_SCALE,
+  oreReserveTier
 } from './render3d.js';
 
 (function () {
@@ -1214,6 +1215,7 @@ import {
   var activeTab = 'buildings';
   var selectedUnits = new Set();
   var selectedStructureId = null;
+  var selectedResourceId = null;
   var buildMode = null;
   var commandMode = null;
   var viewWidth = 0;
@@ -2403,6 +2405,7 @@ import {
     resultShown = false;
     selectedUnits.clear();
     selectedStructureId = null;
+    selectedResourceId = null;
     controlGroups = {};
     lastGroupTap = {};
     activeAgentPair = null;
@@ -2423,6 +2426,7 @@ import {
       resultShown = false;
       selectedUnits.clear();
       selectedStructureId = null;
+      selectedResourceId = null;
       controlGroups = {};
       lastGroupTap = {};
       buildMode = null;
@@ -2922,6 +2926,9 @@ import {
       } else if (structure.active && structureRole(structure.kind) === 'repair') {
         activeText = isOwnMagicFaction() ?
           '圣泉待命 · 右键派遣构装' : '维修系统待命 · 右键派遣载具';
+      } else if (structure.active && structure.owner === session.playerId &&
+          structureRole(structure.kind) === 'defense') {
+        activeText = '防御系统待命 · 右键敌军指定攻击';
       }
       var sell = structure.owner === session.playerId && structureRole(structure.kind) !== 'hq' ?
         '<button class="sell-button" id="sellSelectedBtn">出售</button>' : '<span></span>';
@@ -2962,11 +2969,41 @@ import {
       }
       return;
     }
+    var resource = roomState.game.resources.find(function (item) {
+      return item.id === selectedResourceId && item.amount > 0 &&
+        view3d.isVisible(item.x, item.y);
+    });
+    if (resource) {
+      var tier = oreReserveTier(resource.amount);
+      var maxAmount = Math.max(resource.amount, resource.maxAmount || 0, 1);
+      var reservePercent = Math.max(0, Math.min(100,
+        Math.round(resource.amount / maxAmount * 100)));
+      var reserveTitle = tier.label + (resource.public ?
+        (resource.guarded ? ' · 守卫封锁' : ' · 公共矿区') : '');
+      var orePips = '';
+      for (var orePip = 0; orePip < tier.minimapPips; orePip++) {
+        orePips += '<i></i>';
+      }
+      var resourceInfoKey = 'r|' + resource.id + ':' + Math.floor(resource.amount) + ':' +
+        (resource.guarded ? 1 : 0) + ':' + tier.id;
+      if (selectionInfo.dataset.key === resourceInfoKey) { return; }
+      selectionInfo.dataset.key = resourceInfoKey;
+      selectionInfo.innerHTML =
+        '<div class="selected-summary ore-summary ore-tier-' + tier.id + '" ' +
+        'title="矿量图例：贫矿＜0.8万；普通矿0.8–3万；富矿3–8万；巨矿≥8万">' +
+        '<div class="selected-portrait ore-portrait"><span class="ore-glyph">' + orePips + '</span></div>' +
+        '<div><strong>' + reserveTitle + '</strong>' +
+        '<small>剩余 ' + Math.floor(resource.amount).toLocaleString('zh-CN') + ' / ' +
+        Math.floor(maxAmount).toLocaleString('zh-CN') + ' · ' + reservePercent + '%</small>' +
+        '<div class="health-track ore-track"><i style="width:' + reservePercent + '%"></i></div></div>' +
+        '<small class="ore-tier-badge">' + tier.shortLabel + '</small></div>';
+      return;
+    }
     if (selectionInfo.dataset.key === 'empty') { return; }
     selectionInfo.dataset.key = 'empty';
     selectionInfo.innerHTML =
       '<div class="selection-empty"><span class="selection-reticle">⌖</span>' +
-      '<strong>未选择作战单位</strong><small>左键单选或拖拽框选</small></div>';
+      '<strong>未选择目标</strong><small>左键选择单位、建筑或矿脉</small></div>';
   }
 
   function pruneSelection() {
@@ -2983,6 +3020,12 @@ import {
     });
     if (selectedStructureId && !roomState.game.structures.some(function (s) { return s.id === selectedStructureId; })) {
       selectedStructureId = null;
+    }
+    if (selectedResourceId && !roomState.game.resources.some(function (resource) {
+      return resource.id === selectedResourceId && resource.amount > 0 &&
+        view3d.isVisible(resource.x, resource.y);
+    })) {
+      selectedResourceId = null;
     }
     pruneControlGroups();
   }
@@ -3426,6 +3469,7 @@ import {
       time: timestamp,
       selectedUnitIds: selectedUnits,
       selectedStructureId: selectedStructureId,
+      selectedResourceId: selectedResourceId,
       buildPreview: buildPreviewState(),
       newEffects: pendingEffects,
       hqSalute: hqSalute
@@ -3771,30 +3815,50 @@ import {
       }
       var rx = resource.x * sx;
       var ry = resource.y * sy;
-      // 大号光晕 — 亮琥珀色，缩略图上能一眼定位
-      miniCtx.fillStyle = 'rgba(255,180,40,.28)';
+      var tier = oreReserveTier(resource.amount);
+      var markerRadius = tier.minimapRadius;
+      miniCtx.save();
+      // 贫/普/富/巨四档同时改变占地、亮度和晶点数量，不能只靠近似颜色区分。
+      miniCtx.globalAlpha = 0.18 + tier.level * 0.035;
+      miniCtx.fillStyle = tier.color;
       miniCtx.beginPath();
-      miniCtx.arc(rx, ry, 7, 0, Math.PI * 2);
+      miniCtx.arc(rx, ry, markerRadius + 2, 0, Math.PI * 2);
       miniCtx.fill();
-      // 内圈更亮
-      miniCtx.fillStyle = 'rgba(255,200,60,.22)';
+      miniCtx.globalAlpha = 0.28 + tier.level * 0.035;
       miniCtx.beginPath();
-      miniCtx.arc(rx, ry, 4, 0, Math.PI * 2);
+      miniCtx.arc(rx, ry, markerRadius * 0.58, 0, Math.PI * 2);
       miniCtx.fill();
-      // 矿点核心：从原来的一个点变成 3x3 亮块
-      miniCtx.fillStyle = '#ffcc44';
-      for (var k = 0; k < 4; k++) {
-        var ox = (cellHash(idx + 3, k) - 0.5) * 7;
-        var oy = (cellHash(k, idx + 11) - 0.5) * 6;
-        miniCtx.fillRect(rx + ox - 1.5, ry + oy - 1.5, 3, 3);
+      miniCtx.globalAlpha = 1;
+      miniCtx.fillStyle = tier.color;
+      var pipSize = 1.45 + tier.level * 0.28;
+      var pipSpread = markerRadius * 1.22;
+      for (var k = 0; k < tier.minimapPips; k++) {
+        var ox = (cellHash(idx + 3, k) - 0.5) * pipSpread;
+        var oy = (cellHash(k, idx + 11) - 0.5) * pipSpread;
+        miniCtx.fillRect(rx + ox - pipSize / 2, ry + oy - pipSize / 2, pipSize, pipSize);
+      }
+      if (tier.id === 'giant') {
+        miniCtx.strokeStyle = tier.color;
+        miniCtx.lineWidth = 1;
+        miniCtx.beginPath();
+        miniCtx.arc(rx, ry, markerRadius + 0.5, 0, Math.PI * 2);
+        miniCtx.stroke();
       }
       if (resource.public && resource.guarded) {
         miniCtx.strokeStyle = 'rgba(255,74,48,.95)';
         miniCtx.lineWidth = 1.5;
         miniCtx.beginPath();
-        miniCtx.arc(rx, ry, 9, 0, Math.PI * 2);
+        miniCtx.arc(rx, ry, markerRadius + 3, 0, Math.PI * 2);
         miniCtx.stroke();
       }
+      if (resource.id === selectedResourceId) {
+        miniCtx.strokeStyle = '#ffffff';
+        miniCtx.lineWidth = 1.5;
+        miniCtx.beginPath();
+        miniCtx.arc(rx, ry, markerRadius + 5, 0, Math.PI * 2);
+        miniCtx.stroke();
+      }
+      miniCtx.restore();
     });
     // 建筑：3-6px 队伍色方块 + 1px 黑描边（先铺大一号的黑块，代价最低）
     roomState.game.structures.forEach(function (structure) {
@@ -3923,6 +3987,30 @@ import {
     return best;
   }
 
+  function resourceAt(worldX, worldY) {
+    if (!roomState || !roomState.game || !view3d.isVisible) {
+      return null;
+    }
+    var best = null;
+    var bestDistance = Infinity;
+    roomState.game.resources.forEach(function (resource) {
+      if (resource.amount <= 0 || !view3d.isVisible(resource.x, resource.y)) {
+        return;
+      }
+      var distance = Math.hypot(resource.x - worldX, resource.y - worldY);
+      var tolerance = resource.radius * 1.08 + 8 / camera.zoom;
+      if (distance <= tolerance && distance < bestDistance) {
+        best = resource;
+        bestDistance = distance;
+      }
+    });
+    if (best) {
+      // 点击本身也发生在当前视野内，可以安全地登记到已探索小地图。
+      discoveredResourceIds.add(best.id);
+    }
+    return best;
+  }
+
   function updateSelectionBox() {
     if (!dragging) {
       return;
@@ -3950,14 +4038,26 @@ import {
 
   function selectAt(worldX, worldY, additive) {
     var entity = entityAt(worldX, worldY);
+    var resource = entity ? null : resourceAt(worldX, worldY);
     if (!additive) {
       selectedUnits.clear();
       selectedStructureId = null;
+      selectedResourceId = null;
     }
-    if (!entity) {
+    if (!entity && !resource) {
       renderSelectionInfo();
       return;
     }
+    if (resource) {
+      // 矿脉是查看型目标，不和可下达命令的部队混选。
+      selectedUnits.clear();
+      selectedStructureId = null;
+      selectedResourceId = resource.id;
+      sound('select');
+      renderSelectionInfo();
+      return;
+    }
+    selectedResourceId = null;
     if (entity.id.charAt(0) === 'u' && entity.owner === session.playerId) {
       if (additive && selectedUnits.has(entity.id)) {
         selectedUnits.delete(entity.id);
@@ -3998,6 +4098,7 @@ import {
       selectedUnits.clear();
     }
     selectedStructureId = null;
+    selectedResourceId = null;
     selectedUnits.add(entity.id);
     roomState.game.units.forEach(function (unit) {
       if (unit.owner !== session.playerId || unit.kind !== kind || unit.hp <= 0) {
@@ -4018,6 +4119,7 @@ import {
       selectedUnits.clear();
     }
     selectedStructureId = null;
+    selectedResourceId = null;
     var left = Math.min(startX, endX);
     var right = Math.max(startX, endX);
     var top = Math.min(startY, endY);
@@ -4139,6 +4241,28 @@ import {
     // would re-order group A onto B's feet and abort A's march.
     if (target && target.id.charAt(0) === 'u' && target.owner === session.playerId) {
       selectAt(worldX, worldY, isAdditiveSelect(event));
+      return;
+    }
+    var defense = !selectedUnits.size && selectedStructureId ?
+      roomState.game.structures.find(function (s) {
+        return s.id === selectedStructureId && s.owner === session.playerId &&
+          s.active && structureRole(s.kind) === 'defense';
+      }) : null;
+    if (defense && target && !isFriendly(target.owner)) {
+      markOrder(target.x, target.y, 'attack');
+      sendAction('command', {
+        command: 'structureAttack',
+        structureId: defense.id,
+        targetId: target.id
+      }).then(function () {
+        toast('炮塔已锁定指定目标', 'success');
+        sound('attack');
+      }).catch(function () {});
+      return;
+    }
+    if (defense) {
+      toast('请右键射程内的敌方单位或建筑', 'error');
+      sound('error');
       return;
     }
     if (target && !isFriendly(target.owner) && selectedUnits.size) {
@@ -4431,7 +4555,7 @@ import {
     }
     resultShown = true;
     var me = ownPlayer();
-    var won = roomState.game.winnerId === session.playerId;
+    var won = didPlayerWin(roomState.game, session.playerId);
     var card = $('#resultModal .result-card');
     card.classList.toggle('defeat', !won);
     $('#resultEmblem').textContent = won ? '★' : '✕';
@@ -4448,6 +4572,17 @@ import {
       '<div><span>作战时间</span><strong>' + $('#matchClock').textContent + '</strong></div>';
     $('#resultModal').classList.remove('hidden');
     sound(won ? 'complete' : 'error');
+  }
+
+  function didPlayerWin(game, playerId) {
+    if (!game || !playerId) { return false; }
+    // 新服务端明确下发整支获胜队伍；不能再拿一个代表性的 winnerId 让其他
+    // 队员显示失败。旧服务端没有 winnerIds 时，按当前队伍关系兼容判断。
+    if (Array.isArray(game.winnerIds)) {
+      return game.winnerIds.indexOf(playerId) !== -1;
+    }
+    return !!game.winnerId &&
+      (game.winnerId === playerId || isFriendly(game.winnerId));
   }
 
   function pointerPosition(event) {
@@ -4640,6 +4775,7 @@ import {
           } else {
             selectedUnits.clear();
             selectedStructureId = null;
+            selectedResourceId = null;
             group.forEach(function (id) { selectedUnits.add(id); });
             pruneSelection();
             renderSelectionInfo();

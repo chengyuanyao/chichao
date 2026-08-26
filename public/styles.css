@@ -1913,6 +1913,46 @@ kbd {
   cursor: crosshair;
 }
 
+/* 矿量图例叠在雷达底边，不增加侧栏高度。战场矿点的大小、晶点数量与
+   这里四档完全一致；覆盖层不截获点击，小地图仍可正常跳转镜头。 */
+.ore-reserve-legend {
+  position: absolute;
+  z-index: 3;
+  left: 5px;
+  right: 5px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 4px;
+  border: 1px solid rgba(201, 162, 75, 0.24);
+  background: rgba(7, 9, 6, 0.76);
+  box-shadow: 0 1px 7px rgba(0, 0, 0, 0.65);
+  color: #c6bea2;
+  font: 650 7px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.ore-reserve-legend span {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.ore-reserve-legend i {
+  display: block;
+  flex: none;
+  width: var(--ore-dot, 4px);
+  height: var(--ore-dot, 4px);
+  background: var(--ore-color);
+  box-shadow: 0 0 5px var(--ore-color);
+  transform: rotate(45deg);
+}
+
 /* 雷达扫掠：conic 余晖旋转，纯 transform */
 .minimap-well::after {
   content: "";
@@ -2431,6 +2471,82 @@ kbd {
   color: var(--brass);
   font: 700 8px var(--font-mono);
   letter-spacing: 0.1em;
+}
+
+/* 储量档位变量同时服务于雷达图例和选中面板。 */
+.ore-tier-poor {
+  --ore-color: #b77a35;
+  --ore-dot: 3px;
+}
+
+.ore-tier-standard {
+  --ore-color: #ffc247;
+  --ore-dot: 4px;
+}
+
+.ore-tier-rich {
+  --ore-color: #ffe06a;
+  --ore-dot: 5px;
+}
+
+.ore-tier-giant {
+  --ore-color: #fff0a0;
+  --ore-dot: 6px;
+}
+
+.ore-portrait {
+  background:
+    radial-gradient(circle at 50% 72%, color-mix(in srgb, var(--ore-color) 42%, transparent), transparent 54%),
+    linear-gradient(180deg, #292615, #100e08);
+  border-color: color-mix(in srgb, var(--ore-color) 70%, #554823);
+}
+
+.ore-glyph {
+  display: flex;
+  width: 54px;
+  height: 38px;
+  align-items: flex-end;
+  justify-content: center;
+  filter: drop-shadow(0 0 5px var(--ore-color));
+}
+
+.ore-glyph i {
+  display: block;
+  width: 8px;
+  height: 22px;
+  margin-left: -2px;
+  background: linear-gradient(90deg, #7d541f, var(--ore-color) 56%, #fff5bd);
+  clip-path: polygon(50% 0, 100% 32%, 82% 100%, 18% 100%, 0 32%);
+  transform: rotate(-5deg);
+}
+
+.ore-glyph i:nth-child(2n) {
+  height: 29px;
+  transform: rotate(5deg);
+}
+
+.ore-glyph i:nth-child(3n) {
+  height: 17px;
+  transform: rotate(-9deg);
+}
+
+.ore-glyph i:nth-child(4n) {
+  height: 25px;
+  transform: rotate(9deg);
+}
+
+.health-track.ore-track i {
+  background: linear-gradient(180deg, #fff1a1, var(--ore-color) 52%, #a96720);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--ore-color) 45%, transparent);
+}
+
+.ore-tier-badge {
+  padding: 4px 5px;
+  border: 1px solid color-mix(in srgb, var(--ore-color) 52%, transparent);
+  background: color-mix(in srgb, var(--ore-color) 11%, #0c0b06);
+  color: var(--ore-color) !important;
+  letter-spacing: 0.04em !important;
+  white-space: nowrap;
 }
 
 /* 血条：厚重分段 */

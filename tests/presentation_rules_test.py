@@ -38,6 +38,8 @@ def main():
     app = read("public/app.js")
     render = read("public/render3d.js")
     styles = read("public/styles.css")
+    hud = read("public/index.html")
+    server_source = read("server.py")
 
     assert "radar" not in server.STRUCTURE_TYPES
     assert "全景雷达" not in app
@@ -63,6 +65,46 @@ def main():
     assert "if (!view3d.isVisible(resource.x, resource.y)) { return; }" in app
     assert "discoveredResourceIds.add(resource.id);" in app
     assert "discoveredResourceIds.clear();" in app
+
+    # 矿脉现在是可选中的情报目标：详情给出准确余量/总量/百分比；四档
+    # 图例由渲染层统一提供给 3D 矿簇、小地图和侧栏，且点选不能穿透迷雾。
+    assert "export const ORE_RESERVE_TIERS" in render
+    assert "export function oreReserveTier(amount)" in render
+    for tier_id, minimum, pips in (
+            ("poor", 0, 2), ("standard", 8000, 4),
+            ("rich", 30000, 6), ("giant", 80000, 8)):
+        tier_pattern = (r"id: '%s'[\s\S]*?minAmount: %d[\s\S]*?"
+                        r"minimapPips: %d" % (tier_id, minimum, pips))
+        assert re.search(tier_pattern, render), tier_id
+    assert "oreReserveTier" in app.split("from './render3d.js';", 1)[0]
+    assert "var selectedResourceId = null;" in app
+    assert "function resourceAt(worldX, worldY)" in app
+    resource_at = re.search(
+        r"function resourceAt\(worldX, worldY\) \{([\s\S]*?)\n  \}", app)
+    assert resource_at
+    assert "resource.amount <= 0" in resource_at.group(1)
+    assert "view3d.isVisible(resource.x, resource.y)" in resource_at.group(1)
+    assert "var resource = entity ? null : resourceAt(worldX, worldY);" in app
+    assert "selectedResourceId = resource.id;" in app
+    assert "selectedResourceId: selectedResourceId" in app
+    assert "剩余 " in app
+    assert "resource.maxAmount" in app
+    assert "reservePercent" in app
+    assert 'class="health-track ore-track"' in app
+    assert "resource.id === selectedResourceId" in app
+    assert "payload.selectedResourceId" in render
+    assert "oreReserveTier(res.amount)" in render
+    assert "new THREE.InstancedMesh(crystalGeo, crystalMat, count)" in render
+    assert "new THREE.Mesh(crystalGeo, crystalMat)" not in render
+    assert "crystals.count = live ?" in render
+    assert "tier.crystalCount" in render
+    assert 'class="ore-reserve-legend"' in hud
+    for tier_id in ("poor", "standard", "rich", "giant"):
+        assert "ore-tier-%s" % tier_id in hud
+        assert ".ore-tier-%s" % tier_id in styles
+    assert ".ore-reserve-legend" in styles
+    assert ".ore-glyph" in styles
+    assert ".ore-track i" in styles
 
     # 两辆经济载具在高低模里都有独立识别特征。
     assert "大型切削滚筒是采矿车的主剪影" in render
@@ -227,6 +269,24 @@ def main():
     assert "applyTerrainDetail(applyFogMask" in render
     assert "function makeProceduralGroundTexture" in render
     assert "function spawnWearAt" in render
+    assert "const TERRAIN_DETAIL_DEFAULTS = {" in render
+    assert "function resolveTerrainDetail(map, terrain)" in render
+    assert "function terrainFlatnessAt(x, y)" in render
+    assert "function buildGroundDetail()" in render
+    assert "mesh.name = 'ground-detail'" in render
+    assert "const grassTarget = Math.min(640" in render
+    assert "三片交叉三角叶组成一簇草" in render
+    assert "const rockTarget = Math.min(180" in render
+    assert "mesh.castShadow = false" in render
+    assert "groundDetailParts: state.groundDetailParts" in render
+    assert "terrainDetail\": visual_terrain_detail(m)" in server_source
+    # 团队胜利必须按完整获胜成员列表显示；winnerId 只是兼容字段，不能再让
+    # 同队其余客户端误弹“失败”。旧服务端仍按 isFriendly 回退。
+    assert "function didPlayerWin(game, playerId)" in app
+    assert "Array.isArray(game.winnerIds)" in app
+    assert "isFriendly(game.winnerId)" in app
+    assert "roomState.game.winnerId === session.playerId" not in app
+    assert '"winnerIds": list(game.get("winnerIds", []))' in server_source
     assert "function tuftParts" not in render
     assert "function pineParts" not in render
     assert "function buildScatter" not in render
@@ -269,11 +329,15 @@ def main():
     assert "奥术塔：扭转尖塔 + 武器晶碟" in render
     assert "teamOrOwn7-real-" in render
     assert "armyTimeUniform" in render
-    # 写实升级必须保持合批边界：共享压缩贴图替代旧的四次片元 hash，
-    # 地面/森林/金矿仍沿用各自原有 Mesh，不允许为细节再叠额外绘制批次。
+    # 写实升级必须保持合批边界：军械共享压缩贴图；自然草簇和碎石允许整张
+    # 地图共用一个额外 Mesh，但不能退回“一棵草/一块石头一个 draw call”。
     assert "function makeArmySurfaceTexture()" in render
     assert "uniform sampler2D uArmySurface" in render
-    assert "const CLOTH_UNIT_KINDS = { mage: 1, frost: 1, oracle: 1 }" in render
+    assert "const CLOTH_UNIT_KINDS = {" in render
+    for kind in ("rifle", "rocket", "sniper", "tesla", "mage", "frost", "oracle"):
+        assert re.search(r"\b%s: 1\b" % kind, render[render.index(
+            "const CLOTH_UNIT_KINDS = {"):render.index(
+                "const HIDE_UNIT_KINDS = {")]), kind
     assert "surfaceKind === 'cloth' ? 2" in render
     assert "gRoughness = 0.92; gBumpScale = 0.20" in render
     assert "function makeUnitShadowTexture()" in render
@@ -292,6 +356,10 @@ def main():
     # 近景用低面数倒角和圆肢体去掉积木轮廓；远景必须退回 12 面方盒控制面数。
     assert "function chamferedBoxGeometry(w, h, d)" in render
     assert "geo: chamferedBoxGeometry(w, h, d)" in render
+    assert "function isEmissivePaint(paint)" in render
+    assert "? new THREE.BoxGeometry(w, h, d)" in render
+    assert ": chamferedBoxGeometry(w, h, d)" in render
+    assert "material !== GLOW && geo && geo.type === 'BoxGeometry'" in render
     assert "function plainBox(w, h, d" in render
     assert "const box = plainBox;" in render
     assert "function plainTaperedBox(" in render
@@ -300,6 +368,7 @@ def main():
     assert "function profiledVolume(profile, radiusX, radiusZ" in render
     assert "new THREE.LatheGeometry(points" in render
     assert "运行时仍是一个 InstancedMesh，不增加 draw call" in render
+    assert "body: mergeParts(parts.body.concat(parts.glow || []))" in render
     assert "大头积木人" in render
     assert "groundTexture.repeat.set(mw / 420, mh / 420);" in render
     assert "同一棵树的三层树冠分别压暗、保持、提亮" in render
@@ -345,7 +414,6 @@ def main():
     assert catalog["units"]["hexling"]["build"] == 8.5
     assert server.UNIT_TYPES["bomb_truck"]["speed"] == server.UNIT_TYPES["hexling"]["speed"]
     assert server.UNIT_TYPES["bomb_truck"]["speed"] == 97.9
-    hud = read("public/index.html")
     assert "魔导甲怕磁暴/狙击×1.6" in hud
     assert "魔导甲怕磁暴/狙击×2.0" not in hud
     assert "frostRobe:" in render
@@ -361,6 +429,25 @@ def main():
     assert "function emitIdleAura" in render
     assert "手臂在肘部转折后共同托枪" in render
     assert "魔法主堡：双尖塔托浮空金冠，不是矮方堡" in render
+
+    # 两个阵营目录里的每一种单位都必须有专属近景 builder；不能悄悄回退到
+    # rifle 占位模型。曲面推广只增加缓存几何，仍保持每种单位一个实例批次。
+    builder_block = render[render.index("const UNIT_BUILDERS = {"):
+                           render.index("/* ------------------------------------------------------------------ *\n * 建筑模型")]
+    for kind in catalog["units"]:
+        assert re.search(r"\n  %s: function \(" % re.escape(kind), builder_block), kind
+    for profile_name in (
+            "mantleProfile", "seerProfile", "cuirassProfile", "beastProfile",
+            "launchBaseProfile", "migrateBaseProfile"):
+        assert profile_name in builder_block
+    assert "ellipsoid(14.0, 4.0, 5.5" in builder_block
+
+    # 建筑同样逐项覆盖目录，所有非发光直角盒会在首次缓存时换成倒角截面。
+    structure_block = render[render.index("function structureParts(kind, size)"):
+                             render.index("return c.parts;", render.index(
+                                 "function structureParts(kind, size)"))]
+    for kind in catalog["buildings"]:
+        assert "kind === '%s'" % kind in structure_block, kind
 
     # 秘法会既要保留固定紫/蓝的阵营材质，也必须在近景、远景和建筑上
     # 留出足够大的玩家色识别面，不能再出现整只构装或整座建筑不随玩家变色。

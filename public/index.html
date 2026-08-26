@@ -228,6 +228,12 @@
               </div>
               <div class="minimap-well">
                 <canvas id="minimapCanvas" width="260" height="160"></canvas>
+                <div class="ore-reserve-legend" aria-label="矿量图例：贫矿低于零点八万，普通矿零点八万到三万，富矿三万到八万，巨矿八万以上">
+                  <span class="ore-tier-poor"><i></i>贫&lt;0.8万</span>
+                  <span class="ore-tier-standard"><i></i>普0.8–3万</span>
+                  <span class="ore-tier-rich"><i></i>富3–8万</span>
+                  <span class="ore-tier-giant"><i></i>巨≥8万</span>
+                </div>
               </div>
               <span class="corner tl"></span><span class="corner tr"></span>
               <span class="corner bl"></span><span class="corner br"></span>
@@ -261,8 +267,8 @@
           <div id="selectionInfo" class="selection-info">
             <div class="selection-empty">
               <span class="selection-reticle">⌖</span>
-              <strong>未选择作战单位</strong>
-              <small>左键单选或拖拽框选</small>
+              <strong>未选择目标</strong>
+              <small>左键选择单位、建筑或矿脉</small>
             </div>
           </div>
 

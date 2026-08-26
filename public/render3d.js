@@ -14,6 +14,45 @@ import { createPostFX } from './postfx.js';
 
 const TAU = Math.PI * 2;
 
+// 矿量图例的唯一数据源。右侧详情、小地图与 3D 矿簇都使用同一组阈值，
+// 避免出现“面板说富矿、地图却还是普通图标”的信息冲突。
+export const ORE_RESERVE_TIERS = Object.freeze([
+  Object.freeze({
+    id: 'poor', level: 1, minAmount: 0,
+    label: '贫瘠矿脉', shortLabel: '贫矿', color: '#b77a35',
+    minimapRadius: 4, minimapPips: 2, crystalCount: 6,
+    footprint: 0.68, height: 0.72
+  }),
+  Object.freeze({
+    id: 'standard', level: 2, minAmount: 8000,
+    label: '标准矿脉', shortLabel: '普通矿', color: '#ffc247',
+    minimapRadius: 5.5, minimapPips: 4, crystalCount: 10,
+    footprint: 0.84, height: 0.92
+  }),
+  Object.freeze({
+    id: 'rich', level: 3, minAmount: 30000,
+    label: '富集矿脉', shortLabel: '富矿', color: '#ffe06a',
+    minimapRadius: 7, minimapPips: 6, crystalCount: 16,
+    footprint: 1.02, height: 1.14
+  }),
+  Object.freeze({
+    id: 'giant', level: 4, minAmount: 80000,
+    label: '巨型矿脉', shortLabel: '巨矿', color: '#fff0a0',
+    minimapRadius: 9, minimapPips: 8, crystalCount: 22,
+    footprint: 1.20, height: 1.38
+  })
+]);
+
+export function oreReserveTier(amount) {
+  const reserve = Math.max(0, Number(amount) || 0);
+  for (let i = ORE_RESERVE_TIERS.length - 1; i >= 0; i--) {
+    if (reserve >= ORE_RESERVE_TIERS[i].minAmount) {
+      return ORE_RESERVE_TIERS[i];
+    }
+  }
+  return ORE_RESERVE_TIERS[0];
+}
+
 /* ------------------------------------------------------------------ *
  * 几何工具
  * ------------------------------------------------------------------ */
@@ -147,11 +186,25 @@ function plainBox(w, h, d, x, y, z, paint, rotY) {
   return Object.assign({ geo: new THREE.BoxGeometry(w, h, d), matrix: m }, tint(paint));
 }
 
+function isEmissivePaint(paint) {
+  if (Array.isArray(paint)) return Math.max(paint[0], paint[1], paint[2]) > 1.05;
+  return typeof paint === 'number' && paint > 1.05;
+}
+
+/**
+ * 近景盒状零件默认改成八边倒角截面。钢铁装甲仍保留应有的硬朗平面，
+ * 但车舱、护板、背包和建筑梁柱不再暴露 90° 的“积木角”。发光灯条维持
+ * 最便宜的 BoxGeometry；远景 simpleUnitParts 也会在局部把 box 指回
+ * plainBox，因此这次升级只把顶点预算花在镜头附近。
+ */
 function box(w, h, d, x, y, z, paint, rotY) {
   const m = new THREE.Matrix4();
   if (rotY) m.makeRotationY(rotY);
   m.setPosition(x, y, z);
-  return Object.assign({ geo: new THREE.BoxGeometry(w, h, d), matrix: m }, tint(paint));
+  const geo = isEmissivePaint(paint)
+    ? new THREE.BoxGeometry(w, h, d)
+    : chamferedBoxGeometry(w, h, d);
+  return Object.assign({ geo: geo, matrix: m }, tint(paint));
 }
 
 /** 近景主体才调用倒角盒；小零件继续用 box，避免无效增加三角面。 */
@@ -340,7 +393,12 @@ const MAGIC_UNIT_KINDS = {
   mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, panther: 1, dragon: 1,
   warden: 1, colossus: 1, comet: 1, mharvester: 1, mmcv: 1, hexling: 1
 };
-const CLOTH_UNIT_KINDS = { mage: 1, frost: 1, oracle: 1 };
+// 一张共享军械图仍只产生四个材质变体。普通步兵/磁暴兵走织物粗糙度，
+// 不再把军服照成钢板；其余车辆、石构和兽类分别复用 metal/stone/hide。
+const CLOTH_UNIT_KINDS = {
+  rifle: 1, rocket: 1, sniper: 1, tesla: 1,
+  mage: 1, frost: 1, oracle: 1
+};
 const HIDE_UNIT_KINDS = { dog: 1, panther: 1, dragon: 1 };
 
 const ROT_X90 = new THREE.Matrix4().makeRotationX(Math.PI / 2);
@@ -562,8 +620,12 @@ const UNIT_BUILDERS = {
     // 冰霜女巫：宽檐帽 + 苍白斗篷 + 霜环，杖顶寒晶簇。宽帽剪影远看不是法师尖帽。
     const tipDn = new THREE.Matrix4().makeRotationZ(0.85);
     const tipSide = new THREE.Matrix4().makeRotationX(1.15).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
+    const mantleProfile = [
+      [0.0, -5.8], [1.0, -5.8], [0.96, -4.7], [0.78, -1.2],
+      [0.62, 2.8], [0.42, 5.3], [0.0, 5.8]
+    ];
     const body = [
-      taperedBox(10.4, 10.4, 3.8, 3.8, 11.6, 0, 6.4, 0, MAT.frostRobe),
+      profiledVolume(mantleProfile, 5.2, 5.2, 12, 0, 6.4, 0, MAT.frostRobe),
       cyl(5.6, 6.0, 0.55, 12, 0, 1.02, 0, MAT.iceShard),
       chamferedBox(4.2, 1.1, 7.0, 0, 12.4, 0, 0.72),
       chamferedBox(5.8, 0.55, 6.1, -2.0, 10.8, 0, 0.82),     // 玩家色披挂
@@ -598,8 +660,8 @@ const UNIT_BUILDERS = {
   imp: function () {
     // 晶刺：贴地锯齿晶螨。低矮六足碎晶，不是直立小人，也不是悬浮魔球。
     const body = [
-      taperedBox(8.6, 6.4, 5.4, 4.6, 3.4, 0.6, 3.5, 0, MAT.miteCrystal),
-      taperedBox(3.8, 3.6, 2.2, 2.2, 2.4, 4.4, 4.0, 0, MAT.crystal),
+      ellipsoid(4.5, 1.9, 3.25, 0.4, 3.5, 0, MAT.miteCrystal),
+      ellipsoid(2.2, 1.45, 2.0, 4.3, 3.9, 0, MAT.crystal),
       pyr(0.72, 2.6, 4, 1.2, 6.6, 0, MAT.miteCrystal),
       pyr(0.55, 2.2, 4, -1.4, 6.2, 1.5, MAT.miteCrystal),
       pyr(0.55, 2.2, 4, -1.4, 6.2, -1.5, MAT.miteCrystal),
@@ -625,8 +687,12 @@ const UNIT_BUILDERS = {
 
   oracle: function () {
     // 虹视使：细长棱晶杖 + 发光面罩。比法师更瘦更高，没有尖帽，面罩一眼是远视者。
+    const seerProfile = [
+      [0.0, -7.7], [1.0, -7.7], [0.86, -5.8], [0.61, -0.8],
+      [0.47, 4.6], [0.34, 7.1], [0.0, 7.7]
+    ];
     const body = [
-      taperedBox(5.6, 5.6, 2.2, 2.2, 15.4, 0, 8.4, 0, MAT.deepViolet),
+      profiledVolume(seerProfile, 2.8, 2.8, 12, 0, 8.4, 0, MAT.deepViolet),
       chamferedBox(2.8, 0.9, 5.1, 0, 16.2, 0, 0.70),
       chamferedBox(5.0, 0.52, 5.5, -1.8, 13.8, 0, 0.82),     // 玩家色披肩
       sph(1.72, 10, 0, 18.0, 0, MAT.sandArmor),
@@ -716,8 +782,8 @@ const UNIT_BUILDERS = {
   dragon: function () {
     // 秘法巨龙：拉长的翼展剪影，RTS 俯视角一眼是龙而不是大傀儡
     const body = [
-      taperedBox(28, 11, 20, 8, 7.2, -2, 8.2, 0, MAT.scaleHide),
-      taperedBox(20, 7.4, 14, 5.0, 3.2, -1.2, 5.5, 0, MAT.dragonBelly),
+      ellipsoid(14.0, 4.0, 5.5, -2, 8.2, 0, MAT.scaleHide),
+      ellipsoid(10.0, 1.8, 3.7, -1.2, 5.6, 0, MAT.dragonBelly),
       box(8.4, 3.0, 8.0, 4.2, 12.2, 0, MAT.dragonScale),
       taperedBox(7.4, 4.2, 5.4, 3.2, 4.0, 11.4, 11.5, 0, MAT.scaleHide),
       taperedBox(6.2, 3.6, 4.6, 2.8, 3.4, 16.6, 13.4, 0, MAT.scaleHide),
@@ -770,18 +836,22 @@ const UNIT_BUILDERS = {
 
   warden: function () {
     // 晶铠卫士：持盾板甲骑士。盔冠 + 鸢盾 + 金边板甲，远看是骑士不是第二只岩石傀儡。
+    const cuirassProfile = [
+      [0.0, -5.5], [0.72, -5.5], [0.94, -3.8], [1.0, 0.8],
+      [0.82, 3.7], [0.56, 5.5], [0.0, 5.5]
+    ];
     const body = [
-      taperedBox(10.4, 8.2, 7.2, 5.8, 11.0, 0, 10.2, 0, MAT.plateViolet),
+      profiledVolume(cuirassProfile, 5.2, 4.1, 10, 0, 10.2, 0, MAT.plateViolet),
       box(8.8, 0.45, 6.4, 0.2, 15.4, 0, MAT.goldTrim),
       taperedBox(7.6, 6.4, 5.6, 4.8, 3.8, 0.5, 16.6, 0, MAT.plateViolet),
       taperedBox(4.2, 4.0, 2.6, 2.4, 3.6, 2.2, 20.0, 0, MAT.plateViolet),
       sph(1.55, 6, 3.2, 20.6, 0, MAT.slate),
       pyr(0.55, 2.6, 4, 2.6, 23.0, 0, MAT.goldTrim),
-      box(3.4, 7.0, 3.4, 1.1, 10.0, 5.2, MAT.plateViolet),
-      box(3.4, 7.0, 3.4, 1.1, 10.0, -5.2, MAT.plateViolet),
+      limb(1.8, 1.45, 0.4, 13.2, 4.5, 1.2, 7.0, 5.5, MAT.plateViolet),
+      limb(1.8, 1.45, 0.4, 13.2, -4.5, 1.2, 7.0, -5.5, MAT.plateViolet),
       box(8.2, 0.85, 5.8, -0.2, 15.8, 0, 0.92),              // 玩家色胸背甲
-      box(3.0, 6.0, 3.2, 0, 3.1, 2.6, MAT.slate),
-      box(3.0, 6.0, 3.2, 0, 3.1, -2.6, MAT.slate),
+      limb(1.55, 1.35, -0.3, 6.2, 2.5, 0.2, 0.8, 2.8, MAT.slate),
+      limb(1.55, 1.35, -0.3, 6.2, -2.5, 0.2, 0.8, -2.8, MAT.slate),
       box(1.5, 13.2, 8.8, 2.4, 10.8, 8.2, MAT.goldTrim),
       box(0.7, 11.2, 7.0, 3.2, 10.8, 8.2, 0.85),
       cyl(0.38, 0.5, 16.8, 6, 6.4, 10.6, -3.6, MAT.goldTrim, ROT_Z90),
@@ -801,8 +871,12 @@ const UNIT_BUILDERS = {
   colossus: function () {
     // 裂地晶兽：四足晶兽驮晶陨鞍塔，俯视是攻城兽不是大傀儡/晶铠。
     const barrel = new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.38);
+    const beastProfile = [
+      [0.0, -4.3], [0.72, -4.3], [0.94, -3.0], [1.0, 0.3],
+      [0.88, 2.8], [0.58, 4.3], [0.0, 4.3]
+    ];
     const body = [
-      taperedBox(26, 14.4, 20, 11.6, 8.6, 0.2, 10.4, 0, MAT.magicStone),
+      profiledVolume(beastProfile, 13.0, 7.2, 10, 0.2, 10.4, 0, MAT.magicStone),
       taperedBox(20, 10.4, 15.2, 8.2, 3.4, 0.6, 6.4, 0, MAT.slate),
       taperedBox(8.6, 12.4, 6.6, 10.2, 5.4, 8.4, 12.6, 0, MAT.slate),
       taperedBox(9.4, 13.2, 7.2, 11.0, 5.8, -8.6, 13.0, 0, MAT.magicStone),
@@ -821,10 +895,10 @@ const UNIT_BUILDERS = {
       cyl(2.9, 2.9, 3.4, 8, 20.6, 27.2, 0, MAT.goldTrim, barrel),
       taperedBox(2.8, 2.8, 1.15, 1.15, 4.2, -5.4, 19.8, 4.8, MAT.goldTrim),
       taperedBox(2.8, 2.8, 1.15, 1.15, 4.2, -5.4, 19.8, -4.8, MAT.goldTrim),
-      box(4.6, 8.6, 4.6, 8.8, 4.5, 6.0, MAT.magicStone),
-      box(4.6, 8.6, 4.6, 8.8, 4.5, -6.0, MAT.magicStone),
-      box(5.0, 9.0, 5.0, -8.4, 4.7, 6.4, MAT.magicStone),
-      box(5.0, 9.0, 5.0, -8.4, 4.7, -6.4, MAT.magicStone),
+      limb(2.35, 2.0, 8.2, 8.5, 5.8, 9.0, 1.2, 6.0, MAT.magicStone),
+      limb(2.35, 2.0, 8.2, 8.5, -5.8, 9.0, 1.2, -6.0, MAT.magicStone),
+      limb(2.55, 2.15, -8.0, 8.7, 6.1, -8.6, 1.3, 6.4, MAT.magicStone),
+      limb(2.55, 2.15, -8.0, 8.7, -6.1, -8.6, 1.3, -6.4, MAT.magicStone),
       taperedBox(5.4, 5.4, 3.6, 3.6, 2.2, 9.0, 1.2, 6.0, MAT.goldStoneDark),
       taperedBox(5.4, 5.4, 3.6, 3.6, 2.2, 9.0, 1.2, -6.0, MAT.goldStoneDark),
       taperedBox(5.8, 5.8, 3.8, 3.8, 2.4, -8.6, 1.3, 6.4, MAT.goldStoneDark),
@@ -852,8 +926,12 @@ const UNIT_BUILDERS = {
 
   comet: function () {
     // 坠星台：厚重发射底盘 + 竖直晶炮。曲射台不是法师，也不是裂地晶兽的四足鞍塔。
+    const launchBaseProfile = [
+      [0.0, -3.8], [0.82, -3.8], [1.0, -2.2], [0.96, 1.2],
+      [0.76, 3.2], [0.0, 3.8]
+    ];
     const body = [
-      taperedBox(36, 24, 30, 20, 7.6, 0, 7.2, 0, MAT.goldStoneDark),
+      profiledVolume(launchBaseProfile, 18.0, 12.0, 12, 0, 7.2, 0, MAT.goldStoneDark),
       taperedBox(22, 20, 18, 16, 3.6, -1.0, 12.4, 0, MAT.slate),
       taperedBox(27, 16, 23, 13, 1.0, -1.0, 12.3, 0, 0.88),  // 玩家色发射平台顶板
       box(28, 3.2, 1.6, -2, 9.6, 11.2, MAT.goldTrim),
@@ -946,8 +1024,12 @@ const UNIT_BUILDERS = {
 
   mmcv: function () {
     // 迁徙法阵：暖金悬浮台 + 竖立金环，环心青符漩涡。经济载具，不是圣殿也非法阵平台。
+    const migrateBaseProfile = [
+      [0.0, -2.5], [0.72, -2.5], [0.96, -1.5], [1.0, 0.2],
+      [0.82, 1.9], [0.42, 2.5], [0.0, 2.5]
+    ];
     const body = [
-      taperedBox(22, 16, 24, 18, 5, 0, 6, 0, MAT.goldStone),
+      profiledVolume(migrateBaseProfile, 12.0, 9.0, 12, 0, 6, 0, MAT.goldStone),
       taperedBox(19, 13, 16, 10, 1.2, 0, 9.0, 0, 0.92),      // 玩家色平台上盖
       box(2.6, 7.4, 3.5, -8, 9.0, 0, 0.84),                 // 玩家色环架
       box(2.6, 7.4, 3.5, 8, 9.0, 0, 0.84),
@@ -1233,6 +1315,13 @@ function partCollector() {
   // paint：数字 = 团队色明暗系数，数组 = 固有色。混凝土地基、钢梁、锈迹
   // 都该有自己的颜色，否则一整座基地只是团队色的深浅变化，非常单调。
   const add = function (material, geo, x, y, z, paint, rot) {
+    // 建筑数量远少于单位，允许所有非发光 BoxGeometry 在首次缓存时换成
+    // 八边倒角截面。几何仍会和其他零件合并为一张网格，运行时 draw call
+    // 完全不变；灯条继续保留原始 12 三角面方盒。
+    if (material !== GLOW && geo && geo.type === 'BoxGeometry' && geo.parameters) {
+      const p = geo.parameters;
+      geo = chamferedBoxGeometry(p.width, p.height, p.depth);
+    }
     const m = new THREE.Matrix4();
     if (rot) m.multiply(rot);
     m.setPosition(x, y, z);
@@ -1889,6 +1978,38 @@ function displayTheme(themeId) {
   return MAP_DISPLAY_THEMES[themeId] || MAP_DISPLAY_THEMES.grassland;
 }
 
+// 服务端会随地图下发同名细节参数；这里保留主题缺省值，旧存档/旧服务端的
+// full 帧也能得到完整地表。它们只改变网格高度和装饰物，不参与 2D 权威碰撞。
+const TERRAIN_DETAIL_DEFAULTS = {
+  grassland: { relief: 1.20, colorVariation: 1.18, grassDensity: 1.00, rockDensity: 0.78, spawnFlatRadius: 280, centerFlatRadius: 0 },
+  arid: { relief: 1.32, colorVariation: 1.26, grassDensity: 0.34, rockDensity: 1.18, spawnFlatRadius: 280, centerFlatRadius: 0 },
+  urban: { relief: 0.62, colorVariation: 0.82, grassDensity: 0.18, rockDensity: 0.62, spawnFlatRadius: 300, centerFlatRadius: 0 },
+  crater: { relief: 1.42, colorVariation: 1.34, grassDensity: 0.16, rockDensity: 1.34, spawnFlatRadius: 290, centerFlatRadius: 0 }
+};
+
+function resolveTerrainDetail(map, terrain) {
+  const themeId = (terrain && terrain.theme) || 'grassland';
+  const result = Object.assign({},
+    TERRAIN_DETAIL_DEFAULTS[themeId] || TERRAIN_DETAIL_DEFAULTS.grassland);
+  // 兼容未重启的旧服务端：五车争疆可由唯一的 4000×4000 / 五出生点布局识别。
+  const isCentralScramble = (map && map.id === 'central_scramble') ||
+    (map && map.width === 4000 && map.height === 4000);
+  if (isCentralScramble) {
+    Object.assign(result, {
+      relief: 1.58, colorVariation: 1.42, grassDensity: 1.35,
+      rockDensity: 1.48, spawnFlatRadius: 320, centerFlatRadius: 620
+    });
+  }
+  Object.assign(result, (terrain && terrain.detail) || {});
+  result.relief = THREE.MathUtils.clamp(Number(result.relief) || 1, 0.35, 2.2);
+  result.colorVariation = THREE.MathUtils.clamp(Number(result.colorVariation) || 1, 0.5, 1.8);
+  result.grassDensity = THREE.MathUtils.clamp(Number(result.grassDensity) || 0, 0, 2);
+  result.rockDensity = THREE.MathUtils.clamp(Number(result.rockDensity) || 0, 0, 2);
+  result.spawnFlatRadius = THREE.MathUtils.clamp(Number(result.spawnFlatRadius) || 0, 0, 700);
+  result.centerFlatRadius = THREE.MathUtils.clamp(Number(result.centerFlatRadius) || 0, 0, 1000);
+  return result;
+}
+
 // 相机拉到这个距离以外才换用可辨识的兵种剪影。单位数量不再触发全场
 // 硬切低模：InstancedMesh 的绘制调用本来就按兵种合批，数量阈值只会造成
 // 模型突然一起变成盒子，却没有省下任何 draw call。
@@ -2091,9 +2212,9 @@ export function createRenderer(canvas) {
     shadows: 'structures', lod: true, fogScale: 6, particleBudget: 600,
     bloom: true,
     showProjectiles: true,
-    buildTerrainMs: 0,
+    buildTerrainMs: 0, groundDetailParts: 0,
     snapshotUnits: 0, renderedUnits: 0, renderedStructures: 0,
-    sight: null,
+    sight: null, terrainDetail: null,
     palette: new Map(),
     friendly: function () { return false; },
     viewerId: null
@@ -2509,14 +2630,43 @@ export function createRenderer(canvas) {
    * 否则各算各的就会出现「单位悬空」「路飘在坡上」这类错位。
    */
   const _ghCache = new Map();
+  function terrainFlatnessAt(x, y) {
+    const detail = state.terrainDetail;
+    if (!detail || !state.map) return 0;
+    let best = 0;
+    const circle = function (cx, cy, radius, feather) {
+      if (radius <= 0) return 0;
+      const distance = Math.hypot(x - cx, y - cy);
+      if (distance <= radius) return 1;
+      if (distance >= radius + feather) return 0;
+      const t = 1 - (distance - radius) / feather;
+      return t * t * (3 - 2 * t);
+    };
+    if (detail.centerFlatRadius > 0) {
+      best = circle(state.map.width * 0.5, state.map.height * 0.5,
+        detail.centerFlatRadius, 260);
+    }
+    const spawns = state.spawnPoints || [];
+    for (let i = 0; i < spawns.length && best < 1; i++) {
+      best = Math.max(best, circle(spawns[i][0], spawns[i][1],
+        detail.spawnFlatRadius, 180));
+    }
+    return best;
+  }
+
   function rollingHeight(x, y) {
-    // 纯装饰起伏：服务端寻路仍是 2D 平面。单位/建筑用 groundHeight() 贴地，
-    // 所以这里加高频噪声只会让草地「鼓」起来，不会改可行走区域。
-    return Math.sin(x * 0.0016) * Math.cos(y * 0.0021) * 10
+    // 纯装饰起伏：服务端寻路仍是 2D 平面。长波草坡负责打破桌面感，短波
+    // 只刻画土壤；出生/展开区通过平滑权重压回水平，建筑不会架在坡肩上。
+    const broad = Math.sin(x * 0.00043 + y * 0.00027) * 7.5
+      + Math.cos(x * 0.00061 - y * 0.00039) * 5.5;
+    const ground = broad
+      + Math.sin(x * 0.0016) * Math.cos(y * 0.0021) * 10
       + Math.sin(x * 0.0007 + y * 0.0011) * 7
       + Math.sin(x * 0.0068 + y * 0.0043) * 2.6
       + Math.cos(x * 0.0121 - y * 0.0097) * 1.5
       + Math.sin(x * 0.028 + y * 0.019) * 0.8;
+    const relief = state.terrainDetail ? state.terrainDetail.relief : 1;
+    return ground * relief * (1 - terrainFlatnessAt(x, y));
   }
 
   function baseGroundHeight(x, y) {
@@ -2667,6 +2817,8 @@ export function createRenderer(canvas) {
     const mw = state.map.width;
     const mh = state.map.height;
     const theme = displayTheme(state.terrain && state.terrain.theme);
+    const detail = state.terrainDetail || resolveTerrainDetail(state.map, state.terrain);
+    state.groundDetailParts = 0;
     applyWorldTheme(theme);
     if (!groundTexture || groundTexture.userData.themeId !== theme.id) {
       groundTexture = makeProceduralGroundTexture(theme.id);
@@ -2700,7 +2852,9 @@ export function createRenderer(canvas) {
       const stone = Math.min(1, rock / 70);
       const ravine = Math.min(1, depth * 1.4);
       const bank = Math.max(0, 1 - Math.abs(depth - 0.10) / 0.14) * (depth > 0.005 ? 1 : 0);
-      const lush = clumpNoise(wx, wz);
+      const rawLush = clumpNoise(wx, wz);
+      const lush = THREE.MathUtils.clamp(
+        0.5 + (rawLush - 0.5) * detail.colorVariation, 0, 1);
       const stripe = 0.5 + 0.5 * Math.sin(wx * 0.0022 + lush * 2.4);
       const wear = spawnWearAt(wx, wz);
       const topo = 1 + Math.max(-1, Math.min(1, height / 24)) * 0.10;
@@ -2947,6 +3101,7 @@ export function createRenderer(canvas) {
     });
 
     buildRocks();
+    buildGroundDetail();
     buildOreField();
     state.buildTerrainMs = Math.round(performance.now() - buildStarted);
   }
@@ -3028,6 +3183,165 @@ export function createRenderer(canvas) {
     });
   }
 
+  /**
+   * 可通行地面的自然细节：低矮草簇与小块散石共享一个合并网格。
+   *
+   * 这些物体不写进服务端 Terrain，所以绝不会挡路、占建造格或改变射线；
+   * 出生区、矿区、道路、林道和碰撞山体周围主动留白，视觉也不会误导玩家。
+   * 数量按地图面积增长但设有硬上限，整张地图只增加一个 draw call。
+   */
+  function buildGroundDetail() {
+    const detail = state.terrainDetail;
+    if (!detail || !state.map) return;
+    const mw = state.map.width;
+    const mh = state.map.height;
+    const area = mw * mh;
+    const theme = displayTheme(state.terrain && state.terrain.theme);
+    const roads = (state.terrain && state.terrain.roads) || [];
+    const resources = state.resources || [];
+    const spawns = state.spawnPoints || [];
+
+    let seed = ((Number(state.map.seed) || 1) ^ Math.round(mw * 31) ^
+      Math.round(mh * 131)) >>> 0;
+    const rand = function () {
+      seed = (seed + 0x6d2b79f5) >>> 0;
+      let value = seed;
+      value = Math.imul(value ^ (value >>> 15), value | 1);
+      value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+      return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+
+    const clearAt = function (x, y, clearance) {
+      if (x < 90 || y < 90 || x > mw - 90 || y > mh - 90) return false;
+      if (riverDepthAt(x, y) > 0.025 || mountainHeightAt(x, y) > 0.8 ||
+          bridgeTrailAt(x, y) > 0.02) return false;
+      if (detail.centerFlatRadius > 0 &&
+          Math.hypot(x - mw * 0.5, y - mh * 0.5) <
+            detail.centerFlatRadius + clearance) return false;
+      for (let i = 0; i < spawns.length; i++) {
+        if (Math.hypot(x - spawns[i][0], y - spawns[i][1]) <
+            detail.spawnFlatRadius + clearance) return false;
+      }
+      for (let i = 0; i < resources.length; i++) {
+        const resource = resources[i];
+        if (Math.hypot(x - resource.x, y - resource.y) <
+            (resource.radius || 70) + clearance + 35) return false;
+      }
+      for (let i = 0; i < roads.length; i++) {
+        const road = roads[i];
+        const safeWidth = (road.width || 100) * 0.5 + clearance + 18;
+        if (pointSegmentDistanceSq(x, y, road.x1, road.y1, road.x2, road.y2) <
+            safeWidth * safeWidth) return false;
+      }
+      return true;
+    };
+
+    // 三片交叉三角叶组成一簇草：比三棱锥更像叶片，每簇只有 3 个三角形。
+    const grassPositions = [];
+    const grassNormals = [];
+    const grassUvs = [];
+    for (let blade = 0; blade < 3; blade++) {
+      const angle = blade * Math.PI / 3;
+      const dx = Math.cos(angle) * 0.5;
+      const dz = Math.sin(angle) * 0.5;
+      const nx = -Math.sin(angle);
+      const nz = Math.cos(angle);
+      grassPositions.push(-dx, 0, -dz, dx, 0, dz, 0, 1, 0);
+      grassNormals.push(nx, 0, nz, nx, 0, nz, nx, 0, nz);
+      grassUvs.push(0, 0, 1, 0, 0.5, 1);
+    }
+    const grassGeo = new THREE.BufferGeometry();
+    grassGeo.setAttribute('position', new THREE.Float32BufferAttribute(grassPositions, 3));
+    grassGeo.setAttribute('normal', new THREE.Float32BufferAttribute(grassNormals, 3));
+    grassGeo.setAttribute('uv', new THREE.Float32BufferAttribute(grassUvs, 2));
+    let pebbleGeo = new THREE.DodecahedronGeometry(1, 0);
+    if (pebbleGeo.index) {
+      const indexed = pebbleGeo;
+      pebbleGeo = indexed.toNonIndexed();
+      indexed.dispose();
+    }
+    const parts = [];
+    const addPart = function (geo, x, y, sx, sy, sz, rotation, tilt, rgb) {
+      const matrix = new THREE.Matrix4().makeRotationY(rotation);
+      if (tilt) matrix.multiply(new THREE.Matrix4().makeRotationX(tilt));
+      matrix.scale(new THREE.Vector3(sx, sy, sz));
+      matrix.setPosition(x, groundHeight(x, y) + sy * 0.48, y);
+      parts.push({ geo: geo, matrix: matrix, rgb: rgb });
+    };
+
+    // 每个采样点长成 1–3 株小草，颜色在主题草色与深草色间变化。
+    const grassTarget = Math.min(640,
+      Math.round(area / 58000 * detail.grassDensity));
+    let acceptedGrass = 0;
+    for (let attempt = 0; attempt < grassTarget * 14 &&
+         acceptedGrass < grassTarget; attempt++) {
+      const cx = 100 + rand() * (mw - 200);
+      const cy = 100 + rand() * (mh - 200);
+      if (!clearAt(cx, cy, 16)) continue;
+      acceptedGrass++;
+      const tuftCount = 2 + Math.floor(rand() * 3);
+      for (let blade = 0; blade < tuftCount; blade++) {
+        const angle = rand() * TAU;
+        const distance = rand() * 8;
+        const x = cx + Math.cos(angle) * distance;
+        const y = cy + Math.sin(angle) * distance;
+        const height = 9 + rand() * 9;
+        const width = 3.0 + rand() * 2.2;
+        const mix = rand();
+        const shade = 0.90 + rand() * 0.30;
+        const rgb = [0, 1, 2].map(function (channel) {
+          return Math.min(1, (theme.grass[channel] * (1 - mix) +
+            theme.lush[channel] * mix) * shade);
+        });
+        addPart(grassGeo, x, y, width, height, width * (0.72 + rand() * 0.35),
+          rand() * TAU, (rand() - 0.5) * 0.18, rgb);
+      }
+    }
+
+    // 散石以小簇出现，尺寸远小于碰撞山岩，让玩家一眼能区分装饰与障碍。
+    const rockTarget = Math.min(180,
+      Math.round(area / 260000 * detail.rockDensity));
+    let acceptedRocks = 0;
+    for (let attempt = 0; attempt < rockTarget * 18 &&
+         acceptedRocks < rockTarget; attempt++) {
+      const cx = 110 + rand() * (mw - 220);
+      const cy = 110 + rand() * (mh - 220);
+      if (!clearAt(cx, cy, 34)) continue;
+      acceptedRocks++;
+      const clusterSize = 2 + Math.floor(rand() * 4);
+      for (let rock = 0; rock < clusterSize; rock++) {
+        const angle = rand() * TAU;
+        const distance = 5 + rand() * 26;
+        const x = cx + Math.cos(angle) * distance;
+        const y = cy + Math.sin(angle) * distance;
+        if (!clearAt(x, y, 10)) continue;
+        const size = 3.5 + rand() * 7.0;
+        const shade = 0.72 + rand() * 0.42;
+        const rgb = theme.rock.map(function (channel) {
+          return Math.min(1, channel * shade);
+        });
+        addPart(pebbleGeo, x, y, size * (0.85 + rand() * 0.45),
+          size * (0.50 + rand() * 0.42), size * (0.80 + rand() * 0.45),
+          rand() * TAU, (rand() - 0.5) * 0.55, rgb);
+      }
+    }
+
+    state.groundDetailParts = parts.length;
+    if (parts.length) {
+      const merged = mergeParts(parts);
+      const mesh = new THREE.Mesh(merged, applyFogMask(new THREE.MeshLambertMaterial({
+        vertexColors: true, flatShading: true, side: THREE.DoubleSide
+      })));
+      mesh.name = 'ground-detail';
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = false;
+      terrainGroup.add(mesh);
+    }
+    grassGeo.dispose();
+    pebbleGeo.dispose();
+  }
+
   /* -------------------- 矿脉 -------------------- */
 
   let oreGroup = null;
@@ -3051,12 +3365,9 @@ export function createRenderer(canvas) {
       map: makeOreVeinTexture()
     });
     const crystalGeo = new THREE.ConeGeometry(1, 1, 5);
-    // 地面辉光环：让矿脉在绿色草皮上有一个「发光底座」，拉远也不会消失
+    // 地面辉光环：让矿脉在绿色草皮上有一个「发光底座」，拉远也不会消失。
+    // 每处矿用自己的轻量材质实例，以便开采跨档时独立换色和缩小。
     const discGeo = new THREE.CircleGeometry(1, 18).rotateX(-Math.PI / 2);
-    const discMat = new THREE.MeshBasicMaterial({
-      color: 0xffc840, transparent: true, opacity: 0.32,
-      depthWrite: false, fog: false, side: THREE.DoubleSide
-    });
     const guardRingGeo = new THREE.RingGeometry(0.82, 1.0, 32).rotateX(-Math.PI / 2);
     const guardRingMat = new THREE.MeshBasicMaterial({
       color: 0xff3f2f, transparent: true, opacity: 0.82,
@@ -3066,12 +3377,19 @@ export function createRenderer(canvas) {
       const cluster = new THREE.Group();
       cluster.position.set(res.x, groundHeight(res.x, res.y), res.y);
       cluster.userData.resourceId = res.id;
+      const initialTier = oreReserveTier(res.amount);
+      const maxTier = oreReserveTier(Math.max(res.amount || 0, res.maxAmount || 0));
 
-      // 地面辉光底座：大小跟随矿脉范围，始终贴地
-      const disc = new THREE.Mesh(discGeo, discMat);
-      disc.scale.set(res.radius * 0.85, 1, res.radius * 0.85);
+      // 储量越高，辉光占地越大、颜色越亮；这和小地图图例使用同一档位。
+      const disc = new THREE.Mesh(discGeo, new THREE.MeshBasicMaterial({
+        color: initialTier.color, transparent: true, opacity: 0.30,
+        depthWrite: false, fog: false, side: THREE.DoubleSide
+      }));
+      const initialDiscRadius = res.radius * (0.62 + initialTier.level * 0.13);
+      disc.scale.set(initialDiscRadius, 1, initialDiscRadius);
       disc.position.y = 2.6;
       disc.renderOrder = 2;
+      cluster.userData.disc = disc;
       cluster.add(disc);
 
       if (res.public) {
@@ -3090,18 +3408,39 @@ export function createRenderer(canvas) {
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         return seed / 0x7fffffff;
       };
-      const count = Math.max(10, Math.round(res.radius / 7));
+      // 一处矿脉始终只有一个 InstancedMesh draw call。巨矿虽然有更多晶柱，
+      // 也不会像旧版“每根晶柱一个 Mesh”那样按储量增加绘制调用。
+      const count = maxTier.crystalCount;
+      const crystals = new THREE.InstancedMesh(crystalGeo, crystalMat, count);
+      const oreMatrix = new THREE.Matrix4();
+      const orePosition = new THREE.Vector3();
+      const oreRotation = new THREE.Quaternion();
+      const oreScale = new THREE.Vector3();
+      const oreEuler = new THREE.Euler();
       for (let i = 0; i < count; i++) {
         const a = rand() * TAU;
-        const rr = Math.sqrt(rand()) * res.radius * 0.9;
-        const h = 10 + rand() * 26;
-        const crystal = new THREE.Mesh(crystalGeo, crystalMat);
-        crystal.position.set(Math.cos(a) * rr, h / 2 + 2, Math.sin(a) * rr);
-        crystal.scale.set(4 + rand() * 4, h, 4 + rand() * 4);
-        crystal.rotation.y = rand() * TAU;
-        crystal.castShadow = false;
-        cluster.add(crystal);
+        // 先写入的晶柱更靠近中心；开采后降低 instance count 时，留下的矿簇
+        // 会自然向中心收紧，而不是随机缺一块、视觉上仍占满原来面积。
+        const spread = 0.38 + 0.62 * ((i + 1) / count);
+        const rr = Math.sqrt(rand()) * res.radius * maxTier.footprint * spread;
+        const h = (11 + rand() * 22) * maxTier.height;
+        const w = (3.6 + rand() * 3.6) * (0.92 + maxTier.level * 0.035);
+        orePosition.set(Math.cos(a) * rr, h / 2 + 2, Math.sin(a) * rr);
+        oreEuler.set((rand() - 0.5) * 0.16, rand() * TAU, (rand() - 0.5) * 0.16);
+        oreRotation.setFromEuler(oreEuler);
+        oreScale.set(w, h, w);
+        oreMatrix.compose(orePosition, oreRotation, oreScale);
+        crystals.setMatrixAt(i, oreMatrix);
       }
+      crystals.count = Math.min(count, initialTier.crystalCount);
+      crystals.instanceMatrix.needsUpdate = true;
+      crystals.castShadow = false;
+      crystals.receiveShadow = true;
+      crystals.frustumCulled = false;
+      cluster.userData.crystalMesh = crystals;
+      cluster.userData.crystalCapacity = count;
+      cluster.userData.maxTier = maxTier;
+      cluster.add(crystals);
       oreGroup.add(cluster);
       oreMeshes.set(res.id, cluster);
     });
@@ -3113,22 +3452,42 @@ export function createRenderer(canvas) {
       const cluster = oreMeshes.get(ore[i][0]);
       if (!cluster) continue;
       const res = state.resourceById && state.resourceById.get(ore[i][0]);
-      const ratio = res && res.maxAmount ? Math.max(0, ore[i][1] / res.maxAmount) : 1;
-      cluster.visible = ratio > 0.001;
-      const s = 0.25 + ratio * 0.75;
-      cluster.scale.set(1, s, 1);
+      const amount = Math.max(0, Number(ore[i][1]) || 0);
+      if (res) {
+        res.amount = amount;
+        res.guarded = !!ore[i][2];
+      }
+      const tier = oreReserveTier(amount);
+      const live = amount > 0.05;
+      cluster.visible = live;
+      const poorFraction = tier.id === 'poor' ? Math.max(0.10, amount / 8000) : 1;
+      const crystals = cluster.userData.crystalMesh;
+      if (crystals) {
+        const wanted = tier.id === 'poor' ?
+          Math.max(1, Math.ceil(tier.crystalCount * poorFraction)) : tier.crystalCount;
+        crystals.count = live ? Math.min(cluster.userData.crystalCapacity, wanted) : 0;
+        const maxTier = cluster.userData.maxTier || tier;
+        crystals.scale.set(
+          tier.footprint / maxTier.footprint,
+          tier.height / maxTier.height,
+          tier.footprint / maxTier.footprint
+        );
+      }
+      const disc = cluster.userData.disc;
+      if (disc) {
+        const poorScale = tier.id === 'poor' ? 0.64 + poorFraction * 0.36 : 1;
+        const discRadius = (res ? res.radius : 48) *
+          (0.62 + tier.level * 0.13) * poorScale;
+        disc.scale.set(discRadius, 1, discRadius);
+        disc.material.color.set(tier.color);
+        const pulse = 0.84 + 0.16 * Math.sin((time * 0.003 + ore[i][0].charCodeAt(0)) * 1.7);
+        disc.material.opacity = live ? (0.20 + tier.level * 0.035) * pulse *
+          (tier.id === 'poor' ? 0.45 + poorFraction * 0.55 : 1) : 0;
+      }
       if (cluster.userData.guardRing) {
-        cluster.userData.guardRing.visible = !!ore[i][2] && ratio > 0.001;
+        cluster.userData.guardRing.visible = !!ore[i][2] && live;
         cluster.userData.guardRing.material.opacity =
           0.62 + 0.22 * Math.sin(time * 0.006 + i);
-      }
-      // 晶体脉冲：矿量越满闪得越亮，远处也看得见
-      if (cluster.children.length > 0 && cluster.children[0].material) {
-        const disc = cluster.children[0];
-        if (disc.material && disc.material.opacity !== undefined) {
-          const pulse = 0.28 + 0.16 * Math.sin((time * 0.003 + ore[i][0].charCodeAt(0)) * 1.7);
-          disc.material.opacity = pulse * ratio;
-        }
       }
     }
   }
@@ -5907,7 +6266,7 @@ export function createRenderer(canvas) {
 
     /* --- 选中环 --- */
     const selected = payload.selectedUnitIds;
-    const rings = ensureRingMesh(selected.size + 1);
+    const rings = ensureRingMesh(selected.size + 2);
     let ringCount = 0;
     // 整体缓慢自转，静止时也能一眼看出「这个被选中了」
     const ringSpin = quat.setFromAxisAngle(upAxis, payload.time * 0.0006);
@@ -5944,6 +6303,22 @@ export function createRenderer(canvas) {
           vecScale.set(r, 1, r));
         rings.setMatrixAt(ringCount, matrix);
         tmpColor.set(colorOf(s.owner));
+        rings.setColorAt(ringCount, tmpColor);
+        ringCount++;
+      }
+    }
+    if (payload.selectedResourceId) {
+      const res = state.resourceById && state.resourceById.get(payload.selectedResourceId);
+      const cluster = oreMeshes.get(payload.selectedResourceId);
+      if (res && res.amount > 0 && cluster && cluster.visible && isVisible(res.x, res.y)) {
+        const tier = oreReserveTier(res.amount);
+        const r = res.radius * (0.78 + tier.level * 0.14);
+        matrix.compose(
+          vecPos.set(res.x, groundHeight(res.x, res.y) + 3.2, res.y),
+          ringSpin,
+          vecScale.set(r, 1, r));
+        rings.setMatrixAt(ringCount, matrix);
+        tmpColor.set(tier.color);
         rings.setColorAt(ringCount, tmpColor);
         ringCount++;
       }
@@ -6063,16 +6438,18 @@ export function createRenderer(canvas) {
       state.resources.forEach(function (r) { state.resourceById.set(r.id, r); });
       if (sight) state.sight = sight;
       state.spawnPoints = spawnPoints || state.spawnPoints || [];
+      state.terrainDetail = resolveTerrainDetail(map, state.terrain);
 
       // 每局开新地图时服务端会给 map.seed 一个新随机值，尺寸与地形要素数量
       // 一并入键，防止「换了图但恰好同尺寸」漏判。
       const t = state.terrain;
       const worldKey = [
-        map.width, map.height, map.seed,
+        map.id || '', map.width, map.height, map.seed,
         t.theme || '',
         (t.rivers || []).length, (t.bridges || []).length,
         (t.mountains || []).length, (t.roads || []).length,
-        state.resources.length
+        state.resources.length,
+        JSON.stringify(state.terrainDetail)
       ].join('|');
       if (worldKey === builtWorldKey && terrainGroup) {
         return false;
@@ -6128,6 +6505,7 @@ export function createRenderer(canvas) {
         renderedStructures: state.renderedStructures,
         particles: fireLayer.list.length + smokeLayer.list.length,
         buildTerrainMs: state.buildTerrainMs,
+        groundDetailParts: state.groundDetailParts,
         geometries: renderer.info.memory.geometries,
         textures: renderer.info.memory.textures
       };

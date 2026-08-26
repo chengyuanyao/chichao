@@ -8,6 +8,11 @@ server.py re-exports these names so existing tests and imports keep working.
 from __future__ import print_function
 
 
+# 有攻击距离的单位统一比武器多看 10%。视野由 range 派生，后续平衡武器
+# 射程时会自动同步，不再维护一组容易漂移的独立数字。
+UNIT_SIGHT_RANGE_MULTIPLIER = 1.10
+
+
 # 可进维修厂/圣泉的单位。步兵、法师、影豹不算；构装、巨龙、晶簇与科技载具对位。
 VEHICLE_KINDS = frozenset((
     "tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv",
@@ -274,6 +279,21 @@ UNIT_TYPES = {
         "detonateOnContact": True,
     },
 }
+
+
+def unit_sight_radius(definition):
+    """Return authoritative unit sight: attack range +10%, or utility fallback."""
+    attack_range = float(definition.get("range", 0.0) or 0.0)
+    if attack_range > 0.0:
+        return round(attack_range * UNIT_SIGHT_RANGE_MULTIPLIER, 3)
+    # 采矿车和基地车没有武器，不能按 0×1.1 变成完全失明。
+    return float(definition.get("sight", 350.0))
+
+
+# 保持 UNIT_TYPES 本身也是已经归一化的公开定义，旧代码/测试即使直接读取
+# definition["sight"]，得到的也和服务端迷雾、客户端视野表完全一致。
+for _unit_definition in UNIT_TYPES.values():
+    _unit_definition["sight"] = unit_sight_radius(_unit_definition)
 
 STRUCTURE_TYPES = {
     "hq": {

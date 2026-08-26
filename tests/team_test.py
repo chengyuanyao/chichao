@@ -208,6 +208,12 @@ def main():
     tick_for(room2, 1.0)
     assert team_b2["eliminated"] is True, "b2 should be eliminated"
     assert room2["status"] == "finished", "game should end (all team B eliminated)"
+    assert game2["winnerId"] in (team_a1["id"], team_a2["id"])
+    assert game2["winnerTeam"] == 1
+    assert set(game2["winnerIds"]) == set((team_a1["id"], team_a2["id"]))
+    for teammate in (team_a1, team_a2):
+        public = server.public_game(game2, teammate["id"])
+        assert set(public["winnerIds"]) == set((team_a1["id"], team_a2["id"]))
 
     print("  Team victory: PASS")
 
@@ -228,16 +234,24 @@ def main():
     assert not server.is_friendly(game3, mix_a["id"], mix_c["id"])
     assert not server.is_friendly(game3, mix_b["id"], mix_c["id"])
 
-    # Solo player eliminated by HQ loss -> team should win
+    # 即使一名队友先被淘汰，最后队伍获胜时也应拿到相同的胜利结果。
     game3["elapsed"] = 20
+    for s in game3["structures"]:
+        if s["owner"] == mix_b["id"] and server.structure_role(s["kind"]) == "hq":
+            s["hp"] = 0
+    tick_for(room3, 1.0)
+    assert mix_b["eliminated"] is True
+    assert room3["status"] != "finished"
+
+    # Solo player eliminated by HQ loss -> team should win
     for s in game3["structures"]:
         if s["owner"] == mix_c["id"] and server.structure_role(s["kind"]) == "hq":
             s["hp"] = 0
     tick_for(room3, 1.0)
     assert mix_c["eliminated"] is True
     assert room3["status"] == "finished", "game should end with team victory"
-    # Both team members should still be alive
-    assert not mix_a["eliminated"] and not mix_b["eliminated"]
+    assert not mix_a["eliminated"] and mix_b["eliminated"]
+    assert set(game3["winnerIds"]) == set((mix_a["id"], mix_b["id"]))
 
     print("  Solo + Team mix: PASS")
 

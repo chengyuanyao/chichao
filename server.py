@@ -36,11 +36,13 @@ from catalog import (
     STRUCTURE_TYPES,
     SUICIDE_KINDS,
     UNIT_TYPES,
+    UNIT_SIGHT_RANGE_MULTIPLIER,
     VEHICLE_KINDS,
     faction_buildings,
     faction_loadout,
     public_catalog,
     structure_role,
+    unit_sight_radius,
     unit_role,
 )
 import easter_eggs
@@ -64,6 +66,9 @@ CHEATS_OPEN = os.environ.get("IFL_CHEATS", "").strip().lower() in ("1", "true", 
 LOCK = threading.RLock()
 ROOMS = {}
 MAX_ROOMS = 32
+EMPTY_ROOM_GRACE_SECONDS = 10.0
+ROOM_REAP_INTERVAL_SECONDS = 1.0
+AGENT_REAP_INTERVAL_SECONDS = 30.0
 MIN_TEAM = 0
 MAX_TEAM = 4
 RUNNING = True
@@ -631,6 +636,67 @@ MAPS = {
         ],
     },
 }
+
+# 地表细节只参与客户端表现，不进入 Terrain / 寻路 / 建造碰撞。按主题提供
+# 全地图默认值，再给个别地图做覆盖，避免为了让草地不再像平板而改变战术地形。
+TERRAIN_DETAIL_PROFILES = {
+    "grassland": {
+        "relief": 1.20,
+        "colorVariation": 1.18,
+        "grassDensity": 1.00,
+        "rockDensity": 0.78,
+        "spawnFlatRadius": 280,
+        "centerFlatRadius": 0,
+    },
+    "arid": {
+        "relief": 1.32,
+        "colorVariation": 1.26,
+        "grassDensity": 0.34,
+        "rockDensity": 1.18,
+        "spawnFlatRadius": 280,
+        "centerFlatRadius": 0,
+    },
+    "urban": {
+        "relief": 0.62,
+        "colorVariation": 0.82,
+        "grassDensity": 0.18,
+        "rockDensity": 0.62,
+        "spawnFlatRadius": 300,
+        "centerFlatRadius": 0,
+    },
+    "crater": {
+        "relief": 1.42,
+        "colorVariation": 1.34,
+        "grassDensity": 0.16,
+        "rockDensity": 1.34,
+        "spawnFlatRadius": 290,
+        "centerFlatRadius": 0,
+    },
+}
+
+MAP_TERRAIN_DETAIL = {
+    # 五辆基地车的中央展开圈保持平整、无散石；外围草坡和碎石比普通草原更密，
+    # 解决 4000×4000 战场远看像一块纯平绿板的问题。
+    "central_scramble": {
+        "relief": 1.58,
+        "colorVariation": 1.42,
+        "grassDensity": 1.35,
+        "rockDensity": 1.48,
+        "spawnFlatRadius": 320,
+        "centerFlatRadius": 620,
+    },
+}
+
+
+def visual_terrain_detail(map_def):
+    """Resolved, JSON-safe visual ground profile for one map."""
+    theme = map_def.get("theme", "grassland")
+    detail = dict(TERRAIN_DETAIL_PROFILES.get(
+        theme, TERRAIN_DETAIL_PROFILES["grassland"]))
+    detail.update(MAP_TERRAIN_DETAIL.get(map_def.get("id"), {}))
+    return detail
+
+
 COMBAT_CELL_SIZE = 256.0
 SEPARATION_CELL_SIZE = 64.0
 REPAIR_RATE = 105.0
@@ -1010,7 +1076,8 @@ def public_entity_frame(game):
     stamp = (version, game["elapsed"], len(game["units"]), len(game["structures"]),
              len(game["projectiles"]), len(game["effects"]), len(game["pings"]),
              len(game.get("crates", [])), len(game.get("pendingStrikes", [])),
-             game.get("winnerId"))
+             game.get("winnerId"), tuple(game.get("winnerIds", [])),
+             game.get("winnerTeam", 0))
     cached = game.get("_publicEntityFrame")
     if cached is not None and cached["stamp"] == stamp:
         return cached
@@ -1032,6 +1099,8 @@ def public_entity_frame(game):
         "ore": [[r["id"], round(r["amount"], 1), 1 if r.get("guarded") else 0]
                 for r in game["resources"]],
         "winnerId": game.get("winnerId"),
+        "winnerIds": list(game.get("winnerIds", [])),
+        "winnerTeam": game.get("winnerTeam", 0),
         "crates": [{"id": c["id"], "x": c["x"], "y": c["y"], "kind": c["kind"]}
                    for c in game.get("crates", [])],
         "strikes": [{
@@ -1107,7 +1176,7 @@ def player_vision_sources(game, player_id):
     for unit in game["units"]:
         if unit["hp"] > 0 and is_friendly(game, unit["owner"], player_id):
             sources.append((unit["x"], unit["y"],
-                            UNIT_TYPES[unit["kind"]].get("sight", 350.0)))
+                            unit_sight_radius(UNIT_TYPES[unit["kind"]])))
     for structure in game["structures"]:
         if structure["hp"] > 0 and is_friendly(game, structure["owner"], player_id):
             radius = STRUCTURE_TYPES[structure["kind"]].get("sight", 350.0)
@@ -1182,6 +1251,8 @@ def public_game(game, viewer_id=None, full=True):
             "effects": visible_effects,
             "pings": pings,
             "winnerId": frame["winnerId"],
+            "winnerIds": frame["winnerIds"],
+            "winnerTeam": frame["winnerTeam"],
             "crates": frame["crates"],
             "strikes": frame["strikes"],
             "orbitalRain": bool(game.get("orbitalRain")),
@@ -1204,7 +1275,7 @@ def public_game(game, viewer_id=None, full=True):
         # and structures it already receives, instead of the server re-sending
         # every friendly position a second time as a vision list.
         result["sight"] = {
-            "units": {k: v.get("sight", 350.0) for k, v in UNIT_TYPES.items()},
+            "units": {k: unit_sight_radius(v) for k, v in UNIT_TYPES.items()},
             "structures": {k: v.get("sight", 350.0) for k, v in STRUCTURE_TYPES.items()},
         }
         result["catalog"] = PUBLIC_CATALOG
@@ -1224,6 +1295,7 @@ PUBLIC_MAPS = {
         "bridges": m.get("bridges", []),
         "mountains": m.get("mountains", []),
         "roads": m.get("roads", []),
+        "terrainDetail": visual_terrain_detail(m),
         "resources": m.get("bonusResources", []),
         "neutralOreGuards": bool(m.get("neutralOreGuards", True)),
     }
@@ -1306,6 +1378,49 @@ def room_list():
         })
     rooms.sort(key=lambda item: item["createdAt"], reverse=True)
     return rooms
+
+
+def room_has_connected_human(room):
+    """True while at least one browser SSE connection owns the room."""
+    return any(
+        not player.get("isBot") and player.get("connections", 0) > 0
+        for player in room.get("players", {}).values())
+
+
+def room_is_abandoned(room, current=None):
+    """Rooms with no browser clients expire after a short reconnect grace."""
+    current = now() if current is None else current
+    humans = [
+        player for player in room.get("players", {}).values()
+        if not player.get("isBot")
+    ]
+    if not humans:
+        return True
+    if any(player.get("connections", 0) > 0 for player in humans):
+        return False
+    newest = max(float(player.get("lastSeen", room.get("createdAt", current)) or 0)
+                 for player in humans)
+    return current - newest >= EMPTY_ROOM_GRACE_SECONDS
+
+
+def reap_abandoned_rooms(current=None):
+    """Remove rooms nobody is viewing, then stop any room-owned AI agents."""
+    current = now() if current is None else current
+    removed = []
+    # All request paths that need both locks already use LOCK -> room_lock.
+    # Holding that same order here makes connection admission and removal
+    # atomic: a reconnect either increments first, or receives room-not-found.
+    with LOCK:
+        for room_id, room in list(ROOMS.items()):
+            with room_lock(room):
+                abandoned = room_is_abandoned(room, current)
+            if abandoned and ROOMS.get(room_id) is room:
+                ROOMS.pop(room_id, None)
+                removed.append(room_id)
+    # Process termination can wait; never hold the global room table meanwhile.
+    for room_id in removed:
+        stop_server_agents_for_room(room_id)
+    return removed
 
 
 def public_chat(room, viewer_id=None):
@@ -1687,6 +1802,8 @@ def make_structure(kind, owner, x, y, active=True):
         "buildTotal": deploy_total,
         "constructionDamage": 0.0,
         "queue": [], "cooldown": random.random(), "dir": 0.0, "rally": None,
+        # 防御建筑默认自动索敌；玩家右键点名时才暂存手动目标。
+        "targetId": None,
     }
 
 
@@ -2066,10 +2183,16 @@ def start_game(room):
     roads = room_map.get("roads", [])
 
     game = {
-        "map": {"width": map_width, "height": map_height, "seed": random.randint(1, 999999)},
+        "map": {
+            "id": room_map["id"],
+            "width": map_width,
+            "height": map_height,
+            "seed": random.randint(1, 999999),
+        },
         "elapsed": 0.0, "units": [], "structures": [], "resources": [],
         "neutralCamps": [],
-        "projectiles": [], "effects": [], "pings": [], "winnerId": None,
+        "projectiles": [], "effects": [], "pings": [],
+        "winnerId": None, "winnerIds": [], "winnerTeam": 0,
         "playerTeams": {p["id"]: p.get("team", 0) for p in room["players"].values()},
         "botClock": 1.0, "victoryClock": 1.0,
         # 单位分离是视觉碰撞，不需要和攻击/移动一样跑满 20Hz。独立时钟让
@@ -2093,6 +2216,8 @@ def start_game(room):
             "mountains": [{"x": m["x"], "y": m["y"], "r": m["r"]} for m in mountains],
             "roads": [{"x1": r["x1"], "y1": r["y1"], "x2": r["x2"], "y2": r["y2"], "width": r["width"]} for r in roads],
             "theme": room_map.get("theme", "grassland"),
+            # 纯表现参数：客户端用来生成低缓草坡、草簇与不可碰撞的散石。
+            "detail": visual_terrain_detail(room_map),
         },
         # Shared per-map navigation context. Never serialized: public_game()
         # copies only the plain "terrain" dict above.
@@ -2582,6 +2707,35 @@ def issue_attack(game, player_id, unit_ids, target_id):
                 unit["order"] = "attack"
 
 
+def issue_structure_attack(game, player_id, structure_id, target_id):
+    """Give one owned defense structure a manual, in-range attack target."""
+    structure = find_entity(game, structure_id)
+    if (not structure or not structure["id"].startswith("s")
+            or structure["owner"] != player_id
+            or structure_role(structure.get("kind")) != "defense"
+            or not structure.get("active")):
+        raise ValueError("请选择己方已启用的炮塔")
+
+    target = find_entity(game, target_id)
+    if not target or is_friendly(game, target["owner"], player_id):
+        raise ValueError("无效目标")
+
+    # The browser only receives visible enemies, but validate again here so a
+    # forged target id cannot order a turret through fog of war.
+    field = vision_field(game, player_id)
+    if field is not None and not field.visible(
+            target["x"], target["y"], target.get("size", 0.0)):
+        raise ValueError("目标不在视野内")
+
+    definition = STRUCTURE_TYPES[structure["kind"]]
+    distance = math.hypot(
+        target["x"] - structure["x"], target["y"] - structure["y"])
+    attack_distance = definition["range"] + target.get("size", 0.0) * 0.35
+    if distance > attack_distance:
+        raise ValueError("目标超出炮塔射程")
+    structure["targetId"] = target["id"]
+
+
 def issue_repair(game, player_id, unit_ids, structure_id):
     repair_bay = find_entity(game, structure_id)
     if (not repair_bay or structure_role(repair_bay.get("kind")) != "repair"
@@ -2855,6 +3009,10 @@ def handle_game_command(room, player, payload):
         issue_move(game, player["id"], unit_ids, payload.get("x", 0), payload.get("y", 0), command == "attackMove")
     elif command == "attack":
         issue_attack(game, player["id"], command_unit_ids(payload), payload.get("targetId"))
+    elif command == "structureAttack":
+        issue_structure_attack(
+            game, player["id"], payload.get("structureId"),
+            payload.get("targetId"))
     elif command == "repair":
         issue_repair(
             game, player["id"], command_unit_ids(payload),
@@ -4448,7 +4606,7 @@ def tick_build_queues(room, dt):
             item["ready"] = True
 
 
-def tick_structures(room, dt, combat_spatial=None):
+def tick_structures(room, dt, combat_spatial=None, entity_index=None):
     game = room["game"]
     terrain = game_terrain(game)
     for structure in game["structures"]:
@@ -4504,9 +4662,25 @@ def tick_structures(room, dt, combat_spatial=None):
             structure["cooldown"] = max(0.0, structure["cooldown"] - dt)
             # 炮塔作战不看电力：电厂或友塔被拆后，剩下的塔照常开火。
             combat_mult = fielded_combat_multiplier(room, structure["owner"])
-            target = nearest_enemy(
-                game, structure["owner"], structure["x"], structure["y"],
-                definition["range"], combat_spatial)
+            target = find_entity(
+                game, structure.get("targetId"), entity_index)
+            if target:
+                distance = math.hypot(
+                    target["x"] - structure["x"],
+                    target["y"] - structure["y"])
+                attack_distance = (definition["range"]
+                                   + target.get("size", 0.0) * 0.35)
+                if (is_friendly(game, target["owner"], structure["owner"])
+                        or distance > attack_distance):
+                    target = None
+                    structure["targetId"] = None
+            elif structure.get("targetId"):
+                # Dead/removed targets must not leave the turret inert.
+                structure["targetId"] = None
+            if not target:
+                target = nearest_enemy(
+                    game, structure["owner"], structure["x"], structure["y"],
+                    definition["range"], combat_spatial)
             if target and combat_mult > 0:
                 structure["dir"] = math.atan2(target["y"] - structure["y"], target["x"] - structure["x"])
                 if structure["cooldown"] <= 0:
@@ -5440,6 +5614,33 @@ def player_has_command(game, player_id):
     return False
 
 
+def record_match_winner(room, winner):
+    """Store both the legacy representative and the complete winning side.
+
+    ``winnerId`` historically named one arbitrary survivor.  That is enough to
+    stop the simulation, but not enough for every client in a team to decide
+    whether its own result is a victory.  Keep it for compatibility and add an
+    authoritative member list; eliminated teammates remain part of the side
+    they fought for and therefore receive the same team result.
+    """
+    game = room["game"]
+    if winner is None:
+        game["winnerId"] = None
+        game["winnerIds"] = []
+        game["winnerTeam"] = 0
+        return
+    team = winner.get("team", 0)
+    game["winnerId"] = winner["id"]
+    game["winnerTeam"] = team if team > 0 else 0
+    if team > 0:
+        game["winnerIds"] = [
+            player["id"] for player in room["players"].values()
+            if player.get("team", 0) == team
+        ]
+    else:
+        game["winnerIds"] = [winner["id"]]
+
+
 def check_elimination_and_victory(room, force=False):
     """淘汰与胜负判定。仍按 victoryClock 的 0.45s 节奏跑，不需要 20Hz 的精度。
 
@@ -5465,7 +5666,7 @@ def check_elimination_and_victory(room, force=False):
     alive = [p for p in room["players"].values() if not p["eliminated"]]
     if (force or game["elapsed"] > 15) and len(alive) <= 1:
         winner = alive[0] if alive else None
-        game["winnerId"] = winner["id"] if winner else None
+        record_match_winner(room, winner)
         room["status"] = "finished"
         add_chat(room, "作战系统", "%s 赢得了本局战斗！" % (winner["name"] if winner else "无人"), True)
     elif force or game["elapsed"] > 15:
@@ -5475,7 +5676,7 @@ def check_elimination_and_victory(room, force=False):
             surviving_teams.add(t if t > 0 else p["id"])
         if len(surviving_teams) <= 1:
             winner = alive[0]
-            game["winnerId"] = winner["id"]
+            record_match_winner(room, winner)
             room["status"] = "finished"
             team_winners = [p["name"] for p in alive]
             add_chat(room, "作战系统", "队伍 %s 赢得了本局战斗！" % ("、".join(team_winners)), True)
@@ -5638,7 +5839,7 @@ def tick_game(room, dt):
     entity_index, combat_spatial = build_combat_indexes(game)
     tick_units(room, dt, entity_index, combat_spatial)
     tick_build_queues(room, dt)
-    tick_structures(room, dt, combat_spatial)
+    tick_structures(room, dt, combat_spatial, entity_index)
     entity_index, combat_spatial = build_combat_indexes(game)
     tick_projectiles(room, dt, entity_index, combat_spatial)
     tick_orbital_rain(room)
@@ -5679,27 +5880,21 @@ def tick_game(room, dt):
 def game_loop():
     global RUNNING
     previous = time.time()
-    cleanup_clock = 0.0
+    room_reap_clock = 0.0
+    agent_reap_clock = 0.0
     while RUNNING:
         current = time.time()
         dt = min(0.12, max(0.001, current - previous))
         previous = current
         tick_all_rooms(dt)
-        cleanup_clock += dt
-        if cleanup_clock > 30:
-            cleanup_clock = 0
+        room_reap_clock += dt
+        agent_reap_clock += dt
+        if room_reap_clock >= ROOM_REAP_INTERVAL_SECONDS:
+            room_reap_clock = 0.0
+            reap_abandoned_rooms(current)
+        if agent_reap_clock >= AGENT_REAP_INTERVAL_SECONDS:
+            agent_reap_clock = 0.0
             reap_server_agents()
-            cutoff = now() - 60 * 60 * 3
-            with LOCK:
-                stale = []
-                for room_id, room in ROOMS.items():
-                    humans = [p for p in room["players"].values() if not p["isBot"]]
-                    newest = max([p.get("lastSeen", room["createdAt"]) for p in humans] or [room["createdAt"]])
-                    if not humans or (room["status"] == "finished" and newest < cutoff):
-                        stale.append(room_id)
-                for room_id in stale:
-                    ROOMS.pop(room_id, None)
-                    stop_server_agents_for_room(room_id)
         elapsed = time.time() - current
         time.sleep(max(0.005, 0.05 - elapsed))
 
@@ -5735,7 +5930,16 @@ def static_entry(target):
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
     daemon_threads = True
-    allow_reuse_address = True
+    # Windows SO_REUSEADDR permits two Python servers to bind the same port;
+    # stopping one then appears to work while the other keeps every room alive.
+    # Use an exclusive bind there. Unix keeps fast restart semantics.
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self):
+        if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(
+                socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        HTTPServer.server_bind(self)
 
 
 # SSE / 状态拉取把 session token 放在查询串里。默认 access log 会打印整条
@@ -5801,6 +6005,7 @@ class GameHandler(BaseHTTPRequestHandler):
         elif path == "/api/catalog":
             self.send_json(200, PUBLIC_CATALOG)
         elif path == "/api/rooms":
+            reap_abandoned_rooms()
             with LOCK:
                 payload = {"rooms": room_list(), "serverTime": now()}
             self.send_json(200, payload)
@@ -6246,16 +6451,22 @@ class GameHandler(BaseHTTPRequestHandler):
         self.send_json(200, response)
 
     def handle_events(self, query):
-        room_id = (query.get("roomId") or [""])[0]
+        room_id = (query.get("roomId") or [""])[0].strip().upper()
         player_id = (query.get("playerId") or [""])[0]
         token = (query.get("token") or [""])[0]
         with LOCK:
             room, player = authenticate(room_id, player_id, token)
+            if room and player:
+                with room_lock(room):
+                    # Re-check while LOCK still prevents the reaper from
+                    # removing this room between authentication and admission.
+                    if ROOMS.get(room_id) is room:
+                        player["connections"] += 1
+                    else:
+                        room, player = None, None
         if not room or not player:
             self.send_json(403, {"ok": False, "error": "会话已失效"})
             return
-        with room_lock(room):
-            player["connections"] += 1
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache, no-transform")
@@ -6306,6 +6517,9 @@ class GameHandler(BaseHTTPRequestHandler):
                 if player_id in room["players"]:
                     room["players"][player_id]["connections"] = max(
                         0, room["players"][player_id]["connections"] - 1)
+                    # Count the reconnect grace from the detected disconnect,
+                    # not from the preceding SSE snapshot.
+                    room["players"][player_id]["lastSeen"] = now()
 
     def serve_static(self, path):
         if path == "/":

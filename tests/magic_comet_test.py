@@ -70,7 +70,7 @@ def main():
     assert comet["size"] == 22.0
     assert comet["build"] == 18.0
     assert comet["splash"] == 110.0
-    assert comet["sight"] == 300.0
+    assert comet["sight"] == round(comet["range"] * 1.10, 3)
     assert comet["armor"] == "light"
     assert comet["damageType"] == "missile"
     assert comet["projectile"] == "comet"

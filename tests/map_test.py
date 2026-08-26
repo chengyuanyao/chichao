@@ -62,6 +62,24 @@ def check_map(map_id, map_def):
     assert len(map_def["spawnLabels"]) == len(spawns), \
         "%s: 出生点标签数量不符" % map_id
 
+    # 每张地图都要拿到完整的视觉地表档案；它只随 terrain JSON 下发，不能
+    # 混进寻路 Terrain。五车争疆另有更强的外围起伏和中央平整展开圈。
+    detail = server.visual_terrain_detail(map_def)
+    assert set(detail) == {
+        "relief", "colorVariation", "grassDensity", "rockDensity",
+        "spawnFlatRadius", "centerFlatRadius",
+    }, (map_id, detail)
+    assert detail["relief"] > 0
+    assert detail["grassDensity"] >= 0
+    assert detail["rockDensity"] >= 0
+    assert server.PUBLIC_MAPS[map_id]["terrainDetail"] == detail
+    if map_id == "central_scramble":
+        assert detail["centerFlatRadius"] >= 600
+        assert detail["grassDensity"] > \
+            server.TERRAIN_DETAIL_PROFILES["grassland"]["grassDensity"]
+        assert detail["rockDensity"] > \
+            server.TERRAIN_DETAIL_PROFILES["grassland"]["rockDensity"]
+
     # --- 出生点必须在地图内、且周围有足够空地 ---
     for index, (sx, sy) in enumerate(spawns):
         assert 0 < sx < width and 0 < sy < height, \
@@ -128,6 +146,8 @@ def check_map(map_id, map_def):
     }
     server.start_game(room)
     game = room["game"]
+    assert game["map"]["id"] == map_id
+    assert game["terrain"]["detail"] == detail
 
     for resource in game["resources"]:
         assert not terrain.blocked(resource["x"], resource["y"], resource["radius"]), \

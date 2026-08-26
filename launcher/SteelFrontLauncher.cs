@@ -6,12 +6,73 @@ using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
 namespace SteelFrontLauncher
 {
+    internal static class NativeMethods
+    {
+        internal const uint JobObjectExtendedLimitInformationClass = 9;
+        internal const uint JobObjectLimitKillOnJobClose = 0x00002000;
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct JobObjectBasicLimitInformation
+        {
+            internal long PerProcessUserTimeLimit;
+            internal long PerJobUserTimeLimit;
+            internal uint LimitFlags;
+            internal UIntPtr MinimumWorkingSetSize;
+            internal UIntPtr MaximumWorkingSetSize;
+            internal uint ActiveProcessLimit;
+            internal UIntPtr Affinity;
+            internal uint PriorityClass;
+            internal uint SchedulingClass;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct IoCounters
+        {
+            internal ulong ReadOperationCount;
+            internal ulong WriteOperationCount;
+            internal ulong OtherOperationCount;
+            internal ulong ReadTransferCount;
+            internal ulong WriteTransferCount;
+            internal ulong OtherTransferCount;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct JobObjectExtendedLimitInformation
+        {
+            internal JobObjectBasicLimitInformation BasicLimitInformation;
+            internal IoCounters IoInfo;
+            internal UIntPtr ProcessMemoryLimit;
+            internal UIntPtr JobMemoryLimit;
+            internal UIntPtr PeakProcessMemoryUsed;
+            internal UIntPtr PeakJobMemoryUsed;
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        internal static extern IntPtr CreateJobObject(IntPtr jobAttributes, string name);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool SetInformationJobObject(
+            IntPtr job, uint informationClass, IntPtr information,
+            uint informationLength);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool AssignProcessToJobObject(
+            IntPtr job, IntPtr process);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool CloseHandle(IntPtr handle);
+    }
+
     internal sealed class LauncherOptions
     {
         public bool AutoStart;
@@ -109,6 +170,7 @@ namespace SteelFrontLauncher
         private LinkLabel _logLink;
 
         private Process _serverProcess;
+        private IntPtr _serverJob = IntPtr.Zero;
         private ServerState _state = ServerState.Stopped;
         private DateTime _startDeadline;
         private bool _healthChecking;
@@ -341,16 +403,36 @@ namespace SteelFrontLauncher
                 SafeBeginInvoke(delegate { HandleProcessExited(process, exitCode); });
             };
 
+            bool started = false;
             try
             {
                 if (!process.Start())
                     throw new InvalidOperationException("Python 进程没有启动");
+                started = true;
                 _serverProcess = process;
+                if (!AttachKillOnCloseJob(process))
+                    AppendLog("警告：无法建立进程树托管，停止时将使用 taskkill /T 兜底。");
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
             }
             catch (Exception exc)
             {
+                if (started)
+                {
+                    bool killedByJob = ReleaseServerJob();
+                    if (!killedByJob)
+                        KillProcessTree(process.Id);
+                    try
+                    {
+                        if (!HasExited(process))
+                        {
+                            process.Kill();
+                            process.WaitForExit(3000);
+                        }
+                    }
+                    catch { }
+                }
+                _serverProcess = null;
                 process.Dispose();
                 AppendLog("启动失败：" + exc);
                 MessageBox.Show("服务器启动失败：\n" + exc.Message + "\n\n详情见 launcher.log。",
@@ -437,7 +519,10 @@ namespace SteelFrontLauncher
         {
             Process process = _serverProcess;
             if (process == null)
+            {
+                ReleaseServerJob();
                 return;
+            }
 
             _state = ServerState.Stopping;
             _stoppingByUser = true;
@@ -449,11 +534,16 @@ namespace SteelFrontLauncher
                 SetStatus("● 正在停止……", Red);
             }
 
+            int port = Decimal.ToInt32(_portInput.Value);
+            bool killedByJob = ReleaseServerJob();
             try
             {
                 if (!HasExited(process))
                 {
-                    process.Kill();
+                    if (!killedByJob)
+                        KillProcessTree(process.Id);
+                    if (!HasExited(process))
+                        process.Kill();
                     process.WaitForExit(3000);
                 }
             }
@@ -467,7 +557,17 @@ namespace SteelFrontLauncher
                 _serverProcess = null;
                 process.Dispose();
             }
-            AppendLog("服务器已由启动器停止。");
+            bool portReleased = WaitForPortRelease(port, 5000);
+            AppendLog(portReleased
+                ? "服务器进程树已全部停止，端口已释放。"
+                : "停止异常：服务进程已结束，但端口仍被其他进程占用。");
+            if (!closing && !portReleased)
+            {
+                MessageBox.Show(
+                    "服务器进程树已经结束，但端口 " + port +
+                    " 仍被其他程序占用。\n\n启动器不会把这种状态误报为已彻底停止，请检查 launcher.log。",
+                    "端口仍被占用", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
             if (!closing)
                 UpdateStoppedState();
         }
@@ -479,6 +579,7 @@ namespace SteelFrontLauncher
 
             _healthTimer.Stop();
             _serverProcess = null;
+            ReleaseServerJob();
             process.Dispose();
             bool expected = _stoppingByUser;
             UpdateStoppedState();
@@ -621,6 +722,108 @@ namespace SteelFrontLauncher
         {
             try { return process.HasExited; }
             catch { return true; }
+        }
+
+        private bool AttachKillOnCloseJob(Process process)
+        {
+            IntPtr job = NativeMethods.CreateJobObject(IntPtr.Zero, null);
+            if (job == IntPtr.Zero)
+                return false;
+
+            IntPtr buffer = IntPtr.Zero;
+            bool assigned = false;
+            try
+            {
+                NativeMethods.JobObjectExtendedLimitInformation limits =
+                    new NativeMethods.JobObjectExtendedLimitInformation();
+                limits.BasicLimitInformation.LimitFlags =
+                    NativeMethods.JobObjectLimitKillOnJobClose;
+                int length = Marshal.SizeOf(typeof(
+                    NativeMethods.JobObjectExtendedLimitInformation));
+                buffer = Marshal.AllocHGlobal(length);
+                Marshal.StructureToPtr(limits, buffer, false);
+                if (!NativeMethods.SetInformationJobObject(
+                        job, NativeMethods.JobObjectExtendedLimitInformationClass,
+                        buffer, (uint)length))
+                    return false;
+                if (!NativeMethods.AssignProcessToJobObject(job, process.Handle))
+                    return false;
+                _serverJob = job;
+                assigned = true;
+                return true;
+            }
+            finally
+            {
+                if (buffer != IntPtr.Zero)
+                    Marshal.FreeHGlobal(buffer);
+                if (!assigned)
+                    NativeMethods.CloseHandle(job);
+            }
+        }
+
+        private bool ReleaseServerJob()
+        {
+            IntPtr job = _serverJob;
+            _serverJob = IntPtr.Zero;
+            return job != IntPtr.Zero && NativeMethods.CloseHandle(job);
+        }
+
+        private static void KillProcessTree(int processId)
+        {
+            try
+            {
+                ProcessStartInfo info = new ProcessStartInfo();
+                info.FileName = "taskkill.exe";
+                info.Arguments = "/PID " + processId + " /T /F";
+                info.UseShellExecute = false;
+                info.CreateNoWindow = true;
+                info.WindowStyle = ProcessWindowStyle.Hidden;
+                using (Process killer = Process.Start(info))
+                {
+                    if (killer != null)
+                        killer.WaitForExit(3000);
+                }
+            }
+            catch { }
+        }
+
+        private static bool WaitForPortRelease(int port, int timeoutMs)
+        {
+            Stopwatch watch = Stopwatch.StartNew();
+            while (watch.ElapsedMilliseconds < timeoutMs)
+            {
+                if (!TcpPortOpen(port))
+                    return true;
+                Thread.Sleep(100);
+            }
+            return !TcpPortOpen(port);
+        }
+
+        private static bool TcpPortOpen(int port)
+        {
+            try
+            {
+                using (TcpClient client = new TcpClient())
+                {
+                    IAsyncResult pending = client.BeginConnect(
+                        IPAddress.Loopback, port, null, null);
+                    try
+                    {
+                        if (!pending.AsyncWaitHandle.WaitOne(150))
+                            return false;
+                        client.EndConnect(pending);
+                        return true;
+                    }
+                    finally
+                    {
+                        pending.AsyncWaitHandle.Close();
+                    }
+                }
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static string Quote(string value)
