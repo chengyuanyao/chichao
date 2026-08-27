@@ -1344,7 +1344,12 @@ kbd {
   box-shadow: var(--shadow);
 }
 
-/* 桌面左下战报/操作图例会盖住最左的「速推」。方针条抬高后，把战报挪到条上方。 */
+/* 桌面左下战报/操作图例会盖住最左的「速推」。方针条抬高后，把战报挪到条上方。
+   指挥官模式不要 900px 下限：中等桌面窗一出横向滚动，最左的速推就被裁掉。 */
+.game-screen.commander-play {
+  min-width: 0;
+}
+
 .game-screen.commander-play .control-legend {
   display: none;
 }

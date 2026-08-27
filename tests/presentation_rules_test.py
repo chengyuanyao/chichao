@@ -619,6 +619,7 @@ def main():
     assert "min-width: 0" in styles
     assert ".game-screen.commander-play .battle-chat" in styles
     assert ".game-screen.commander-play .control-legend" in styles
+    assert "中等桌面窗一出横向滚动" in styles
     assert "默认方针为发育" in readme
     assert "总部遇袭" in readme
     assert 'id="commanderBindHint"' in hud
