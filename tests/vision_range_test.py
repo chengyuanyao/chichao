@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Unit sight must stay exactly 10% beyond authoritative attack range."""
+"""Weapon range can extend sight, but must never shrink base/scout vision."""
 
 from __future__ import print_function
 
@@ -17,31 +17,55 @@ def main():
     assert server.UNIT_SIGHT_RANGE_MULTIPLIER == 1.10
 
     armed = []
+    extended = []
+    preserved = []
     utility = []
     for kind, definition in server.UNIT_TYPES.items():
+        base_sight = float(definition["_baseSight"])
         attack_range = float(definition.get("range", 0.0) or 0.0)
         if attack_range > 0.0:
             armed.append(kind)
-            expected = round(attack_range * 1.10, 3)
+            expected = round(max(base_sight, attack_range * 1.10), 3)
             assert definition["sight"] == expected, (
                 kind, definition["sight"], expected)
             assert server.unit_sight_radius(definition) == expected
             assert definition["sight"] > attack_range
+            assert definition["sight"] >= base_sight
+            if attack_range * 1.10 > base_sight:
+                extended.append(kind)
+            else:
+                preserved.append(kind)
         else:
             utility.append(kind)
-            assert definition["sight"] > 0.0, "%s must not become blind" % kind
+            assert definition["sight"] == base_sight
             assert server.unit_sight_radius(definition) == definition["sight"]
 
     assert armed, "catalog needs combat units"
     assert set(utility) == {"harvester", "mharvester", "mcv", "mmcv"}
-    # Contact detonation range is still an attack range, even though its direct
-    # damage field is zero; both suicide counterparts must follow the same rule.
-    assert server.UNIT_TYPES["bomb_truck"]["sight"] == 24.2
-    assert server.UNIT_TYPES["hexling"]["sight"] == 24.2
+    # Melee, scouts and contact detonators retain their deliberately generous
+    # awareness instead of collapsing to 22-34 world units.
+    assert server.UNIT_TYPES["dog"]["sight"] == 400.0
+    assert server.UNIT_TYPES["panther"]["sight"] == 520.0
+    assert server.UNIT_TYPES["bomb_truck"]["sight"] == 350.0
+    assert server.UNIT_TYPES["hexling"]["sight"] == 350.0
+
+    # These siege weapons had less base sight than range and must be extended.
+    assert server.UNIT_TYPES["artillery"]["sight"] == 374.0
+    assert server.UNIT_TYPES["v3"]["sight"] == 550.0
+    assert server.UNIT_TYPES["comet"]["sight"] == 572.0
+    assert server.UNIT_TYPES["colossus"]["sight"] == 374.0
+    assert {"artillery", "v3", "comet", "colossus"}.issubset(extended)
+    assert {"dog", "panther", "bomb_truck", "hexling"}.issubset(preserved)
+
+    dog_sight = server.unit_sight_radius(server.UNIT_TYPES["dog"])
+    dog_field = server.VisionField([(0.0, 0.0, dog_sight)])
+    assert dog_field.visible(350.0, 0.0)
+    assert dog_field.visible(dog_sight, 0.0)
+    assert not dog_field.visible(dog_sight + 0.01, 0.0)
 
     # Server-side fog math uses the derived radius exactly.
     artillery = server.UNIT_TYPES["artillery"]
-    artillery_sight = round(artillery["range"] * 1.10, 3)
+    artillery_sight = server.unit_sight_radius(artillery)
     field = server.VisionField([(0.0, 0.0, artillery_sight)])
     assert field.visible(artillery_sight, 0.0)
     assert not field.visible(artillery_sight + 0.01, 0.0)
@@ -63,8 +87,8 @@ def main():
     for kind, definition in server.UNIT_TYPES.items():
         assert client_sight[kind] == server.unit_sight_radius(definition), kind
 
-    print("vision range ok: %d combat units use range x1.10; utility units keep sight" %
-          len(armed))
+    print("vision range ok: %d extended, %d preserve base, %d utility" %
+          (len(extended), len(preserved), len(utility)))
 
 
 if __name__ == "__main__":

@@ -84,8 +84,12 @@ def main():
     assert oracle["damage"] == 48.0
     assert imp["cooldown"] == 0.7
     assert oracle["cooldown"] == 1.55
-    assert imp["sight"] == round(imp["range"] * 1.10, 3)
-    assert oracle["sight"] == round(oracle["range"] * 1.10, 3)
+    # Short/medium-range units keep their authored awareness; range-derived
+    # sight is only a minimum and must never narrow the original value.
+    assert imp["sight"] == imp["_baseSight"] == 360.0
+    assert oracle["sight"] == oracle["_baseSight"] == 470.0
+    assert imp["sight"] > imp["range"]
+    assert oracle["sight"] > oracle["range"]
     # 不抄钢铁突击/狙击数字
     assert imp["cost"] != server.UNIT_TYPES["rifle"]["cost"]
     assert oracle["cost"] != server.UNIT_TYPES["sniper"]["cost"]

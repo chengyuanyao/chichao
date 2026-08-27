@@ -8,8 +8,9 @@ server.py re-exports these names so existing tests and imports keep working.
 from __future__ import print_function
 
 
-# 有攻击距离的单位统一比武器多看 10%。视野由 range 派生，后续平衡武器
-# 射程时会自动同步，不再维护一组容易漂移的独立数字。
+# 保留每个兵种原有的基础视野；只有武器射程超过基础视野时，才把视野扩到
+# 射程的 110%。这样远程单位一定看得到自己能打到的目标，近战/侦察单位也
+# 不会因为短攻击距离被压成几十点视野。
 UNIT_SIGHT_RANGE_MULTIPLIER = 1.10
 
 
@@ -282,17 +283,21 @@ UNIT_TYPES = {
 
 
 def unit_sight_radius(definition):
-    """Return authoritative unit sight: attack range +10%, or utility fallback."""
+    """Return base sight, extended when needed to cover weapon range +10%."""
+    base_sight = float(definition.get(
+        "_baseSight", definition.get("sight", 350.0)) or 350.0)
     attack_range = float(definition.get("range", 0.0) or 0.0)
     if attack_range > 0.0:
-        return round(attack_range * UNIT_SIGHT_RANGE_MULTIPLIER, 3)
-    # 采矿车和基地车没有武器，不能按 0×1.1 变成完全失明。
-    return float(definition.get("sight", 350.0))
+        return round(max(
+            base_sight, attack_range * UNIT_SIGHT_RANGE_MULTIPLIER), 3)
+    return base_sight
 
 
 # 保持 UNIT_TYPES 本身也是已经归一化的公开定义，旧代码/测试即使直接读取
 # definition["sight"]，得到的也和服务端迷雾、客户端视野表完全一致。
 for _unit_definition in UNIT_TYPES.values():
+    _unit_definition["_baseSight"] = float(
+        _unit_definition.get("sight", 350.0) or 350.0)
     _unit_definition["sight"] = unit_sight_radius(_unit_definition)
 
 STRUCTURE_TYPES = {
