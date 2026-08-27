@@ -612,6 +612,7 @@ def main():
     assert "总部遇袭" in app
     assert "敌军压境" in app
     assert "默认发育" in app
+    assert "已设焦点" in app
     assert "commander-defend-pulse" in styles
     assert ".game-screen.commander-play" in styles
     assert "方针条独占底栏" in styles

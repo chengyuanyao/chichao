@@ -2347,8 +2347,15 @@ import {
       payload.y = y;
     }
     sendAction('command', payload).then(function () {
-      var label = COMMANDER_INTENT_LABELS[kind] || (ownIntent() && COMMANDER_INTENT_LABELS[ownIntent().kind]);
-      toast(label ? ('方针：' + label) : '已更新焦点', 'success');
+      var current = ownIntent();
+      var changingKind = !!(kind && (!current || current.kind !== kind));
+      if (changingKind) {
+        toast('方针：' + COMMANDER_INTENT_LABELS[kind], 'success');
+      } else if (x != null && y != null) {
+        toast('已设焦点', 'success');
+      } else {
+        toast('已更新焦点', 'success');
+      }
       sound('confirm');
     }).catch(function (err) {
       toast((err && err.message) || '方针下达失败', 'error');
@@ -4176,17 +4183,21 @@ import {
       var fx = intent.focus.x * sx;
       var fy = intent.focus.y * sy;
       miniCtx.save();
-      miniCtx.strokeStyle = '#ffd23e';
-      miniCtx.lineWidth = 2;
+      miniCtx.strokeStyle = 'rgba(255,210,62,0.95)';
+      miniCtx.lineWidth = 2.5;
       miniCtx.beginPath();
-      miniCtx.moveTo(fx - 7, fy);
-      miniCtx.lineTo(fx + 7, fy);
-      miniCtx.moveTo(fx, fy - 7);
-      miniCtx.lineTo(fx, fy + 7);
+      miniCtx.arc(fx, fy, 9, 0, Math.PI * 2);
       miniCtx.stroke();
       miniCtx.beginPath();
-      miniCtx.arc(fx, fy, 6, 0, Math.PI * 2);
+      miniCtx.moveTo(fx - 11, fy);
+      miniCtx.lineTo(fx + 11, fy);
+      miniCtx.moveTo(fx, fy - 11);
+      miniCtx.lineTo(fx, fy + 11);
       miniCtx.stroke();
+      miniCtx.fillStyle = '#ffd23e';
+      miniCtx.beginPath();
+      miniCtx.arc(fx, fy, 2.5, 0, Math.PI * 2);
+      miniCtx.fill();
       miniCtx.restore();
     }
     // 轨道打击预警圈：半径跟服务端这发走（玩家 180，轨道天降 900）
