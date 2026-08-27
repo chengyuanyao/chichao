@@ -1350,12 +1350,9 @@ kbd {
   min-width: 0;
 }
 
-.game-screen.commander-play .control-legend {
-  display: none;
-}
-
+.game-screen.commander-play .control-legend,
 .game-screen.commander-play .battle-chat {
-  bottom: 132px;
+  display: none;
 }
 
 .commander-hud.hidden {
