@@ -1333,7 +1333,7 @@ kbd {
   left: 12px;
   right: calc(var(--sidebar-w) + 16px);
   bottom: 18px;
-  z-index: 8;
+  z-index: 16;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1342,6 +1342,15 @@ kbd {
   border: 1px solid rgba(201, 162, 75, 0.4);
   background: rgba(18, 20, 12, 0.88);
   box-shadow: var(--shadow);
+}
+
+/* 桌面左下战报/操作图例会盖住最左的「速推」。方针条抬高后，把战报挪到条上方。 */
+.game-screen.commander-play .control-legend {
+  display: none;
+}
+
+.game-screen.commander-play .battle-chat {
+  bottom: 132px;
 }
 
 .commander-hud.hidden {

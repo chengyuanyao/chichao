@@ -617,6 +617,8 @@ def main():
     assert ".game-screen.commander-play" in styles
     assert "方针条独占底栏" in styles
     assert "min-width: 0" in styles
+    assert ".game-screen.commander-play .battle-chat" in styles
+    assert ".game-screen.commander-play .control-legend" in styles
     assert "默认方针为发育" in readme
     assert "总部遇袭" in readme
     assert 'id="commanderBindHint"' in hud
