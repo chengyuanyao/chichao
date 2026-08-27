@@ -85,7 +85,7 @@ UNIT_TYPES = {
         "sight": 290.0, "armor": "heavy", "damageType": "siege",
     },
     "tank_destroyer": {
-        "name": "坦克歼击车", "cost": 1050, "hp": 320, "speed": 66.0,
+        "name": "坦克歼击车", "cost": 1050, "hp": 400, "speed": 66.0,
         "damage": 78.0, "range": 230.0, "cooldown": 1.7,
         "size": 18.0, "build": 8.0, "producer": "factory",
         "projectile": "ap", "projectileSpeed": 800.0, "splash": 0.0,
@@ -108,7 +108,7 @@ UNIT_TYPES = {
     },
     # ---- 高级兵种：靠 requires 卡在二级科技后，贵在单兵质量而非数量 ----
     "overlord": {
-        "name": "天启坦克", "cost": 1700, "hp": 2000, "speed": 57.6,
+        "name": "天启坦克", "cost": 1700, "hp": 1700, "speed": 57.6,
         "damage": 120.0, "range": 195.0, "cooldown": 1.6,
         "size": 24.0, "build": 16.0, "producer": "factory",
         "requires": ["repair"],
@@ -223,7 +223,7 @@ UNIT_TYPES = {
         "sight": 520.0, "armor": "arcane", "damageType": "magic",
     },
     # 秘法巨龙：远程大火球大溅射。圣泉二级后才许召唤，避免法阵一立就能出 1600 压轴。
-    # 1100 血仍低于天启 2000；靠射程/溅射/熔甲换耐久，不当新的碾压前排。
+    # 1100 血仍低于天启 1700；靠射程/溅射/熔甲换耐久，不当新的碾压前排。
     "dragon": {
         "name": "秘法巨龙", "cost": 1600, "hp": 1100, "speed": 60.0,
         "damage": 95.0, "range": 260.0, "cooldown": 1.7,
@@ -254,7 +254,7 @@ UNIT_TYPES = {
         "sight": 300.0, "armor": "light", "damageType": "missile",
     },
     # 裂地晶兽：缺的攻城行。siege ×1.8 拆建筑，对单位很差，对位攻城炮/光棱。
-    # 600 血不再一碰就碎，仍远低于晶铠 1040 / 巨龙 1100 / 天启 2000。
+    # 600 血不再一碰就碎，仍远低于晶铠 1040 / 巨龙 1100 / 天启 1700。
     "colossus": {
         "name": "裂地晶兽", "cost": 1280, "hp": 600, "speed": 48.0,
         "damage": 120.0, "range": 340.0, "cooldown": 2.10,

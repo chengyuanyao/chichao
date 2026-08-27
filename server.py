@@ -587,7 +587,8 @@ MAPS = {
         "theme": "grassland",
         "briefing": (
             "五名指挥官只带一辆折叠基地车，在中央矿脉旁同时落地。"
-            "先抢方向再展开：中央是一片巨型矿脉，外围每局随机生成五片大型无守军矿区。"
+            "先抢方向再展开：外围每局随机生成五片 23 万无守军矿区，"
+            "中央固定矿储量 46 万，是外围单片矿的两倍。"
         ),
         # 五辆基地车停在中央 190 半径的小环上：彼此都在视野内，但不发生
         # 单位分离。这里是落地点，不是固定发展区；玩家应先驶离中央再展开。
@@ -627,12 +628,12 @@ MAPS = {
         ],
         "packedStart": True,
         "neutralOreGuards": False,
-        # 总矿区数为 6：中央固定一片，外围五片每局重新随机；两者储量均为
-        # 常规值的 10 倍，让五人高强度混战不会迅速挖空整张地图。
+        # 总矿区数为 6：中央固定一片，外围五片每局重新随机。外围每片固定
+        # 23 万，中央固定 46 万，稳定保持 2:1，避免随机储量破坏争夺价值。
         "publicOreCount": 5,
-        "publicOreAmountMultiplier": 10,
+        "publicOreAmount": 230000,
         "bonusResources": [
-            {"x": 2000, "y": 2000, "amount": 90000, "public": True},
+            {"x": 2000, "y": 2000, "amount": 460000, "public": True},
         ],
     },
 }
@@ -2042,7 +2043,7 @@ def resource_is_guarded(game, resource):
 
 
 def add_random_resources(game, count, spawn_points, guarded=True,
-                         amount_multiplier=1.0):
+                         amount_multiplier=1.0, fixed_amount=None):
     """在出生区之外放置随机公共矿区。
 
     出生点附近的保底矿由 ``start_game`` 单独生成；这里的矿只负责争夺区，
@@ -2107,9 +2108,12 @@ def add_random_resources(game, count, spawn_points, guarded=True,
                for r in game["resources"]):
             continue
 
-        # 公共矿量有波动，但限制在可读的整千数，地图每次重开会变化又不会
-        # 因极端随机值破坏经济节奏。
-        amount = int(rng.randint(18, 28) * 1000 * amount_multiplier)
+        # 默认公共矿量有小幅波动；地图也可以固定每片储量，让中央与外围等
+        # 需要明确比例的玩法不受随机数影响。
+        if fixed_amount is None:
+            amount = int(rng.randint(18, 28) * 1000 * amount_multiplier)
+        else:
+            amount = max(1, int(fixed_amount))
         public_resources.append(add_resource(game, x, y, amount, public=True))
         placed += 1
 
@@ -2450,7 +2454,8 @@ def start_game(room):
     add_random_resources(
         game, int(room_map.get("publicOreCount", 4)), spawn_points,
         guarded=neutral_ore_guards,
-        amount_multiplier=room_map.get("publicOreAmountMultiplier", 1.0))
+        amount_multiplier=room_map.get("publicOreAmountMultiplier", 1.0),
+        fixed_amount=room_map.get("publicOreAmount"))
 
     # 折叠开局的人类玩家完全自行选址。AI 没有人拖动基地车，给它写入一个
     # 私有的外环目标；bot_maybe_pack 会先沿放射路驶离中央，到点后再展开。

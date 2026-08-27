@@ -130,10 +130,26 @@ def main():
     assert abs(actual - expected) < 0.1, (actual, expected)
     print("  AP vs infantry: %.0f damage (expected %.0f) PASS" % (actual, expected))
 
-    print("\n=== Test 7: Unit definitions ===")
+    print("\n=== Test 7: Tank destroyer survives three overlord shells ===")
+    destroyer = server.make_unit("tank_destroyer", f["id"], 2300, 2300)
+    game3["units"].append(destroyer)
+    assert destroyer["hp"] == destroyer["maxHp"] == 400
+    for _ in range(3):
+        server.apply_damage(room3, destroyer, 120, e["id"], "shell", game3)
+    assert destroyer["hp"] == 40, destroyer["hp"]
+    server.apply_damage(room3, destroyer, 120, e["id"], "shell", game3)
+    assert destroyer["hp"] == 0
+    print("  400 HP: survives 3 x 120 shell hits, destroyed by the fourth: PASS")
+
+    print("\n=== Test 8: Unit definitions ===")
     assert "tank_destroyer" in server.UNIT_TYPES
     assert "mcv" in server.UNIT_TYPES
     assert server.UNIT_TYPES["tank_destroyer"]["damageType"] == "ap"
+    assert server.UNIT_TYPES["tank_destroyer"]["hp"] == 400
+    assert server.UNIT_TYPES["tank_destroyer"]["cost"] == 1050
+    assert server.UNIT_TYPES["tank_destroyer"]["damage"] == 78.0
+    assert server.UNIT_TYPES["tank_destroyer"]["range"] == 230.0
+    assert server.UNIT_TYPES["tank_destroyer"]["cooldown"] == 1.7
     assert server.UNIT_TYPES["mcv"]["canDeploy"] is True
     assert server.UNIT_TYPES["tank_destroyer"]["producer"] == "factory"
     assert server.UNIT_TYPES["mcv"]["producer"] == "factory"

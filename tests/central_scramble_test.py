@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""五车争疆：中央折叠开局、六片十倍矿、全图无中立矿营。"""
+"""五车争疆：中央折叠开局、中央双倍矿、全图无中立矿营。"""
 
 from __future__ import print_function
 
@@ -57,7 +57,7 @@ def main():
     assert map_def.get("packedStart") is True
     assert map_def.get("neutralOreGuards") is False
     assert map_def.get("publicOreCount") == 5
-    assert map_def.get("publicOreAmountMultiplier") == 10
+    assert map_def.get("publicOreAmount") == 230000
     assert server.PUBLIC_MAPS[MAP_ID]["maxPlayers"] == 5
     app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             "public", "app.js")
@@ -84,22 +84,23 @@ def main():
         assert server.player_has_command(game, player["id"])
     print("  科技基地车/秘法迁徙法阵共 5 辆，中央静止折叠: PASS")
 
-    print("\n=== Test 2: 中央和外围矿量均提高到常规值的十倍 ===")
+    print("\n=== Test 2: 中央矿量稳定为外围单片矿的两倍 ===")
     assert len(game["resources"]) == 6, len(game["resources"])
     center = [resource for resource in game["resources"]
               if math.hypot(resource["x"] - 2000, resource["y"] - 2000) < 20]
     outer = [resource for resource in game["resources"] if resource not in center]
-    assert len(center) == 1 and center[0]["amount"] == 90000, center
+    assert len(center) == 1 and center[0]["amount"] == 460000, center
     assert len(outer) == 5, len(outer)
-    assert all(180000 <= resource["amount"] <= 280000
-               and resource["amount"] % 10000 == 0 for resource in outer), outer
+    assert all(resource["amount"] == 230000 for resource in outer), outer
+    assert all(center[0]["amount"] == resource["amount"] * 2
+               for resource in outer), (center, outer)
     assert all(math.hypot(resource["x"] - 2000, resource["y"] - 2000) > 700
                for resource in outer)
     assert all(resource.get("public") for resource in game["resources"])
     room2, _players2, _bot2 = make_room(71102)
     assert outer_positions(game) != outer_positions(room2["game"]), \
         "不同对局的外围矿坐标应重新随机"
-    print("  总计 6 片；中央固定 90000，外围每片 180000–280000: PASS")
+    print("  总计 6 片；中央固定 460000，外围每片固定 230000，比例 2:1: PASS")
 
     print("\n=== Test 3: 固定矿和随机矿都没有中立守军 ===")
     assert game.get("neutralCamps") == []
