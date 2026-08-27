@@ -608,9 +608,17 @@ def main():
     assert "function roomHasCommanderMode" in app
     assert "function sendCommanderIntent" in app
     assert "function commanderHudActive" in app
+    assert "function copyBindToken" in app
+    assert "总部遇袭" in app
+    assert "敌军压境" in app
+    assert "默认发育" in app
+    assert "commander-defend-pulse" in styles
     assert ".game-screen.commander-play" in styles
     assert "方针条独占底栏" in styles
     assert "min-width: 0" in styles
+    assert "默认方针为发育" in readme
+    assert "总部遇袭" in readme
+    assert 'id="commanderBindHint"' in hud
 
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 
