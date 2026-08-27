@@ -738,6 +738,19 @@ NEUTRAL_CAMPS_MODE = "neutral_camps"
 COMBAT_REWARD_UNIT_RATE = 0.08
 COMBAT_REWARD_STRUCTURE_RATE = 0.05
 
+# 可选大厅模式「指挥官模式」：人类只下方针，执行层做微操。
+# 方针一变立即清掉该席位的作战指令（方针覆盖微操）；矿车/基地车继续干活。
+COMMANDER_MODE = "commander_mode"
+COMMANDER_INTENT_KINDS = ("rush", "eco", "defend", "snipe")
+COMMANDER_INTENT_LABELS = {
+    "rush": "速推",
+    "eco": "发育",
+    "defend": "防守",
+    "snipe": "偷家",
+}
+# 外部副官靠 SSE 连接或 HTTP 轮询续命；断线后内置大师 AI 按当前方针接回。
+EXECUTOR_HEARTBEAT_TTL = 8.0
+
 # Only completed core buildings extend construction territory. Defensive
 # structures deliberately do not, preventing turret chains across the map.
 BUILD_ANCHOR_RANGES = {
@@ -974,6 +987,13 @@ def public_player(room, player, viewer_id=None):
         "buildQueue": [dict(item) for item in player.get("buildQueue", [])]
         if viewer_id == player["id"] else [],
         "strikeCharges": player.get("strikeCharges", 0),
+        "intent": public_intent(player) if commander_mode_on(room) else None,
+        "executorBound": executor_is_bound(player) if commander_mode_on(room) else False,
+        "bindToken": (ensure_bind_token(player)
+                      if commander_mode_on(room)
+                      and viewer_id == player["id"]
+                      and not player.get("isBot")
+                      else None),
     }
 
 
@@ -1258,6 +1278,7 @@ def public_game(game, viewer_id=None, full=True):
             "orbitalRain": bool(game.get("orbitalRain")),
             "neutrals": neutrals_enabled(game),
             "combatRewards": bool(game.get("combatRewards")),
+            "commanderMode": bool(game.get("commanderMode")),
         }
         view_cache[view_key] = (frame["stamp"], dynamic)
 
@@ -1320,6 +1341,7 @@ def public_room(room, include_game=True, viewer_id=None, full=True,
         "neutrals": (neutrals_enabled(room, room.get("game"))
                      and bool(room_map.get("neutralOreGuards", True))),
         "combatRewards": bool(room.get("combatRewards") or (room.get("game") or {}).get("combatRewards")),
+        "commanderMode": commander_mode_on(room),
         "mapConfig": {
             "id": room_map["id"],
             "name": room_map["name"],
@@ -1483,6 +1505,9 @@ def create_human(name, color, team=0, spawn=-1):
         "harvested": 0,
         "buildQueue": [],
         "strikeCharges": 0,
+        "bindToken": uuid.uuid4().hex,
+        "intent": empty_commander_intent(),
+        "executor": {"token": None, "lastSeen": 0, "connections": 0},
     }
 
 
@@ -1497,20 +1522,30 @@ def create_bot(room):
         "team": 0, "faction": random.choice(("tech", "magic")), "spawn": -1, "ready": True, "isBot": True, "connections": 1, "lastSeen": now(),
         "cash": 0, "eliminated": False, "kills": 0, "unitsLost": 0,
         "harvested": 0, "buildQueue": [], "strikeCharges": 0,
+        "bindToken": uuid.uuid4().hex,
+        "intent": empty_commander_intent(),
+        "executor": {"token": None, "lastSeen": 0, "connections": 0},
     }
     room["players"][bot["id"]] = bot
     return bot
 
 
 def authenticate(room_id, player_id, token):
+    """Accept the seat owner's token or a bound executor token."""
     room = ROOMS.get(str(room_id or "").upper())
     if not room:
         return None, None
     player = room["players"].get(player_id)
-    if not player or player["isBot"] or player.get("token") != token:
+    if not player:
         return room, None
-    player["lastSeen"] = now()
-    return room, player
+    role = session_role(player, token)
+    if role == "commander":
+        player["lastSeen"] = now()
+        return room, player
+    if role == "agent":
+        touch_executor(player)
+        return room, player
+    return room, None
 
 
 def ensure_agent_channel(player):
@@ -2206,6 +2241,7 @@ def start_game(room):
         "neutrals": (neutrals_enabled(room)
                      and bool(room_map.get("neutralOreGuards", True))),
         "combatRewards": bool(room.get("combatRewards")),
+        "commanderMode": bool(room.get("commanderMode")),
         "nextOrbitalRainAt": (
             random.uniform(ORBITAL_RAIN_FIRST_MIN, ORBITAL_RAIN_FIRST_MAX)
             if room.get("orbitalRain") else None),
@@ -2930,6 +2966,385 @@ def set_combat_rewards(room, player, enabled):
     return enabled
 
 
+def commander_mode_on(room):
+    """房间或对局是否开了指挥官模式。缺省关，旧测试房间没有该字段。"""
+    if not room:
+        return False
+    if room.get("commanderMode"):
+        return True
+    game = room.get("game")
+    return bool(game and game.get("commanderMode"))
+
+
+def set_commander_mode(room, player, enabled):
+    """房主在大厅开关「指挥官模式」。关着时对局与现在完全一致。"""
+    if room.get("status") != "lobby":
+        raise ValueError("战斗已经开始")
+    if not player or room.get("hostId") != player.get("id"):
+        raise ValueError("只有房主可以设置模式")
+    enabled = bool(enabled)
+    if bool(room.get("commanderMode")) == enabled:
+        return enabled
+    room["commanderMode"] = enabled
+    if enabled:
+        add_chat(room, "作战系统", "已开启可选模式：指挥官模式。人类下方针，执行层做微操。", True)
+    else:
+        add_chat(room, "作战系统", "已关闭可选模式：指挥官模式。", True)
+    return enabled
+
+
+def empty_commander_intent():
+    return {
+        "kind": None,
+        "focus": None,
+        "generation": 0,
+        "setAt": 0,
+    }
+
+
+def ensure_commander_intent(player):
+    intent = player.get("intent")
+    if not isinstance(intent, dict):
+        intent = empty_commander_intent()
+        player["intent"] = intent
+    return intent
+
+
+def public_intent(player):
+    intent = ensure_commander_intent(player)
+    focus = intent.get("focus")
+    public_focus = None
+    if isinstance(focus, dict):
+        try:
+            public_focus = {
+                "x": round(float(focus.get("x", 0)), 1),
+                "y": round(float(focus.get("y", 0)), 1),
+            }
+        except (TypeError, ValueError):
+            public_focus = None
+    kind = intent.get("kind")
+    if kind not in COMMANDER_INTENT_KINDS:
+        kind = None
+    return {
+        "kind": kind,
+        "focus": public_focus,
+        "generation": int(intent.get("generation") or 0),
+        "setAt": float(intent.get("setAt") or 0),
+    }
+
+
+def commander_focus_point(player):
+    focus = (player.get("intent") or {}).get("focus")
+    if not isinstance(focus, dict):
+        return None
+    try:
+        return float(focus["x"]), float(focus["y"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def is_economy_unit(unit):
+    """矿车 / 基地车：方针覆盖微操时不要打断采集或展开。"""
+    return unit_role(unit.get("kind")) in ("harvester", "mcv")
+
+
+def clear_unit_path(unit):
+    unit["_path"] = None
+    unit["_pathDest"] = None
+    unit["_pathEnd"] = None
+    unit["_pathDirect"] = False
+    unit["_pathUnavailable"] = False
+    unit["_routeRetry"] = 0.0
+    unit["_stuck"] = 0.0
+
+
+def clear_combat_orders(game, player_id):
+    """方针覆盖微操：清掉作战单位的目的地/指令/路径，留下矿车和基地车。"""
+    if not game:
+        return 0
+    cleared = 0
+    for unit in game.get("units") or []:
+        if unit.get("owner") != player_id or unit.get("hp", 0) <= 0:
+            continue
+        if is_economy_unit(unit):
+            continue
+        unit["destX"] = None
+        unit["destY"] = None
+        unit["targetId"] = None
+        clear_repair_order(unit)
+        unit["order"] = "guard"
+        clear_unit_path(unit)
+        cleared += 1
+    return cleared
+
+
+def _focus_changed(old_focus, new_focus):
+    if old_focus is None and new_focus is None:
+        return False
+    if not isinstance(old_focus, dict) or not isinstance(new_focus, dict):
+        return old_focus != new_focus
+    try:
+        return (abs(float(old_focus.get("x", 0)) - float(new_focus.get("x", 0))) > 0.05
+                or abs(float(old_focus.get("y", 0)) - float(new_focus.get("y", 0))) > 0.05)
+    except (TypeError, ValueError):
+        return True
+
+
+def set_commander_intent(room, player, payload, role="commander"):
+    """人类指挥官下达方针。外部副官不得改方针。"""
+    if role == "agent":
+        raise ValueError("副官不能改方针")
+    if not player or player.get("isBot"):
+        raise ValueError("只有人类指挥官可以下达方针")
+    if player.get("eliminated"):
+        raise ValueError("你已被击败")
+    if not commander_mode_on(room):
+        raise ValueError("未开启指挥官模式")
+    intent = ensure_commander_intent(player)
+    kind = payload.get("kind", intent.get("kind"))
+    if kind is not None:
+        kind = str(kind).strip().lower()
+        if kind not in COMMANDER_INTENT_KINDS:
+            raise ValueError("未知方针")
+    clear_focus = bool(payload.get("clearFocus"))
+    has_xy = payload.get("x") is not None and payload.get("y") is not None
+    old_kind = intent.get("kind")
+    old_focus = intent.get("focus")
+    if clear_focus:
+        new_focus = None
+    elif has_xy:
+        try:
+            fx = float(payload.get("x"))
+            fy = float(payload.get("y"))
+        except (TypeError, ValueError):
+            raise ValueError("无效的焦点坐标")
+        game = room.get("game")
+        if game and game.get("map"):
+            fx = clamp(fx, 0, game["map"]["width"])
+            fy = clamp(fy, 0, game["map"]["height"])
+        new_focus = {"x": round(fx, 1), "y": round(fy, 1)}
+    else:
+        new_focus = old_focus
+    changed = (kind != old_kind) or _focus_changed(old_focus, new_focus)
+    intent["kind"] = kind
+    intent["focus"] = new_focus
+    if changed:
+        intent["generation"] = int(intent.get("generation") or 0) + 1
+        intent["setAt"] = now()
+        if room.get("game"):
+            clear_combat_orders(room["game"], player["id"])
+            # 立刻让内置执行层按新方针重排，不必等下一个 2.25s bot 节拍。
+            room["game"]["botClock"] = 0
+    player["intent"] = intent
+    return intent
+
+
+def ensure_bind_token(player):
+    token = player.get("bindToken")
+    if not token:
+        token = uuid.uuid4().hex
+        player["bindToken"] = token
+    return token
+
+
+def ensure_executor(player):
+    executor = player.get("executor")
+    if not isinstance(executor, dict):
+        executor = {"token": None, "lastSeen": 0, "connections": 0}
+        player["executor"] = executor
+    return executor
+
+
+def executor_is_bound(player):
+    """外部副官是否占着这个席位。连着或心跳未过期都算绑定。"""
+    executor = player.get("executor")
+    if not isinstance(executor, dict) or not executor.get("token"):
+        return False
+    if int(executor.get("connections") or 0) > 0:
+        return True
+    last_seen = float(executor.get("lastSeen") or 0)
+    return last_seen > 0 and (now() - last_seen) < EXECUTOR_HEARTBEAT_TTL
+
+
+def touch_executor(player):
+    executor = ensure_executor(player)
+    executor["lastSeen"] = now()
+    return executor
+
+
+def bind_executor(room, bind_token):
+    """用席位绑定令牌接入外部副官，返回 (player, agent_token)。"""
+    token = str(bind_token or "").strip()
+    if not token:
+        raise ValueError("绑定令牌无效")
+    if not commander_mode_on(room):
+        raise ValueError("未开启指挥官模式")
+    for player in room.get("players", {}).values():
+        if player.get("bindToken") != token:
+            continue
+        if player.get("eliminated"):
+            raise ValueError("该席位已被击败")
+        executor = ensure_executor(player)
+        agent_token = uuid.uuid4().hex + uuid.uuid4().hex
+        executor["token"] = agent_token
+        executor["lastSeen"] = now()
+        executor["connections"] = 0
+        return player, agent_token
+    raise ValueError("绑定令牌无效")
+
+
+def unbind_executor(player):
+    """副官断开：清掉绑定，内置大师 AI 按当前方针接回。"""
+    executor = player.get("executor")
+    if not isinstance(executor, dict) or not executor.get("token"):
+        return False
+    executor["token"] = None
+    executor["lastSeen"] = 0
+    executor["connections"] = 0
+    return True
+
+
+def session_role(player, token):
+    if not player or not token:
+        return None
+    if player.get("token") and player.get("token") == token:
+        return "commander"
+    executor = player.get("executor") or {}
+    if executor.get("token") and executor.get("token") == token:
+        return "agent"
+    return None
+
+
+def should_tick_master_bot(room, player):
+    """内置大师 AI 是否该操这个席位。
+
+    指挥官模式关：只打电脑席，和现在一样。
+    指挥官模式开：人类席在没有外部副官时由大师 AI 按方针执行；
+    电脑空席继续走原版 bot，不挡。
+    """
+    if not player or player.get("eliminated"):
+        return False
+    if executor_is_bound(player):
+        return False
+    if player.get("isBot"):
+        return True
+    return commander_mode_on(room)
+
+
+def commander_policy(room, player):
+    """人类席在指挥官模式下的方针；电脑席或模式关返回 None。"""
+    if not commander_mode_on(room) or not player or player.get("isBot"):
+        return None
+    intent = public_intent(player)
+    return {
+        "kind": intent.get("kind") or "eco",
+        "focus": commander_focus_point(player),
+    }
+
+
+def commander_snipe_target(game, player):
+    """偷家：焦点落在敌方建筑上就打那座，否则打最近的敌方总部。"""
+    focus = commander_focus_point(player)
+    if focus is not None:
+        fx, fy = focus
+        best = None
+        best_dist = 220.0
+        for structure in game["structures"]:
+            if (structure.get("hp", 0) <= 0
+                    or is_friendly(game, structure.get("owner"), player["id"])):
+                continue
+            dist = math.hypot(structure["x"] - fx, structure["y"] - fy)
+            if dist <= best_dist:
+                best = structure
+                best_dist = dist
+        if best is not None:
+            return best
+    return bot_pick_suicide_target(game, player["id"]) or bot_focus_hq(game, player["id"])
+
+
+def commander_army_point(game, player, kind, focus):
+    """方针下的进攻/防守集结点。"""
+    if focus is not None:
+        return focus
+    if kind == "defend":
+        return bot_own_origin(game, player["id"])
+    hq = bot_focus_hq(game, player["id"])
+    if hq is not None:
+        return hq["x"], hq["y"]
+    return None
+
+
+def apply_commander_bot_plan(bot, roles, phase, threatened, inbound, policy):
+    """把方针映射到现有大师 AI 的阶段/防守开关，不改电脑空席的原版路径。"""
+    kind = policy.get("kind") or "eco"
+    if kind == "rush":
+        phase = BOT_PHASE_COMMIT if "factory" in roles else BOT_PHASE_OPEN
+    elif kind == "eco":
+        if "factory" in roles:
+            phase = BOT_PHASE_CLOSE if "repair" in roles else BOT_PHASE_STABILIZE
+        else:
+            phase = BOT_PHASE_OPEN
+        inbound = None
+    elif kind == "defend":
+        threatened = True
+        phase = BOT_PHASE_STABILIZE
+    elif kind == "snipe":
+        phase = BOT_PHASE_COMMIT if "factory" in roles else BOT_PHASE_OPEN
+        threatened = False
+        inbound = None
+    return phase, threatened, inbound
+
+
+def commander_direct_army(game, bot, combat, policy, threatened, inbound, evaded, focus):
+    """方针覆盖野战去向：焦点优先，否则总部/家门口。"""
+    if not combat:
+        return
+    kind = policy.get("kind") or "eco"
+    focus_pt = policy.get("focus")
+    dest = commander_army_point(game, bot, kind, focus_pt)
+    ids = set(unit["id"] for unit in combat)
+    if inbound is not None and not evaded and kind != "snipe":
+        hq = bot_own_hq(game, bot["id"])
+        if hq is not None:
+            dx = hq["x"] - inbound["x"]
+            dy = hq["y"] - inbound["y"]
+            dist = math.hypot(dx, dy) or 1.0
+            try:
+                issue_move(
+                    game, bot["id"], ids,
+                    hq["x"] + (-dy / dist) * 180.0,
+                    hq["y"] + (dx / dist) * 180.0)
+            except ValueError:
+                pass
+            return
+    try:
+        if kind == "defend":
+            if dest:
+                issue_move(game, bot["id"], ids, dest[0], dest[1], True)
+            return
+        if kind == "eco":
+            hold = dest if focus_pt else bot_own_origin(game, bot["id"])
+            if hold:
+                issue_move(game, bot["id"], ids, hold[0], hold[1])
+            return
+        if kind == "snipe":
+            target = commander_snipe_target(game, bot)
+            if focus_pt:
+                issue_move(game, bot["id"], ids, focus_pt[0], focus_pt[1], True)
+            elif target is not None:
+                issue_attack(game, bot["id"], ids, target["id"])
+            return
+        # rush：现有压总部，有焦点则攻击移动到焦点
+        if focus_pt:
+            issue_move(game, bot["id"], ids, focus_pt[0], focus_pt[1], True)
+        elif focus is not None:
+            issue_attack(game, bot["id"], ids, focus["id"])
+        elif dest:
+            issue_move(game, bot["id"], ids, dest[0], dest[1], True)
+    except ValueError:
+        pass
+
+
 def pick_walkable_map_point(game, margin=160.0, attempts=48):
     """均匀抽一个可通行点；抽不中就退回地图中心，避免 100% 落在山/水上。"""
     terrain = game_terrain(game)
@@ -2997,13 +3412,25 @@ def tick_orbital_rain(room):
     schedule_orbital_rain(game, first=False)
 
 
-def handle_game_command(room, player, payload):
+AGENT_ALLOWED_COMMANDS = frozenset((
+    "move", "attackMove", "attack", "structureAttack", "repair",
+    "deploy", "undeploy", "stop", "train", "prepareBuild", "placeBuild",
+    "cancelBuild", "cancelTrain", "sell", "setRally",
+))
+
+
+def handle_game_command(room, player, payload, role="commander"):
     if room["status"] != "playing" or not room.get("game"):
         raise ValueError("战斗尚未开始")
     if player.get("eliminated"):
         raise ValueError("你已被击败")
     game = room["game"]
     command = payload.get("command")
+    if command == "setIntent":
+        set_commander_intent(room, player, payload, role=role)
+        return
+    if role == "agent" and command not in AGENT_ALLOWED_COMMANDS:
+        raise ValueError("副官不能执行该指令")
     if command in ("move", "attackMove"):
         unit_ids = command_unit_ids(payload)
         issue_move(game, player["id"], unit_ids, payload.get("x", 0), payload.get("y", 0), command == "attackMove")
@@ -3070,6 +3497,8 @@ def handle_game_command(room, player, payload):
     elif command == "callStrike":
         issue_strike(room, player["id"], payload.get("x", 0), payload.get("y", 0))
     elif command == "tapHq":
+        if role == "agent":
+            raise ValueError("副官不能执行该指令")
         tap_own_hq(room, player, payload.get("structureId"))
     else:
         raise ValueError("未知指令")
@@ -5459,7 +5888,7 @@ def bot_maybe_pack(game, bot, roles, elapsed):
 def tick_bots(room):
     game = room["game"]
     elapsed = game.get("elapsed", 0.0)
-    for bot in [p for p in room["players"].values() if p["isBot"] and not p["eliminated"]]:
+    for bot in [p for p in room["players"].values() if should_tick_master_bot(room, p)]:
         faction = bot.get("faction", "tech")
         fb = faction_buildings(faction)
         own_structures = [s for s in game["structures"] if s["owner"] == bot["id"] and s["hp"] > 0]
@@ -5473,6 +5902,10 @@ def tick_bots(room):
         phase = bot_phase(game, bot, roles, mem, scout)
         threatened = bot_needs_defense(game, bot["id"])
         inbound = scout.get("inbound") if scout.get("suicide_inbound") else None
+        policy = commander_policy(room, bot)
+        if policy is not None:
+            phase, threatened, inbound = apply_commander_bot_plan(
+                bot, roles, phase, threatened, inbound, policy)
         build_queue = bot.get("buildQueue", [])
         if build_queue and build_queue[0].get("ready"):
             bot_place_prepared(room, bot, build_queue[0]["kind"])
@@ -5510,7 +5943,10 @@ def tick_bots(room):
             and unit["hp"] > 0 and unit.get("order") != "repair"
             and unit["hp"] / unit["maxHp"] >= 0.45
         ]
-        if inbound is not None and not evaded and combat:
+        if policy is not None:
+            commander_direct_army(
+                game, bot, combat, policy, threatened, inbound, evaded, focus)
+        elif inbound is not None and not evaded and combat:
             # 敌军自爆进家：把野战从总部直线上拉开，留给炮塔点卡车。
             hq = bot_own_hq(game, bot["id"])
             if hq is not None:
@@ -5555,7 +5991,12 @@ def tick_bots(room):
             if prey is None or prey.get("kind") in UNIT_TYPES:
                 idle_or_chasing.append(unit)
         # 凑齐 2 辆就出发，不等 8 人野战部队。目标只许是总部或成团建筑。
-        building = bot_pick_suicide_target(game, bot["id"]) if suicides else None
+        if policy is not None and policy.get("kind") == "snipe":
+            building = commander_snipe_target(game, bot) if suicides else None
+        elif policy is not None and policy.get("kind") == "eco":
+            building = None
+        else:
+            building = bot_pick_suicide_target(game, bot["id"]) if suicides else None
         if building and len(suicides) >= BOT_SUICIDE_WAVE and idle_or_chasing:
             try:
                 issue_attack(
@@ -6096,6 +6537,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 "orbitalRain": False,
                 "neutrals": True,
                 "combatRewards": False,
+                "commanderMode": False,
                 "lock": threading.RLock(),
             }
             ROOMS[room_id] = room
@@ -6105,11 +6547,26 @@ class GameHandler(BaseHTTPRequestHandler):
 
     def join_room(self, data):
         room_id = str(data.get("roomId", "")).strip().upper()
+        role = str(data.get("role") or "player").strip().lower()
         with LOCK:
             room = ROOMS.get(room_id)
             if not room:
                 raise ValueError("房间不存在")
         with room_lock(room):
+            if role == "agent":
+                player, agent_token = bind_executor(room, data.get("bindToken"))
+                payload = {
+                    "ok": True,
+                    "session": {
+                        "roomId": room_id,
+                        "playerId": player["id"],
+                        "token": agent_token,
+                        "role": "agent",
+                    },
+                    "room": public_room(room, viewer_id=player["id"]),
+                }
+                self.send_json(200, payload)
+                return
             if room["status"] != "lobby":
                 raise ValueError("该房间已开始战斗")
             room_map = MAPS.get(room.get("selectedMap", DEFAULT_MAP), MAPS[DEFAULT_MAP])
@@ -6167,6 +6624,9 @@ class GameHandler(BaseHTTPRequestHandler):
             if not room or not player:
                 self.send_json(403, {"ok": False, "error": "会话已失效"})
                 return
+            role = session_role(player, data.get("token")) or "commander"
+            if role == "agent" and action not in ("command", "leave"):
+                raise ValueError("副官只能下达部队指令")
             if action == "ready":
                 if room["status"] != "lobby":
                     raise ValueError("战斗已经开始")
@@ -6191,6 +6651,10 @@ class GameHandler(BaseHTTPRequestHandler):
                 set_neutrals(room, player, payload.get("enabled"))
             elif action == "setCombatRewards":
                 set_combat_rewards(room, player, payload.get("enabled"))
+            elif action == "setCommanderMode":
+                set_commander_mode(room, player, payload.get("enabled"))
+            elif action == "setCommanderIntent":
+                set_commander_intent(room, player, payload, role=role)
             elif action == "addBot":
                 if room["hostId"] != player["id"] or room["status"] != "lobby":
                     raise ValueError("只有房主可以添加 AI")
@@ -6323,7 +6787,7 @@ class GameHandler(BaseHTTPRequestHandler):
                     append_agent_message(player, "system", "AI 副官已断开。")
                 agent_response = {"agent": public_agent_channel(player)}
             elif action == "command":
-                handle_game_command(room, player, payload)
+                handle_game_command(room, player, payload, role=role)
             elif action == "proposeAlliance":
                 if room["status"] != "playing":
                     raise ValueError("只能在战斗中进行")
@@ -6378,6 +6842,14 @@ class GameHandler(BaseHTTPRequestHandler):
                     room["game"]["playerTeams"] = {p["id"]: p.get("team", 0) for p in room["players"].values()}
                 add_chat(room, "作战系统", "%s 退出了当前队伍。" % player["name"], True)
             elif action == "leave":
+                if role == "agent":
+                    unbind_executor(player)
+                    invalidate_game_snapshot(room.get("game"))
+                    response = {"ok": True, "room": public_room(
+                        room, viewer_id=player["id"], full=False,
+                        agent_messages=False)}
+                    self.send_json(200, response)
+                    return
                 name = player["name"]
                 stop_server_agent(room["id"], player["id"])
                 if room["status"] == "lobby":
@@ -6454,6 +6926,7 @@ class GameHandler(BaseHTTPRequestHandler):
         room_id = (query.get("roomId") or [""])[0].strip().upper()
         player_id = (query.get("playerId") or [""])[0]
         token = (query.get("token") or [""])[0]
+        stream_role = None
         with LOCK:
             room, player = authenticate(room_id, player_id, token)
             if room and player:
@@ -6461,7 +6934,13 @@ class GameHandler(BaseHTTPRequestHandler):
                     # Re-check while LOCK still prevents the reaper from
                     # removing this room between authentication and admission.
                     if ROOMS.get(room_id) is room:
-                        player["connections"] += 1
+                        stream_role = session_role(player, token) or "commander"
+                        if stream_role == "agent":
+                            ensure_executor(player)["connections"] = (
+                                int(ensure_executor(player).get("connections") or 0) + 1)
+                            touch_executor(player)
+                        else:
+                            player["connections"] += 1
                     else:
                         room, player = None, None
         if not room or not player:
@@ -6515,11 +6994,19 @@ class GameHandler(BaseHTTPRequestHandler):
         finally:
             with room_lock(room):
                 if player_id in room["players"]:
-                    room["players"][player_id]["connections"] = max(
-                        0, room["players"][player_id]["connections"] - 1)
-                    # Count the reconnect grace from the detected disconnect,
-                    # not from the preceding SSE snapshot.
-                    room["players"][player_id]["lastSeen"] = now()
+                    live = room["players"][player_id]
+                    if stream_role == "agent":
+                        executor = ensure_executor(live)
+                        executor["connections"] = max(
+                            0, int(executor.get("connections") or 0) - 1)
+                        # SSE 断开即交回内置 AI；HTTP 轮询仍靠 lastSeen 续命。
+                        if executor["connections"] <= 0:
+                            executor["lastSeen"] = 0
+                    else:
+                        live["connections"] = max(0, live["connections"] - 1)
+                        # Count the reconnect grace from the detected disconnect,
+                        # not from the preceding SSE snapshot.
+                        live["lastSeen"] = now()
 
     def serve_static(self, path):
         if path == "/":

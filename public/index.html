@@ -165,6 +165,13 @@
                 <em>击毁单位返还8%，建筑返还5%，默认关</em>
               </span>
             </label>
+            <label id="commanderModeRow" class="mode-toggle" data-mode="commander_mode" for="commanderModeToggle">
+              <input type="checkbox" id="commanderModeToggle">
+              <span>
+                <strong>指挥官模式</strong>
+                <em>手机下方针，执行层做微操，默认关</em>
+              </span>
+            </label>
           </section>
 
           <section class="panel chat-panel">
@@ -203,6 +210,7 @@
         <div id="combatRewardsBadge" class="mode-badge hidden" title="击毁敌军获得战利资金">战斗奖励</div>
         <div id="orbitalRainBadge" class="mode-badge hidden" title="随机轨道打击，范围×5">轨道天降</div>
         <div id="neutralCampsBadge" class="mode-badge hidden" title="矿区中立单位">中立守卫</div>
+        <div id="commanderModeBadge" class="mode-badge hidden" title="方针覆盖微操">指挥官模式</div>
         <div id="connectionBadge" class="connection-badge"><i></i> 已连接</div>
         <button id="agentPanelBtn" class="agent-panel-button" title="打开 AI 副官">
           <i></i><span>AI 副官</span>
@@ -217,6 +225,21 @@
         <div id="selectionBox" class="selection-box hidden"></div>
         <div id="buildCursorLabel" class="build-cursor-label hidden"></div>
         <div id="toastStack" class="toast-stack"></div>
+
+        <div id="commanderHud" class="commander-hud hidden" aria-label="指挥官方针">
+          <div class="commander-intents" role="group" aria-label="作战方针">
+            <button type="button" class="commander-intent" data-intent="rush">速推</button>
+            <button type="button" class="commander-intent" data-intent="eco">发育</button>
+            <button type="button" class="commander-intent" data-intent="defend">防守</button>
+            <button type="button" class="commander-intent" data-intent="snipe">偷家</button>
+          </div>
+          <div class="commander-meta">
+            <span id="commanderIntentLabel">方针：未下达</span>
+            <span id="commanderFocusLabel"></span>
+            <span id="commanderAlertLabel"></span>
+            <button type="button" id="copyBindTokenBtn" class="commander-copy">复制副官令牌</button>
+          </div>
+        </div>
 
         <aside class="command-sidebar">
           <div class="sidebar-top">
