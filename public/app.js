@@ -1143,6 +1143,7 @@ import {
   var commanderModeToggle = $('#commanderModeToggle');
   var commanderModeBadge = $('#commanderModeBadge');
   var commanderHud = $('#commanderHud');
+  var lastCommanderThreatKey = '';
   var COMMANDER_INTENT_LABELS = {
     rush: '速推',
     eco: '发育',
@@ -1507,6 +1508,11 @@ import {
     lobbyScreen.style.transition = 'opacity .3s';
     gameScreen.style.transition = 'opacity .3s';
     document.body.style.overflow = name === 'game' ? 'hidden' : '';
+    if (name === 'game' && roomHasCommanderMode(roomState)) {
+      gameScreen.classList.add('commander-play');
+    } else if (name !== 'game') {
+      gameScreen.classList.remove('commander-play');
+    }
     if (name === 'home') {
       startRoomRefresh();
     } else {
@@ -1912,7 +1918,8 @@ import {
     var rosterKey = roomState.players.map(function (p) {
       return p.id + ':' + p.team + ':' + (p.spawn == null ? -1 : p.spawn) + ':' +
              p.ready + ':' + p.isBot + ':' + p.name + ':' + p.color + ':' + (p.faction || 'tech') +
-             ':' + (p.executorBound ? '1' : '0');
+             ':' + (p.executorBound ? '1' : '0') +
+             ':' + (p.bindToken ? '1' : '0');
     }).join('|') + (me && me.isHost ? '|host' : '') + '|' + roomState.selectedMap +
       '|' + (roomState.commanderMode ? 'cm' : '');
     if (playerRoster.dataset.key === rosterKey) {
@@ -2013,12 +2020,13 @@ import {
         bindRow.className = 'bind-token-row';
         bindRow.innerHTML = '<span>副官令牌</span><code></code>';
         bindRow.querySelector('code').textContent = player.bindToken;
+        bindRow.querySelector('code').title = player.bindToken;
         var copyBtn = document.createElement('button');
         copyBtn.type = 'button';
         copyBtn.textContent = '复制';
         copyBtn.addEventListener('click', function (event) {
           event.preventDefault();
-          copyBindToken(player.bindToken);
+          copyBindToken(player.bindToken, copyBtn);
         });
         bindRow.appendChild(copyBtn);
         slot.appendChild(bindRow);
@@ -2274,18 +2282,55 @@ import {
     return (me && me.intent) || null;
   }
 
-  function copyBindToken(token) {
+  function markBindTokenCopied(button) {
+    if (!button) { return; }
+    var idle = button.getAttribute('data-idle') || button.textContent;
+    button.setAttribute('data-idle', idle);
+    button.textContent = '已复制';
+    window.setTimeout(function () {
+      button.textContent = button.getAttribute('data-idle') || idle;
+    }, 1600);
+  }
+
+  function fallbackCopyBindToken(token) {
+    var area = document.createElement('textarea');
+    area.value = token;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.left = '-9999px';
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+    var copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } catch (err) {
+      copied = false;
+    }
+    document.body.removeChild(area);
+    if (!copied) {
+      window.prompt('复制副官令牌', token);
+    }
+    return copied;
+  }
+
+  function copyBindToken(token, button) {
     if (!token) {
       toast('还没有副官令牌', 'error');
       return;
     }
-    var done = function () { toast('副官令牌已复制', 'success'); };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(token).then(done).catch(function () {
-        window.prompt('复制副官令牌', token);
-      });
+    var done = function () {
+      toast('副官令牌已复制', 'success');
+      markBindTokenCopied(button);
+    };
+    var fallback = function () {
+      fallbackCopyBindToken(token);
+      done();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+      navigator.clipboard.writeText(token).then(done).catch(fallback);
     } else {
-      window.prompt('复制副官令牌', token);
+      fallback();
     }
   }
 
@@ -2302,8 +2347,15 @@ import {
       payload.y = y;
     }
     sendAction('command', payload).then(function () {
-      var label = COMMANDER_INTENT_LABELS[kind] || (ownIntent() && COMMANDER_INTENT_LABELS[ownIntent().kind]);
-      toast(label ? ('方针：' + label) : '已更新焦点', 'success');
+      var current = ownIntent();
+      var changingKind = !!(kind && (!current || current.kind !== kind));
+      if (changingKind) {
+        toast('方针：' + COMMANDER_INTENT_LABELS[kind], 'success');
+      } else if (x != null && y != null) {
+        toast('已设焦点', 'success');
+      } else {
+        toast('已更新焦点', 'success');
+      }
       sound('confirm');
     }).catch(function (err) {
       toast((err && err.message) || '方针下达失败', 'error');
@@ -2330,7 +2382,7 @@ import {
     }
     var label = $('#commanderIntentLabel');
     if (label) {
-      label.textContent = '方针：' + (COMMANDER_INTENT_LABELS[kind] || '未下达');
+      label.textContent = '方针：' + (COMMANDER_INTENT_LABELS[kind] || '发育');
     }
     var focusLabel = $('#commanderFocusLabel');
     if (focusLabel) {
@@ -2341,12 +2393,18 @@ import {
       }
     }
     var alertLabel = $('#commanderAlertLabel');
-    if (alertLabel && roomState.game) {
-      var ownHQ = roomState.game.structures.find(function (s) {
-        return me && s.owner === me.id && structureRole(s.kind) === 'hq' && s.hp > 0;
-      });
-      if (ownHQ && ownHQ.hp / ownHQ.maxHp < 0.35) {
+    var threat = me && me.commanderThreat;
+    if (alertLabel) {
+      alertLabel.classList.remove('danger', 'warn');
+      if (threat && threat.hqCritical) {
         alertLabel.textContent = '总部告急';
+        alertLabel.classList.add('danger');
+      } else if (threat && threat.raidInbound) {
+        alertLabel.textContent = '敌军压境';
+        alertLabel.classList.add('danger');
+      } else if (threat && threat.hqDamaged) {
+        alertLabel.textContent = '总部遇袭';
+        alertLabel.classList.add('warn');
       } else if (me && me.executorBound) {
         alertLabel.textContent = '副官执行中';
       } else if (commanderPlayActive()) {
@@ -2354,6 +2412,28 @@ import {
       } else {
         alertLabel.textContent = '';
       }
+    }
+    var defendBtn = commanderHud ? commanderHud.querySelector('[data-intent="defend"]') : null;
+    if (defendBtn) {
+      defendBtn.classList.toggle('suggest', !!(threat && (threat.hqDamaged || threat.raidInbound || threat.hqCritical) && kind !== 'defend'));
+    }
+    var threatKey = threat
+      ? [!!threat.hqCritical, !!threat.raidInbound, !!threat.hqDamaged].join('|')
+      : '';
+    if (threatKey !== lastCommanderThreatKey) {
+      if (threat && threat.hqCritical) {
+        toast('总部告急，可改防守', 'error');
+      } else if (threat && threat.raidInbound) {
+        toast('敌军压境，可改防守', 'error');
+      } else if (threat && threat.hqDamaged) {
+        toast('总部遇袭', 'error');
+      }
+      lastCommanderThreatKey = threatKey;
+    }
+    var bindHint = $('#commanderBindHint');
+    if (bindHint) {
+      bindHint.textContent = (me && me.bindToken) ? ('令牌 ' + me.bindToken.slice(0, 8) + '…') : '';
+      bindHint.title = (me && me.bindToken) ? me.bindToken : '';
     }
     var copyBtn = $('#copyBindTokenBtn');
     if (copyBtn) {
@@ -2559,6 +2639,7 @@ import {
     saveSession(null);
     roomState = null;
     gameKey = null;
+    lastCommanderThreatKey = '';
     resultShown = false;
     selectedUnits.clear();
     selectedStructureId = null;
@@ -2606,7 +2687,13 @@ import {
       camera.x = hq ? hq.x : roomState.game.map.width / 2;
       camera.y = hq ? hq.y : roomState.game.map.height / 2;
       camera.zoom = 1.0;   // 开局视角更贴近基地
-      toast('战斗开始：保护' + factionCopy().hq + '，摧毁所有敌方总部', 'success');
+      lastCommanderThreatKey = '';
+      toast(
+        roomHasCommanderMode(roomState)
+          ? '战斗开始：默认发育，点方针条指挥'
+          : ('战斗开始：保护' + factionCopy().hq + '，摧毁所有敌方总部'),
+        'success'
+      );
       sound('start');
     }
     resizeCanvas();
@@ -2703,9 +2790,13 @@ import {
 
     var ownHQ = roomState.game.structures.find(function (s) { return s.owner === me.id && structureRole(s.kind) === 'hq' && s.active; });
     var gameScreenEl = document.querySelector('.game-screen');
-    if (ownHQ && ownHQ.hp / ownHQ.maxHp < 0.30) {
+    var threat = me && me.commanderThreat;
+    var hqCritical = ownHQ && ownHQ.hp / ownHQ.maxHp < 0.30;
+    var commanderWarn = commanderHudActive() && threat && (threat.hqDamaged || threat.raidInbound || threat.hqCritical);
+    if (hqCritical || commanderWarn) {
       var pulse = Math.sin(elapsed * 4) * 0.5 + 0.5;
-      gameScreenEl.style.boxShadow = 'inset 0 0 ' + (20 + pulse * 60) + 'px rgba(255,20,20,' + (0.08 + pulse * 0.2) + ')';
+      var strength = hqCritical || (threat && threat.hqCritical) ? 1 : 0.65;
+      gameScreenEl.style.boxShadow = 'inset 0 0 ' + (20 + pulse * 60) + 'px rgba(255,20,20,' + ((0.08 + pulse * 0.2) * strength) + ')';
     } else {
       gameScreenEl.style.boxShadow = '';
     }
@@ -4092,17 +4183,21 @@ import {
       var fx = intent.focus.x * sx;
       var fy = intent.focus.y * sy;
       miniCtx.save();
-      miniCtx.strokeStyle = '#ffd23e';
-      miniCtx.lineWidth = 2;
+      miniCtx.strokeStyle = 'rgba(255,210,62,0.95)';
+      miniCtx.lineWidth = 2.5;
       miniCtx.beginPath();
-      miniCtx.moveTo(fx - 7, fy);
-      miniCtx.lineTo(fx + 7, fy);
-      miniCtx.moveTo(fx, fy - 7);
-      miniCtx.lineTo(fx, fy + 7);
+      miniCtx.arc(fx, fy, 9, 0, Math.PI * 2);
       miniCtx.stroke();
       miniCtx.beginPath();
-      miniCtx.arc(fx, fy, 6, 0, Math.PI * 2);
+      miniCtx.moveTo(fx - 11, fy);
+      miniCtx.lineTo(fx + 11, fy);
+      miniCtx.moveTo(fx, fy - 11);
+      miniCtx.lineTo(fx, fy + 11);
       miniCtx.stroke();
+      miniCtx.fillStyle = '#ffd23e';
+      miniCtx.beginPath();
+      miniCtx.arc(fx, fy, 2.5, 0, Math.PI * 2);
+      miniCtx.fill();
       miniCtx.restore();
     }
     // 轨道打击预警圈：半径跟服务端这发走（玩家 180，轨道天降 900）
@@ -5176,7 +5271,7 @@ import {
   if ($('#copyBindTokenBtn')) {
     $('#copyBindTokenBtn').addEventListener('click', function () {
       var me = ownPlayer();
-      copyBindToken(me && me.bindToken);
+      copyBindToken(me && me.bindToken, $('#copyBindTokenBtn'));
     });
   }
   lobbyChatForm.addEventListener('submit', function (event) {

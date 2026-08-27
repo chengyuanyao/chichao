@@ -742,6 +742,7 @@ COMBAT_REWARD_STRUCTURE_RATE = 0.05
 # 方针一变立即清掉该席位的作战指令（方针覆盖微操）；矿车/基地车继续干活。
 COMMANDER_MODE = "commander_mode"
 COMMANDER_INTENT_KINDS = ("rush", "eco", "defend", "snipe")
+DEFAULT_COMMANDER_INTENT = "eco"
 COMMANDER_INTENT_LABELS = {
     "rush": "速推",
     "eco": "发育",
@@ -994,6 +995,13 @@ def public_player(room, player, viewer_id=None):
                       and viewer_id == player["id"]
                       and not player.get("isBot")
                       else None),
+        "commanderThreat": (
+            commander_threat(room.get("game"), player)
+            if commander_mode_on(room)
+            and viewer_id == player["id"]
+            and not player.get("isBot")
+            and room.get("game")
+            else None),
     }
 
 
@@ -2488,6 +2496,12 @@ def start_game(room):
         for t in sorted(team_map):
             add_chat(room, "作战系统", "第%d队：%s" % (t, "、".join(team_map[t])), True)
     add_chat(room, "作战系统", "战斗开始：摧毁敌方指挥中心即可获胜。", True)
+    if game.get("commanderMode"):
+        apply_default_commander_intents(room)
+        add_chat(
+            room, "作战系统",
+            "本局模式：指挥官。默认方针为发育，点速推 / 防守 / 偷家即可覆盖。",
+            True)
     if game["orbitalRain"]:
         add_chat(room, "作战系统", "本局模式：轨道天降（随机轨道打击，范围×5）。", True)
     if not game.get("neutrals", True):
@@ -3002,6 +3016,46 @@ def empty_commander_intent():
     }
 
 
+def apply_default_commander_intents(room):
+    """开战时人类席若还没下达方针，默认发育。
+
+    执行层本来就会把空方针当成发育，但 HUD / 副官快照写「未下达」会让
+    第一分钟像没在打。这里写成明确的 eco，不碰电脑空席。
+    """
+    if not commander_mode_on(room):
+        return 0
+    applied = 0
+    for player in room.get("players", {}).values():
+        if player.get("isBot") or player.get("eliminated"):
+            continue
+        intent = ensure_commander_intent(player)
+        if intent.get("kind") in COMMANDER_INTENT_KINDS:
+            continue
+        intent["kind"] = DEFAULT_COMMANDER_INTENT
+        intent["generation"] = max(int(intent.get("generation") or 0), 1)
+        intent["setAt"] = now()
+        player["intent"] = intent
+        applied += 1
+    return applied
+
+
+def commander_threat(game, player):
+    """指挥官席自己的总部告急 / 敌军压境。不泄露给别人。"""
+    empty = {"hqDamaged": False, "hqCritical": False, "raidInbound": False}
+    if not game or not player:
+        return empty
+    hq = bot_own_hq(game, player["id"])
+    hq_damaged = bool(hq is not None and hq["hp"] < hq["maxHp"] - 0.5)
+    hq_critical = bool(
+        hq is not None and hq.get("maxHp", 0) > 0
+        and hq["hp"] / hq["maxHp"] < 0.35)
+    return {
+        "hqDamaged": hq_damaged,
+        "hqCritical": hq_critical,
+        "raidInbound": bot_enemies_in_base(game, player["id"]),
+    }
+
+
 def ensure_commander_intent(player):
     intent = player.get("intent")
     if not isinstance(intent, dict):
@@ -3176,9 +3230,9 @@ def bind_executor(room, bind_token):
     """用席位绑定令牌接入外部副官，返回 (player, agent_token)。"""
     token = str(bind_token or "").strip()
     if not token:
-        raise ValueError("绑定令牌无效")
+        raise ValueError("缺少绑定令牌")
     if not commander_mode_on(room):
-        raise ValueError("未开启指挥官模式")
+        raise ValueError("未开启指挥官模式，无法绑定副官")
     for player in room.get("players", {}).values():
         if player.get("bindToken") != token:
             continue
@@ -3237,7 +3291,7 @@ def commander_policy(room, player):
         return None
     intent = public_intent(player)
     return {
-        "kind": intent.get("kind") or "eco",
+        "kind": intent.get("kind") or DEFAULT_COMMANDER_INTENT,
         "focus": commander_focus_point(player),
     }
 
