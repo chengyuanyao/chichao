@@ -3597,9 +3597,11 @@ kbd {
     font-size: 16px;
   }
 
-  /* 手机指挥官：战场铺满，小地图浮在右上，方针条独占底栏，避免挡住偷家。 */
+  /* 手机指挥官：取消桌面 900px 下限，战场铺满，小地图浮在右上，方针条独占底栏。 */
   .game-screen.commander-play {
     --sidebar-w: 0px;
+    min-width: 0;
+    min-height: 0;
   }
 
   .game-screen.commander-play .control-legend,
