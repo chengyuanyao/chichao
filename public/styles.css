@@ -1328,6 +1328,96 @@ kbd {
   background: rgba(40, 20, 8, 0.65);
 }
 
+.commander-hud {
+  position: absolute;
+  left: 12px;
+  right: calc(var(--sidebar-w) + 16px);
+  bottom: 18px;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  pointer-events: auto;
+  border: 1px solid rgba(201, 162, 75, 0.4);
+  background: rgba(18, 20, 12, 0.88);
+  box-shadow: var(--shadow);
+}
+
+.commander-hud.hidden {
+  display: none;
+}
+
+.commander-intents {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.commander-intent {
+  min-height: 48px;
+  padding: 8px 6px;
+  color: var(--ivory);
+  font: 700 15px var(--font-display);
+  letter-spacing: 0.12em;
+  border: 1px solid rgba(201, 162, 75, 0.35);
+  background: var(--metal-face);
+  cursor: pointer;
+}
+
+.commander-intent.active {
+  color: var(--lcd);
+  border-color: rgba(255, 210, 62, 0.75);
+  background: var(--metal-face-lit);
+  box-shadow: inset 0 0 0 1px rgba(255, 210, 62, 0.25);
+}
+
+.commander-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.commander-copy {
+  margin-left: auto;
+  min-height: 36px;
+  padding: 6px 10px;
+  color: var(--brass-bright);
+  font: 600 11px var(--font-display);
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(201, 162, 75, 0.4);
+  background: rgba(40, 20, 8, 0.55);
+  cursor: pointer;
+}
+
+.bind-token-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.bind-token-row code {
+  color: var(--lcd);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.bind-token-row button {
+  min-height: 32px;
+  padding: 4px 8px;
+  color: var(--brass-bright);
+  font-size: 11px;
+  border: 1px solid rgba(201, 162, 75, 0.35);
+  background: rgba(40, 20, 8, 0.45);
+  cursor: pointer;
+}
+
 /* 聊天 */
 .chat-panel {
   display: grid;
@@ -3492,6 +3582,23 @@ kbd {
 
   .agent-panel-button span { display: none; }
   .agent-panel-button { width: 38px; justify-content: center; padding: 0; }
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  .commander-hud {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+  }
+
+  .commander-intent {
+    min-height: 56px;
+    font-size: 16px;
+  }
+
+  .game-screen.commander-play .control-legend {
+    display: none;
+  }
 }
 
 @media (max-width: 620px) {

@@ -1139,6 +1139,16 @@ import {
   var combatRewardsRow = $('#combatRewardsRow');
   var combatRewardsToggle = $('#combatRewardsToggle');
   var combatRewardsBadge = $('#combatRewardsBadge');
+  var commanderModeRow = $('#commanderModeRow');
+  var commanderModeToggle = $('#commanderModeToggle');
+  var commanderModeBadge = $('#commanderModeBadge');
+  var commanderHud = $('#commanderHud');
+  var COMMANDER_INTENT_LABELS = {
+    rush: '速推',
+    eco: '发育',
+    defend: '防守',
+    snipe: '偷家'
+  };
   var BUILTIN_MAPS = {
     north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, theme: 'grassland', spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
     narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
@@ -1895,13 +1905,16 @@ import {
     syncOrbitalRainToggle(me, roomState);
     syncNeutralCampsToggle(me, roomState);
     syncCombatRewardsToggle(me, roomState);
+    syncCommanderModeToggle(me, roomState);
 
     // Only rebuild the roster DOM when something actually changed.
     // Rebuilding on every SSE tick destroys open dropdowns instantly.
     var rosterKey = roomState.players.map(function (p) {
       return p.id + ':' + p.team + ':' + (p.spawn == null ? -1 : p.spawn) + ':' +
-             p.ready + ':' + p.isBot + ':' + p.name + ':' + p.color + ':' + (p.faction || 'tech');
-    }).join('|') + (me && me.isHost ? '|host' : '') + '|' + roomState.selectedMap;
+             p.ready + ':' + p.isBot + ':' + p.name + ':' + p.color + ':' + (p.faction || 'tech') +
+             ':' + (p.executorBound ? '1' : '0');
+    }).join('|') + (me && me.isHost ? '|host' : '') + '|' + roomState.selectedMap +
+      '|' + (roomState.commanderMode ? 'cm' : '');
     if (playerRoster.dataset.key === rosterKey) {
       renderChat(lobbyChatMessages, roomState.chat, 30);
       return;
@@ -1995,6 +2008,21 @@ import {
         });
       }
       slot.appendChild(factionSelect);
+      if (roomHasCommanderMode(roomState) && me && player.id === me.id && !player.isBot && player.bindToken) {
+        var bindRow = document.createElement('div');
+        bindRow.className = 'bind-token-row';
+        bindRow.innerHTML = '<span>副官令牌</span><code></code>';
+        bindRow.querySelector('code').textContent = player.bindToken;
+        var copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.textContent = '复制';
+        copyBtn.addEventListener('click', function (event) {
+          event.preventDefault();
+          copyBindToken(player.bindToken);
+        });
+        bindRow.appendChild(copyBtn);
+        slot.appendChild(bindRow);
+      }
       playerRoster.appendChild(slot);
     });
 
@@ -2201,6 +2229,135 @@ import {
     combatRewardsToggle.disabled = !canEdit;
     if (combatRewardsRow) {
       combatRewardsRow.classList.toggle('disabled', !canEdit);
+    }
+  }
+
+  function roomHasCommanderMode(state) {
+    if (!state) { return false; }
+    if (state.commanderMode) { return true; }
+    return !!(state.game && state.game.commanderMode);
+  }
+
+  function syncCommanderModeToggle(me, state) {
+    if (!commanderModeToggle) { return; }
+    var on = roomHasCommanderMode(state);
+    if (commanderModeToggle.checked !== on) {
+      commanderModeToggle.checked = on;
+    }
+    var canEdit = !!(me && me.isHost && state && state.status === 'lobby');
+    commanderModeToggle.disabled = !canEdit;
+    if (commanderModeRow) {
+      commanderModeRow.classList.toggle('disabled', !canEdit);
+    }
+  }
+
+  function isPhoneLikeCommander() {
+    var coarse = false;
+    try {
+      coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    } catch (err) {
+      coarse = false;
+    }
+    return coarse || window.innerWidth <= 720;
+  }
+
+  function commanderHudActive() {
+    return roomHasCommanderMode(roomState);
+  }
+
+  function commanderPlayActive() {
+    return roomHasCommanderMode(roomState);
+  }
+
+  function ownIntent() {
+    var me = ownPlayer();
+    return (me && me.intent) || null;
+  }
+
+  function copyBindToken(token) {
+    if (!token) {
+      toast('还没有副官令牌', 'error');
+      return;
+    }
+    var done = function () { toast('副官令牌已复制', 'success'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(token).then(done).catch(function () {
+        window.prompt('复制副官令牌', token);
+      });
+    } else {
+      window.prompt('复制副官令牌', token);
+    }
+  }
+
+  function sendCommanderIntent(kind, x, y, clearFocus) {
+    if (!commanderPlayActive()) {
+      toast('需在大厅开启指挥官模式', 'error');
+      return;
+    }
+    var payload = { command: 'setIntent' };
+    if (kind) { payload.kind = kind; }
+    if (clearFocus) { payload.clearFocus = true; }
+    if (x != null && y != null) {
+      payload.x = x;
+      payload.y = y;
+    }
+    sendAction('command', payload).then(function () {
+      var label = COMMANDER_INTENT_LABELS[kind] || (ownIntent() && COMMANDER_INTENT_LABELS[ownIntent().kind]);
+      toast(label ? ('方针：' + label) : '已更新焦点', 'success');
+      sound('confirm');
+    }).catch(function (err) {
+      toast((err && err.message) || '方针下达失败', 'error');
+    });
+  }
+
+  function updateCommanderHud() {
+    var gameScreenEl = document.querySelector('.game-screen');
+    var showBar = !!(roomState && roomState.game && commanderHudActive());
+    if (commanderHud) {
+      commanderHud.classList.toggle('hidden', !showBar);
+    }
+    if (gameScreenEl) {
+      gameScreenEl.classList.toggle('commander-play', showBar);
+    }
+    if (!showBar) { return; }
+    var me = ownPlayer();
+    var intent = me && me.intent;
+    var kind = intent && intent.kind;
+    var buttons = commanderHud ? commanderHud.querySelectorAll('[data-intent]') : [];
+    for (var i = 0; i < buttons.length; i += 1) {
+      buttons[i].classList.toggle('active', buttons[i].getAttribute('data-intent') === kind);
+      buttons[i].disabled = !commanderPlayActive();
+    }
+    var label = $('#commanderIntentLabel');
+    if (label) {
+      label.textContent = '方针：' + (COMMANDER_INTENT_LABELS[kind] || '未下达');
+    }
+    var focusLabel = $('#commanderFocusLabel');
+    if (focusLabel) {
+      if (intent && intent.focus) {
+        focusLabel.textContent = '焦点 (' + Math.round(intent.focus.x) + ',' + Math.round(intent.focus.y) + ')';
+      } else {
+        focusLabel.textContent = '未指定焦点';
+      }
+    }
+    var alertLabel = $('#commanderAlertLabel');
+    if (alertLabel && roomState.game) {
+      var ownHQ = roomState.game.structures.find(function (s) {
+        return me && s.owner === me.id && structureRole(s.kind) === 'hq' && s.hp > 0;
+      });
+      if (ownHQ && ownHQ.hp / ownHQ.maxHp < 0.35) {
+        alertLabel.textContent = '总部告急';
+      } else if (me && me.executorBound) {
+        alertLabel.textContent = '副官执行中';
+      } else if (commanderPlayActive()) {
+        alertLabel.textContent = '内置执行层';
+      } else {
+        alertLabel.textContent = '';
+      }
+    }
+    var copyBtn = $('#copyBindTokenBtn');
+    if (copyBtn) {
+      copyBtn.classList.toggle('hidden', !(me && me.bindToken));
     }
   }
 
@@ -2529,6 +2686,10 @@ import {
     if (combatRewardsBadge) {
       combatRewardsBadge.classList.toggle('hidden', !roomHasCombatRewards(roomState));
     }
+    if (commanderModeBadge) {
+      commanderModeBadge.classList.toggle('hidden', !roomHasCommanderMode(roomState));
+    }
+    updateCommanderHud();
 
     applyFactionHud();
     var repairBtn = $('#repairBtn');
@@ -3926,6 +4087,24 @@ import {
       miniCtx.arc(ping.x * sx, ping.y * sy, 6 + ping.ttl, 0, Math.PI * 2);
       miniCtx.stroke();
     });
+    var intent = ownIntent();
+    if (intent && intent.focus) {
+      var fx = intent.focus.x * sx;
+      var fy = intent.focus.y * sy;
+      miniCtx.save();
+      miniCtx.strokeStyle = '#ffd23e';
+      miniCtx.lineWidth = 2;
+      miniCtx.beginPath();
+      miniCtx.moveTo(fx - 7, fy);
+      miniCtx.lineTo(fx + 7, fy);
+      miniCtx.moveTo(fx, fy - 7);
+      miniCtx.lineTo(fx, fy + 7);
+      miniCtx.stroke();
+      miniCtx.beginPath();
+      miniCtx.arc(fx, fy, 6, 0, Math.PI * 2);
+      miniCtx.stroke();
+      miniCtx.restore();
+    }
     // 轨道打击预警圈：半径跟服务端这发走（玩家 180，轨道天降 900）
     (roomState.game.strikes || []).forEach(function (strike) {
       var ringR = ((strike.radius > 0) ? strike.radius : 180) * sx;
@@ -4649,6 +4828,10 @@ import {
     pointerPosition(event);
     var moved = Math.hypot(pointer.x - dragging.startX, pointer.y - dragging.startY);
     if (moved < 6) {
+      if (commanderPlayActive() && isPhoneLikeCommander()) {
+        var tapIntent = ownIntent();
+        sendCommanderIntent(tapIntent && tapIntent.kind, pointer.worldX, pointer.worldY);
+      }
       selectAt(pointer.worldX, pointer.worldY, dragging.additive);
     } else {
       selectBoxUnits(dragging.startX, dragging.startY, pointer.x, pointer.y, dragging.additive);
@@ -4679,14 +4862,20 @@ import {
     clampCamera();
   }, { passive: false });
 
-  minimap.addEventListener('mousedown', function (event) {
+  function minimapWorldFromEvent(event) {
+    var rect = minimap.getBoundingClientRect();
+    return {
+      x: (event.clientX - rect.left) / rect.width * roomState.game.map.width,
+      y: (event.clientY - rect.top) / rect.height * roomState.game.map.height
+    };
+  }
+
+  minimap.addEventListener('pointerdown', function (event) {
     if (!roomState || !roomState.game) {
       return;
     }
     event.preventDefault();
-    var rect = minimap.getBoundingClientRect();
-    var wx = (event.clientX - rect.left) / rect.width * roomState.game.map.width;
-    var wy = (event.clientY - rect.top) / rect.height * roomState.game.map.height;
+    var world = minimapWorldFromEvent(event);
     if (event.button === 2) {
       // 右键小地图：派遣选中单位
       if (selectedUnits.size) {
@@ -4694,16 +4883,19 @@ import {
         sendAction('command', {
           command: cmd,
           unitIds: selectedUnitIdList(),
-          x: wx,
-          y: wy
+          x: world.x,
+          y: world.y
         }).then(function () { sound('move'); }).catch(function () {});
         if (commandMode) { cancelModes(); }
       }
-    } else if (event.button === 0) {
-      // 左键小地图：移动视角
-      camera.x = wx;
-      camera.y = wy;
+    } else if (event.button === 0 || event.pointerType === 'touch') {
+      camera.x = world.x;
+      camera.y = world.y;
       clampCamera();
+      if (commanderPlayActive()) {
+        var current = ownIntent();
+        sendCommanderIntent(current && current.kind, world.x, world.y);
+      }
     }
   });
   minimap.addEventListener('contextmenu', function (event) { event.preventDefault(); });
@@ -4958,6 +5150,33 @@ import {
       sendAction('setCombatRewards', { enabled: combatRewardsToggle.checked }).catch(function () {
         if (roomState) { syncCombatRewardsToggle(ownPlayer(), roomState); }
       });
+    });
+  }
+  if (commanderModeToggle) {
+    commanderModeToggle.addEventListener('change', function () {
+      sendAction('setCommanderMode', { enabled: commanderModeToggle.checked }).catch(function () {
+        if (roomState) { syncCommanderModeToggle(ownPlayer(), roomState); }
+      });
+    });
+  }
+  if (commanderHud) {
+    commanderHud.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-intent]');
+      if (button) {
+        var current = ownIntent();
+        var focus = current && current.focus;
+        sendCommanderIntent(
+          button.getAttribute('data-intent'),
+          focus ? focus.x : null,
+          focus ? focus.y : null
+        );
+      }
+    });
+  }
+  if ($('#copyBindTokenBtn')) {
+    $('#copyBindTokenBtn').addEventListener('click', function () {
+      var me = ownPlayer();
+      copyBindToken(me && me.bindToken);
     });
   }
   lobbyChatForm.addEventListener('submit', function (event) {

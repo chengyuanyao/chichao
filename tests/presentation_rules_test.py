@@ -593,6 +593,22 @@ def main():
     assert "function syncNeutralCampsToggle" in app
     assert "function roomHasNeutrals" in app
 
+    # 可选模式「指挥官模式」：大厅开关、方针条、小地图焦点。
+    assert "指挥官模式" in hud
+    assert "手机下方针，执行层做微操，默认关" in hud
+    assert 'data-mode="commander_mode"' in hud
+    assert "commanderModeToggle" in hud
+    assert 'id="commanderHud"' in hud
+    assert 'data-intent="rush"' in hud
+    assert 'data-intent="eco"' in hud
+    assert 'data-intent="defend"' in hud
+    assert 'data-intent="snipe"' in hud
+    assert "指挥官模式" in readme
+    assert "setCommanderMode" in app
+    assert "function roomHasCommanderMode" in app
+    assert "function sendCommanderIntent" in app
+    assert "function commanderHudActive" in app
+
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 
 
