@@ -608,6 +608,8 @@ def main():
     assert "function roomHasCommanderMode" in app
     assert "function sendCommanderIntent" in app
     assert "function commanderHudActive" in app
+    assert ".game-screen.commander-play" in styles
+    assert "方针条独占底栏" in styles
 
     print("presentation rules ok: radar removed, shroud persists, vehicles distinct, maps use valleys, catalog from server")
 

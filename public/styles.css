@@ -3589,6 +3589,7 @@ kbd {
     left: 8px;
     right: 8px;
     bottom: 8px;
+    z-index: 20;
   }
 
   .commander-intent {
@@ -3596,8 +3597,39 @@ kbd {
     font-size: 16px;
   }
 
-  .game-screen.commander-play .control-legend {
+  /* 手机指挥官：战场铺满，小地图浮在右上，方针条独占底栏，避免挡住偷家。 */
+  .game-screen.commander-play {
+    --sidebar-w: 0px;
+  }
+
+  .game-screen.commander-play .control-legend,
+  .game-screen.commander-play .command-tabs,
+  .game-screen.commander-play .command-grid,
+  .game-screen.commander-play .tactical-readout,
+  .game-screen.commander-play .selection-info,
+  .game-screen.commander-play .orders-row,
+  .game-screen.commander-play .counter-panel,
+  .game-screen.commander-play .scoreboard,
+  .game-screen.commander-play .ore-reserve-legend {
     display: none;
+  }
+
+  .game-screen.commander-play .command-sidebar {
+    top: 8px;
+    right: 8px;
+    bottom: auto;
+    left: auto;
+    width: min(220px, 48vw);
+    height: auto;
+    overflow: hidden;
+    border-left: 1px solid var(--brass-dark);
+    background: rgba(18, 20, 12, 0.9);
+    box-shadow: var(--shadow);
+    z-index: 16;
+  }
+
+  .game-screen.commander-play .sidebar-top {
+    padding: 18px 8px 8px;
   }
 }
 
