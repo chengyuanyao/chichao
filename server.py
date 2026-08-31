@@ -798,9 +798,9 @@ DAMAGE_MULTIPLIER = {
     "bite":    {"infantry": 4.00, "light": 0.00, "heavy": 0.00, "structure": 0.00, "arcane": 1.50},
     # 奥术魔法：无视钢铁装甲熔重甲（法师是反坦克答案），但法术拆不动建筑
     "magic":   {"infantry": 1.20, "light": 1.30, "heavy": 1.60, "structure": 0.60, "arcane": 1.00},
-    # 自爆卡车 / 爆裂魔仆的死亡爆炸：清步兵堆、砸成团建筑；打散开的高血载具差。
-    # 对总部只有约 1.1，单车拆不掉满血指挥中心。
-    "explosive": {"infantry": 1.80, "light": 0.80, "heavy": 0.50, "structure": 1.10, "arcane": 1.45},
+    # 爆破本身对所有护甲中性。卡车/魔仆对建筑与采矿单位的 ×1.5 属于具体兵种
+    # 的 targetMultipliers，在 trigger_death_explosion 里按目标 kind 结算。
+    "explosive": {"infantry": 1.00, "light": 1.00, "heavy": 1.00, "structure": 1.00, "arcane": 1.00},
 }
 
 DEFAULT_MAP = "north_conflict"
@@ -891,13 +891,32 @@ def new_room_code():
     return uuid.uuid4().hex[:6].upper()
 
 
-def is_friendly(game, owner_a, owner_b):
-    if owner_a == owner_b:
-        return True
+def friendly_owners(game, owner):
+    """Return the owners allied with *owner*, rebuilding only after teams change.
+
+    Combat and fog-of-war ask this question hundreds of thousands of times in a
+    crowded frame.  The playerTeams mapping is replaced whenever an alliance
+    changes, so its identity is a cheap and reliable cache generation marker.
+    """
     teams = game.get("playerTeams", {})
-    ta = teams.get(owner_a, 0)
-    tb = teams.get(owner_b, 0)
-    return ta > 0 and ta == tb
+    cache = game.get("_friendlyOwners")
+    if cache is None or game.get("_friendlyTeamsRef") is not teams:
+        team_members = {}
+        for player_id, team_id in teams.items():
+            if team_id > 0:
+                team_members.setdefault(team_id, set()).add(player_id)
+        cache = {}
+        for player_id, team_id in teams.items():
+            cache[player_id] = (frozenset(team_members[team_id])
+                                if team_id > 0 else frozenset((player_id,)))
+        game["_friendlyOwners"] = cache
+        game["_friendlyTeamsRef"] = teams
+    friendly = cache.get(owner)
+    return friendly if friendly is not None else (owner,)
+
+
+def is_friendly(game, owner_a, owner_b):
+    return owner_b in friendly_owners(game, owner_a)
 
 
 def player_power(room, player_id):
@@ -1194,12 +1213,13 @@ class VisionField(object):
 def player_vision_sources(game, player_id):
     """Sight circles a player sees through, as (x, y, radius) tuples."""
     sources = []
+    friendly = friendly_owners(game, player_id)
     for unit in game["units"]:
-        if unit["hp"] > 0 and is_friendly(game, unit["owner"], player_id):
+        if unit["hp"] > 0 and unit["owner"] in friendly:
             sources.append((unit["x"], unit["y"],
                             unit_sight_radius(UNIT_TYPES[unit["kind"]])))
     for structure in game["structures"]:
-        if structure["hp"] > 0 and is_friendly(game, structure["owner"], player_id):
+        if structure["hp"] > 0 and structure["owner"] in friendly:
             radius = STRUCTURE_TYPES[structure["kind"]].get("sight", 350.0)
             if not structure["active"]:
                 radius *= 0.45
@@ -1241,14 +1261,15 @@ def public_game(game, viewer_id=None, full=True):
             pings = [public for _raw, public in frame["pings"]]
         else:
             seen = field.visible
+            friendly = friendly_owners(game, viewer_id)
             visible_units = [
                 public for unit, public in frame["units"]
-                if is_friendly(game, unit["owner"], viewer_id)
+                if unit["owner"] in friendly
                 or seen(unit["x"], unit["y"], unit["size"])
             ]
             visible_structures = [
                 public for structure, public in frame["structures"]
-                if is_friendly(game, structure["owner"], viewer_id)
+                if structure["owner"] in friendly
                 or seen(structure["x"], structure["y"], structure["size"])
             ]
             visible_projectiles = [
@@ -1261,7 +1282,7 @@ def public_game(game, viewer_id=None, full=True):
             ]
             pings = [
                 public for ping, public in frame["pings"]
-                if is_friendly(game, ping["owner"], viewer_id)
+                if ping["owner"] in friendly
             ]
         dynamic = {
             "elapsed": frame["elapsed"],
@@ -4334,11 +4355,12 @@ def move_toward(terrain, entity, target_x, target_y, speed, dt, stop_distance=0.
 def nearest_enemy(game, owner, x, y, max_distance, spatial_index=None):
     best = None
     best_dist_sq = max_distance * max_distance
+    friendly = friendly_owners(game, owner)
     candidates = (spatial_candidates(
         spatial_index, x, y, max_distance, 16.0)
         if spatial_index else game["units"] + game["structures"])
     for entity in candidates:
-        if is_friendly(game, entity["owner"], owner) or entity["hp"] <= 0:
+        if entity["owner"] in friendly or entity["hp"] <= 0:
             continue
         dx = entity["x"] - x
         dy = entity["y"] - y
@@ -4352,6 +4374,7 @@ def nearest_enemy(game, owner, x, y, max_distance, spatial_index=None):
 def nearest_enemy_structure(game, owner, x, y, max_distance, spatial_index=None):
     best = None
     best_dist_sq = max_distance * max_distance
+    friendly = friendly_owners(game, owner)
     # 与 nearest_enemy 一样走共享的战术空间网格，只在候选里筛出敌方建筑，
     # 不再每次线性扫整张结构表（网格里混着单位，靠 id 前缀挑出建筑）。
     candidates = (spatial_candidates(
@@ -4360,7 +4383,7 @@ def nearest_enemy_structure(game, owner, x, y, max_distance, spatial_index=None)
     for entity in candidates:
         if not entity["id"].startswith("s"):
             continue
-        if is_friendly(game, entity["owner"], owner) or entity["hp"] <= 0:
+        if entity["owner"] in friendly or entity["hp"] <= 0:
             continue
         dx = entity["x"] - x
         dy = entity["y"] - y
@@ -4413,6 +4436,7 @@ def nearest_enemy_infantry(game, owner, x, y, max_distance, spatial_index=None):
     （步兵、军犬、法师、女巫等；不含秘法巨龙）。"""
     best = None
     best_dist_sq = max_distance * max_distance
+    friendly = friendly_owners(game, owner)
     candidates = (spatial_candidates(
         spatial_index, x, y, max_distance, 16.0)
         if spatial_index else game["units"])
@@ -4421,7 +4445,7 @@ def nearest_enemy_infantry(game, owner, x, y, max_distance, spatial_index=None):
             continue
         if not is_dog_prey(entity.get("kind")):
             continue
-        if is_friendly(game, entity["owner"], owner) or entity["hp"] <= 0:
+        if entity["owner"] in friendly or entity["hp"] <= 0:
             continue
         dx = entity["x"] - x
         dy = entity["y"] - y
@@ -4440,6 +4464,19 @@ def death_explosion_falloff(distance, radius, inner=1.0, outer=DEATH_EXPLOSION_O
     if radius <= 0 or distance >= radius:
         return 0.0
     return inner + (outer - inner) * (distance / radius)
+
+
+def death_explosion_target_multiplier(boom, target):
+    """返回某种自爆对具体目标的专属倍率；未配置时沿用护甲倍率表。"""
+    multipliers = boom.get("targetMultipliers")
+    if multipliers is None:
+        return None
+    kind = target.get("kind")
+    if kind in multipliers:
+        return float(multipliers[kind])
+    if target.get("id", "").startswith("s"):
+        return float(multipliers.get("structure", multipliers.get("default", 1.0)))
+    return float(multipliers.get("default", 1.0))
 
 
 def trigger_death_explosion(room, source, game, combat_spatial=None):
@@ -4468,20 +4505,28 @@ def trigger_death_explosion(room, source, game, combat_spatial=None):
         return False
     ox, oy = source["x"], source["y"]
     owner = source.get("owner")
+    friendly = friendly_owners(game, owner)
     candidates = (spatial_candidates(combat_spatial, ox, oy, radius)
                   if combat_spatial else game["units"] + game["structures"])
     for entity in candidates:
         if entity is source or entity.get("hp", 0) <= 0:
             continue
-        if is_friendly(game, entity["owner"], owner):
+        if entity["owner"] in friendly:
             continue
         dist = math.hypot(entity["x"] - ox, entity["y"] - oy)
         falloff = death_explosion_falloff(dist, radius)
         if falloff <= 0:
             continue
+        target_multiplier = death_explosion_target_multiplier(boom, entity)
+        # 配了目标倍率的自爆不再叠乘通用护甲表：卡车/魔仆对普通单位严格 ×1，
+        # 只对建筑与两种采矿单位走目录里的 ×1.5。
+        applied_type = dtype
+        if target_multiplier is not None:
+            falloff *= target_multiplier
+            applied_type = None
         apply_damage(
-            room, entity, base * falloff, owner, dtype, game,
-            source.get("id"))
+            room, entity, base * falloff, owner, applied_type, game,
+            source.get("id"), source)
     return True
 
 
@@ -4555,7 +4600,8 @@ def award_combat_reward(room, game, source_owner, target):
     return reward
 
 
-def apply_damage(room, target, damage, source_owner, damage_type=None, game=None, source_id=None):
+def apply_damage(room, target, damage, source_owner, damage_type=None, game=None,
+                 source_id=None, source_unit=None):
     if target["hp"] <= 0:
         return
     applied = max(0.0, damage)
@@ -4586,11 +4632,13 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
             source["kills"] += 1
             award_combat_reward(room, game_state, source_owner, target)
         if source_id and game and source_owner != target["owner"]:
-            source_unit = None
-            for u in game["units"]:
-                if u["id"] == source_id:
-                    source_unit = u
-                    break
+            # 范围伤害会连续结算许多目标。调用方已知攻击源时直接复用，避免
+            # 每杀一个目标都重新线性扫描整支部队；旧调用仍保留兼容回退。
+            if source_unit is None:
+                for u in game["units"]:
+                    if u["id"] == source_id:
+                        source_unit = u
+                        break
             if source_unit:
                 new_kills = source_unit.get("kills", 0) + 1
                 source_unit["kills"] = new_kills
@@ -4626,18 +4674,24 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
         move = projectile["speed"] * dt
         if dist <= move + 7 or projectile["ttl"] <= 0:
             impact_x, impact_y = projectile["targetX"], projectile["targetY"]
+            source_unit = None
+            source_id = projectile.get("sourceId")
+            if source_id and entity_index is not None:
+                source_unit = entity_index.get(source_id)
             if target:
                 apply_damage(room, target, projectile["damage"], projectile["owner"],
                              projectile.get("damageType"), game,
-                             projectile.get("sourceId"))
+                             source_id, source_unit)
                 apply_slow(projectile, target)
             splash = projectile.get("splash", 0)
             if splash > 0:
+                friendly = friendly_owners(game, projectile["owner"])
                 candidates = (spatial_candidates(
                     combat_spatial, impact_x, impact_y, splash)
                     if combat_spatial else game["units"] + game["structures"])
                 for entity in candidates:
-                    if entity is target or is_friendly(game, entity["owner"], projectile["owner"]) or entity["hp"] <= 0:
+                    if (entity is target or entity["owner"] in friendly
+                            or entity["hp"] <= 0):
                         continue
                     dx = entity["x"] - impact_x
                     dy = entity["y"] - impact_y
@@ -4646,7 +4700,7 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
                         radius = math.sqrt(radius_sq)
                         apply_damage(room, entity, projectile["damage"] * 0.45 * (1.0 - radius / splash), projectile["owner"],
                                      projectile.get("damageType"), game,
-                                     projectile.get("sourceId"))
+                                     source_id, source_unit)
                         apply_slow(projectile, entity)
             game["effects"].append({
                 "id": new_id("e"), "type": "impact", "x": impact_x, "y": impact_y,
@@ -4775,56 +4829,103 @@ def tick_harvester(room, unit, dt, entity_index=None, terrain=None):
                 unit["returnTarget"] = "pending"
 
 
-def separate_units(terrain, units):
+def separate_units(terrain, units, active_ids=None):
+    """Relax local overlaps and return units that still need another pass.
+
+    When active_ids is supplied, stationary/stable pairs are skipped.  An
+    active unit is still checked against every nearby stationary unit, so the
+    optimization does not let moving columns pass through parked formations.
+    """
     cells = {}
+    active_cells = set()
+    touched = set()
+    filter_inactive = active_ids is not None
     has_blockers = bool(terrain.rivers or terrain.mountains)
     for first in units:
         cell_x, cell_y = spatial_cell(first["x"], first["y"], SEPARATION_CELL_SIZE)
-        for near_x in range(cell_x - 1, cell_x + 2):
-            for near_y in range(cell_y - 1, cell_y + 2):
-                for second in cells.get((near_x, near_y), ()):
+        first_active = not filter_inactive or first["id"] in active_ids
+        scan_neighbors = first_active
+        if not scan_neighbors and active_cells:
+            scan_neighbors = any(
+                (near_x, near_y) in active_cells
+                for near_x in range(cell_x - 1, cell_x + 2)
+                for near_y in range(cell_y - 1, cell_y + 2))
+        if scan_neighbors:
+            for near_x in range(cell_x - 1, cell_x + 2):
+                for near_y in range(cell_y - 1, cell_y + 2):
+                    for second in cells.get((near_x, near_y), ()):
+                        if (filter_inactive and not first_active
+                                and second["id"] not in active_ids):
+                            continue
                     # 自爆单位贴脸引爆，不能被分离力推出引爆距离：坦克这类
                     # 大目标的分离半径 (16+20)×1.15≈41 远大于引爆距离
                     # 22+20×0.35≈29，追上了却永远差一步，跟着走不自爆。
                     # 敢死队无视碰撞：能穿进单位群直扑目标。
-                    if (first.get("kind") in SUICIDE_KINDS
-                            or second.get("kind") in SUICIDE_KINDS):
-                        continue
-                    dx = second["x"] - first["x"]
-                    dy = second["y"] - first["y"]
-                    dist_sq = dx * dx + dy * dy
-                    minimum = (first["size"] + second["size"]) * 1.15
-                    if 0.01 < dist_sq < minimum * minimum:
-                        dist = math.sqrt(dist_sq)
-                        push = (minimum - dist) * 0.35
-                        nx, ny = dx / dist, dy / dist
-                        old_fx, old_fy = first["x"], first["y"]
-                        old_sx, old_sy = second["x"], second["y"]
-                        check_first = (has_blockers and terrain.near_blocker(
-                            old_fx, old_fy, push + 4.0))
-                        check_second = (has_blockers and terrain.near_blocker(
-                            old_sx, old_sy, push + 4.0))
-                        first["x"] -= nx * push
-                        first["y"] -= ny * push
-                        second["x"] += nx * push
-                        second["y"] += ny * push
+                        if (first.get("kind") in SUICIDE_KINDS
+                                or second.get("kind") in SUICIDE_KINDS):
+                            continue
+                        dx = second["x"] - first["x"]
+                        dy = second["y"] - first["y"]
+                        dist_sq = dx * dx + dy * dy
+                        minimum = (first["size"] + second["size"]) * 1.15
+                        if 0.01 < dist_sq < minimum * minimum:
+                            dist = math.sqrt(dist_sq)
+                            push = (minimum - dist) * 0.35
+                            nx, ny = dx / dist, dy / dist
+                            old_fx, old_fy = first["x"], first["y"]
+                            old_sx, old_sy = second["x"], second["y"]
+                            check_first = (has_blockers and terrain.near_blocker(
+                                old_fx, old_fy, push + 4.0))
+                            check_second = (has_blockers and terrain.near_blocker(
+                                old_sx, old_sy, push + 4.0))
+                            first["x"] -= nx * push
+                            first["y"] -= ny * push
+                            second["x"] += nx * push
+                            second["y"] += ny * push
                         # 绝大多数碰撞发生在开阔地，不再为每一对单位扫描全图
                         # 山河；宽相位命中障碍物包围盒时才做精确 blocked 检查。
                         # 回退检查带单位半径：只拦"中心点入水"会把单位挤到
                         # 河岸临界带（中心距水 < size/2），那里任何一步都进河，
                         # 移动与寻路全部失效，单位永久卡死在岸边。
-                        if ((check_first and terrain.blocked(
-                                first["x"], first["y"], first["size"] * 0.5))
-                                or (check_second and terrain.blocked(
-                                    second["x"], second["y"], second["size"] * 0.5))):
-                            first["x"], first["y"] = old_fx, old_fy
-                            second["x"], second["y"] = old_sx, old_sy
+                            if ((check_first and terrain.blocked(
+                                    first["x"], first["y"], first["size"] * 0.5))
+                                    or (check_second and terrain.blocked(
+                                        second["x"], second["y"], second["size"] * 0.5))):
+                                first["x"], first["y"] = old_fx, old_fy
+                                second["x"], second["y"] = old_sx, old_sy
+                            elif push >= 0.10:
+                                touched.add(first["id"])
+                                touched.add(second["id"])
         key = spatial_cell(first["x"], first["y"], SEPARATION_CELL_SIZE)
         cells.setdefault(key, []).append(first)
+        if first_active:
+            active_cells.add(key)
 
     for unit in units:
         unit["x"] = clamp(unit["x"], unit["size"], terrain.width - unit["size"])
         unit["y"] = clamp(unit["y"], unit["size"], terrain.height - unit["size"])
+    return touched
+
+
+def active_separation_units(game, units):
+    """Detect units that moved since the previous separation sample."""
+    previous = game.get("_separationPositions", {})
+    active = set(game.get("_separationCarry", ()))
+    current = {}
+    for unit in units:
+        unit_id = unit["id"]
+        position = (unit["x"], unit["y"])
+        current[unit_id] = position
+        old = previous.get(unit_id)
+        if old is None:
+            active.add(unit_id)
+        else:
+            dx = position[0] - old[0]
+            dy = position[1] - old[1]
+            if dx * dx + dy * dy >= 0.0625:
+                active.add(unit_id)
+    game["_separationPositions"] = current
+    return active
 
 
 def tick_neutral_guard(game, unit, definition, dt, entity_index, terrain, speed_mult):
@@ -5015,15 +5116,21 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                 unit["destY"] = None
                 unit["order"] = "guard"
 
-    # A local spatial grid limits separation checks to neighboring cells. Unit
-    # movement and combat stay at 20Hz, while collision relaxation runs at
-    # 10Hz. In a four-player blob this halves the dominant O(local pairs)
-    # workload without changing pathfinding, weapon timing or command latency.
+    # Moving formations and unresolved overlaps relax at 10Hz. Once a group is
+    # stable, it is sampled at 4Hz and stationary/stationary pairs are skipped.
+    # Newly spawned units count as active, so crowded production exits still
+    # separate immediately.
     game["separationClock"] = game.get("separationClock", 0.0) - dt
     if game["separationClock"] <= 0.0:
         live_units = [u for u in game["units"] if u["hp"] > 0]
-        separate_units(terrain, live_units)
-        game["separationClock"] = 0.10
+        active_ids = active_separation_units(game, live_units)
+        if active_ids:
+            game["_separationCarry"] = separate_units(
+                terrain, live_units, active_ids)
+            game["separationClock"] = 0.10
+        else:
+            game["_separationCarry"] = set()
+            game["separationClock"] = 0.25
 
 
 def tick_build_queues(room, dt):

@@ -835,37 +835,50 @@ const UNIT_BUILDERS = {
   },
 
   warden: function () {
-    // 晶铠卫士：持盾板甲骑士。盔冠 + 鸢盾 + 金边板甲，远看是骑士不是第二只岩石傀儡。
+    // 晶铠卫士：天启级巨型持盾构装。宽肩重甲、晶冠、分层塔盾与晶锤组成
+    // 清楚的圣骑士剪影；所有零件仍合进同一 InstancedMesh，不增加 draw call。
     const cuirassProfile = [
-      [0.0, -5.5], [0.72, -5.5], [0.94, -3.8], [1.0, 0.8],
-      [0.82, 3.7], [0.56, 5.5], [0.0, 5.5]
+      [0.0, -6.2], [0.72, -6.2], [0.95, -4.2], [1.0, 0.9],
+      [0.86, 4.1], [0.58, 6.2], [0.0, 6.2]
     ];
     const body = [
-      profiledVolume(cuirassProfile, 5.2, 4.1, 10, 0, 10.2, 0, MAT.plateViolet),
-      box(8.8, 0.45, 6.4, 0.2, 15.4, 0, MAT.goldTrim),
-      taperedBox(7.6, 6.4, 5.6, 4.8, 3.8, 0.5, 16.6, 0, MAT.plateViolet),
-      taperedBox(4.2, 4.0, 2.6, 2.4, 3.6, 2.2, 20.0, 0, MAT.plateViolet),
-      sph(1.55, 6, 3.2, 20.6, 0, MAT.slate),
-      pyr(0.55, 2.6, 4, 2.6, 23.0, 0, MAT.goldTrim),
-      limb(1.8, 1.45, 0.4, 13.2, 4.5, 1.2, 7.0, 5.5, MAT.plateViolet),
-      limb(1.8, 1.45, 0.4, 13.2, -4.5, 1.2, 7.0, -5.5, MAT.plateViolet),
-      box(8.2, 0.85, 5.8, -0.2, 15.8, 0, 0.92),              // 玩家色胸背甲
-      limb(1.55, 1.35, -0.3, 6.2, 2.5, 0.2, 0.8, 2.8, MAT.slate),
-      limb(1.55, 1.35, -0.3, 6.2, -2.5, 0.2, 0.8, -2.8, MAT.slate),
-      box(1.5, 13.2, 8.8, 2.4, 10.8, 8.2, MAT.goldTrim),
-      box(0.7, 11.2, 7.0, 3.2, 10.8, 8.2, 0.85),
-      cyl(0.38, 0.5, 16.8, 6, 6.4, 10.6, -3.6, MAT.goldTrim, ROT_Z90),
-      pyr(1.05, 4.0, 4, 15.6, 10.6, -3.6, MAT.crystal, ROT_Z90)
+      profiledVolume(cuirassProfile, 6.6, 5.1, 10, 0, 11.4, 0, MAT.plateViolet),
+      taperedBox(11.8, 8.8, 9.4, 7.0, 3.2, -0.3, 17.0, 0, MAT.slate),
+      box(11.0, 0.55, 7.4, 0.3, 18.5, 0, MAT.goldTrim),
+      box(10.4, 0.95, 6.8, -0.4, 17.8, 0, 0.92),              // 玩家色胸背甲
+      taperedBox(6.2, 5.6, 4.4, 4.0, 4.6, 2.0, 21.1, 0, MAT.plateViolet),
+      sph(1.9, 7, 3.3, 22.0, 0, MAT.slate),
+      pyr(0.78, 3.8, 5, 2.7, 25.0, 0, MAT.crystal),           // 晶冠
+      // 双层肩甲把上半身横向撑开，远景也有重型构装的压迫感。
+      ellipsoid(3.4, 1.8, 3.0, 0.8, 16.2, 6.5, MAT.plateViolet),
+      ellipsoid(3.4, 1.8, 3.0, 0.8, 16.2, -6.5, MAT.plateViolet),
+      pyr(0.72, 2.8, 4, 0.6, 19.1, 6.5, MAT.goldTrim),
+      pyr(0.72, 2.8, 4, 0.6, 19.1, -6.5, MAT.goldTrim),
+      limb(2.1, 1.65, 0.6, 14.5, 5.7, 1.6, 8.0, 7.0, MAT.plateViolet),
+      limb(2.1, 1.65, 0.6, 14.5, -5.7, 1.6, 8.0, -7.0, MAT.plateViolet),
+      limb(1.9, 1.55, -0.8, 7.2, 3.2, 0.0, 0.9, 3.6, MAT.slate),
+      limb(1.9, 1.55, -0.8, 7.2, -3.2, 0.0, 0.9, -3.6, MAT.slate),
+      ellipsoid(2.9, 0.85, 2.4, 0.7, 0.9, 3.8, MAT.goldStoneDark),
+      ellipsoid(2.9, 0.85, 2.4, 0.7, 0.9, -3.8, MAT.goldStoneDark),
+      // 分层鸢盾：厚金边、玩家色盾面、中央晶脊，避免一整块平板。
+      taperedBox(2.1, 13.8, 1.2, 10.2, 15.8, 2.4, 11.1, 10.2, MAT.goldTrim),
+      taperedBox(1.05, 11.8, 0.72, 8.5, 13.8, 3.1, 11.2, 10.2, 0.84),
+      box(0.65, 10.6, 1.15, 3.7, 11.5, 10.2, MAT.crystal),
+      // 另一手改为厚重晶锤，短柄大锤头比细矛更符合前排卫士。
+      cyl(0.48, 0.58, 17.5, 7, 6.8, 11.0, -5.1, MAT.goldTrim, ROT_Z90),
+      taperedBox(5.8, 4.8, 4.5, 3.7, 5.4, 17.1, 11.0, -5.1, MAT.crystal, Math.PI / 2),
+      pyr(0.9, 3.2, 4, 20.0, 11.0, -5.1, MAT.goldTrim, ROT_Z90)
     ];
-    return {
+    return scaleUnitModel({
       body: body,
       glow: [
-        box(2.6, 0.55, 1.15, 3.6, 20.6, 0, MAT.runeCyan),
-        sph(1.15, 7, 4.0, 12.0, 0, MAT.runeCyan),
-        box(0.4, 9.4, 0.4, 3.4, 10.8, 8.2, MAT.runeCyan),
-        sph(0.8, 6, 17.4, 10.6, -3.6, MAT.runeCyan)
+        box(3.4, 0.65, 1.25, 4.0, 22.0, 0, MAT.runeCyan),
+        sph(1.45, 7, 4.8, 13.0, 0, MAT.runeCyan),
+        box(0.5, 10.2, 0.5, 3.8, 11.5, 10.2, MAT.runeCyan),
+        sph(1.25, 7, 17.1, 11.0, -5.1, MAT.runeCyan),
+        cyl(5.4, 5.4, 0.22, 10, 0, 0.32, 0, MAT.runeCyan)
       ]
-    };
+    }, 1.18, 1.14, 1.18);
   },
 
   colossus: function () {
@@ -2029,7 +2042,7 @@ const UNIT_VISUAL_SCALE = {
   artillery: 1.28, harvester: 1.16, mcv: 1.30, v3: 1.28,
   overlord: 1.30, prism: 1.28, bomb_truck: 1.32,
   mage: 2.15, frost: 2.15, imp: 2.05, oracle: 2.15, golem: 1.42, panther: 1.7, dragon: 1.34,
-  warden: 1.40, colossus: 1.38, comet: 1.28, hexling: 2.05,
+  warden: 1.55, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30
 };
 
@@ -2040,7 +2053,7 @@ const UNIT_VISUAL_SCALE = {
 export const UNIT_VISUAL_PICK_SCALE = Object.freeze({
   mage: 3.10, frost: 3.10, imp: 1.70, oracle: 3.25,
   golem: 1.05, panther: 1.90, dragon: 1.90,
-  warden: 1.35, colossus: 1.45, comet: 1.20,
+  warden: 1.75, colossus: 1.45, comet: 1.20,
   mharvester: 1.00, mmcv: 1.20, hexling: 1.10
 });
 
@@ -4193,13 +4206,17 @@ export function createRenderer(canvas) {
       return dragon;
     }
     if (kind === 'warden') {
-      return [
-        taperedBox(10.4, 8.2, 7.2, 5.8, 11, 0, 10.2, 0, MAT.plateViolet),
-        box(8.2, 0.85, 5.8, -0.2, 15.8, 0, 0.92),            // 玩家色胸背甲
-        box(1.5, 13, 8.6, 2.4, 10.8, 8.2, MAT.goldTrim),
-        cyl(0.38, 0.5, 16, 6, 6.2, 10.6, -3.4, MAT.goldTrim, ROT_Z90),
-        sph(1.15, 6, 4.0, 12.0, 0, MAT.runeCyan)
-      ];
+      return scalePartList([
+        taperedBox(13.2, 10.2, 9.6, 7.4, 12.4, 0, 11.4, 0, MAT.plateViolet),
+        box(10.4, 0.95, 6.8, -0.4, 17.8, 0, 0.92),           // 玩家色胸背甲
+        box(5.6, 3.2, 13.2, 0.8, 16.1, 0, MAT.slate),        // 宽肩剪影
+        taperedBox(2.1, 13.8, 1.2, 10.2, 15.8, 2.4, 11.1, 10.2, MAT.goldTrim),
+        box(0.8, 10.4, 1.2, 3.2, 11.4, 10.2, 0.84),          // 塔盾面
+        cyl(0.48, 0.58, 17.5, 6, 6.8, 11.0, -5.1, MAT.goldTrim, ROT_Z90),
+        box(5.4, 5.0, 4.4, 17.1, 11.0, -5.1, MAT.crystal),   // 晶锤头
+        pyr(0.75, 3.4, 4, 2.7, 24.8, 0, MAT.crystal),
+        sph(1.35, 6, 4.8, 13.0, 0, MAT.runeCyan)
+      ], 1.18, 1.14, 1.18);
     }
     if (kind === 'colossus') {
       return [

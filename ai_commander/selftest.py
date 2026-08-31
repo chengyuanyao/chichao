@@ -96,6 +96,14 @@ def test_counter_table():
           abs(codex.counter("bite", "mage") - 1.50) < 1e-6)
     check("自爆单位按死亡爆炸算输出，不是 0",
           codex.sustained_damage("bomb_truck") > 0)
+    check("卡车/魔仆只对建筑与矿车 ×1.50，其他单位 ×1.00",
+          all(codex.attacker_counter(kind, "power") == 1.50
+              and codex.attacker_counter(kind, "harvester") == 1.50
+              and codex.attacker_counter(kind, "mharvester") == 1.50
+              and codex.attacker_counter(kind, "rifle") == 1.00
+              and codex.attacker_counter(kind, "tank") == 1.00
+              and codex.attacker_counter(kind, "mage") == 1.00
+              for kind in ("bomb_truck", "hexling")))
     check("护甲表覆盖 catalog 里全部兵种",
           all(codex.armor_of(kind) for kind in server.UNIT_TYPES))
 

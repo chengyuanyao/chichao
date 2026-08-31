@@ -75,6 +75,21 @@ def counter(damage_type, target_kind):
     return damage_armor_multiplier(damage_type, armor_of(target_kind))
 
 
+def attacker_counter(attacker_kind, target_kind):
+    """具体兵种对目标的倍率；自爆单位优先读取按 kind 配置的目标倍率。"""
+    spec = UNIT_TYPES.get(attacker_kind) or {}
+    blast = spec.get("deathExplosion") or {}
+    multipliers = blast.get("targetMultipliers")
+    if multipliers is not None:
+        if target_kind in multipliers:
+            return float(multipliers[target_kind])
+        if target_kind in STRUCTURE_TYPES:
+            return float(multipliers.get(
+                "structure", multipliers.get("default", 1.0)))
+        return float(multipliers.get("default", 1.0))
+    return counter(damage_type_of(attacker_kind), target_kind)
+
+
 def sustained_damage(kind):
     """单位的"每秒基础伤害"，自爆单位按名义接敌时间摊开。"""
     spec = UNIT_TYPES.get(kind) or {}
@@ -97,11 +112,11 @@ def damage_type_of(kind):
 
 
 def effective_dps(attacker_kind, target_kind):
-    """打某个具体 kind 的每秒有效伤害（已乘护甲倍率）。"""
+    """打某个具体 kind 的每秒有效伤害（已乘护甲/目标倍率）。"""
     base = sustained_damage(attacker_kind)
     if base <= 0:
         return 0.0
-    return base * counter(damage_type_of(attacker_kind), target_kind)
+    return base * attacker_counter(attacker_kind, target_kind)
 
 
 def reach_of(kind):

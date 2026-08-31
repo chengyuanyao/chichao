@@ -500,9 +500,9 @@ class Commander(object):
     def _launch_suicides(self, game, bot_id, suicides, mem):
         """自爆车专用波次：凑够人就走，且只许砸建筑。
 
-        `_score_target` 会挑「倍率×残血×距离」最优的目标，对自爆车来说那多半
-        是一个步兵——explosive 对 infantry ×1.80，可它撞上去就没了。目标限定
-        为总部或贴着总部的建筑团，才对得起 1000 块的造价。
+        `_score_target` 会挑「倍率×残血×距离」最优的野战目标，自爆车撞上去
+        就没了。卡车/魔仆只对建筑与采矿单位 ×1.5，所以目标限定为总部或贴着
+        总部的建筑团，才对得起 1000 块的造价。
         """
         if len(suicides) < BOT_SUICIDE_WAVE:
             return

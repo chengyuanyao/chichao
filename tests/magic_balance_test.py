@@ -64,7 +64,7 @@ def main():
     hexling = server.UNIT_TYPES["hexling"]
     for field in ("cost", "hp", "speed", "build", "damageType"):
         assert truck[field] == hexling[field], (field, truck[field], hexling[field])
-    for field in ("damage", "radius", "damageType"):
+    for field in ("damage", "radius", "damageType", "targetMultipliers"):
         assert truck["deathExplosion"][field] == hexling["deathExplosion"][field], (
             field, truck["deathExplosion"][field], hexling["deathExplosion"][field])
     assert "chainRadius" not in truck["deathExplosion"]

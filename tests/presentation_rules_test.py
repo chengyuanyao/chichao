@@ -390,7 +390,10 @@ def main():
     assert "奥术法师：高挑长袍施法者，暗紫袍 + 金饰法杖" in render
     assert "冰霜女巫：宽檐帽 + 苍白斗篷 + 霜环" in render
     assert "秘法巨龙：拉长的翼展剪影" in render
-    assert "晶铠卫士：持盾板甲骑士" in render
+    assert "天启级巨型持盾构装" in render
+    assert "}, 1.18, 1.14, 1.18);" in render
+    assert "warden: 1.55" in render
+    assert "warden: 1.75" in render
     assert "裂地晶兽：四足晶兽驮晶陨鞍塔" in render
     assert "裂地晶兽：四足晶兽 + 背上晶陨鞍塔" in app
     assert "坠星台：厚重发射底盘 + 竖直晶炮" in render
@@ -461,7 +464,7 @@ def main():
             "ellipsoid(3.6, 0.48, 3.55", "chamferedBox(5.8, 0.55, 6.1",
             "box(6.4, 0.70, 4.8", "chamferedBox(5.0, 0.52, 5.5",
             "ellipsoid(4.55, 0.62, 3.4", "taperedBox(10.0, 6.8",
-            "box(14.0, 0.75, 6.2", "box(8.2, 0.85, 5.8",
+            "box(14.0, 0.75, 6.2", "box(10.4, 0.95, 6.8",
             "taperedBox(15.2, 9.8", "taperedBox(27, 16",
             "profiledVolume(deckProfile, 7.8, 6.5", "taperedBox(19, 13",
             "torus(4.2, 0.45"):
@@ -479,7 +482,7 @@ def main():
             "box(6.0, 1.6, 7", "box(5.8, 0.65, 6.0",
             "box(6.4, 0.70, 4.8", "box(5.2, 0.65, 5.8",
             "box(9.0, 0.90, 6.6", "taperedBox(10.0, 6.8",
-            "box(14.0, 0.75, 6.2", "box(8.2, 0.85, 5.8",
+            "box(14.0, 0.75, 6.2", "box(10.4, 0.95, 6.8",
             "taperedBox(15.2, 9.8", "taperedBox(27, 16",
             "taperedBox(15, 12", "taperedBox(19, 13",
             "torus(4.2, 0.45"):

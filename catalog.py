@@ -134,8 +134,8 @@ UNIT_TYPES = {
     # 自爆卡车：中期玻璃大炮。工厂就能出，不卡维修厂。无常规火力，
     # 贴近或阵亡时炸开。轻甲载具：军犬咬不动，磁暴/火箭能拆。
     # 造价 1000 / 训练 8.5 / 移速 97.9，与爆裂魔仆对齐（贵、慢造、慢走）。
-    # 爆炸 700 / 半径 120 未改。贴脸总部约 770 伤
-    # （2400 的 32%），单车拆不掉满血指挥中心；三四辆叠炸才够。
+    # 爆炸 700 / 半径 120。爆破专攻建筑与采矿单位 ×1.5，其余单位固定 ×1.0；
+    # 单车仍拆不掉满血指挥中心，避免兼任清兵、反甲与拆家三种角色。
     # 邻近自爆只吃 700 溅射，不会连带引爆。
     "bomb_truck": {
         "name": "自爆卡车", "cost": 1000, "hp": 160, "speed": 97.9,
@@ -146,6 +146,12 @@ UNIT_TYPES = {
         "deathExplosion": {
             "damage": 700.0, "radius": 120.0,
             "damageType": "explosive",
+            "targetMultipliers": {
+                "default": 1.0,
+                "structure": 1.5,
+                "harvester": 1.5,
+                "mharvester": 1.5,
+            },
         },
         "detonateOnContact": True,
     },
@@ -265,6 +271,7 @@ UNIT_TYPES = {
     },
     # 爆裂魔仆：秘法会对位自爆单位，不是卡车。符核活体，法阵召唤。
     # 造价/训练/移速/血/爆炸与卡车对齐（1000 / 8.5 / 97.9 / 160 / 700 / 120）。
+    # 目标倍率也与卡车一致：建筑/采矿单位 ×1.5，其余单位 ×1.0。
     # 邻近自爆不连带。魔导甲、不算载具：军犬能扑，但一口咬不死（160 血，咬 90）。
     # 圣泉修不了。
     "hexling": {
@@ -276,6 +283,12 @@ UNIT_TYPES = {
         "deathExplosion": {
             "damage": 700.0, "radius": 120.0,
             "damageType": "explosive",
+            "targetMultipliers": {
+                "default": 1.0,
+                "structure": 1.5,
+                "harvester": 1.5,
+                "mharvester": 1.5,
+            },
         },
         "detonateOnContact": True,
     },
