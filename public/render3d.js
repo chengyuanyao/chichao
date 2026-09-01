@@ -64,7 +64,109 @@ export function oreReserveTier(amount) {
  * (0.3,0.3,0.3) 得到很暗的同色。这样每个兵种只需要一个 InstancedMesh，
  * 而 instanceColor 负责乘上该玩家的颜色。
  */
-function mergeParts(parts) {
+/**
+ * 零件表面通道。同一个合并网格里，法袍要哑光、金饰要金属高光、晶体要玻璃反光——
+ * 过去整件模型只能共用材质上的一个 uArmySurfaceMode，所以法师全身都按布料打光。
+ * 现在按顶点写一条 aSurf，一次绘制调用里就能同时存在四五种表面。
+ * -1 表示「跟随材质默认」，老零件不写这个字段就是这个值。
+ */
+const SURF = Object.freeze({
+  metal: 0, stone: 1, cloth: 2, hide: 3, crystal: 4
+});
+
+/** 给一批零件打上表面通道，返回原数组，方便直接拼进 body 列表。 */
+function surfaced(code, parts) {
+  for (let i = 0; i < parts.length; i++) parts[i].surf = code;
+  return parts;
+}
+
+// 烘焙遮蔽的调参。目标是把缝隙压暗到能看出体积，而不是把模型压成黑块。
+const OCC_MIN = 0.46;          // 最暗只到 0.46，再低低模就成黑洞
+const OCC_STRENGTH = 0.90;     // 遮蔽量到明暗的换算强度
+const OCC_RANGE_SQ = 900;      // 30 以外的零件一律不参与，兜底上限
+const OCC_EPS = 0.004;         // 单个零件贡献低于这个值就剪掉，用来反解影响半径
+const OCC_GROUND = 0.80;       // 地面接触阴影的权重
+const OCC_GROUND_FADE = 15;    // 离地这么高之内还吃一层地面遮蔽
+
+/**
+ * 顶点烘焙环境光遮蔽。
+ *
+ * 低面数模型看起来像塑料玩具，主要是因为零件交界处没有暗部：腋下、兜帽内侧、
+ * 翼根、腹部、裙摆和地面之间应该是暗的，但纯 Lambert 只看光线方向，这些地方
+ * 和顶面一样亮。英雄联盟那种「画过」的质感有很大一块就是把这层暗部画进贴图。
+ * 这里改成建几何体时算一次、写进顶点属性：运行时零成本，也不占贴图。
+ *
+ * 每个零件近似成一个球：球心取世界包围盒中心，等效半径由平均截面积换算，
+ * 细长的法杖因此不会像一整块板那样遮掉半边身子。用球心方向而不是包围盒最近点，
+ * 是因为腰封、领环这类环状零件的包围盒会把整段身体都框进去，按最近点算距离恒
+ * 为零，整件模型会被压到下限。发光件当作光源，不投遮蔽也不接收。
+ */
+function bakeOcclusion(prepared, position, normal, out) {
+  const spheres = [];
+  for (let k = 0; k < prepared.length; k++) {
+    const item = prepared[k];
+    if (item.emissive || !item.box) continue;
+    const b = item.box;
+    const ex = b[3] - b[0], ey = b[4] - b[1], ez = b[5] - b[2];
+    const area = (ex * ey + ey * ez + ez * ex) / 3;
+    const r2 = Math.max(0.16, area * 0.25 / Math.PI);
+    spheres.push({
+      owner: k,
+      x: (b[0] + b[3]) * 0.5, y: (b[1] + b[4]) * 0.5, z: (b[2] + b[5]) * 0.5,
+      r2: r2,
+      // 单个零件的贡献是 r²/(r²+d²)，低于 OCC_EPS 就不值得算了。
+      // 反解出每个零件各自的影响半径：细小的背鳍只影响身边几个单位，
+      // 不必和躯干一样一路算到 30 开外。
+      maxD2: Math.min(OCC_RANGE_SQ, r2 * (1 / OCC_EPS - 1))
+    });
+  }
+  // 先做零件级配对筛选：接收零件的包围盒离某个遮挡球超出影响半径时，
+  // 这一整片顶点都不用再逐个和它算距离。巨龙 78 个零件、9336 个顶点，
+  // 全配对是 70 万次；筛完通常只剩十分之一，首次出场的烘焙尖峰随之消失。
+  const shortlist = [];
+  for (let k = 0; k < prepared.length; k++) {
+    const item = prepared[k];
+    if (item.emissive || !item.box) continue;
+    const b = item.box;
+    const near = [];
+    for (let i = 0; i < spheres.length; i++) {
+      const sp = spheres[i];
+      if (sp.owner === k) continue;
+      const cx = sp.x < b[0] ? b[0] : (sp.x > b[3] ? b[3] : sp.x);
+      const cy = sp.y < b[1] ? b[1] : (sp.y > b[4] ? b[4] : sp.y);
+      const cz = sp.z < b[2] ? b[2] : (sp.z > b[5] ? b[5] : sp.z);
+      const dx = cx - sp.x, dy = cy - sp.y, dz = cz - sp.z;
+      if (dx * dx + dy * dy + dz * dz <= sp.maxD2) near.push(sp);
+    }
+    shortlist[k] = near;
+  }
+  for (let k = 0; k < prepared.length; k++) {
+    const item = prepared[k];
+    if (item.emissive) continue;          // 发光件保持 1.0，不吃暗部
+    const near = shortlist[k] || [];
+    for (let i = item.start; i < item.end; i++) {
+      const vi = i * 3;
+      const px = position[vi], py = position[vi + 1], pz = position[vi + 2];
+      const nx = normal[vi], ny = normal[vi + 1], nz = normal[vi + 2];
+      let occ = 0;
+      for (let b = 0; b < near.length; b++) {
+        const sp = near[b];
+        const dx = sp.x - px, dy = sp.y - py, dz = sp.z - pz;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 > sp.maxD2 || d2 < 1e-6) continue;
+        // 遮挡物落在法线背面时看不见，不该算进遮蔽
+        const cosw = (nx * dx + ny * dy + nz * dz) / Math.sqrt(d2);
+        if (cosw <= 0) continue;
+        occ += cosw * sp.r2 / (sp.r2 + d2);
+      }
+      // 贴地且法线朝下的顶点再压一档：脚底、腹部、裙摆自然落进接触阴影
+      const low = 1 - Math.min(1, Math.max(0, py) / OCC_GROUND_FADE);
+      occ += low * low * (0.5 - 0.5 * ny) * OCC_GROUND;
+      out[i] = Math.max(OCC_MIN, 1 / (1 + OCC_STRENGTH * occ));
+    }
+  }
+}
+function mergeParts(parts, options) {
   // 直接把源顶点按矩阵变换写进输出缓冲，不做 geometry.clone()。
   // 单位、建筑和山岩会合并大量零件，clone 一份 BufferGeometry 再
   // applyMatrix4 的开销和 GC 压力都很可观，手写这一段能省掉一半时间。
@@ -80,11 +182,16 @@ function mergeParts(parts) {
     }
     const count = geo.attributes.position.count;
     total += count;
+    const shade = part.shade == null ? 1 : part.shade;
+    const rgb = part.rgb || null;
     prepared.push({
       geo: geo, count: count,
       matrix: part.matrix,
-      shade: part.shade == null ? 1 : part.shade,
-      rgb: part.rgb || null,
+      shade: shade,
+      rgb: rgb,
+      surf: part.surf == null ? -1 : part.surf,
+      // 发光件（色值分量 > 1）当光源看待：既不投遮蔽也不接收遮蔽
+      emissive: rgb ? Math.max(rgb[0], rgb[1], rgb[2]) > 1.05 : shade > 1.05,
       uv: geo.attributes.uv ? geo.attributes.uv.array : null
     });
   }
@@ -96,6 +203,12 @@ function mergeParts(parts) {
   // aTeam：0 = 这个零件用自己的固有色，1 = 乘上玩家的团队色。
   // 没有这条通道的话，所有零件都只能是团队色的深浅，整个基地就是一片单色。
   const teamFlag = new Float32Array(total);
+  // 烘焙遮蔽与逐零件表面通道。默认 1.0 / -1，不开烘焙的调用方（建筑、山岩）
+  // 拿到的仍是「全亮 + 跟随材质」，但属性一定存在——着色器声明了就不能缺。
+  const occlusion = new Float32Array(total);
+  const surfChan = new Float32Array(total);
+  occlusion.fill(1);
+  surfChan.fill(-1);
   const nm = new THREE.Matrix3();
   let offset = 0;
 
@@ -109,6 +222,11 @@ function mergeParts(parts) {
     const n = nm.elements;
     const rgb = item.rgb;
     const shade = item.shade;
+    const surf = item.surf;
+    item.start = offset;
+    item.end = offset + item.count;
+    let bMinX = Infinity, bMinY = Infinity, bMinZ = Infinity;
+    let bMaxX = -Infinity, bMaxY = -Infinity, bMaxZ = -Infinity;
 
     for (let i = 0; i < item.count; i++) {
       const si = i * 3;
@@ -143,8 +261,21 @@ function mergeParts(parts) {
         uv[ui] = item.uv[i * 2];
         uv[ui + 1] = item.uv[i * 2 + 1];
       }
+      surfChan[offset + i] = surf;
+      const wx = position[di], wy = position[di + 1], wz = position[di + 2];
+      if (wx < bMinX) bMinX = wx;
+      if (wy < bMinY) bMinY = wy;
+      if (wz < bMinZ) bMinZ = wz;
+      if (wx > bMaxX) bMaxX = wx;
+      if (wy > bMaxY) bMaxY = wy;
+      if (wz > bMaxZ) bMaxZ = wz;
     }
+    item.box = item.count ? [bMinX, bMinY, bMinZ, bMaxX, bMaxY, bMaxZ] : null;
     offset += item.count;
+  }
+
+  if (options && options.occlusion) {
+    bakeOcclusion(prepared, position, normal, occlusion);
   }
 
   const merged = new THREE.BufferGeometry();
@@ -153,6 +284,8 @@ function mergeParts(parts) {
   merged.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   merged.setAttribute('color', new THREE.BufferAttribute(color, 3));
   merged.setAttribute('aTeam', new THREE.BufferAttribute(teamFlag, 1));
+  merged.setAttribute('aOcc', new THREE.BufferAttribute(occlusion, 1));
+  merged.setAttribute('aSurf', new THREE.BufferAttribute(surfChan, 1));
   merged.computeBoundingSphere();
   return merged;
 }
@@ -353,7 +486,6 @@ const MAT = {
   // ---- 秘法会：建筑走暖金石 + 金饰 + 青符；作战单位走冷紫青，互不涂成同一片中紫 ----
   magicStone: [0.44, 0.38, 0.32],   // 傀儡/晶兽岩体：暖灰褐，不是紫晶
   magicHide: [0.18, 0.12, 0.26],    // 影豹近黑紫皮
-  scaleHide: [0.30, 0.36, 0.24],    // 巨龙鳞皮
   crystal: [0.42, 0.38, 0.78],      // 冷紫青晶体（单位）
   miteCrystal: [0.52, 0.74, 0.98],  // 晶刺：更偏青的碎晶
   goldStone: [0.58, 0.44, 0.26],    // 建筑暖金砂石
@@ -363,13 +495,20 @@ const MAT = {
   marble: [0.62, 0.54, 0.40],       // 暖色石面
   bronze: [0.72, 0.52, 0.20],       // 金铜饰，跟建筑金饰一家
   robe: [0.16, 0.10, 0.28],         // 法师深紫袍（不跟团队色走）
+  // ---- 秘法巨龙走「玉剑传说」路线：白玉 / 翡翠 / 金饰的东方龙，不再是绿褐西方龙 ----
+  // 明度刻意拉开三段：深玉背鳞 0.24 / 翡翠主鳞 0.43 / 白玉腹甲 0.85。
+  // 过去鳞皮 0.33、翼膜 0.14 通体两个调，远看是一团深色；现在从上到下有落差。
+  jadeScaleDark: [0.12, 0.30, 0.28],   // 背鳞、肩甲：最深的一段墨玉
+  jadeScale: [0.24, 0.52, 0.42],       // 主鳞：翡翠
+  jadeBelly: [0.82, 0.88, 0.74],       // 腹甲、下颌、喉部：白玉，全身最亮的一段
+  jadeFin: [0.46, 0.80, 0.66],         // 背鳍、鬃毛：半透的浅玉
+  jadeMembrane: [0.30, 0.62, 0.55],    // 翼膜内侧：贴近翼根的深玉
+  jadeMembraneLit: [0.66, 0.88, 0.80], // 翼膜外缘：越靠翼尖越透光的白玉
+  jadeGlow: [0.72, 2.45, 1.75],        // 龙息 / 眼:玉色辉光（自发光，分量 > 1）
   deepViolet: [0.14, 0.08, 0.26],   // 虹视使更瘦的冷紫袍
   frostRobe: [0.50, 0.72, 0.88],    // 冰霜袍：偏饱和苍蓝，远看和法师暗紫分开
   iceShard: [0.74, 0.90, 1.02],     // 冰棱（略亮，软件 GL 上也认得出来）
   plateViolet: [0.28, 0.24, 0.42],  // 晶铠冷紫板甲
-  dragonScale: [0.20, 0.28, 0.16],  // 更深的背鳞
-  dragonBelly: [0.50, 0.36, 0.20],  // 暖色腹甲
-  wingMembrane: [0.16, 0.12, 0.22], // 翼膜
   cloth: [0.20, 0.22, 0.18],        // 步兵布甲
   sandbag: [0.40, 0.34, 0.22],      // 沙袋/夯土
   canvas: [0.38, 0.30, 0.18],       // 帐篷布 / 旗帜衬
@@ -395,6 +534,12 @@ const MAGIC_UNIT_KINDS = {
 };
 // 一张共享军械图仍只产生四个材质变体。普通步兵/磁暴兵走织物粗糙度，
 // 不再把军服照成钢板；其余车辆、石构和兽类分别复用 metal/stone/hide。
+/**
+ * 顶点烘焙遮蔽的试点兵种。先只放秘法巨龙：它是体积最大的活物，翼根、腹部、
+ * 颈下这些该有暗部的地方最多，最容易判断这套做法值不值得铺到全部兵种。
+ */
+const OCCLUSION_BAKED_KINDS = { dragon: 1 };
+
 const CLOTH_UNIT_KINDS = {
   rifle: 1, rocket: 1, sniper: 1, tesla: 1,
   mage: 1, frost: 1, oracle: 1
@@ -780,60 +925,131 @@ const UNIT_BUILDERS = {
   },
 
   dragon: function () {
-    // 秘法巨龙：拉长的翼展剪影，RTS 俯视角一眼是龙而不是大傀儡
+    // 秘法巨龙：「玉剑传说」路线的东方玉龙。西方绿褐皮龙改成白玉 + 翡翠 + 金饰。
+    //
+    // 三件事决定它读起来是不是「玉」：
+    //   1) 明度三段——墨玉背鳍 0.24 / 翡翠主鳞 0.43 / 白玉腹甲 0.85。腹甲比背鳞亮
+    //      三倍多，俯视角一眼能读出体积，过去通体一个调只是一坨深色；
+    //   2) 东方龙的辨识件——分叉鹿角、后掠的长龙须、颈后火焰形鬃鳍、背脊玉鳍，
+    //      这几样比「有没有翅膀」更决定它像不像东方龙；
+    //   3) 翼骨换成金梁、翼膜换成半透玉色，从翼根的深玉过渡到翼尖的白玉。
+    //
+    // 玉件全部走 SURF.crystal：低粗糙度 + 强边缘光，这是玉和石头的区别所在。
+    // 翼展与包围球刻意保持不变，俯视点选半径继续有效。
     const body = [
-      ellipsoid(14.0, 4.0, 5.5, -2, 8.2, 0, MAT.scaleHide),
-      ellipsoid(10.0, 1.8, 3.7, -1.2, 5.6, 0, MAT.dragonBelly),
-      box(8.4, 3.0, 8.0, 4.2, 12.2, 0, MAT.dragonScale),
-      taperedBox(7.4, 4.2, 5.4, 3.2, 4.0, 11.4, 11.5, 0, MAT.scaleHide),
-      taperedBox(6.2, 3.6, 4.6, 2.8, 3.4, 16.6, 13.4, 0, MAT.scaleHide),
-      taperedBox(6.6, 4.4, 5.0, 3.2, 3.6, 21.2, 14.8, 0, MAT.scaleHide),
-      taperedBox(4.4, 2.4, 2.4, 1.5, 1.7, 25.2, 14.2, 0, MAT.scaleHide),
-      box(3.8, 1.0, 2.2, 24.6, 13.1, 0, MAT.dragonScale),
-      pyr(0.55, 3.4, 4, 19.6, 17.6, 1.5, MAT.goldTrim),
-      pyr(0.55, 3.4, 4, 19.6, 17.6, -1.5, MAT.goldTrim),
-      box(2.4, 0.4, 2.8, 20.4, 16.4, 2.5, MAT.goldTrim),
-      box(2.4, 0.4, 2.8, 20.4, 16.4, -2.5, MAT.goldTrim),
-      pyr(0.7, 3.0, 4, 6.2, 13.0, 0, MAT.goldTrim),
-      pyr(0.62, 2.6, 4, 1.0, 12.7, 0, MAT.goldTrim),
-      pyr(0.52, 2.2, 4, -4.2, 12.2, 0, MAT.goldTrim),
-      pyr(0.42, 1.8, 4, -9.4, 11.4, 0, MAT.goldTrim),
-      taperedBox(8.4, 2.8, 5.4, 1.8, 2.5, -16.4, 7.6, 0, MAT.scaleHide),
-      taperedBox(7.2, 2.0, 4.0, 1.1, 1.9, -22.6, 7.2, 0, MAT.scaleHide),
-      taperedBox(6.0, 1.2, 2.4, 0.4, 1.3, -27.6, 7.4, 0, MAT.scaleHide),
-      box(0.45, 2.8, 3.8, -30.0, 8.5, 0, MAT.goldTrim),
-      box(2.6, 5.0, 2.6, 6.2, 3.1, 4.3, MAT.dragonScale),
-      box(2.6, 5.0, 2.6, 6.2, 3.1, -4.3, MAT.dragonScale),
-      box(2.4, 4.5, 2.4, -8.4, 2.9, 3.6, MAT.dragonScale),
-      box(2.4, 4.5, 2.4, -8.4, 2.9, -3.6, MAT.dragonScale),
-      box(3.5, 1.15, 2.4, 7.8, 1.0, 4.3, MAT.dragonScale),
-      box(3.5, 1.15, 2.4, 7.8, 1.0, -4.3, MAT.dragonScale),
-      box(14.0, 0.75, 6.2, -2.0, 12.3, 0, 0.90)              // 玩家色背甲
+      ellipsoid(14.2, 4.2, 5.7, -2, 8.2, 0, MAT.jadeScale),
+      ellipsoid(10.4, 2.0, 3.9, -1.2, 5.5, 0, MAT.jadeBelly),
+      ellipsoid(4.4, 2.1, 2.9, 9.0, 7.0, 0, MAT.jadeBelly),        // 白玉喉腹
+      box(9.0, 3.2, 8.4, 4.2, 12.2, 0, MAT.jadeScaleDark),
+      taperedBox(7.8, 4.4, 5.6, 3.4, 4.2, 11.4, 11.5, 0, MAT.jadeScale),
+      taperedBox(6.4, 3.8, 4.8, 2.9, 3.6, 16.6, 13.4, 0, MAT.jadeScale),
+      taperedBox(7.6, 5.2, 5.6, 3.7, 4.2, 21.4, 14.9, 0, MAT.jadeScale),
+      box(4.2, 1.5, 4.6, 22.6, 16.9, 0, MAT.jadeScaleDark),        // 眉脊
+      taperedBox(5.2, 2.9, 2.8, 1.8, 2.0, 25.6, 14.3, 0, MAT.jadeScale),
+      box(4.4, 1.2, 2.6, 25.2, 12.9, 0, MAT.jadeBelly),            // 白玉下颌
+      box(2.0, 1.0, 3.4, 22.0, 13.0, 0, MAT.jadeScaleDark),        // 颊板
+      taperedBox(9.0, 3.0, 5.8, 2.0, 2.6, -16.4, 7.6, 0, MAT.jadeScale),
+      taperedBox(7.6, 2.2, 4.2, 1.2, 2.0, -22.6, 7.2, 0, MAT.jadeScale),
+      taperedBox(6.0, 1.2, 2.4, 0.4, 1.3, -27.6, 7.4, 0, MAT.jadeScale),
+      box(3.4, 5.4, 3.4, 6.2, 3.3, 4.5, MAT.jadeScaleDark),
+      box(3.4, 5.4, 3.4, 6.2, 3.3, -4.5, MAT.jadeScaleDark),
+      ellipsoid(2.6, 2.6, 2.2, 6.0, 6.4, 4.6, MAT.jadeScale),
+      ellipsoid(2.6, 2.6, 2.2, 6.0, 6.4, -4.6, MAT.jadeScale),
+      box(2.6, 4.7, 2.6, -8.4, 3.0, 3.8, MAT.jadeScaleDark),
+      box(2.6, 4.7, 2.6, -8.4, 3.0, -3.8, MAT.jadeScaleDark),
+      ellipsoid(2.4, 2.4, 2.0, -8.6, 5.9, 3.9, MAT.jadeScale),
+      ellipsoid(2.4, 2.4, 2.0, -8.6, 5.9, -3.9, MAT.jadeScale),
+      box(3.8, 1.2, 2.6, 7.9, 1.0, 4.5, MAT.jadeBelly),            // 白玉爪
+      box(3.8, 1.2, 2.6, 7.9, 1.0, -4.5, MAT.jadeBelly),
+      box(3.4, 1.1, 2.4, -9.2, 0.9, 3.8, MAT.jadeBelly),
+      box(3.4, 1.1, 2.4, -9.2, 0.9, -3.8, MAT.jadeBelly),
+      box(14.0, 0.75, 6.2, -2.0, 12.3, 0, 0.90)                    // 玩家色背甲
     ];
+    // 金件：分叉鹿角、后掠龙须、额冠、颈环、尾刃。东方龙的金饰量比西方龙大得多，
+    // 这一层是「玉剑」两个字里的「剑」。
+    const antler = function (side, rz) {
+      return new THREE.Matrix4().makeRotationX(side * 0.30)
+        .multiply(new THREE.Matrix4().makeRotationZ(rz));
+    };
+    body.push.apply(body, surfaced(SURF.metal, [
+      box(2.6, 0.45, 3.0, 20.6, 16.6, 2.7, MAT.goldTrim),
+      box(2.6, 0.45, 3.0, 20.6, 16.6, -2.7, MAT.goldTrim),
+      box(1.4, 0.5, 2.2, 24.8, 15.9, 0, MAT.goldTrim),             // 额心
+      box(0.5, 3.2, 4.4, -30.2, 8.6, 0, MAT.goldTrim),             // 尾刃
+      torus(3.2, 0.34, 6, 14, 9.6, 11.6, 0, MAT.goldTrim, ROT_Z90) // 颈环
+    ]));
+    [1, -1].forEach(function (side) {
+      body.push.apply(body, surfaced(SURF.metal, [
+        // 分叉鹿角：主枝后掠 + 两根小叉，比直角更像东方龙
+        cyl(0.34, 0.62, 6.4, 6, 19.8, 18.6, side * 1.9, MAT.goldTrim, antler(side, -0.62)),
+        cyl(0.22, 0.34, 3.2, 6, 17.4, 21.4, side * 3.0, MAT.goldTrim, antler(side, -1.05)),
+        cyl(0.20, 0.30, 2.6, 6, 21.8, 21.2, side * 2.6, MAT.goldTrim, antler(side, -0.18)),
+        // 后掠长龙须：东方龙最强的辨识件，贴着颈线往后飘，不越出翼展
+        cyl(0.20, 0.30, 12.0, 6, 20.4, 12.6, side * 3.2, MAT.goldTrim, antler(side * 1.4, 1.25)),
+        cyl(0.16, 0.22, 7.0, 6, 13.6, 10.4, side * 4.4, MAT.goldTrim, antler(side * 1.8, 1.42))
+      ]));
+    });
+    // 玉件：颈后火焰形鬃鳍 + 背脊玉鳍 + 翼尖玉爪。晶体表面模式让它们反光锐、
+    // 边缘透亮，和金饰的暖高光区分得开。
+    // 火焰形玉鳍：taperedBox 只支持绕 Y 转，这里直接换掉它的矩阵，绕 Z 后倾。
+    // rake 为正 = 鳍尖往尾部倒，这是东方龙和西方龙背棘最直观的差别。
+    const fin = function (h, w, x, y, z, rake) {
+      const part = taperedBox(w, 0.6, w * 0.30, 0.32, h, 0, 0, 0, MAT.jadeFin);
+      const m = new THREE.Matrix4();
+      if (rake) m.makeRotationZ(rake);
+      m.setPosition(x, y, z);
+      part.matrix = m;
+      return part;
+    };
+    body.push.apply(body, surfaced(SURF.crystal, [
+      // 颈后鬃鳍：向后倒得最狠，像火焰也像云纹
+      fin(5.4, 3.2, 13.6, 15.8, 0, 0.52),
+      fin(4.6, 2.8, 15.4, 16.2, 2.3, 0.46),
+      fin(4.6, 2.8, 15.4, 16.2, -2.3, 0.46),
+      fin(3.8, 2.4, 11.0, 14.8, 3.1, 0.40),
+      fin(3.8, 2.4, 11.0, 14.8, -3.1, 0.40),
+      // 背脊玉鳍：一路收小到尾根，是俯视角最长的一条线
+      fin(5.8, 4.0, 6.2, 14.4, 0, 0.30),
+      fin(5.2, 3.6, 1.0, 13.8, 0, 0.28),
+      fin(4.4, 3.2, -4.2, 13.1, 0, 0.26),
+      fin(3.6, 2.6, -9.4, 12.1, 0, 0.24),
+      fin(2.8, 2.0, -14.6, 9.9, 0, 0.22),
+      fin(2.2, 1.6, -19.8, 8.7, 0, 0.20),
+      fin(1.8, 1.3, -24.6, 8.3, 0, 0.18)
+    ]));
     const glow = [
-      sph(1.7, 7, 27.2, 14.3, 0, MAT.fireGlow),
-      cyl(0.15, 2.4, 5.8, 6, 30.2, 14.1, 0, MAT.fireGlow, ROT_Z90),
-      sph(0.85, 5, 22.2, 15.8, 1.55, MAT.fireGlow),
-      sph(0.85, 5, 22.2, 15.8, -1.55, MAT.fireGlow),
-      sph(1.05, 6, 2.2, 7.1, 0, MAT.runeCyan)
+      sph(1.7, 7, 27.6, 15.0, 0, MAT.jadeGlow),
+      cyl(0.15, 2.4, 5.8, 6, 30.6, 14.6, 0, MAT.jadeGlow, ROT_Z90),   // 玉色龙息
+      sph(0.95, 5, 22.6, 16.2, 1.75, MAT.jadeGlow),
+      sph(0.95, 5, 22.6, 16.2, -1.75, MAT.jadeGlow),
+      sph(1.05, 6, 2.2, 7.1, 0, MAT.jadeGlow),
+      box(6.4, 0.30, 0.8, 4.0, 4.4, 0, MAT.jadeGlow)                  // 腹下玉光
     ];
     const wingBody = [];
     const wingGlow = [];
     [1, -1].forEach(function (side) {
-      wingBody.push(boxOrient(18, 1.05, 1.45, -1.6, 13.6, side * 12.4, MAT.dragonScale, side * 0.16, side * 0.52, 0.18));
-      wingBody.push(boxOrient(16, 0.85, 1.15, -9.2, 15.0, side * 22.4, MAT.dragonScale, side * 0.24, side * 0.88, 0.10));
-      wingBody.push(boxOrient(11, 0.55, 0.75, -4.6, 13.2, side * 17.2, MAT.dragonScale, side * 0.08, side * 0.66, -0.04));
-      wingBody.push(boxOrient(22, 0.22, 15.0, -3.4, 13.4, side * 16.0, MAT.wingMembrane, side * 0.18, side * 0.48, 0.08));
-      wingBody.push(boxOrient(14, 0.18, 11.4, -11.0, 14.4, side * 23.6, MAT.wingMembrane, side * 0.24, side * 0.82, 0.05));
-      wingBody.push(boxOrient(14, 0.34, 3.4, -2.0, 13.9, side * 17.0, 0.86, side * 0.18, side * 0.48, 0.08));
-      wingGlow.push(boxOrient(15, 0.14, 0.4, -2.0, 13.8, side * 14.6, MAT.fireGlow, side * 0.18, side * 0.48, 0.08));
+      // 翼骨改成金梁：玉膜 + 金骨是这条皮肤线最直接的读法
+      wingBody.push.apply(wingBody, surfaced(SURF.metal, [
+        boxOrient(18, 1.25, 1.65, -1.6, 14.4, side * 12.4, MAT.goldTrim, side * 0.16, side * 0.52, 0.26),
+        boxOrient(16, 1.00, 1.30, -9.2, 16.2, side * 22.4, MAT.goldTrim, side * 0.24, side * 0.88, 0.16),
+        boxOrient(11, 0.65, 0.85, -4.6, 14.2, side * 17.2, MAT.goldTrim, side * 0.08, side * 0.66, 0.02)
+      ]));
+      // 玉膜三段：翼根深玉 → 外缘白玉，越靠翼尖越透光
+      wingBody.push.apply(wingBody, surfaced(SURF.crystal, [
+        boxOrient(20, 0.22, 9.6, -2.4, 14.1, side * 12.6, MAT.jadeMembrane, side * 0.18, side * 0.48, 0.16),
+        boxOrient(19, 0.20, 8.4, -5.4, 14.9, side * 20.4, MAT.jadeMembraneLit, side * 0.20, side * 0.62, 0.12),
+        boxOrient(13, 0.18, 10.2, -11.4, 15.6, side * 24.2, MAT.jadeMembraneLit, side * 0.24, side * 0.82, 0.10),
+        pyr(0.55, 3.2, 4, -17.4, 17.4, side * 27.0, MAT.jadeFin,
+          new THREE.Matrix4().makeRotationZ(side * 0.5))
+      ]));
+      wingBody.push(boxOrient(14, 0.34, 3.4, -2.0, 14.7, side * 17.0, 0.86, side * 0.18, side * 0.48, 0.16));
+      wingGlow.push(boxOrient(15, 0.14, 0.4, -2.0, 14.6, side * 14.6, MAT.jadeGlow, side * 0.18, side * 0.48, 0.16));
     });
     // 只收短翼展，不压缩头、躯干与尾巴；依旧是同一份合并网格。
     body.push.apply(body, scalePartList(wingBody, 1.0, 1.0, 0.82));
     glow.push.apply(glow, scalePartList(wingGlow, 1.0, 1.0, 0.82));
     return { body: body, glow: glow };
   },
-
   warden: function () {
     // 晶铠卫士：天启级巨型持盾构装。宽肩重甲、晶冠、分层塔盾与晶锤组成
     // 清楚的圣骑士剪影；所有零件仍合进同一 InstancedMesh，不增加 draw call。
@@ -2308,11 +2524,14 @@ export function createRenderer(canvas) {
       shader.uniforms.uArmySurfaceMode = { value: surfaceMode };
       // three.js 的 <color_vertex> 已经把 instanceColor 乘进 vColor，
       // 所以另存一份未乘的原始顶点色，供固有色零件使用。
-      shader.vertexShader = 'attribute float aTeam;\nvarying float vTeamMix;\n' +
+      shader.vertexShader = 'attribute float aTeam;\nattribute float aOcc;\n' +
+        'attribute float aSurf;\nvarying float vTeamMix;\nvarying float vOcc;\n' +
+        'varying float vSurf;\n' +
         'varying vec3 vOwnColor;\nvarying vec3 vArmyWorld;\n' + shader.vertexShader
           .replace(
             '#include <color_vertex>',
-            '#include <color_vertex>\n  vTeamMix = aTeam;\n  vOwnColor = color;')
+            '#include <color_vertex>\n  vTeamMix = aTeam;\n  vOwnColor = color;\n' +
+            '  vOcc = aOcc;\n  vSurf = aSurf;')
           .replace(
             '#include <begin_vertex>',
             '#include <begin_vertex>\n' +
@@ -2323,7 +2542,8 @@ export function createRenderer(canvas) {
             '#endif\n' +
             '    vArmyWorld = (modelMatrix * armyWorld).xyz;\n' +
             '  }');
-      shader.fragmentShader = 'varying float vTeamMix;\nvarying vec3 vOwnColor;\n' +
+      shader.fragmentShader = 'varying float vTeamMix;\nvarying float vOcc;\n' +
+        'varying float vSurf;\nvarying vec3 vOwnColor;\n' +
         'varying vec3 vArmyWorld;\nuniform vec3 uSunDirView;\nuniform float uArmyTime;\n' +
         'uniform sampler2D uArmySurface;\nuniform float uArmySurfaceMode;\n' +
         shader.fragmentShader
@@ -2341,17 +2561,25 @@ export function createRenderer(canvas) {
             '    diffuseColor.rgb = mix(diffuseColor.rgb, gFieldPaint, vTeamMix);\n' +
             '    gBase = diffuseColor.rgb;\n' +
             '  }\n' +
+            // 烘焙遮蔽：缝隙、腋下、翼根、裙摆压暗。低模的体积感主要来自这一层。
+            '  diffuseColor.rgb *= mix(1.0, vOcc, 1.0 - gEmissive);\n' +
+            '  gBase = diffuseColor.rgb;\n' +
+            // 表面参数优先读逐零件通道（vSurf >= 0），没写的零件才回落到材质模式。
+            // 同一次绘制调用里，法袍是哑光布、金饰是金属、法球是晶体。
+            '  float gMode = vSurf < -0.5 ? uArmySurfaceMode : vSurf;\n' +
             '  float gSurfaceLum = 0.5;\n' +
-            '  float gAtlasSide = step(0.5, uArmySurfaceMode);\n' +
+            '  float gAtlasSide = gMode > 3.5 ? 0.0 : step(0.5, gMode);\n' +
             '  float gRoughness = mix(0.56, 0.84, gAtlasSide);\n' +
             '  float gBumpScale = mix(0.30, 0.72, gAtlasSide);\n' +
             '  float gSurfaceBlend = 0.34;\n' +
             // 布料和皮革仍复用右半张风化纹理，但把凹凸/色差压低；法袍不再像石柱，
-            // 兽皮也不会出现钢板高光。只增加两个共享材质变体，不拆单位合批。
-            '  if (uArmySurfaceMode > 1.5 && uArmySurfaceMode < 2.5) {\n' +
+            // 兽皮也不会出现钢板高光。晶体走独立一档：几乎不吃岩纹，高光锐、粗糙度低。
+            '  if (gMode > 1.5 && gMode < 2.5) {\n' +
             '    gRoughness = 0.92; gBumpScale = 0.20; gSurfaceBlend = 0.16;\n' +
-            '  } else if (uArmySurfaceMode > 2.5) {\n' +
+            '  } else if (gMode > 2.5 && gMode < 3.5) {\n' +
             '    gRoughness = 0.74; gBumpScale = 0.34; gSurfaceBlend = 0.22;\n' +
+            '  } else if (gMode > 3.5) {\n' +
+            '    gRoughness = 0.24; gBumpScale = 0.10; gSurfaceBlend = 0.07;\n' +
             '  }\n' +
             // 世界空间镜像投影：左半旧钢、右半玄武岩。一次采样同时提供颜色、
             // 粗糙度依据和凹凸高度，仍然不拆单位/建筑的合批。
@@ -2392,13 +2620,15 @@ export function createRenderer(canvas) {
             '    vec3 gH = normalize(gV + uSunDirView);\n' +
             '    float gGloss = 1.0 - gRoughness;\n' +
             '    float gSpec = pow(max(dot(gN, gH), 0.0), mix(12.0, 56.0, gGloss));\n' +
-            '    gl_FragColor.rgb += (vec3(0.34, 0.42, 0.46) * gRim * 0.10\n' +
-            '      + vec3(1.0, 0.93, 0.78) * gSpec * mix(0.10, 0.52, gGloss)) * (1.0 - gEmissive);\n' +
+            '    float gRimGain = gMode > 3.5 ? 0.42 : 0.13;\n' +
+            '    gl_FragColor.rgb += (vec3(0.34, 0.42, 0.46) * gRim * gRimGain\n' +
+            '      + vec3(1.0, 0.93, 0.78) * gSpec * mix(0.10, 0.52, gGloss))\n' +
+            '      * (1.0 - gEmissive) * vOcc;\n' +
             '    float gPulse = 0.86 + 0.14 * sin(uArmyTime * 2.1 + vArmyWorld.x * 0.03);\n' +
             '    gl_FragColor.rgb = mix(gl_FragColor.rgb, gBase * gPulse, gEmissive);\n' +
             '  }');
     };
-    material.customProgramCacheKey = function () { return 'teamOrOwn7-real-' + surfaceMode; };
+    material.customProgramCacheKey = function () { return 'teamOrOwn8-occ-' + surfaceMode; };
     return material;
   }
 
@@ -4186,21 +4416,36 @@ export function createRenderer(canvas) {
       return scalePartList(quad, 0.88, 1.0, 1.0);
     }
     if (kind === 'dragon') {
+      // 远景保留近景那版的读法：玉色明度三段、分叉金角、后倒的背鳍线、金梁玉膜。
+      // 远处只有几十个像素，靠的就是「浅色腹 + 深色背 + 一条金线」这三块色。
       const dragon = [
-        taperedBox(28, 11, 20, 8, 7.2, -2, 8.2, 0, MAT.scaleHide),
+        taperedBox(28, 11, 20, 8, 7.2, -2, 8.2, 0, MAT.jadeScale),
+        taperedBox(20, 8, 14, 6, 2.4, -1.4, 5.2, 0, MAT.jadeBelly),
         box(14.0, 0.75, 6.2, -2.0, 12.3, 0, 0.90),
-        taperedBox(7, 4, 5, 3, 4, 12.2, 12.0, 0, MAT.scaleHide),
-        taperedBox(6.2, 4.2, 4.8, 3.0, 3.4, 20.4, 14.6, 0, MAT.scaleHide),
-        taperedBox(10, 2.2, 5, 1.1, 2.0, -18.4, 7.5, 0, MAT.scaleHide),
-        sph(1.6, 6, 26.6, 14.2, 0, MAT.fireGlow)
+        taperedBox(7, 4, 5, 3, 4, 12.2, 12.0, 0, MAT.jadeScale),
+        taperedBox(7.4, 5.0, 5.4, 3.6, 4.2, 21.0, 14.9, 0, MAT.jadeScale),
+        box(4.2, 1.2, 2.6, 25.2, 13.0, 0, MAT.jadeBelly),
+        cyl(0.34, 0.62, 6.0, 6, 19.8, 18.4, 1.9, MAT.goldTrim,
+          new THREE.Matrix4().makeRotationZ(-0.62)),
+        cyl(0.34, 0.62, 6.0, 6, 19.8, 18.4, -1.9, MAT.goldTrim,
+          new THREE.Matrix4().makeRotationZ(-0.62)),
+        pyr(1.5, 5.4, 4, 13.6, 15.8, 0, MAT.jadeFin),
+        pyr(1.8, 5.8, 4, 6.2, 14.4, 0, MAT.jadeFin),
+        pyr(1.5, 4.6, 4, -1.0, 13.6, 0, MAT.jadeFin),
+        taperedBox(10, 2.2, 5, 1.1, 2.0, -18.4, 7.5, 0, MAT.jadeScale),
+        sph(1.6, 6, 26.6, 14.2, 0, MAT.jadeGlow)
       ];
       const wings = [
-        boxOrient(22, 0.28, 15.4, -2.8, 13.4, 16.0, MAT.wingMembrane, 0.18, 0.48, 0.08),
-        boxOrient(22, 0.28, 15.4, -2.8, 13.4, -16.0, MAT.wingMembrane, -0.18, -0.48, 0.08)
+        boxOrient(18, 0.9, 1.3, -1.6, 14.4, 12.4, MAT.goldTrim, 0.16, 0.52, 0.26),
+        boxOrient(18, 0.9, 1.3, -1.6, 14.4, -12.4, MAT.goldTrim, -0.16, -0.52, 0.26),
+        boxOrient(22, 0.28, 9.8, -2.4, 14.1, 12.6, MAT.jadeMembrane, 0.18, 0.48, 0.16),
+        boxOrient(22, 0.28, 9.8, -2.4, 14.1, -12.6, MAT.jadeMembrane, -0.18, -0.48, 0.16),
+        boxOrient(19, 0.24, 9.0, -6.4, 15.2, 21.0, MAT.jadeMembraneLit, 0.20, 0.62, 0.12),
+        boxOrient(19, 0.24, 9.0, -6.4, 15.2, -21.0, MAT.jadeMembraneLit, -0.20, -0.62, 0.12)
       ];
       [1, -1].forEach(function (side) {
-        wings.push(boxOrient(14, 0.34, 3.4, -2.0, 13.9, side * 17.0, 0.86,
-          side * 0.18, side * 0.48, 0.08));
+        wings.push(boxOrient(14, 0.34, 3.4, -2.0, 14.7, side * 17.0, 0.86,
+          side * 0.18, side * 0.48, 0.16));
       });
       dragon.push.apply(dragon, scalePartList(wings, 1.0, 1.0, 0.82));
       return dragon;
@@ -4272,11 +4517,14 @@ export function createRenderer(canvas) {
     if (entry) return entry;
     const builder = UNIT_BUILDERS[kind] || UNIT_BUILDERS.rifle;
     const parts = builder();
+    // 烘焙遮蔽先只在试点兵种上打开，方便和没改过的兵种并排对照。方向确认后
+    // 把其余兵种加进来即可，管线本身不用再动。
+    const bake = OCCLUSION_BAKED_KINDS[kind] ? { occlusion: true } : null;
     entry = {
       // 车体与发光件合并成一个几何体：发光件的顶点系数 > 1，着色器据此
       // 跳过光照，效果一样但少一半绘制调用
-      body: mergeParts(parts.body.concat(parts.glow || [])),
-      simple: mergeParts(simpleUnitParts(kind))
+      body: mergeParts(parts.body.concat(parts.glow || []), bake),
+      simple: mergeParts(simpleUnitParts(kind), bake)
     };
     UNIT_GEOMETRY_CACHE.set(kind, entry);
     return entry;
@@ -4587,8 +4835,9 @@ export function createRenderer(canvas) {
     frost: { len: 18, thick: 1.15, color: 0xc4f4ff, arc: 12, look: 'shard' },
     // 巨石：傀儡投掷，高弧线
     boulder: { len: 20, thick: 2.6, color: 0xb09a7a, arc: 70, look: 'streak' },
-    // 火球：巨龙喷吐，橙色高弧 + 光核
-    fireball: { len: 15, thick: 3.1, color: 0xff7a28, arc: 52, look: 'fireball' },
+    // 玉息：巨龙喷吐，玉色高弧 + 白玉核。projectile 键仍是 fireball（服务端目录约定），
+    // 只换表现。这条样式是巨龙独有的，改色不影响任何其他兵种。
+    fireball: { len: 15, thick: 3.1, color: 0x4fd8a0, arc: 52, look: 'fireball' },
     // 晶刃：卫士短促紫晶弹
     crystal: { len: 20, thick: 1.15, color: 0xe0c4ff, arc: 10, look: 'crystal' },
     // 虹视：细长棱晶束，几乎无弧
@@ -5047,6 +5296,8 @@ export function createRenderer(canvas) {
         });
         flashAt(x, y, 0x9fe8ff);
       } else if (kind === 'fireball') {
+        // 玉息炸点：外圈翡翠、内芯白玉。亮度量级和原来的橙火一致，
+        // 只换色相，不改爆点大小与存续，命中反馈的可读性保持不变。
         burst(fireLayer, 8, function () {
           const a = rand() * TAU;
           const sp = 80 + rand() * 140;
@@ -5055,7 +5306,7 @@ export function createRenderer(canvas) {
             vx: Math.cos(a) * sp, vy: 50 + rand() * 90, vz: Math.sin(a) * sp,
             life: 0.35 + rand() * 0.25, maxLife: 0.6,
             size: 10 + rand() * 8, grow: true,
-            r: 2.3, g: 1.05, b: 0.28
+            r: 0.45, g: 2.25, b: 1.50
           };
         });
         burst(fireLayer, 5, function () {
@@ -5066,18 +5317,19 @@ export function createRenderer(canvas) {
             vx: Math.cos(a) * sp, vy: 80 + rand() * 120, vz: Math.sin(a) * sp,
             life: 0.22 + rand() * 0.18, maxLife: 0.4,
             size: 4 + rand() * 3,
-            r: 2.4, g: 1.8, b: 0.7
+            r: 1.70, g: 2.40, b: 2.05
           };
         });
         shockLayer.spawn({
           x: x, y: y, radius: 10, growth: 70, alpha: 0.7,
-          life: 0.36, maxLife: 0.36, r: 1.2, g: 0.55, b: 0.18
+          life: 0.36, maxLife: 0.36, r: 0.42, g: 1.15, b: 0.85
         });
+        // 地面留痕从焦黑改成冷玉residue：玉息不是火，烧不出炭
         scorchLayer.spawn({
-          x: x, y: y, radius: 24 + rand() * 8, growth: 0, alpha: 0.46,
-          life: 10, maxLife: 10, hold: true, r: 0.06, g: 0.03, b: 0.02
+          x: x, y: y, radius: 24 + rand() * 8, growth: 0, alpha: 0.42,
+          life: 10, maxLife: 10, hold: true, r: 0.05, g: 0.12, b: 0.10
         });
-        flashAt(x, y, 0xff7a2a);
+        flashAt(x, y, 0x7dffc8);
       } else if (kind === 'meteor') {
         burst(fireLayer, 12, function () {
           const a = rand() * TAU;
@@ -5318,6 +5570,24 @@ export function createRenderer(canvas) {
           life: 1.8, maxLife: 1.8, hold: true, r: 0.14, g: 0.05, b: 0.2
         });
         flashAt(x, y, 0xf2e6ff);
+      } else if (kind === 'fireball') {
+        // 龙口喷吐：过去落进通用暖白分支，配玉龙很违和。改成从口部高度
+        // 向前散开的一小簇玉息，比命中爆点轻，不抢炸点的视觉重量。
+        burst(fireLayer, 6, function () {
+          const a = rand() * TAU;
+          return {
+            x: x + (rand() - 0.5) * 6, y: 18 + rand() * 6, z: y + (rand() - 0.5) * 6,
+            vx: Math.cos(a) * 34, vy: 20 + rand() * 26, vz: Math.sin(a) * 34,
+            life: 0.16 + rand() * 0.10, maxLife: 0.26,
+            size: 6 + rand() * 5,
+            r: 0.50, g: 2.20, b: 1.50
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 6, growth: 44, alpha: 0.42,
+          life: 0.24, maxLife: 0.24, r: 0.40, g: 1.05, b: 0.80
+        });
+        flashAt(x, y, 0x9fffdc);
       } else {
         burst(fireLayer, 5, function () {
           const a = rand() * TAU;
@@ -5726,11 +5996,12 @@ export function createRenderer(canvas) {
   function emitProjectileTrail(look, x, height, y) {
     if (fireLayer.list.length > state.particleBudget * 0.62) return;
     if (look === 'fireball') {
+      // 玉息拖尾：绿主 + 青副，和 MAT.jadeGlow 同一色相
       emit(fireLayer, {
         x: x + (Math.random() - 0.5) * 5, y: height, z: y + (Math.random() - 0.5) * 5,
         vx: (Math.random() - 0.5) * 16, vy: 8 + Math.random() * 14, vz: (Math.random() - 0.5) * 16,
         life: 0.22, maxLife: 0.22, size: 6 + Math.random() * 5,
-        r: 2.2, g: 0.95, b: 0.25
+        r: 0.55, g: 2.25, b: 1.55
       });
     } else if (look === 'shard') {
       emit(fireLayer, {
@@ -6188,11 +6459,12 @@ export function createRenderer(canvas) {
         const yaw = Math.atan2(dy, dx);
         const look = style.look || 'streak';
         if (look === 'fireball') {
-          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 4.2, 4.2, 4.2, 0xffb060);
+          // 白玉核 + 翡翠焰身 + 更长的浅玉尾迹
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 4.2, 4.2, 4.2, 0xe6fff2);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len, style.thick, style.thick, style.color);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
-            style.len * 1.7, style.thick * 0.45, style.thick * 0.45, 0xffc878);
+            style.len * 1.7, style.thick * 0.45, style.thick * 0.45, 0xa8ffd8);
         } else if (look === 'shard') {
           writeTracer(shards, shardCount++, p.x, height, p.y, yaw, 9.5, 2.1, 2.1, 0xe8fbff);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,

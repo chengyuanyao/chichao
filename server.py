@@ -798,8 +798,9 @@ DAMAGE_MULTIPLIER = {
     "bite":    {"infantry": 4.00, "light": 0.00, "heavy": 0.00, "structure": 0.00, "arcane": 1.50},
     # 奥术魔法：无视钢铁装甲熔重甲（法师是反坦克答案），但法术拆不动建筑
     "magic":   {"infantry": 1.20, "light": 1.30, "heavy": 1.60, "structure": 0.60, "arcane": 1.00},
-    # 爆破本身对所有护甲中性。卡车/魔仆对建筑与采矿单位的 ×1.5 属于具体兵种
-    # 的 targetMultipliers，在 trigger_death_explosion 里按目标 kind 结算。
+    # 爆破本身对所有护甲中性。卡车/魔仆对建筑与采矿单位的 ×1.5、对其余单位的
+    # ×0.8 属于具体兵种的 targetMultipliers，在 trigger_death_explosion 里按目标
+    # kind 结算。
     "explosive": {"infantry": 1.00, "light": 1.00, "heavy": 1.00, "structure": 1.00, "arcane": 1.00},
 }
 
@@ -4632,7 +4633,7 @@ def trigger_death_explosion(room, source, game, combat_spatial=None):
         if falloff <= 0:
             continue
         target_multiplier = death_explosion_target_multiplier(boom, entity)
-        # 配了目标倍率的自爆不再叠乘通用护甲表：卡车/魔仆对普通单位严格 ×1，
+        # 配了目标倍率的自爆不再叠乘通用护甲表：卡车/魔仆对普通单位严格 ×0.8，
         # 只对建筑与两种采矿单位走目录里的 ×1.5。
         applied_type = dtype
         if target_multiplier is not None:

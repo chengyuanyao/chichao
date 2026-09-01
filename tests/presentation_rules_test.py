@@ -327,8 +327,24 @@ def main():
     assert "召唤法阵：多层平面符环 + 悬浮核" in render
     assert "圣泉：石碗泉盆 + 上升泉光" in render
     assert "奥术塔：扭转尖塔 + 武器晶碟" in render
-    assert "teamOrOwn7-real-" in render
+    assert "teamOrOwn8-occ-" in render
     assert "armyTimeUniform" in render
+    # 顶点烘焙遮蔽 + 逐零件表面通道：两条通道必须一直写进合并几何体，
+    # 着色器声明了属性却拿不到数据的话，整支部队会被当成全黑。
+    assert "function bakeOcclusion(" in render
+    assert "merged.setAttribute('aOcc'" in render
+    assert "merged.setAttribute('aSurf'" in render
+    assert "attribute float aOcc;" in render
+    assert "attribute float aSurf;" in render
+    assert "diffuseColor.rgb *= mix(1.0, vOcc, 1.0 - gEmissive);" in render
+    assert "float gMode = vSurf < -0.5 ? uArmySurfaceMode : vSurf;" in render
+    # 晶体是新增的第五种表面：粗糙度最低、边缘光最强
+    assert "const SURF = Object.freeze({" in render
+    assert "gRoughness = 0.24; gBumpScale = 0.10" in render
+    assert "float gRimGain = gMode > 3.5 ? 0.42 : 0.13;" in render
+    # 烘焙目前只在试点兵种上打开；铺开时改这张表即可，管线不用动
+    assert "const OCCLUSION_BAKED_KINDS = { dragon: 1 };" in render
+    assert "OCCLUSION_BAKED_KINDS[kind] ? { occlusion: true } : null" in render
     # 写实升级必须保持合批边界：军械共享压缩贴图；自然草簇和碎石允许整张
     # 地图共用一个额外 Mesh，但不能退回“一棵草/一块石头一个 draw call”。
     assert "function makeArmySurfaceTexture()" in render
@@ -368,7 +384,9 @@ def main():
     assert "function profiledVolume(profile, radiusX, radiusZ" in render
     assert "new THREE.LatheGeometry(points" in render
     assert "运行时仍是一个 InstancedMesh，不增加 draw call" in render
-    assert "body: mergeParts(parts.body.concat(parts.glow || []))" in render
+    # 车体与发光件仍旧合并成同一份几何体；烘焙开关只是多传一个参数，
+    # 不能演化成「发光件单独一个 Mesh」那种额外 draw call。
+    assert "body: mergeParts(parts.body.concat(parts.glow || []), bake)" in render
     assert "大头积木人" in render
     assert "groundTexture.repeat.set(mw / 420, mh / 420);" in render
     assert "同一棵树的三层树冠分别压暗、保持、提亮" in render
@@ -389,7 +407,7 @@ def main():
     assert server.UNIT_TYPES["golem"]["size"] == server.UNIT_TYPES["tank"]["size"]
     assert "奥术法师：高挑长袍施法者，暗紫袍 + 金饰法杖" in render
     assert "冰霜女巫：宽檐帽 + 苍白斗篷 + 霜环" in render
-    assert "秘法巨龙：拉长的翼展剪影" in render
+    assert "秘法巨龙：「玉剑传说」路线的东方玉龙" in render
     assert "天启级巨型持盾构装" in render
     assert "}, 1.18, 1.14, 1.18);" in render
     assert "warden: 1.55" in render
@@ -443,7 +461,27 @@ def main():
             "mantleProfile", "seerProfile", "cuirassProfile", "beastProfile",
             "launchBaseProfile", "migrateBaseProfile"):
         assert profile_name in builder_block
-    assert "ellipsoid(14.0, 4.0, 5.5" in builder_block
+    # 巨龙走「玉剑传说」玉龙路线：躯干仍是椭球不能退回方盒；明度必须保持
+    # 墨玉背 / 翡翠身 / 白玉腹三段，翼膜也要分出翼尖那一段透光的白玉，
+    # 否则又变回通体一个调的深色剪影。金角、龙须、玉鳍是东方龙的辨识件。
+    assert "ellipsoid(14.2, 4.2, 5.7" in builder_block
+    for jade in ("MAT.jadeScaleDark", "MAT.jadeScale", "MAT.jadeBelly",
+                 "MAT.jadeFin", "MAT.jadeMembrane", "MAT.jadeMembraneLit"):
+        assert jade in builder_block, jade
+    assert "分叉鹿角" in builder_block
+    assert "后掠长龙须" in builder_block
+    # 玉件必须走晶体表面通道，金件走金属：一次绘制调用里三种高光
+    assert "surfaced(SURF.crystal, [" in builder_block
+    assert "surfaced(SURF.metal, [" in builder_block
+    # 攻击特效跟模型一起换玉色：火球是巨龙独有弹道，不能残留橙火配色。
+    # projectile 键仍是 fireball（服务端目录约定），只换表现。
+    assert server.UNIT_TYPES["dragon"]["projectile"] == "fireball"
+    assert "fireball: { len: 15, thick: 3.1, color: 0x4fd8a0" in render
+    for orange in ("0xff7a28", "0xff7a2a", "0xffb060", "0xffc878"):
+        assert orange not in render, orange
+    assert "flashAt(x, y, 0x7dffc8);" in render        # 命中闪光
+    assert "flashAt(x, y, 0x9fffdc);" in render        # 龙口喷吐闪光
+    assert "} else if (kind === 'fireball') {" in render
 
     # 建筑同样逐项覆盖目录，所有非发光直角盒会在首次缓存时换成倒角截面。
     structure_block = render[render.index("function structureParts(kind, size)"):

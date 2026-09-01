@@ -6,7 +6,7 @@
    3) 死亡爆炸打附近单位与建筑，带衰减；不伤友军
    4) 单车拆不掉满血总部；贴脸引爆
    5) 军犬：卡车不当猎物且咬不动；魔仆是猎物但一口咬不死
-   6) 造价/血/速/爆炸对齐；单辆拆不掉满血总部
+   6) 造价/血/速/爆炸对齐；单辆拆不掉满血总部；普通单位（含天启/巨龙）×0.8
    7) 速胜 AI 工厂一立就出自爆卡车，同时仍会混编其他兵种
    8) 无连环爆炸：溅射未致死则邻居还活着；友军并排不炸；圈外邻居不引爆
 """
@@ -90,7 +90,7 @@ def main():
     assert truck["deathExplosion"]["damage"] == 700.0
     assert truck["deathExplosion"]["radius"] == 120.0
     target_multipliers = {
-        "default": 1.0,
+        "default": 0.8,
         "structure": 1.5,
         "harvester": 1.5,
         "mharvester": 1.5,
@@ -223,18 +223,27 @@ def main():
         print("  %s 总部剩 %.0f（伤 %.0f）/ 友军无损: PASS" % (
             kind, hq["hp"], hq_hit))
 
-    print("\n=== Test 6b: 卡车/魔仆只增伤建筑与采矿单位，其他单位均为 ×1 ===")
+    print("\n=== Test 6b: 只增伤建筑与采矿单位，其余单位（含天启/巨龙）×0.8 ===")
+    # 步兵、坦克、法师，以及天启坦克 / 秘法巨龙这类高血单位，一律走 default ×0.8：
+    # 自爆仍是清步兵堆与拆家的工具，不能兼任兑掉重甲王牌的答案。
     for kind in ("bomb_truck", "hexling"):
         room, a, b = make_room("SU04b-" + kind, magic_b=True)
         game = room["game"]
         source = server.make_unit(kind, a["id"], 4000, 4000)
-        targets = [
-            server.make_unit("rifle", b["id"], 4040, 4000),
-            server.make_unit("tank", b["id"], 4000, 4040),
-            server.make_unit("mage", b["id"], 3960, 4000),
-            server.make_unit("harvester", b["id"], 4000, 3960),
-            server.make_unit("mharvester", b["id"], 4024, 4032),
+        # 全部摆在离爆心正好 40 的圆周上，衰减一致，只剩目标倍率的差别。
+        diag = math.sqrt(800.0)  # 40 的等分对角分量
+        plain_kinds = [  # ×0.8 的普通目标
+            ("rifle", 40.0, 0.0), ("tank", 0.0, 40.0), ("mage", -40.0, 0.0),
+            ("overlord", diag, diag), ("dragon", -diag, -diag),
         ]
+        mining_kinds = [  # ×1.5 的采矿单位
+            ("harvester", 0.0, -40.0), ("mharvester", diag, -diag),
+        ]
+        plain = [server.make_unit(kind, b["id"], 4000 + dx, 4000 + dy)
+                 for kind, dx, dy in plain_kinds]
+        mining = [server.make_unit(kind, b["id"], 4000 + dx, 4000 + dy)
+                  for kind, dx, dy in mining_kinds]
+        targets = plain + mining
         game["units"].append(source)
         for target in targets:
             target["hp"] = target["maxHp"] = 3000.0
@@ -242,13 +251,22 @@ def main():
         before = [target["hp"] for target in targets]
         server.trigger_death_explosion(room, source, game)
         hits = [old - target["hp"] for old, target in zip(before, targets)]
-        normal = expected_explosion(kind, 40.0, "infantry", "rifle")
-        harvest = expected_explosion(kind, 40.0, "heavy", "harvester")
-        assert all(abs(hit - normal) < 0.6 for hit in hits[:3]), (kind, hits)
-        assert abs(hits[3] - harvest) < 0.6, (kind, hits[3], harvest)
-        assert abs(hits[4] - harvest) < 0.6, (kind, hits[4], harvest)
-        assert abs(harvest - normal * 1.5) < 0.1, (normal, harvest)
-        print("  %s：步兵/坦克/法师 ×1，采矿车/浮游晶簇 ×1.5: PASS" % kind)
+        boom = server.UNIT_TYPES[kind]["deathExplosion"]
+        falloff = server.death_explosion_falloff(40.0, boom["radius"])
+        normal = boom["damage"] * falloff * 0.8
+        harvest = boom["damage"] * falloff * 1.5
+        assert abs(normal - expected_explosion(
+            kind, 40.0, "infantry", "rifle")) < 0.001, normal
+        for target, hit in zip(plain, hits[:len(plain)]):
+            assert abs(hit - normal) < 0.6, (kind, target["kind"], hit, normal)
+        for target, hit in zip(mining, hits[len(plain):]):
+            assert abs(hit - harvest) < 0.6, (kind, target["kind"], hit, harvest)
+        assert abs(harvest - normal * (1.5 / 0.8)) < 0.1, (normal, harvest)
+        # 高血王牌吃一发后仍远未见血线：天启 1700 / 巨龙 1100 都撑得住两发。
+        assert normal * 2 < server.UNIT_TYPES["overlord"]["hp"], normal
+        assert normal * 2 < server.UNIT_TYPES["dragon"]["hp"], normal
+        print("  %s：步兵/坦克/法师/天启/巨龙 ×0.8 = %.0f，采矿 ×1.5 = %.0f: PASS" % (
+            kind, normal, harvest))
 
     print("\n=== Test 7: 魔仆爆炸同样生效 ===")
     room, a, b = make_room("SU05", magic_b=True)
@@ -389,7 +407,7 @@ def main():
     print("  间距 %.0f：魔仆未吃溅射也不引爆 / 坦克法师只吃溅射: PASS" % gap)
 
     print("\n=== Test 12b: 爆破圈内溅射未打死则不连环 ===")
-    # 普通单位统一 ×1 后，爆破边缘也约 196 伤；把邻车生命抬到 300，
+    # 普通单位统一 ×0.8 后，爆破边缘约 157 伤；把邻车生命抬到 300，
     # 验证“受伤但未死”时不会凭空触发连环。
     boom = server.UNIT_TYPES["bomb_truck"]["deathExplosion"]
     dist = boom["radius"] - 0.6
