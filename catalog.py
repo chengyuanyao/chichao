@@ -314,6 +314,24 @@ for _unit_definition in UNIT_TYPES.values():
         _unit_definition.get("sight", 350.0) or 350.0)
     _unit_definition["sight"] = unit_sight_radius(_unit_definition)
 
+# ---- 战功换装：天启坦克的老兵弹种 ----
+# 纯表现层映射。伤害、射速、溅射与护甲判定仍走 UNIT_TYPES 和既有军衔倍率；
+# 这里不额外叠加数值，只决定客户端画哪一种弹道，好让「一星换弹、二星换形态」
+# 在战场上一眼看得出来。阈值必须和 tick_units 里的 3/8/16 军衔线保持一致。
+VETERAN_PROJECTILES = {
+    # 天启坦克：三杀(一星)换等离子穿甲弹，八杀(二星)展开人形态改用双臂炮。
+    "overlord": ((8, "plasmalance"), (3, "plasma")),
+}
+
+
+def veteran_projectile(kind, kills, fallback):
+    """Return the veteran-skinned projectile name, or `fallback` below rank."""
+    for threshold, projectile in VETERAN_PROJECTILES.get(kind, ()):
+        if kills >= threshold:
+            return projectile
+    return fallback
+
+
 STRUCTURE_TYPES = {
     "hq": {
         "name": "指挥中心", "cost": 0, "hp": 2400, "size": 58.0,

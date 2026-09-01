@@ -38,12 +38,14 @@ from catalog import (
     UNIT_TYPES,
     UNIT_SIGHT_RANGE_MULTIPLIER,
     VEHICLE_KINDS,
+    VETERAN_PROJECTILES,
     faction_buildings,
     faction_loadout,
     public_catalog,
     structure_role,
     unit_sight_radius,
     unit_role,
+    veteran_projectile,
 )
 import easter_eggs
 
@@ -4656,6 +4658,12 @@ def apply_slow(projectile, target):
 
 def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
     span = math.hypot(target["x"] - attacker["x"], target["y"] - attacker["y"])
+    # 弹种只影响客户端表现：老兵天启换等离子弹/双臂炮，不在既有军衔倍率
+    # 之外额外改变伤害、弹速或溅射。
+    # 建筑没有 kills，取默认值 0 后一律走目录里的原弹种。
+    base_kind = definition["projectile"]
+    kind = veteran_projectile(attacker.get("kind"), attacker.get("kills", 0),
+                              base_kind)
     game["projectiles"].append({
         "id": new_id("q"), "owner": attacker["owner"],
         "sourceId": attacker["id"],
@@ -4663,14 +4671,20 @@ def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
         "span": max(1.0, span),
         "targetId": target["id"], "targetX": target["x"], "targetY": target["y"],
         "damage": definition["damage"] * damage_mult, "speed": definition["projectileSpeed"],
-        "splash": definition.get("splash", 0.0), "kind": definition["projectile"],
+        "splash": definition.get("splash", 0.0),
+        "kind": kind,
         "damageType": definition.get("damageType", "bullet"),
         "slow": definition.get("slow"),
         "ttl": 3.5,
     })
-    game["effects"].append({
+    muzzle = {
         "id": new_id("e"), "type": "muzzle", "x": attacker["x"], "y": attacker["y"], "ttl": 0.16,
-    })
+    }
+    if kind != base_kind:
+        # 换过装的才标注弹种。客户端平时按「最近的弹丸」猜炮口种类就够了，但
+        # 天启人形态要靠它驱动抬臂动画，玩家把弹道特效关掉时也不能失灵。
+        muzzle["kind"] = kind
+    game["effects"].append(muzzle)
 
 
 def emit_dog_kill_egg(room, game, source_unit, target):

@@ -41,7 +41,7 @@ import {
     artillery: { icon: '◉', desc: '极远溅射，克建筑/重甲' },
     tank_destroyer: { icon: '◭', desc: '专杀坦克，×2.1反重甲' },
     v3: { icon: '⊹', desc: '超远程导弹打击，大溅射' },
-    overlord: { icon: '⬟', desc: '超重型主战，双管重炮抗线 · 需维修厂' },
+    overlord: { icon: '⬟', desc: '超重型主战，双管重炮抗线 · 需维修厂 · 一星换等离子弹，二星展开人形态双臂炮' },
     tesla: { icon: '⚡', desc: '动力甲反甲步兵，电弧专电载具 · 需工厂' },
     prism: { icon: '✦', desc: '远程聚焦光束，点杀轻型与建筑 · 需维修厂' },
     harvester: { icon: '▣', desc: '自动采集矿石' },

@@ -480,6 +480,17 @@ const MAT = {
   glass: [0.16, 0.24, 0.29],
   warnYellow: [0.66, 0.54, 0.12],
   copper: [0.48, 0.30, 0.15],
+  // ---- 天启坦克：可变形重装的两套涂装 ----
+  // 出厂涂装是冷调钨钢 + 琥珀饰条；打满三杀(一星)换成暗夜黑铁 + 猩红条 +
+  // 等离子青，同一副模型只换皮，远景也能一眼分出「这台是老兵」。
+  apocPlate: [0.33, 0.35, 0.39],       // 主装甲板：冷钨灰
+  apocPlateDark: [0.18, 0.20, 0.23],   // 阴影面 / 内构板
+  apocJoint: [0.12, 0.13, 0.15],       // 关节、液压杆、轴销
+  apocTrim: [0.58, 0.47, 0.14],        // 外挂边框条：琥珀金属
+  apocVetPlate: [0.19, 0.16, 0.17],    // 老兵主甲：近黑暗铁
+  apocVetPlateDark: [0.10, 0.09, 0.10],
+  apocVetTrim: [0.60, 0.13, 0.11],     // 老兵饰条：猩红
+  apocIon: [0.30, 2.10, 2.45],         // 等离子青（自发光，与磁暴的蓝分得开）
   // 军犬被毛：黄褐主色 + 深色背鞍/吻部/爪（天然色，不跟团队色走）
   furTan: [0.46, 0.34, 0.20],
   furDark: [0.23, 0.18, 0.14],
@@ -538,7 +549,14 @@ const MAGIC_UNIT_KINDS = {
  * 顶点烘焙遮蔽的试点兵种。先只放秘法巨龙：它是体积最大的活物，翼根、腹部、
  * 颈下这些该有暗部的地方最多，最容易判断这套做法值不值得铺到全部兵种。
  */
-const OCCLUSION_BAKED_KINDS = { dragon: 1 };
+// 顶点烘焙遮蔽的开启名单。烘焙是建几何体时算一次、写进 aOcc 顶点属性，
+// 运行时零成本，代价只是该形态首次出现时多花 0.6~2ms。只有零件多、体量大、
+// 玩家会凑近看的两个兵种值得付这一次：秘法巨龙和天启坦克（三副形态）。
+// 天启的双臂炮不在名单里 —— 那份几何体的原点是肩轴而不是脚底，地面接触
+// 阴影项按局部 y 算，烘上去会把整条手臂错误地压暗一档。
+const OCCLUSION_BAKED_KINDS = {
+  dragon: 1, overlord: 1, overlord_v1: 1, overlord_v2: 1
+};
 
 const CLOTH_UNIT_KINDS = {
   rifle: 1, rocket: 1, sniper: 1, tesla: 1,
@@ -547,6 +565,7 @@ const CLOTH_UNIT_KINDS = {
 const HIDE_UNIT_KINDS = { dog: 1, panther: 1, dragon: 1 };
 
 const ROT_X90 = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+const ROT_Y90 = new THREE.Matrix4().makeRotationY(Math.PI / 2);
 const ROT_Z90 = new THREE.Matrix4().makeRotationZ(Math.PI / 2);
 
 /**
@@ -685,6 +704,235 @@ function trackedHull(len, wid, hullH, shade) {
   parts.push(box(2.2, 2.0, 3.0, -len * 0.5, hullH * 0.7 + 3, wid * 0.22, MAT.gunmetal));
   parts.push(box(0.9, 1.2, 2.0, -len * 0.53, hullH * 0.7 + 3, wid * 0.22, MAT.exhaust));
   return parts;
+}
+
+/* ------------------------------------------------------------------ *
+ * 天启坦克：按战功变形的重装单位
+ *
+ *   0 星    载具形态 + 出厂涂装（冷钨钢 + 琥珀饰条）
+ *   1 星    同一副模型换老兵涂装（暗铁 + 猩红 + 等离子回路），弹道改等离子弹
+ *   2 星起  直接展开成人形态，改用双臂炮开火（手臂是唯一带动画的挂件层）
+ *
+ * 建模按变形金刚的语汇来：大块斜面主装甲外再挂一圈窄边框条，关节处露出液压
+ * 杆与轴销，车体上折着肩甲、膝甲和一个夹在双炮之间的头部模块 —— 载具形态本
+ * 身就要读得出「这是一台折起来的机器人」。
+ *
+ * 三种形态各是一份合并几何体 + 一个 InstancedMesh 池，不产生逐单位 draw
+ * call；军衔线与服务端 tick_units、catalog.VETERAN_PROJECTILES 保持一致。
+ * ------------------------------------------------------------------ */
+const APOC_VETERAN_KILLS = 3;   // 一星：换涂装 + 换弹道
+const APOC_TITAN_KILLS = 8;     // 二星起（含三星王牌）：人形态
+const APOC_ARM_PIVOT_Y = 36.4;  // 人形态肩轴在模型坐标里的高度
+
+// 出厂涂装：冷调钨钢 + 琥珀警示条，暖色观瞄。
+// hull 是车体的团队色明暗系数，team 是炮塔顶那块认旗甲板 —— 老兵把车体压暗
+// 一档做黑铁质感，但顶甲板仍然接近纯团队色，俯视时不能变得认不出归属。
+const APOC_SKIN_LINE = {
+  plate: MAT.apocPlate, plateDark: MAT.apocPlateDark, joint: MAT.apocJoint,
+  trim: MAT.apocTrim, optic: GLOW_WARM,
+  hull: 0.82, deck: 0.88, team: 0.95, ion: false
+};
+// 老兵涂装：近黑暗铁 + 猩红条 + 等离子青回路。大面仍旧走团队色，只是整体
+// 压暗一档 —— 「黑化重涂」是明度变化，色相还在，四人局里照样认得出归属。
+const APOC_SKIN_VET = {
+  plate: MAT.apocVetPlate, plateDark: MAT.apocVetPlateDark, joint: MAT.apocJoint,
+  trim: MAT.apocVetTrim, optic: MAT.apocIon,
+  hull: 0.60, deck: 0.56, team: 0.92, ion: true
+};
+
+/** 载具形态。0 星与 1 星共用这副模型，只换 skin。 */
+function apocalypseTankParts(skin) {
+  const plate = skin.plate;
+  const dark = skin.plateDark;
+  const joint = skin.joint;
+  const trim = skin.trim;
+  const body = trackedHull(40, 24, 10, skin.hull).concat([
+    // 首上：两层斜甲，外层收窄一圈，中间露出下层的深色装甲缝
+    taperedBox(15, 22.4, 10.5, 19.0, 5.0, 12.2, 11.6, 0, dark),
+    taperedBox(11.5, 18.6, 8.0, 15.2, 3.2, 12.8, 15.0, 0, skin.hull),
+    box(2.6, 4.6, 20.4, 19.4, 11.4, 0, joint),                 // 前防撞梁
+    box(2.0, 2.0, 3.6, 20.6, 14.2, 7.0, joint),                // 拖车环
+    box(2.0, 2.0, 3.6, 20.6, 14.2, -7.0, joint),
+    // 折叠头部：夹在双炮之间的头盔模块，二星立起来就是脑袋
+    chamferedBox(5.6, 4.0, 4.6, 13.6, 18.2, 0, dark),
+    box(4.4, 1.0, 5.6, 13.2, 20.4, 0, trim),
+    boxOrient(3.4, 0.85, 1.1, 11.8, 21.2, 2.0, trim, 0, 0, -0.42),   // 头冠鳍
+    boxOrient(3.4, 0.85, 1.1, 11.8, 21.2, -2.0, trim, 0, 0, -0.42),
+    // 炮塔：低矮宽体 + 斜面颊甲 + 后配重舱，四周外挂窄边框条
+    taperedBox(21, 19, 17, 14.6, 7.6, 0.5, 17.6, 0, skin.deck),
+    taperedBox(6.4, 14.4, 4.8, 12.0, 6.6, 8.6, 17.8, 0, dark),       // 炮盾
+    chamferedBox(9.6, 4.8, 15.2, -7.4, 19.6, 0, dark),               // 尾舱
+    box(7.0, 1.1, 13.2, -8.0, 22.2, 0, trim),
+    box(15.4, 1.3, 1.5, 0.5, 20.4, 8.6, trim),                       // 颊甲边框
+    box(15.4, 1.3, 1.5, 0.5, 20.4, -8.6, trim),
+    chamferedBox(11.0, 1.3, 12.0, 1.0, 21.6, 0, skin.team),          // 炮塔顶认旗甲板
+    box(3.4, 3.6, 3.4, -2.4, 22.6, 0, joint),                        // 指挥塔基座
+    chamferedBox(4.6, 2.8, 5.4, -2.0, 24.6, 0, plate),               // 指挥塔
+    cyl(0.34, 0.34, 7.0, 6, -5.4, 25.8, 2.6, MAT.gunmetal),          // 通信天线
+    // 烟雾发射器：炮塔两侧各三管，硬边小件比大平面更像变形金刚
+    cyl(0.62, 0.62, 3.2, 6, -3.2, 21.6, 7.4, MAT.gunmetal, ROT_Z90),
+    cyl(0.62, 0.62, 3.2, 6, -5.4, 21.6, 7.4, MAT.gunmetal, ROT_Z90),
+    cyl(0.62, 0.62, 3.2, 6, -7.6, 21.6, 7.4, MAT.gunmetal, ROT_Z90),
+    cyl(0.62, 0.62, 3.2, 6, -3.2, 21.6, -7.4, MAT.gunmetal, ROT_Z90),
+    cyl(0.62, 0.62, 3.2, 6, -5.4, 21.6, -7.4, MAT.gunmetal, ROT_Z90),
+    cyl(0.62, 0.62, 3.2, 6, -7.6, 21.6, -7.4, MAT.gunmetal, ROT_Z90),
+    // 招牌双联主炮：驻退护套 + 长管 + 制退器 + 炮口联动梁
+    cyl(2.7, 3.0, 9.0, 10, 11.5, 17.6, 4.0, dark, ROT_Z90),
+    cyl(2.7, 3.0, 9.0, 10, 11.5, 17.6, -4.0, dark, ROT_Z90),
+    cyl(1.5, 1.8, 22, 10, 18.0, 17.6, 4.0, MAT.gunmetal, ROT_Z90),
+    cyl(1.5, 1.8, 22, 10, 18.0, 17.6, -4.0, MAT.gunmetal, ROT_Z90),
+    cyl(2.4, 2.4, 3.8, 10, 27.0, 17.6, 4.0, joint, ROT_Z90),
+    cyl(2.4, 2.4, 3.8, 10, 27.0, 17.6, -4.0, joint, ROT_Z90),
+    box(1.6, 1.6, 9.8, 23.4, 17.6, 0, joint),                        // 炮口联动梁
+    cyl(0.6, 0.6, 11.0, 6, 15.0, 21.0, 4.0, MAT.gunmetal, ROT_Z90),  // 驻退液压杆
+    cyl(0.6, 0.6, 11.0, 6, 15.0, 21.0, -4.0, MAT.gunmetal, ROT_Z90),
+    // 折叠肩甲：贴在车体两侧的厚甲块 + 肩轴销，二星展开成手臂
+    taperedBox(18, 6.6, 14, 4.8, 7.2, -1.5, 15.4, 12.0, skin.hull),
+    taperedBox(18, 6.6, 14, 4.8, 7.2, -1.5, 15.4, -12.0, skin.hull),
+    box(13.6, 1.2, 1.3, -1.5, 18.8, 12.6, trim),
+    box(13.6, 1.2, 1.3, -1.5, 18.8, -12.6, trim),
+    cyl(2.2, 2.2, 3.0, 8, 6.4, 15.0, 12.6, joint, ROT_X90),
+    cyl(2.2, 2.2, 3.0, 8, 6.4, 15.0, -12.6, joint, ROT_X90),
+    // 折叠腿：车尾压在履带上方的两块膝甲 + 膝轴，蹲坐姿态的暗示
+    chamferedBox(9.4, 5.4, 5.6, -13.0, 10.4, 12.3, dark),
+    chamferedBox(9.4, 5.4, 5.6, -13.0, 10.4, -12.3, dark),
+    cyl(1.6, 1.6, 2.6, 8, -8.6, 10.4, 12.3, joint, ROT_X90),
+    cyl(1.6, 1.6, 2.6, 8, -8.6, 10.4, -12.3, joint, ROT_X90),
+    // 尾部散热格栅
+    box(6.6, 1.4, 13.0, -15.4, 14.4, 0, joint),
+    box(1.2, 1.8, 13.0, -12.4, 15.0, 0, joint)
+  ]);
+  const glow = [
+    box(1.2, 1.8, 4.6, 16.2, 18.4, 0, skin.optic),             // 折叠头部的一字目镜
+    box(16, 1.0, 0.7, -2, 12.6, 12.0, GLOW_SOFT),              // 侧裙灯带（团队色）
+    box(16, 1.0, 0.7, -2, 12.6, -12.0, GLOW_SOFT),
+    box(2.6, 0.8, 4.4, -9.6, 23.1, 0, GLOW_SOFT),              // 尾舱数据屏
+    sph(0.7, 6, -5.4, 29.5, 2.6, GLOW_HOT)                     // 天线顶灯
+  ];
+  if (skin.ion) {
+    // 老兵加装的等离子回路：炮管三道线圈环 + 尾舱两只电容罐 + 炮口余辉
+    [4.0, -4.0].forEach(function (side) {
+      body.push(cyl(1.5, 1.5, 5.6, 8, -6.0, 23.6, side * 1.35,
+        joint, ROT_Z90));
+      [13.5, 18.5, 23.5].forEach(function (px) {
+        glow.push(torus(2.05, 0.4, 4, 8, px, 17.6, side, MAT.apocIon, ROT_Y90));
+      });
+      glow.push(cyl(1.12, 1.12, 1.4, 8, -6.0, 23.6, side * 1.35,
+        MAT.apocIon, ROT_Z90));
+      glow.push(sph(1.05, 7, 29.2, 17.6, side, MAT.apocIon));
+    });
+  }
+  return { body: body, glow: glow };
+}
+
+/** 人形态（二星起）。手臂不在这里，由 apocalypseArmParts() 单独一层做动画。 */
+function apocalypseTitanParts() {
+  const skin = APOC_SKIN_VET;
+  const plate = skin.plate;
+  const dark = skin.plateDark;
+  const joint = skin.joint;
+  const trim = skin.trim;
+  const body = [
+    // 骨盆与腰轴：躯干和双腿之间留一段窄腰，人形轮廓才不是一根直筒
+    chamferedBox(9.0, 5.6, 17.4, -0.4, 25.0, 0, dark),               // 骨盆
+    chamferedBox(6.0, 4.4, 8.4, 2.4, 24.6, 0, 0.9),                  // 团队色裆甲
+    chamferedBox(7.0, 3.4, 11.0, -0.4, 28.4, 0, joint),              // 腰轴
+    // 躯干：车头斜甲翻上来当胸甲，肩宽向上放开
+    taperedBox(12.0, 19.0, 13.0, 22.0, 10.2, -0.6, 34.6, 0, skin.deck),
+    taperedBox(6.4, 15.0, 4.4, 12.4, 6.6, 5.0, 33.8, 0, dark),       // 胸口斜甲
+    chamferedBox(2.0, 7.6, 11.2, 7.2, 34.2, 0, 0.95),                // 团队色胸板
+    box(1.4, 1.2, 13.0, 6.6, 30.2, 0, trim),                         // 胸下饰条
+    chamferedBox(7.4, 10.4, 16.2, -7.6, 35.0, 0, dark),              // 背包（折叠炮塔）
+    box(6.4, 1.2, 14.0, -7.4, 40.4, 0, trim),
+    cyl(1.15, 1.15, 6.4, 8, -9.4, 42.0, 4.2, MAT.gunmetal),          // 背部排气管
+    cyl(1.15, 1.15, 6.4, 8, -9.4, 42.0, -4.2, MAT.gunmetal),
+    // 肩甲：车体两侧的甲块展开成宽肩，外沿压一条饰条
+    taperedBox(11.4, 8.2, 8.4, 6.2, 8.2, -0.6, 37.0, 13.0, skin.hull),
+    taperedBox(11.4, 8.2, 8.4, 6.2, 8.2, -0.6, 37.0, -13.0, skin.hull),
+    box(9.2, 1.2, 1.4, -0.6, 41.3, 13.0, trim),
+    box(9.2, 1.2, 1.4, -0.6, 41.3, -13.0, trim),
+    cyl(2.6, 2.6, 3.2, 8, -0.4, 36.4, 11.6, joint, ROT_X90),         // 肩轴
+    cyl(2.6, 2.6, 3.2, 8, -0.4, 36.4, -11.6, joint, ROT_X90),
+    // 头：一字目镜 + 头冠鳍，和载具形态折叠头部同一副造型
+    cyl(1.6, 1.9, 2.8, 8, 0.2, 40.8, 0, joint),
+    chamferedBox(5.4, 4.8, 6.2, 0.8, 43.2, 0, skin.deck),
+    chamferedBox(1.9, 3.4, 4.6, 3.4, 42.8, 0, dark),
+    boxOrient(3.8, 0.9, 1.2, -0.6, 45.6, 2.1, trim, 0, 0, 0.38),
+    boxOrient(3.8, 0.9, 1.2, -0.6, 45.6, -2.1, trim, 0, 0, 0.38)
+  ];
+  // 双腿：履带没有消失，是折到了脚掌外侧，靴子本身就是一小段负重轮走行部
+  [7.0, -7.0].forEach(function (side) {
+    body.push(
+      taperedBox(8.2, 8.2, 7.0, 7.2, 8.8, -0.2, 19.2, side * 0.94, skin.hull),  // 大腿
+      sph(2.7, 9, 0.2, 14.4, side, joint),                                  // 膝
+      chamferedBox(3.0, 4.2, 4.8, 2.8, 14.6, side, trim),                   // 护膝
+      taperedBox(7.6, 7.6, 6.2, 6.2, 9.2, 0.0, 9.4, side, plate),           // 小腿
+      chamferedBox(2.1, 8.2, 5.6, 3.8, 9.2, side, dark),                    // 胫甲
+      cyl(0.72, 0.72, 9.2, 6, -2.8, 9.4, side, MAT.gunmetal),               // 液压杆
+      taperedBox(13.0, 9.4, 10.2, 7.6, 3.6, 1.0, 2.2, side, dark),          // 脚掌
+      taperedBox(4.6, 8.6, 3.2, 6.4, 2.6, 6.8, 1.7, side, plate),           // 脚尖
+      box(12.4, 3.8, 1.8, 0.6, 2.6, side * 1.66, MAT.track),                // 外侧履带段
+      cyl(1.5, 1.5, 3.6, 8, 0.4, 4.6, side, joint, ROT_X90)                 // 踝轴
+    );
+  });
+  return {
+    body: body,
+    glow: [
+      box(1.1, 1.3, 4.4, 4.4, 43.0, 0, MAT.apocIon),          // 目镜
+      box(1.0, 1.0, 8.6, 8.0, 34.2, 0, MAT.apocIon),          // 胸口反应堆缝
+      box(0.9, 5.6, 0.9, -0.6, 34.6, 10.4, MAT.apocIon),      // 肩根导能条
+      box(0.9, 5.6, 0.9, -0.6, 34.6, -10.4, MAT.apocIon),
+      cyl(0.85, 0.85, 1.2, 8, -9.4, 45.4, 4.2, MAT.exhaust),  // 排气口
+      cyl(0.85, 0.85, 1.2, 8, -9.4, 45.4, -4.2, MAT.exhaust),
+      box(6.0, 0.7, 0.9, -0.4, 27.6, 8.4, GLOW_SOFT),         // 腰侧灯带（团队色）
+      box(6.0, 0.7, 0.9, -0.4, 27.6, -8.4, GLOW_SOFT)
+    ]
+  };
+}
+
+/**
+ * 人形态的双臂炮。几何体的原点就是肩轴，绕 Z 轴转动即可完成「垂放 → 平举」，
+ * 因此两条手臂能合进同一份几何体、同一个 InstancedMesh，一台单位只多一个
+ * 实例，不为动画付出逐零件的代价。
+ */
+function apocalypseArmParts() {
+  const skin = APOC_SKIN_VET;
+  const parts = [];
+  [13.4, -13.4].forEach(function (side) {
+    parts.push(
+      sph(2.9, 9, 0, 0, side, skin.joint),                                   // 肩球
+      limb(2.4, 2.0, 0.4, -0.4, side, 7.6, -1.6, side, skin.plate),          // 上臂
+      chamferedBox(3.8, 4.0, 4.2, 8.8, -2.0, side, skin.joint),              // 肘
+      taperedBox(9.8, 5.8, 8.2, 5.0, 5.4, 13.8, -2.2, side, skin.hull),      // 前臂炮体
+      box(7.8, 1.2, 5.2, 13.6, 0.4, side, skin.trim),                        // 前臂饰条
+      cyl(2.5, 2.7, 4.4, 10, 18.6, -2.2, side, skin.plateDark, ROT_Z90),     // 炮座
+      cyl(1.55, 1.85, 13.0, 10, 24.0, -2.2, side, MAT.gunmetal, ROT_Z90),    // 炮管
+      cyl(2.5, 2.5, 3.6, 10, 30.0, -2.2, side, skin.joint, ROT_Z90),         // 制退器
+      cyl(0.55, 0.55, 8.4, 6, 16.0, 1.4, side, MAT.gunmetal, ROT_Z90)        // 驻退杆
+    );
+  });
+  return {
+    body: parts,
+    glow: [
+      torus(2.0, 0.4, 4, 8, 21.0, -2.2, 13.4, MAT.apocIon, ROT_Y90),
+      torus(2.0, 0.4, 4, 8, 26.0, -2.2, 13.4, MAT.apocIon, ROT_Y90),
+      torus(2.0, 0.4, 4, 8, 21.0, -2.2, -13.4, MAT.apocIon, ROT_Y90),
+      torus(2.0, 0.4, 4, 8, 26.0, -2.2, -13.4, MAT.apocIon, ROT_Y90),
+      sph(1.0, 7, 32.0, -2.2, 13.4, MAT.apocIon),
+      sph(1.0, 7, 32.0, -2.2, -13.4, MAT.apocIon),
+      box(0.8, 3.4, 0.8, 6.0, -0.8, 13.4, MAT.apocIon),
+      box(0.8, 3.4, 0.8, 6.0, -0.8, -13.4, MAT.apocIon)
+    ]
+  };
+}
+
+/** 天启坦克按战功换池；其他兵种照旧一种一池。 */
+function unitVisualKind(unit) {
+  if (unit.kind !== 'overlord') return unit.kind;
+  const kills = unit.kills || 0;
+  if (kills >= APOC_TITAN_KILLS) return 'overlord_v2';
+  if (kills >= APOC_VETERAN_KILLS) return 'overlord_v1';
+  return 'overlord';
 }
 
 const UNIT_BUILDERS = {
@@ -1410,30 +1658,10 @@ const UNIT_BUILDERS = {
     };
   },
 
-  overlord: function () {
-    return {
-      body: trackedHull(40, 24, 10, 0.82).concat([
-        // 宽扁炮塔比先锋坦克更矮更宽，压住整车重心
-        taperedBox(22, 19, 18, 15, 8, 2, 16.5, 0, 1.0),
-        taperedBox(7, 13, 5, 11, 4, 6, 21.0, 0, 0.8),           // 炮塔正面防盾
-        // 招牌双联主炮：左右并排两根长管 + 各自制退器
-        cyl(1.6, 1.9, 24, 10, 14, 16.4, 3.6, MAT.gunmetal, ROT_Z90),
-        cyl(1.6, 1.9, 24, 10, 14, 16.4, -3.6, MAT.gunmetal, ROT_Z90),
-        cyl(2.5, 2.5, 3.4, 10, 26, 16.4, 3.6, MAT.darkSteel, ROT_Z90),
-        cyl(2.5, 2.5, 3.4, 10, 26, 16.4, -3.6, MAT.darkSteel, ROT_Z90),
-        box(10, 1.0, 1.4, -4, 20.4, 8.0, MAT.warnYellow),       // 侧警示条
-        box(10, 1.0, 1.4, -4, 20.4, -8.0, MAT.warnYellow),
-        box(3.4, 3.0, 3.4, -6, 21.4, 0, MAT.steel),             // 指挥塔
-        box(6, 2.0, 6, 12, 12.4, 0, MAT.steel)                  // 首上附加装甲
-      ]),
-      glow: [
-        box(16, 1.0, 0.7, -2, 12.6, 11.4, GLOW_SOFT),
-        box(16, 1.0, 0.7, -2, 12.6, -11.4, GLOW_SOFT),
-        box(1.6, 1.2, 1.2, 8.5, 21.6, 0, GLOW_HOT),             // 车长观瞄
-        box(2.8, 0.8, 3.8, -8.4, 20.0, 0, GLOW_SOFT)            // 炮塔尾舱
-      ]
-    };
-  },
+  // 天启坦克的三副形态，见文件上方 apocalypseTankParts / apocalypseTitanParts
+  overlord: function () { return apocalypseTankParts(APOC_SKIN_LINE); },
+  overlord_v1: function () { return apocalypseTankParts(APOC_SKIN_VET); },
+  overlord_v2: function () { return apocalypseTitanParts(); },
 
   tesla: function () { return infantryParts('tesla'); },
 
@@ -2256,7 +2484,9 @@ const UNIT_VISUAL_SCALE = {
   rifle: 2.15, rocket: 2.15, sniper: 2.15, tesla: 2.15, dog: 1.85,
   tank: 1.28, scout: 1.34, tank_destroyer: 1.28,
   artillery: 1.28, harvester: 1.16, mcv: 1.30, v3: 1.28,
-  overlord: 1.30, prism: 1.28, bomb_truck: 1.32,
+  // 天启人形态站起来后本身就高了一截，缩一档避免比建筑还夸张
+  overlord: 1.30, overlord_v1: 1.30, overlord_v2: 1.06,
+  prism: 1.28, bomb_truck: 1.32,
   mage: 2.15, frost: 2.15, imp: 2.05, oracle: 2.15, golem: 1.42, panther: 1.7, dragon: 1.34,
   warden: 1.55, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30
@@ -4309,11 +4539,35 @@ export function createRenderer(canvas) {
         box(3, 20, 3, -14, 50, 0, GLOW_HOT)
       ]);
     }
-    if (kind === 'overlord') {
+    if (kind === 'overlord' || kind === 'overlord_v1') {
+      // 一星只是换涂装，远景仍是同一具双联重坦轮廓；靠深色甲板和猩红饰条
+      // 在缩略尺寸下区分出老兵。
+      const vet = kind === 'overlord_v1';
       return hull(40, 24, 10).concat([
         taperedBox(22, 19, 18, 15, 8, 2, 16, 0, 1.0),
+        box(19, 2.0, 17, 1, 20.4, 0, vet ? MAT.apocVetPlate : MAT.apocPlate),
+        box(15, 1.4, 1.6, 0.5, 21.6, 8.0, vet ? MAT.apocVetTrim : MAT.apocTrim),
+        box(15, 1.4, 1.6, 0.5, 21.6, -8.0, vet ? MAT.apocVetTrim : MAT.apocTrim),
         cyl(1.6, 1.9, 24, 8, 14, 16, 3.6, MAT.gunmetal, ROT_Z90),
         cyl(1.6, 1.9, 24, 8, 14, 16, -3.6, MAT.gunmetal, ROT_Z90)
+      ]);
+    }
+    if (kind === 'overlord_v2') {
+      // 二星人形态的远景剪影：双腿 + 宽肩躯干 + 头，外加两条垂放的手臂炮。
+      // 近景的手臂是单独一层做动画，远景直接烘进这份几何体。
+      const legs = [];
+      [7, -7].forEach(function (side) {
+        legs.push(box(12, 4, 9, 1, 2.4, side, MAT.apocVetPlateDark));
+        legs.push(box(7, 12, 7, 0, 10, side, MAT.apocVetPlate));
+        legs.push(box(8, 9, 7, 0, 20, side, MAT.apocVetPlate));
+        legs.push(box(5, 26, 5, 4, 22, side * 1.9, MAT.apocVetPlateDark));
+      });
+      return legs.concat([
+        box(9, 4, 17, 0, 25, 0, MAT.apocVetPlateDark),
+        taperedBox(12, 19, 13, 22, 11, -0.6, 34.6, 0, MAT.apocVetPlate),
+        box(11, 8, 30, -0.6, 37, 0, MAT.apocVetPlate),
+        box(6, 5, 6, 0.8, 43, 0, MAT.apocVetPlate),
+        box(1.4, 1.4, 4.4, 4.2, 43, 0, MAT.apocIon)
       ]);
     }
     if (kind === 'prism') {
@@ -4574,6 +4828,56 @@ export function createRenderer(canvas) {
     return pool;
   }
 
+  /* -------------------- 天启人形态的双臂炮（唯一带动画的挂件层） -------------------- */
+  // 单位主体仍是「一个兵种一份合并几何体」的静态实例；只有手臂要绕肩轴摆动，
+  // 所以单开一层实例网格：两条手臂合进同一份几何体，几何体原点就是肩轴，
+  // 每台单位仍然只占一个实例、一次矩阵写入，不会退化成逐零件绘制。
+  const APOC_ARM_REST = 1.34;      // 垂放角（绕模型 Z 轴，弧度）
+  const APOC_ARM_AIM = 0.05;       // 平举瞄准角
+  const APOC_FIRE_DECAY = 0.6;     // 一次开火动作的总时长（秒）
+  let apocArmMesh = null;
+  let apocArmGeo = null;
+  const apocArmVisuals = [];
+  const apocArmLocal = new THREE.Matrix4();
+  const apocArmKick = new THREE.Matrix4();
+
+  function ensureApocArmMesh(needed) {
+    if (apocArmMesh && apocArmMesh.instanceMatrix.count >= needed) return apocArmMesh;
+    if (apocArmMesh) {
+      worldRoot.remove(apocArmMesh);
+      apocArmMesh.dispose();
+    }
+    if (!apocArmGeo) {
+      const parts = apocalypseArmParts();
+      apocArmGeo = mergeParts(parts.body.concat(parts.glow));
+    }
+    apocArmMesh = new THREE.InstancedMesh(apocArmGeo, unitMetalMaterial,
+      Math.max(8, Math.ceil(needed * 1.5)));
+    apocArmMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    apocArmMesh.frustumCulled = false;
+    apocArmMesh.count = 0;
+    worldRoot.add(apocArmMesh);
+    return apocArmMesh;
+  }
+
+  /**
+   * 服务端的炮口特效不带来源 id，但二星天启的弹种是它独有的，所以按「弹种 +
+   * 最近的一台二星天启」回指开火者。纯表现：万一认错，也只是旁边一台同型
+   * 老兵多抬了一次手。
+   */
+  function triggerApocFire(x, y) {
+    let best = null;
+    let bestD = 36 * 36;
+    for (let i = 0; i < snapshotVisuals.length; i++) {
+      const vis = snapshotVisuals[i];
+      const u = vis.unit;
+      if (u.kind !== 'overlord' || (u.kills || 0) < APOC_TITAN_KILLS) continue;
+      const d = (u.x - x) * (u.x - x) + (u.y - y) * (u.y - y);
+      if (d < bestD) { bestD = d; best = vis; }
+    }
+    if (best) best.apocFire = 1;
+  }
+
   function ensureShadowMesh(needed) {
     if (shadowMesh && shadowMesh.instanceMatrix.count >= needed) return shadowMesh;
     if (shadowMesh) {
@@ -4828,6 +5132,11 @@ export function createRenderer(canvas) {
     tesla: { len: 13, thick: 1.15, color: 0x9ad0ff, arc: 0, look: 'arc' },
     // 光棱聚焦光束：细长、笔直、亮青色，指哪打哪
     laser: { len: 46, thick: 0.52, color: 0xb8f8ff, arc: 0, look: 'beam' },
+    // ---- 天启老兵弹道（服务端按击杀数换 kind，伤害不变，只换表现）----
+    // 一星等离子穿甲弹：比常规炮弹更快更平，青白核 + 短拖尾
+    plasma: { len: 30, thick: 1.2, color: 0x86ecff, arc: 7, look: 'plasma' },
+    // 二星人形态双臂炮：更粗更亮的等离子矛，弹道几乎拉平
+    plasmalance: { len: 40, thick: 2.1, color: 0xd4fbff, arc: 4, look: 'plasma' },
     // ---- 魔法弹道 ----
     // 奥术弹：紫色流光 + 亮核，微微上飘
     arcane: { len: 28, thick: 1.05, color: 0xd6a6ff, arc: 8, look: 'bolt' },
@@ -5466,6 +5775,31 @@ export function createRenderer(canvas) {
           x: x, y: y, radius: 5, growth: 28, alpha: 0.45,
           life: 0.16, maxLife: 0.16, r: 0.5, g: 0.85, b: 1.3
         });
+      } else if (kind === 'plasma' || kind === 'plasmalance') {
+        // 等离子穿甲：青白电离火花 + 一圈冷色冲击环。双臂炮再加一层大环。
+        const heavy = kind === 'plasmalance';
+        burst(fireLayer, heavy ? 11 : 8, function () {
+          const a = rand() * TAU;
+          const sp = 110 + rand() * (heavy ? 200 : 150);
+          return {
+            x: x, y: 6, z: y,
+            vx: Math.cos(a) * sp, vy: 50 + rand() * 100, vz: Math.sin(a) * sp,
+            life: 0.16 + rand() * 0.16, maxLife: 0.32,
+            size: (heavy ? 5 : 3.5) + rand() * 3.5,
+            r: 0.5, g: 1.75, b: 2.35
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: heavy ? 9 : 6, growth: heavy ? 62 : 40,
+          alpha: 0.55, life: 0.26, maxLife: 0.26, r: 0.45, g: 1.0, b: 1.25
+        });
+        if (heavy) {
+          shockLayer.spawn({
+            x: x, y: y, radius: 4, growth: 108, alpha: 0.38,
+            life: 0.4, maxLife: 0.4, r: 0.7, g: 1.1, b: 1.3
+          });
+          flashAt(x, y, 0x9ff0ff);
+        }
       } else if (kind === 'laser') {
         burst(fireLayer, 5, function () {
           const a = rand() * TAU;
@@ -5570,6 +5904,26 @@ export function createRenderer(canvas) {
           life: 1.8, maxLife: 1.8, hold: true, r: 0.14, g: 0.05, b: 0.2
         });
         flashAt(x, y, 0xf2e6ff);
+      } else if (kind === 'plasma' || kind === 'plasmalance') {
+        // 天启老兵的炮口：青白电离气团。二星是抬臂双炮，起点高一截也更散。
+        const arm = kind === 'plasmalance';
+        burst(fireLayer, arm ? 9 : 6, function () {
+          const a = rand() * TAU;
+          return {
+            x: x + (rand() - 0.5) * (arm ? 12 : 7),
+            y: (arm ? 30 : 20) + rand() * 6,
+            z: y + (rand() - 0.5) * (arm ? 12 : 7),
+            vx: Math.cos(a) * 34, vy: 16 + rand() * 26, vz: Math.sin(a) * 34,
+            life: 0.14 + rand() * 0.1, maxLife: 0.24,
+            size: (arm ? 5.5 : 4) + rand() * 3,
+            r: 0.45, g: 1.9, b: 2.4
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: arm ? 8 : 5, growth: arm ? 66 : 44,
+          alpha: 0.42, life: 0.24, maxLife: 0.24, r: 0.5, g: 1.05, b: 1.3
+        });
+        if (arm) flashAt(x, y, 0x8fe8ff);
       } else if (kind === 'fireball') {
         // 龙口喷吐：过去落进通用暖白分支，配玉龙很违和。改成从口部高度
         // 向前散开的一小簇玉息，比命中爆点轻，不抢炸点的视觉重量。
@@ -6031,6 +6385,13 @@ export function createRenderer(canvas) {
         life: 0.36, maxLife: 0.36, size: 6.4 + Math.random() * 5,
         r: 1.9, g: 0.75, b: 2.35
       });
+    } else if (look === 'plasma') {
+      emit(fireLayer, {
+        x: x, y: height, z: y,
+        vx: (Math.random() - 0.5) * 10, vy: 5 + Math.random() * 7, vz: (Math.random() - 0.5) * 10,
+        life: 0.16, maxLife: 0.16, size: 3.0 + Math.random() * 2.4,
+        r: 0.45, g: 1.85, b: 2.3
+      });
     } else if (look === 'bolt') {
       emit(fireLayer, {
         x: x, y: height, z: y,
@@ -6051,7 +6412,11 @@ export function createRenderer(canvas) {
   function emitIdleAura(vis, dt, useSimple) {
     if (useSimple) return;
     const kind = vis.unit.kind;
-    if (kind !== 'frost' && kind !== 'dragon' && kind !== 'mage'
+    // 二星起的天启是人形态，肩背的等离子回路会持续排气；一星以下的载具形态
+    // 没有这层，免得普通天启也在战场上冒光。
+    const apocTitan = kind === 'overlord' &&
+      (vis.unit.kills || 0) >= APOC_TITAN_KILLS;
+    if (!apocTitan && kind !== 'frost' && kind !== 'dragon' && kind !== 'mage'
         && kind !== 'warden' && kind !== 'colossus' && kind !== 'comet'
         && kind !== 'bomb_truck' && kind !== 'hexling'
         && kind !== 'imp' && kind !== 'oracle') return;
@@ -6059,11 +6424,27 @@ export function createRenderer(canvas) {
     const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6
       : kind === 'bomb_truck' ? 7 : kind === 'hexling' ? 6
       : kind === 'colossus' ? 7 : kind === 'comet' ? 6 : kind === 'warden' ? 4
-      : kind === 'oracle' ? 4 : kind === 'imp' ? 3 : 3.5;
+      : kind === 'oracle' ? 4 : kind === 'imp' ? 3 : apocTitan ? 4 : 3.5;
     if (Math.random() > dt * rate) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
     const scale = UNIT_VISUAL_SCALE[kind] || 1;
-    if (kind === 'frost') {
+    if (apocTitan) {
+      // 背部两根排气管的余温：贴着机体上升的一小股青白热气
+      const armScale = UNIT_VISUAL_SCALE.overlord_v2;
+      const back = -9.4 * armScale;
+      const side = (Math.random() < 0.5 ? 4.2 : -4.2) * armScale;
+      const cos = Math.cos(vis.dir);
+      const sin = Math.sin(vis.dir);
+      emit(fireLayer, {
+        x: vis.x + back * cos - side * sin,
+        y: gy + 46 * armScale + Math.random() * 5,
+        z: vis.y + back * sin + side * cos,
+        vx: (Math.random() - 0.5) * 5, vy: 13 + Math.random() * 9,
+        vz: (Math.random() - 0.5) * 5,
+        life: 0.3, maxLife: 0.3, size: 3.0 + Math.random() * 2.0,
+        r: 0.42, g: 1.45, b: 1.85
+      });
+    } else if (kind === 'frost') {
       emit(fireLayer, {
         x: vis.x + (Math.random() - 0.5) * 12,
         y: gy + 3 + Math.random() * 14,
@@ -6275,8 +6656,10 @@ export function createRenderer(canvas) {
           (!farOut || damaged || selected);
       }
 
-      let bucket = byKind.get(u.kind);
-      if (!bucket) { bucket = []; byKind.set(u.kind, bucket); }
+      // 天启坦克按军衔分到不同的形态池，其余兵种就是自己的 kind
+      const vkind = unitVisualKind(u);
+      let bucket = byKind.get(vkind);
+      if (!bucket) { bucket = []; byKind.set(vkind, bucket); }
       bucket.push(vis);
     }
     // 只按相机距离降模；单位数量增加不会让整场模型突然变成盒子。
@@ -6286,9 +6669,13 @@ export function createRenderer(canvas) {
     const doShadows = state.shadows === 'all';
     const shadows = doShadows ? ensureShadowMesh(state.renderedUnits) : null;
 
+    // 每个兵种池都有近景/远景两张网格，同一帧必有一张用不上；离场的兵种
+    // 两张都空着。只把 count 归零仅仅省掉 GL 绘制调用，three 仍会遍历它们、
+    // 算 modelView/normal 矩阵、进渲染列表排序并做材质与 VAO 设置。改成
+    // visible=false，projectObject 在遍历阶段就跳过，这些全部不付。
     unitPools.forEach(function (pool) {
-      if (pool.mesh) pool.mesh.count = 0;
-      if (pool.simple) pool.simple.count = 0;
+      if (pool.mesh) { pool.mesh.count = 0; pool.mesh.visible = false; }
+      if (pool.simple) { pool.simple.count = 0; pool.simple.visible = false; }
     });
 
     byKind.forEach(function (list, kind) {
@@ -6341,6 +6728,8 @@ export function createRenderer(canvas) {
         }
       }
       mesh.count = list.length;
+      // byKind 的键会留到下一帧，空桶同样会走到这里
+      mesh.visible = list.length > 0;
       if (matrixDirty) mesh.instanceMatrix.needsUpdate = true;
       if (colorDirty && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.castShadow = doShadows && !useSimple;
@@ -6349,6 +6738,54 @@ export function createRenderer(canvas) {
     if (shadows) {
       shadows.count = shadowCount;
       shadows.instanceMatrix.needsUpdate = true;
+    }
+
+    /* --- 天启人形态：抬臂开炮 --- */
+    // 远景 LOD 已经把垂放的手臂烘进主几何体，这层只在近景跑。
+    apocArmVisuals.length = 0;
+    if (!useSimple) {
+      const titans = byKind.get('overlord_v2');
+      if (titans) {
+        for (let i = 0; i < titans.length; i++) apocArmVisuals.push(titans[i]);
+      }
+    }
+    if (apocArmVisuals.length) {
+      const arms = ensureApocArmMesh(apocArmVisuals.length);
+      const armScale = UNIT_VISUAL_SCALE.overlord_v2;
+      for (let i = 0; i < apocArmVisuals.length; i++) {
+        const vis = apocArmVisuals[i];
+        if (vis.apocPhase == null) vis.apocPhase = Math.random() * TAU;
+        const fire = vis.apocFire || 0;
+        // 开火瞬间抬到位（raise 立刻满），随后跟着计时器缓缓放下；
+        // kick 只在动作最开始的一小段里出现，做后坐。
+        const raise = Math.min(1, fire * 2.6);
+        const kick = Math.max(0, fire - 0.78) / 0.22;
+        const sway = Math.sin(payload.time * 0.0022 + vis.apocPhase) * 0.05;
+        const rest = APOC_ARM_REST + sway;
+        const angle = rest + (APOC_ARM_AIM - rest) * raise - kick * 0.2;
+        const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
+        quat.setFromAxisAngle(upAxis, -vis.dir);
+        matrix.compose(
+          vecPos.set(vis.x, gy + APOC_ARM_PIVOT_Y * armScale, vis.y),
+          quat, vecScale.set(armScale, armScale, armScale));
+        // 均匀缩放和旋转可交换，所以肩轴的局部旋转/后坐直接右乘即可
+        apocArmLocal.makeRotationZ(-angle);
+        apocArmKick.makeTranslation(-kick * 3.6, 0, 0);
+        matrix.multiply(apocArmLocal).multiply(apocArmKick);
+        arms.setMatrixAt(i, matrix);
+        tmpColor.set(colorOf(vis.unit.owner));
+        arms.setColorAt(i, tmpColor);
+        if (fire > 0) vis.apocFire = Math.max(0, fire - dt / APOC_FIRE_DECAY);
+      }
+      arms.count = apocArmVisuals.length;
+      arms.visible = true;
+      arms.instanceMatrix.needsUpdate = true;
+      if (arms.instanceColor) arms.instanceColor.needsUpdate = true;
+    } else if (apocArmMesh) {
+      // 场上没有二星天启时整层隐藏：count=0 只省掉 GL 绘制，visible=false
+      // 才能让 three 在遍历阶段就跳过，连材质/VAO 设置都不付。
+      apocArmMesh.count = 0;
+      apocArmMesh.visible = false;
     }
 
     /* --- 建筑 --- */
@@ -6492,6 +6929,14 @@ export function createRenderer(canvas) {
           writeTracer(shards, shardCount++, p.x, height - 1.6, p.y, yaw + 0.38, 8.2, 2.2, 2.2, 0x9a7fd0);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len * 1.85, style.thick * 0.48, style.thick * 0.48, 0xf2e6ff);
+        } else if (look === 'plasma') {
+          // 等离子弹：青白亮核 + 一根笔直的长条 + 更长更细的余辉
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw,
+            style.thick * 1.7, style.thick * 1.7, style.thick * 1.7, 0xf2ffff);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len * 1.9, style.thick * 0.34, style.thick * 0.34, 0x5fd8ff);
         } else if (look === 'bolt') {
           writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 2.15, 2.15, 2.15, 0xf0d0ff);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
@@ -6542,6 +6987,10 @@ export function createRenderer(canvas) {
         ? guessImpactKind(fx.x, fx.y, projectileHintPrev)
         : (fx.kind || (fx.type === 'muzzle'
           ? guessMuzzleKind(fx.x, fx.y, projectileHints) : null));
+      // 双臂炮的炮口闪光同时驱动人形态的抬臂动画
+      if (fx.type === 'muzzle' && fxKind === 'plasmalance') {
+        triggerApocFire(fx.x, fx.y);
+      }
       spawnEffect(fx.type, fx.x, fx.y, fxKind);
     }
     projectileHintPrev = projectileHints;
@@ -6846,6 +7295,11 @@ export function createRenderer(canvas) {
         if (pool.mesh) pool.mesh.count = 0;
         if (pool.simple) pool.simple.count = 0;
       });
+      apocArmVisuals.length = 0;
+      if (apocArmMesh) {
+        apocArmMesh.count = 0;
+        apocArmMesh.visible = false;
+      }
       if (barBgMesh) barBgMesh.count = 0;
       if (barFillMesh) barFillMesh.count = 0;
       if (barSecMesh) barSecMesh.count = 0;
