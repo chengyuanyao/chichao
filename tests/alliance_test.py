@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""In-game alliance tests: propose, accept, reject, break, vision/fire update."""
+"""In-game alliances: proposals, team changes, and the lobby dynamic-alliance lock."""
 
 from __future__ import print_function
 
@@ -19,47 +19,18 @@ def tick_for(room, seconds, step=0.05):
 
 
 def do_action(room, player, action, payload=None):
-    """Mimic the alliance action dispatch from room_action."""
-    data = {"action": action, "payload": payload or {}}
+    """Call the same alliance helpers used by the HTTP action dispatcher."""
+    payload = payload or {}
     if action == "proposeAlliance":
-        if room["status"] != "playing":
-            raise ValueError("只能在战斗中进行")
-        if player.get("eliminated"):
-            raise ValueError("你已被击败")
-        target_id = data["payload"].get("playerId")
-        target = room["players"].get(target_id)
-        if not target or target["isBot"] or target.get("eliminated"):
-            raise ValueError("无效的结盟目标")
-        if server.is_friendly(room["game"], player["id"], target["id"]):
-            raise ValueError("已经处于同一队伍")
-        room.setdefault("allianceProposals", {})
-        room["allianceProposals"][target["id"]] = {"from": player["id"], "time": time.time()}
+        server.propose_alliance(room, player, payload.get("playerId"))
     elif action == "acceptAlliance":
-        proposals = room.get("allianceProposals", {})
-        proposal = proposals.get(player["id"])
-        if not proposal:
-            raise ValueError("没有待处理的结盟提议")
-        proposer = room["players"].get(proposal["from"])
-        if not proposer or proposer.get("eliminated"):
-            proposals.pop(player["id"], None)
-            raise ValueError("提议者已不可用")
-        team_id = proposer.get("team", 0)
-        if team_id <= 0:
-            team_id = max((p.get("team", 0) for p in room["players"].values()), default=0) + 1
-            proposer["team"] = team_id
-        player["team"] = team_id
-        room["game"]["playerTeams"] = {p["id"]: p.get("team", 0) for p in room["players"].values()}
-        proposals.pop(player["id"], None)
+        server.accept_alliance(room, player)
     elif action == "rejectAlliance":
-        proposals = room.get("allianceProposals", {})
-        proposals.pop(player["id"], None)
+        server.reject_alliance(room, player)
     elif action == "breakAlliance":
-        if player.get("eliminated"):
-            raise ValueError("你已被击败")
-        if not player.get("team") or player["team"] <= 0:
-            raise ValueError("你没有加入任何队伍")
-        player["team"] = 0
-        room["game"]["playerTeams"] = {p["id"]: p.get("team", 0) for p in room["players"].values()}
+        server.break_alliance(room, player)
+    else:
+        raise AssertionError("unknown alliance action: %s" % action)
 
 
 def main():
@@ -172,6 +143,71 @@ def main():
     # Cleanup fires in tick_game -> should have removed expired proposal
     assert b3["id"] not in room4.get("allianceProposals", {})
     print("  Proposal expiration: PASS")
+
+    print("\n=== Test 6: Dynamic alliances off keeps lobby teams fixed ===")
+    host = server.create_human("LOCK-H", server.COLORS[0], team=1)
+    ally = server.create_human("LOCK-A", server.COLORS[1], team=1)
+    outsider = server.create_human("LOCK-X", server.COLORS[2])
+    room5 = {
+        "id": "ALLY5", "name": "fixed teams", "status": "lobby",
+        "hostId": host["id"],
+        "players": {p["id"]: p for p in (host, ally, outsider)},
+        "chat": [], "game": None, "createdAt": time.time(),
+    }
+    assert server.dynamic_alliances_enabled(room5) is True
+    assert server.public_room(room5, viewer_id=ally["id"])["dynamicAlliances"] is True
+    try:
+        server.set_dynamic_alliances(room5, ally, False)
+        raise AssertionError("访客不该能关闭动态结盟")
+    except ValueError as exc:
+        assert "房主" in str(exc)
+    server.set_dynamic_alliances(room5, host, False)
+    assert room5["dynamicAlliances"] is False
+    assert server.public_room(room5, viewer_id=ally["id"])["dynamicAlliances"] is False
+
+    server.start_game(room5)
+    game5 = room5["game"]
+    assert game5["dynamicAlliances"] is False
+    assert server.is_friendly(game5, host["id"], ally["id"])
+    assert not server.is_friendly(game5, host["id"], outsider["id"])
+    for action, actor, payload in (
+            ("proposeAlliance", outsider, {"playerId": host["id"]}),
+            ("breakAlliance", ally, {})):
+        try:
+            do_action(room5, actor, action, payload)
+            raise AssertionError("关闭动态结盟后不该允许 %s" % action)
+        except ValueError as exc:
+            assert "关闭动态结盟" in str(exc), str(exc)
+    room5["allianceProposals"] = {
+        host["id"]: {"from": outsider["id"], "time": time.time()}
+    }
+    try:
+        do_action(room5, host, "acceptAlliance")
+        raise AssertionError("关闭动态结盟后不该接受伪造提议")
+    except ValueError as exc:
+        assert "关闭动态结盟" in str(exc), str(exc)
+    assert host["team"] == ally["team"] == 1
+    assert server.is_friendly(game5, host["id"], ally["id"])
+    assert "incomingProposal" not in server.public_room(
+        room5, viewer_id=host["id"])
+    try:
+        server.set_dynamic_alliances(room5, host, True)
+        raise AssertionError("开战后不该修改动态结盟开关")
+    except ValueError as exc:
+        assert "开始" in str(exc)
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "public", "index.html"), "r",
+              encoding="utf-8") as handle:
+        index = handle.read()
+    with open(os.path.join(root, "public", "app.js"), "r",
+              encoding="utf-8") as handle:
+        app = handle.read()
+    assert "dynamicAlliancesToggle" in index
+    assert "关闭后锁定开局队伍" in index
+    assert "setDynamicAlliances" in app
+    assert "function roomHasDynamicAlliances" in app
+    print("  默认开 / 房主可关 / 预设盟友保留 / 结盟与退盟均锁定: PASS")
 
     print("\n=== All alliance tests passed! ===")
 

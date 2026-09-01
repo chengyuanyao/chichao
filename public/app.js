@@ -1139,6 +1139,8 @@ import {
   var combatRewardsRow = $('#combatRewardsRow');
   var combatRewardsToggle = $('#combatRewardsToggle');
   var combatRewardsBadge = $('#combatRewardsBadge');
+  var dynamicAlliancesRow = $('#dynamicAlliancesRow');
+  var dynamicAlliancesToggle = $('#dynamicAlliancesToggle');
   var commanderModeRow = $('#commanderModeRow');
   var commanderModeToggle = $('#commanderModeToggle');
   var commanderModeBadge = $('#commanderModeBadge');
@@ -1905,6 +1907,7 @@ import {
     syncOrbitalRainToggle(me, roomState);
     syncNeutralCampsToggle(me, roomState);
     syncCombatRewardsToggle(me, roomState);
+    syncDynamicAlliancesToggle(me, roomState);
     syncCommanderModeToggle(me, roomState);
 
     // Only rebuild the roster DOM when something actually changed.
@@ -1914,7 +1917,8 @@ import {
              p.ready + ':' + p.isBot + ':' + p.name + ':' + p.color + ':' + (p.faction || 'tech') +
              ':' + (p.executorBound ? '1' : '0');
     }).join('|') + (me && me.isHost ? '|host' : '') + '|' + roomState.selectedMap +
-      '|' + (roomState.commanderMode ? 'cm' : '');
+      '|' + (roomState.commanderMode ? 'cm' : '') +
+      '|' + (roomHasDynamicAlliances(roomState) ? 'dynamic-allies' : 'fixed-allies');
     if (playerRoster.dataset.key === rosterKey) {
       renderChat(lobbyChatMessages, roomState.chat, 30);
       return;
@@ -2229,6 +2233,26 @@ import {
     combatRewardsToggle.disabled = !canEdit;
     if (combatRewardsRow) {
       combatRewardsRow.classList.toggle('disabled', !canEdit);
+    }
+  }
+
+  function roomHasDynamicAlliances(state) {
+    if (!state) { return true; }
+    if (state.dynamicAlliances === false) { return false; }
+    if (state.game && state.game.dynamicAlliances === false) { return false; }
+    return true;
+  }
+
+  function syncDynamicAlliancesToggle(me, state) {
+    if (!dynamicAlliancesToggle) { return; }
+    var on = roomHasDynamicAlliances(state);
+    if (dynamicAlliancesToggle.checked !== on) {
+      dynamicAlliancesToggle.checked = on;
+    }
+    var canEdit = !!(me && me.isHost && state && state.status === 'lobby');
+    dynamicAlliancesToggle.disabled = !canEdit;
+    if (dynamicAlliancesRow) {
+      dynamicAlliancesRow.classList.toggle('disabled', !canEdit);
     }
   }
 
@@ -2722,9 +2746,10 @@ import {
       });
     }
 
+    var dynamicAlliances = roomHasDynamicAlliances(roomState);
     var scoreKey = roomState.players.map(function (player) {
       return player.id + ':' + player.eliminated + ':' + player.kills + ':' + (player.team || 0);
-    }).join('|');
+    }).join('|') + '|dynamic-allies:' + (dynamicAlliances ? '1' : '0');
     if (scoreboard.dataset.key !== scoreKey) {
       scoreboard.dataset.key = scoreKey;
       scoreboard.innerHTML = '';
@@ -2739,15 +2764,17 @@ import {
         item.style.setProperty('--player-color', player.color);
         item.title = player.name + ' · 击毁 ' + player.kills + ' · 损失 ' + player.unitsLost + (player.team ? ' · 队伍' + player.team : '');
         item.innerHTML = '<i></i><span>' + htmlEscape(player.name) + '</span><small>' + player.kills + '</small>';
-        if (player.id !== me.id && !player.isBot) {
+        if (player.id !== me.id && !player.isBot && dynamicAlliances) {
           item.addEventListener('click', function () { handleScoreboardClick(player.id, player.name); });
+        } else if (player.id !== me.id && !player.isBot && !dynamicAlliances) {
+          item.title += ' · 本局已锁定开局队伍';
         }
         scoreboard.appendChild(item);
       });
     }
 
     // Handle incoming alliance proposal
-    if (roomState.incomingProposal && roomState.incomingProposal.fromId !== activeProposalFromId) {
+    if (dynamicAlliances && roomState.incomingProposal && roomState.incomingProposal.fromId !== activeProposalFromId) {
       activeProposalFromId = roomState.incomingProposal.fromId;
       activeProposalFromName = roomState.incomingProposal.fromName;
       showAllianceProposal(activeProposalFromId, activeProposalFromName);
@@ -2769,6 +2796,10 @@ import {
   function handleScoreboardClick(playerId, playerName) {
     var me = ownPlayer();
     if (!me || me.eliminated) { return; }
+    if (!roomHasDynamicAlliances(roomState)) {
+      toast('本局已关闭动态结盟，开局队伍不可更改', 'error');
+      return;
+    }
     if (isFriendly(playerId)) {
       sendAction('breakAlliance', {}).catch(function () {});
       toast('已退出与 ' + playerName + ' 的结盟');
@@ -5149,6 +5180,13 @@ import {
     combatRewardsToggle.addEventListener('change', function () {
       sendAction('setCombatRewards', { enabled: combatRewardsToggle.checked }).catch(function () {
         if (roomState) { syncCombatRewardsToggle(ownPlayer(), roomState); }
+      });
+    });
+  }
+  if (dynamicAlliancesToggle) {
+    dynamicAlliancesToggle.addEventListener('change', function () {
+      sendAction('setDynamicAlliances', { enabled: dynamicAlliancesToggle.checked }).catch(function () {
+        if (roomState) { syncDynamicAlliancesToggle(ownPlayer(), roomState); }
       });
     });
   }

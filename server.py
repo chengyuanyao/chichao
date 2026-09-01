@@ -1301,6 +1301,7 @@ def public_game(game, viewer_id=None, full=True):
             "neutrals": neutrals_enabled(game),
             "combatRewards": bool(game.get("combatRewards")),
             "commanderMode": bool(game.get("commanderMode")),
+            "dynamicAlliances": bool(game.get("dynamicAlliances", True)),
         }
         view_cache[view_key] = (frame["stamp"], dynamic)
 
@@ -1364,6 +1365,7 @@ def public_room(room, include_game=True, viewer_id=None, full=True,
                      and bool(room_map.get("neutralOreGuards", True))),
         "combatRewards": bool(room.get("combatRewards") or (room.get("game") or {}).get("combatRewards")),
         "commanderMode": commander_mode_on(room),
+        "dynamicAlliances": dynamic_alliances_enabled(room),
         "mapConfig": {
             "id": room_map["id"],
             "name": room_map["name"],
@@ -1390,7 +1392,7 @@ def public_room(room, include_game=True, viewer_id=None, full=True,
             None if eliminated or room["status"] == "finished" else viewer_id,
             full)
     proposals = room.get("allianceProposals", {})
-    if proposals and viewer_id:
+    if dynamic_alliances_enabled(room) and proposals and viewer_id:
         prop = proposals.get(viewer_id)
         if prop:
             proposer = room["players"].get(prop["from"])
@@ -2267,6 +2269,8 @@ def start_game(room):
                      and bool(room_map.get("neutralOreGuards", True))),
         "combatRewards": bool(room.get("combatRewards")),
         "commanderMode": bool(room.get("commanderMode")),
+        # 只锁定战斗中的队伍变更；大厅已经分好的 team 原样写入 playerTeams。
+        "dynamicAlliances": dynamic_alliances_enabled(room),
         "nextOrbitalRainAt": (
             random.uniform(ORBITAL_RAIN_FIRST_MIN, ORBITAL_RAIN_FIRST_MAX)
             if room.get("orbitalRain") else None),
@@ -2990,6 +2994,116 @@ def set_combat_rewards(room, player, enabled):
     else:
         add_chat(room, "作战系统", "已关闭可选模式：战斗奖励。", True)
     return enabled
+
+
+def dynamic_alliances_enabled(room):
+    """Whether teams may change during battle; missing field preserves legacy on."""
+    if not room:
+        return True
+    if room.get("dynamicAlliances") is False:
+        return False
+    game = room.get("game")
+    if game and game.get("dynamicAlliances") is False:
+        return False
+    return True
+
+
+def set_dynamic_alliances(room, player, enabled):
+    """房主在大厅决定开战后能否临时结盟或退盟；不改变预设队伍。"""
+    if room.get("status") != "lobby":
+        raise ValueError("战斗已经开始")
+    if not player or room.get("hostId") != player.get("id"):
+        raise ValueError("只有房主可以设置模式")
+    enabled = bool(enabled)
+    if dynamic_alliances_enabled(room) == enabled:
+        return enabled
+    room["dynamicAlliances"] = enabled
+    room.pop("allianceProposals", None)
+    if enabled:
+        add_chat(room, "作战系统", "已开启可选模式：动态结盟。", True)
+    else:
+        add_chat(room, "作战系统", "已关闭动态结盟：开局队伍将在整局保持锁定。", True)
+    return enabled
+
+
+def require_dynamic_alliances(room):
+    if not dynamic_alliances_enabled(room):
+        raise ValueError("本局已关闭动态结盟，开局队伍不可更改")
+
+
+def sync_player_teams(room):
+    game = room.get("game")
+    if game:
+        game["playerTeams"] = {
+            p["id"]: p.get("team", 0) for p in room["players"].values()
+        }
+
+
+def propose_alliance(room, player, target_id):
+    require_dynamic_alliances(room)
+    if room.get("status") != "playing":
+        raise ValueError("只能在战斗中进行")
+    if player.get("eliminated"):
+        raise ValueError("你已被击败")
+    target = room.get("players", {}).get(target_id)
+    if not target or target["isBot"] or target.get("eliminated"):
+        raise ValueError("无效的结盟目标")
+    if is_friendly(room.get("game", {}), player["id"], target["id"]):
+        raise ValueError("已经处于同一队伍")
+    room.setdefault("allianceProposals", {})
+    room["allianceProposals"][target["id"]] = {
+        "from": player["id"], "time": now()
+    }
+    add_chat(room, "作战系统", "%s 向 %s 发起了结盟提议。" % (
+        player["name"], target["name"]), True)
+
+
+def accept_alliance(room, player):
+    require_dynamic_alliances(room)
+    if room.get("status") != "playing":
+        raise ValueError("只能在战斗中进行")
+    proposals = room.get("allianceProposals", {})
+    proposal = proposals.get(player["id"])
+    if not proposal:
+        raise ValueError("没有待处理的结盟提议")
+    proposer = room["players"].get(proposal["from"])
+    if not proposer or proposer.get("eliminated"):
+        proposals.pop(player["id"], None)
+        raise ValueError("提议者已不可用")
+    team_id = proposer.get("team", 0)
+    if team_id <= 0:
+        team_id = max((p.get("team", 0)
+                       for p in room["players"].values()), default=0) + 1
+        proposer["team"] = team_id
+    player["team"] = team_id
+    sync_player_teams(room)
+    proposals.pop(player["id"], None)
+    add_chat(room, "作战系统", "%s 接受了 %s 的结盟，共同作战！" % (
+        player["name"], proposer["name"]), True)
+
+
+def reject_alliance(room, player):
+    proposals = room.get("allianceProposals", {})
+    proposal = proposals.pop(player["id"], None)
+    if not proposal:
+        raise ValueError("没有待处理的结盟提议")
+    proposer = room["players"].get(proposal["from"])
+    if proposer:
+        add_chat(room, "作战系统", "%s 拒绝了 %s 的结盟提议。" % (
+            player["name"], proposer["name"]), True)
+
+
+def break_alliance(room, player):
+    require_dynamic_alliances(room)
+    if room.get("status") != "playing":
+        raise ValueError("只能在战斗中进行")
+    if player.get("eliminated"):
+        raise ValueError("你已被击败")
+    if not player.get("team") or player["team"] <= 0:
+        raise ValueError("你没有加入任何队伍")
+    player["team"] = 0
+    sync_player_teams(room)
+    add_chat(room, "作战系统", "%s 退出了当前队伍。" % player["name"], True)
 
 
 def commander_mode_on(room):
@@ -6650,6 +6764,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 "neutrals": True,
                 "combatRewards": False,
                 "commanderMode": False,
+                "dynamicAlliances": True,
                 "lock": threading.RLock(),
             }
             ROOMS[room_id] = room
@@ -6763,6 +6878,8 @@ class GameHandler(BaseHTTPRequestHandler):
                 set_neutrals(room, player, payload.get("enabled"))
             elif action == "setCombatRewards":
                 set_combat_rewards(room, player, payload.get("enabled"))
+            elif action == "setDynamicAlliances":
+                set_dynamic_alliances(room, player, payload.get("enabled"))
             elif action == "setCommanderMode":
                 set_commander_mode(room, player, payload.get("enabled"))
             elif action == "setCommanderIntent":
@@ -6901,58 +7018,13 @@ class GameHandler(BaseHTTPRequestHandler):
             elif action == "command":
                 handle_game_command(room, player, payload, role=role)
             elif action == "proposeAlliance":
-                if room["status"] != "playing":
-                    raise ValueError("只能在战斗中进行")
-                if player.get("eliminated"):
-                    raise ValueError("你已被击败")
-                target_id = payload.get("playerId")
-                target = room.get("players", {}).get(target_id)
-                if not target or target["isBot"] or target.get("eliminated"):
-                    raise ValueError("无效的结盟目标")
-                if is_friendly(room.get("game", {}), player["id"], target["id"]):
-                    raise ValueError("已经处于同一队伍")
-                room.setdefault("allianceProposals", {})
-                room["allianceProposals"][target["id"]] = {"from": player["id"], "time": now()}
-                add_chat(room, "作战系统", "%s 向 %s 发起了结盟提议。" % (player["name"], target["name"]), True)
+                propose_alliance(room, player, payload.get("playerId"))
             elif action == "acceptAlliance":
-                if room["status"] != "playing":
-                    raise ValueError("只能在战斗中进行")
-                proposals = room.get("allianceProposals", {})
-                proposal = proposals.get(player["id"])
-                if not proposal:
-                    raise ValueError("没有待处理的结盟提议")
-                proposer = room["players"].get(proposal["from"])
-                if not proposer or proposer.get("eliminated"):
-                    proposals.pop(player["id"], None)
-                    raise ValueError("提议者已不可用")
-                team_id = proposer.get("team", 0)
-                if team_id <= 0:
-                    team_id = max((p.get("team", 0) for p in room["players"].values()), default=0) + 1
-                    proposer["team"] = team_id
-                player["team"] = team_id
-                if room.get("game"):
-                    room["game"]["playerTeams"] = {p["id"]: p.get("team", 0) for p in room["players"].values()}
-                proposals.pop(player["id"], None)
-                add_chat(room, "作战系统", "%s 接受了 %s 的结盟，共同作战！" % (player["name"], proposer["name"]), True)
+                accept_alliance(room, player)
             elif action == "rejectAlliance":
-                proposals = room.get("allianceProposals", {})
-                proposal = proposals.pop(player["id"], None)
-                if not proposal:
-                    raise ValueError("没有待处理的结盟提议")
-                proposer = room["players"].get(proposal["from"])
-                if proposer:
-                    add_chat(room, "作战系统", "%s 拒绝了 %s 的结盟提议。" % (player["name"], proposer["name"]), True)
+                reject_alliance(room, player)
             elif action == "breakAlliance":
-                if room["status"] != "playing":
-                    raise ValueError("只能在战斗中进行")
-                if player.get("eliminated"):
-                    raise ValueError("你已被击败")
-                if not player.get("team") or player["team"] <= 0:
-                    raise ValueError("你没有加入任何队伍")
-                player["team"] = 0
-                if room.get("game"):
-                    room["game"]["playerTeams"] = {p["id"]: p.get("team", 0) for p in room["players"].values()}
-                add_chat(room, "作战系统", "%s 退出了当前队伍。" % player["name"], True)
+                break_alliance(room, player)
             elif action == "leave":
                 if role == "agent":
                     unbind_executor(player)
