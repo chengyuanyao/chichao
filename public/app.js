@@ -67,9 +67,27 @@ import {
   var STRUCTURE_NAMES = {};
   var STRUCTURE_ROLES = {};
   var UNIT_ROLES = {};
+  // 请求目录前的安全默认值；进入大厅/对局后由服务端 catalog 覆盖。
+  var VETERANCY = {
+    regenDelay: 6,
+    ranks: [
+      { level: 0, name: '新兵', minKills: 0, damageMultiplier: 1, cooldownMultiplier: 1, speedMultiplier: 1, regenMaxHpPerSecond: 0 },
+      { level: 1, name: '老兵', minKills: 3, damageMultiplier: 1.2, cooldownMultiplier: 0.85, speedMultiplier: 1.1, regenMaxHpPerSecond: 0 },
+      { level: 2, name: '精英', minKills: 8, damageMultiplier: 1.4, cooldownMultiplier: 0.7, speedMultiplier: 1.2, regenMaxHpPerSecond: 0.0025 },
+      { level: 3, name: '王牌', minKills: 16, damageMultiplier: 1.6, cooldownMultiplier: 0.55, speedMultiplier: 1.3, regenMaxHpPerSecond: 0.005 }
+    ]
+  };
 
   function applyCatalog(catalog) {
     if (!catalog || !catalog.buildings || !catalog.units) { return; }
+    if (catalog.veterancy && Array.isArray(catalog.veterancy.ranks) && catalog.veterancy.ranks.length) {
+      VETERANCY = {
+        regenDelay: Number(catalog.veterancy.regenDelay) || 6,
+        ranks: catalog.veterancy.ranks.slice().sort(function (a, b) {
+          return Number(a.minKills) - Number(b.minKills);
+        })
+      };
+    }
     Object.keys(catalog.buildings).forEach(function (kind) {
       var src = catalog.buildings[kind];
       var vfx = BUILDING_VFX[kind] || {};
@@ -102,6 +120,7 @@ import {
         canDeploy: !!src.canDeploy,
         damageType: src.damageType,
         repairable: !!src.repairable,
+        canVeteran: !!src.canVeteran,
         icon: vfx.icon || '▲',
         desc: vfx.desc || ''
       };
@@ -1167,7 +1186,7 @@ import {
     snipe: '偷家'
   };
   var BUILTIN_MAPS = {
-    central_scramble: { id: 'central_scramble', name: '五车争霸', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在中央同时落地。先抢方向再展开；外围五片随机位置矿各有23万，中央矿为双倍的46万，且没有中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
+    central_scramble: { id: 'central_scramble', name: '五车争霸', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在中央同时落地。先抢方向再展开；外围五个方向各有一片随机位置的23万矿，中央矿为双倍的46万，且没有中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
     gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着陨石核打，地图紧凑，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[5530,2443],[4640,5182],[1760,5182],[870,2443]] },
     narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] }
   };
@@ -3136,13 +3155,21 @@ import {
       var totalMax = units.reduce(function (sum, unit) { return sum + unit.maxHp; }, 0);
       var one = units.length === 1 ? units[0] : null;
       var label = one ? ((UNITS[one.kind] || {}).name || one.kind) : units.length + ' 个作战单位';
-      var rank = one ? unitRank(one.kills || 0) : 0;
-      var rankLabels = ['', ' ★ 老兵', ' ★★ 精英', ' ★★★ 王牌'];
+      var rankInfo = one ? veteranRankForKills(one.kills || 0) : VETERANCY.ranks[0];
+      var rank = Number(rankInfo.level) || 0;
+      var rankStars = ['', '★', '★★', '★★★'];
+      var rankLabel = rank > 0 ? ' ' + (rankStars[rank] || '') + ' ' + rankInfo.name : '';
       var detail = one && one.repairing ?
         '维修中 · 生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) :
         (one && unitRole(one.kind) === 'harvester' ?
         '载矿 ' + Math.floor(one.cargo) + ' / ' + Math.floor(one.capacity) :
-        (one ? '生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) + rankLabels[rank] : '混合编队'));
+        (one ? '生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) + rankLabel : '混合编队'));
+      var veterancyHtml = '';
+      if (one && (UNITS[one.kind] || {}).canVeteran) {
+        var veteranDetail = veterancySummary(one.kills || 0);
+        veterancyHtml = '<small class="veterancy-detail"><span>' +
+          veteranDetail.bonuses + '</span><span>' + veteranDetail.progress + '</span></small>';
+      }
       // 混编时用主导兵种的肖像打底，右下角标注编队规模
       var kindCounts = {};
       var domKind = units[0].kind;
@@ -3160,7 +3187,8 @@ import {
         '<div class="selected-summary">' +
         '<div class="selected-portrait"></div>' +
         '<div><strong>' + label + '</strong><small>' + detail + '</small>' +
-        '<div class="health-track"><i style="width:' + Math.max(0, totalHp / totalMax * 100) + '%"></i></div></div>' +
+        '<div class="health-track"><i style="width:' + Math.max(0, totalHp / totalMax * 100) + '%"></i></div>' +
+        veterancyHtml + '</div>' +
         '<small>' + units.length + ' UNIT</small></div>';
       selectionInfo.querySelector('.selected-portrait')
         .appendChild(makePortraitCanvas(domKind, false, units.length > 1 ? units.length : 0));
@@ -3737,11 +3765,56 @@ import {
 
   /* -------------------- HUD 叠加层 -------------------- */
 
+  function veteranRankForKills(kills) {
+    var count = Math.max(0, Number(kills) || 0);
+    var ranks = VETERANCY.ranks || [];
+    var result = ranks[0] || { level: 0, name: '新兵', minKills: 0 };
+    ranks.forEach(function (rank) {
+      if (count >= Number(rank.minKills || 0)) { result = rank; }
+    });
+    return result;
+  }
+
   function unitRank(kills) {
-    if (kills >= 16) { return 3; }
-    if (kills >= 8) { return 2; }
-    if (kills >= 3) { return 1; }
-    return 0;
+    return Number(veteranRankForKills(kills).level) || 0;
+  }
+
+  function veteranPercent(value) {
+    var rounded = Math.round(Number(value || 0) * 100) / 100;
+    return String(rounded).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+  }
+
+  function veterancySummary(kills) {
+    var count = Math.max(0, Math.floor(Number(kills) || 0));
+    var rank = veteranRankForKills(count);
+    var bonuses = [];
+    var damageGain = (Number(rank.damageMultiplier || 1) - 1) * 100;
+    var cooldownMultiplier = Number(rank.cooldownMultiplier || 1);
+    var attackSpeedGain = (1 / Math.max(0.01, cooldownMultiplier) - 1) * 100;
+    var speedGain = (Number(rank.speedMultiplier || 1) - 1) * 100;
+    var regenRate = Number(rank.regenMaxHpPerSecond || 0) * 100;
+    if (damageGain > 0.01) { bonuses.push('伤害 +' + veteranPercent(damageGain) + '%'); }
+    if (attackSpeedGain > 0.01) { bonuses.push('攻速 +' + veteranPercent(attackSpeedGain) + '%'); }
+    if (speedGain > 0.01) { bonuses.push('移速 +' + veteranPercent(speedGain) + '%'); }
+    if (regenRate > 0.001) {
+      bonuses.push('脱战回血 ' + veteranPercent(regenRate) + '%/秒（' +
+        veteranPercent(VETERANCY.regenDelay) + '秒后）');
+    }
+    var nextRank = null;
+    (VETERANCY.ranks || []).some(function (candidate) {
+      if (Number(candidate.minKills || 0) > count) {
+        nextRank = candidate;
+        return true;
+      }
+      return false;
+    });
+    return {
+      bonuses: '军衔增益：' + (bonuses.length ? bonuses.join(' · ') : '无'),
+      progress: nextRank ?
+        '已击杀 ' + count + ' · 距' + nextRank.name + '还差 ' +
+          (Number(nextRank.minKills) - count) + '杀' :
+        '已击杀 ' + count + ' · 已达最高军衔'
+    };
   }
 
   // 保留给小地图用：把颜色往白提亮，让单位色点在深色草底上不丢失

@@ -155,6 +155,8 @@ def main():
     # 建造卡造价/名称/角色只信服务端目录，避免客户端再抄一份数字表。
     catalog = server.public_catalog()
     assert catalog["buildings"] and catalog["units"]
+    assert catalog["veterancy"]["regenDelay"] == 6.0
+    assert [rank["minKills"] for rank in catalog["veterancy"]["ranks"]] == [0, 3, 8, 16]
     for kind, entry in catalog["buildings"].items():
         assert kind in server.STRUCTURE_TYPES, kind
         assert entry["cost"] == server.STRUCTURE_TYPES[kind]["cost"], (
@@ -169,6 +171,7 @@ def main():
         assert entry["name"] == server.UNIT_TYPES[kind]["name"]
         assert entry["role"] == server.UNIT_TYPES[kind]["role"]
         assert entry["faction"] == server.UNIT_TYPES[kind]["faction"]
+        assert entry["canVeteran"] == (server.UNIT_TYPES[kind].get("damage", 0) > 0)
     assert catalog["buildings"]["mhq"]["name"] == "魔法主堡"
     view = server.public_game(room["game"], alpha["id"], full=True)
     assert view["catalog"]["buildings"]["power"]["cost"] == server.STRUCTURE_TYPES["power"]["cost"]
@@ -176,6 +179,11 @@ def main():
 
     assert "function applyCatalog" in app
     assert "/api/catalog" in app
+    assert "function veterancySummary(kills)" in app
+    assert "军衔增益：" in app
+    assert "距' + nextRank.name + '还差 " in app
+    assert "veterancy-detail" in app
+    assert ".selected-summary .veterancy-detail" in styles
     for var_name in ("BUILDING_VFX", "UNIT_VFX"):
         block = re.search(r"var %s = \{([\s\S]*?)\n  \};" % var_name, app)
         assert block, "missing %s" % var_name

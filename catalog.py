@@ -14,6 +14,42 @@ from __future__ import print_function
 UNIT_SIGHT_RANGE_MULTIPLIER = 1.10
 
 
+# 军衔数值只在目录里维护一份：服务端战斗结算与客户端选中面板都读取这里。
+# 回血是每秒最大生命值比例，并且只有连续脱战一段时间后才会启动。
+VETERAN_REGEN_DELAY = 6.0
+VETERAN_RANKS = (
+    {
+        "level": 0, "name": "新兵", "minKills": 0,
+        "damageMultiplier": 1.0, "cooldownMultiplier": 1.0,
+        "speedMultiplier": 1.0, "regenMaxHpPerSecond": 0.0,
+    },
+    {
+        "level": 1, "name": "老兵", "minKills": 3,
+        "damageMultiplier": 1.2, "cooldownMultiplier": 0.85,
+        "speedMultiplier": 1.1, "regenMaxHpPerSecond": 0.0,
+    },
+    {
+        "level": 2, "name": "精英", "minKills": 8,
+        "damageMultiplier": 1.4, "cooldownMultiplier": 0.7,
+        "speedMultiplier": 1.2, "regenMaxHpPerSecond": 0.0025,
+    },
+    {
+        "level": 3, "name": "王牌", "minKills": 16,
+        "damageMultiplier": 1.6, "cooldownMultiplier": 0.55,
+        "speedMultiplier": 1.3, "regenMaxHpPerSecond": 0.005,
+    },
+)
+
+
+def veteran_rank(kills):
+    """Return the authoritative veterancy row for a kill count."""
+    kills = max(0, int(kills or 0))
+    for rank in reversed(VETERAN_RANKS):
+        if kills >= rank["minKills"]:
+            return rank
+    return VETERAN_RANKS[0]
+
+
 # 可进维修厂/圣泉的单位。步兵、法师、影豹不算；构装、巨龙、晶簇与科技载具对位。
 VEHICLE_KINDS = frozenset((
     "tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv",
@@ -317,7 +353,7 @@ for _unit_definition in UNIT_TYPES.values():
 # ---- 战功换装：天启坦克的老兵弹种 ----
 # 纯表现层映射。伤害、射速、溅射与护甲判定仍走 UNIT_TYPES 和既有军衔倍率；
 # 这里不额外叠加数值，只决定客户端画哪一种弹道，好让「一星换弹、二星换形态」
-# 在战场上一眼看得出来。阈值必须和 tick_units 里的 3/8/16 军衔线保持一致。
+# 在战场上一眼看得出来。阈值与 VETERAN_RANKS 的 3/8/16 军衔线保持一致。
 VETERAN_PROJECTILES = {
     # 天启坦克：三杀(一星)换等离子穿甲弹，八杀(二星)展开人形态改用双臂炮。
     "overlord": ((8, "plasmalance"), (3, "plasma")),
@@ -493,8 +529,16 @@ def public_catalog():
             "canDeploy": bool(definition.get("canDeploy")),
             "damageType": definition.get("damageType"),
             "repairable": kind in VEHICLE_KINDS,
+            "canVeteran": float(definition.get("damage", 0.0) or 0.0) > 0.0,
         }
-    return {"buildings": buildings, "units": units}
+    return {
+        "buildings": buildings,
+        "units": units,
+        "veterancy": {
+            "regenDelay": VETERAN_REGEN_DELAY,
+            "ranks": [dict(rank) for rank in VETERAN_RANKS],
+        },
+    }
 
 
 PUBLIC_CATALOG = public_catalog()

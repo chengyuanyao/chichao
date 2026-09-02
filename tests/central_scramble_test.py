@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""五车争霸：中央折叠开局、中央双倍矿、全图无中立矿营。"""
+"""五车争霸：中央折叠开局、五向均匀矿、中央双倍矿、全图无中立矿营。"""
 
 from __future__ import print_function
 
@@ -49,6 +49,23 @@ def outer_positions(game):
                   if math.hypot(resource["x"] - 2000, resource["y"] - 2000) > 300)
 
 
+def assert_balanced_outer_ores(game, map_def):
+    outer = [resource for resource in game["resources"]
+             if math.hypot(resource["x"] - 2000, resource["y"] - 2000) > 300]
+    points = map_def["botDeployPoints"]
+    counts = [0] * len(points)
+    radius_min, radius_max = map_def["publicOreSectorRadius"]
+    clearance = map_def["publicOreSectorClearance"]
+    for resource in outer:
+        radial = math.hypot(resource["x"] - 2000, resource["y"] - 2000)
+        assert radius_min <= radial <= radius_max, (radial, resource)
+        distances = [math.hypot(resource["x"] - x, resource["y"] - y)
+                     for x, y in points]
+        counts[min(range(len(points)), key=lambda index: distances[index])] += 1
+        assert min(distances) >= clearance, (distances, resource)
+    assert counts == [1, 1, 1, 1, 1], counts
+
+
 def main():
     map_def = server.MAPS[MAP_ID]
     assert map_def["width"] == map_def["height"] == 4000
@@ -58,6 +75,7 @@ def main():
     assert map_def.get("neutralOreGuards") is False
     assert map_def.get("publicOreCount") == 5
     assert map_def.get("publicOreAmount") == 230000
+    assert map_def.get("publicOrePerSector") is True
     assert server.PUBLIC_MAPS[MAP_ID]["maxPlayers"] == 5
     app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             "public", "app.js")
@@ -97,10 +115,16 @@ def main():
     assert all(math.hypot(resource["x"] - 2000, resource["y"] - 2000) > 700
                for resource in outer)
     assert all(resource.get("public") for resource in game["resources"])
+    assert_balanced_outer_ores(game, map_def)
     room2, _players2, _bot2 = make_room(71102)
     assert outer_positions(game) != outer_positions(room2["game"]), \
         "不同对局的外围矿坐标应重新随机"
-    print("  总计 6 片；中央固定 460000，外围每片固定 230000，比例 2:1: PASS")
+    assert_balanced_outer_ores(room2["game"], map_def)
+    # 多抽一批局锁住“每方向一片”，避免某个随机种子重现单边聚集。
+    for seed in range(71110, 71130):
+        sampled_room, _sampled_players, _sampled_bot = make_room(seed)
+        assert_balanced_outer_ores(sampled_room["game"], map_def)
+    print("  总计 6 片；五个方向各 1 片 230000，中央 460000，比例 2:1: PASS")
 
     print("\n=== Test 3: 固定矿和随机矿都没有中立守军 ===")
     assert game.get("neutralCamps") == []

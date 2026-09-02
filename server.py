@@ -38,6 +38,8 @@ from catalog import (
     UNIT_TYPES,
     UNIT_SIGHT_RANGE_MULTIPLIER,
     VEHICLE_KINDS,
+    VETERAN_RANKS,
+    VETERAN_REGEN_DELAY,
     VETERAN_PROJECTILES,
     faction_buildings,
     faction_loadout,
@@ -45,6 +47,7 @@ from catalog import (
     structure_role,
     unit_sight_radius,
     unit_role,
+    veteran_rank,
     veteran_projectile,
 )
 import easter_eggs
@@ -62,6 +65,8 @@ STARTED_AT = time.time()
 # 刷钱调试接口 /api/give 默认只对服务器本机开放（你在服务器上跑 give_cash.py 做
 # 测试），局域网其他玩家访问会被拒。确需从别的机器用时设环境变量 IFL_CHEATS=1 放开。
 CHEATS_OPEN = os.environ.get("IFL_CHEATS", "").strip().lower() in ("1", "true", "on")
+VETERAN_PROMOTION_KILLS = frozenset(
+    rank["minKills"] for rank in VETERAN_RANKS if rank["level"] > 0)
 
 # LOCK 只保护房间表（创建/加入/列表/回收）。每个房间另有自己的 RLock，
 # 对局 A 的 tick/快照/指令不再挡住对局 B。
@@ -276,7 +281,7 @@ MAPS = {
         "theme": "grassland",
         "briefing": (
             "五名指挥官只带一辆折叠基地车，在中央矿脉旁同时落地。"
-            "先抢方向再展开：外围每局随机生成五片 23 万无守军矿区，"
+            "先抢方向再展开：外围五个方向各随机生成一片 23 万无守军矿区，"
             "中央固定矿储量 46 万，是外围单片矿的两倍。"
         ),
         # 五辆基地车停在中央 190 半径的小环上：彼此都在视野内，但不发生
@@ -317,10 +322,15 @@ MAPS = {
         ],
         "packedStart": True,
         "neutralOreGuards": False,
-        # 总矿区数为 6：中央固定一片，外围五片每局重新随机。外围每片固定
-        # 23 万，中央固定 46 万，稳定保持 2:1，避免随机储量破坏争夺价值。
+        # 总矿区数为 6：中央固定一片，外围五个 72° 扇区各一片。
+        # 矿点在本扇区内随机偏移，但半径接近、并避开推荐展开点；
+        # 外围每片固定 23 万，中央 46 万，稳定保持 2:1。
         "publicOreCount": 5,
         "publicOreAmount": 230000,
+        "publicOrePerSector": True,
+        "publicOreSectorRadius": (1350, 1750),
+        "publicOreSectorJitterDegrees": 22,
+        "publicOreSectorClearance": 260,
         "bonusResources": [
             {"x": 2000, "y": 2000, "amount": 460000, "public": True},
         ],
@@ -1579,6 +1589,8 @@ def make_unit(kind, owner, x, y):
         "repairing": False, "manualUntil": 0.0, "order": "guard",
         "slowMult": 1.0, "slowTimer": 0.0,
         "_path": None, "_pathDest": None, "kills": 0,
+        # 内部作战时间戳不下发给客户端，只用于判定脱战回血。
+        "_lastCombatAt": -VETERAN_REGEN_DELAY,
     }
 
 
@@ -1764,7 +1776,10 @@ def resource_is_guarded(game, resource):
 
 
 def add_random_resources(game, count, spawn_points, guarded=True,
-                         amount_multiplier=1.0, fixed_amount=None):
+                         amount_multiplier=1.0, fixed_amount=None,
+                         sector_points=None, sector_radius=None,
+                         sector_jitter_degrees=0.0,
+                         sector_clearance=0.0):
     """在出生区之外放置随机公共矿区。
 
     出生点附近的保底矿由 ``start_game`` 单独生成；这里的矿只负责争夺区，
@@ -1807,28 +1822,33 @@ def add_random_resources(game, count, spawn_points, guarded=True,
             reachable.add((nx, ny))
             frontier.append((nx, ny))
 
-    placed = 0
-    attempts = 0
     public_resources = []
-    while placed < count and attempts < count * 500:
-        attempts += 1
-        x = rng.uniform(margin, map_w - margin)
-        y = rng.uniform(margin, map_h - margin)
+
+    def candidate_is_valid(x, y):
+        if not (margin <= x <= map_w - margin
+                and margin <= y <= map_h - margin):
+            return False
         cell = (
             int(clamp(x / PATH_CELL_SIZE, 0, terrain._grid_w - 1)),
             int(clamp(y / PATH_CELL_SIZE, 0, terrain._grid_h - 1)),
         )
         if cell not in reachable:
-            continue
+            return False
         if terrain.blocked(x, y, 48.0) or not terrain.cell_open(x, y):
-            continue
+            return False
         if any(math.hypot(x - sx, y - sy) < home_exclusion
                for sx, sy in spawn_points):
-            continue
+            return False
         if any(math.hypot(x - r["x"], y - r["y"]) < resource_separation
                for r in game["resources"]):
-            continue
+            return False
+        if sector_points and sector_clearance > 0.0:
+            if any(math.hypot(x - px, y - py) < sector_clearance
+                   for px, py in sector_points):
+                return False
+        return True
 
+    def place_public_resource(x, y):
         # 默认公共矿量有小幅波动；地图也可以固定每片储量，让中央与外围等
         # 需要明确比例的玩法不受随机数影响。
         if fixed_amount is None:
@@ -1836,7 +1856,48 @@ def add_random_resources(game, count, spawn_points, guarded=True,
         else:
             amount = max(1, int(fixed_amount))
         public_resources.append(add_resource(game, x, y, amount, public=True))
-        placed += 1
+
+    placed = 0
+    attempts = 0
+    if sector_points:
+        # 五车争霸这类中央折叠开局图：以推荐展开点的方向为扇区中线，
+        # 每个方向只放一片。位置仍每局随机，但不会再出现一边四片、一边空矿。
+        if len(sector_points) != count:
+            raise RuntimeError("公共矿扇区数必须与矿区数一致")
+        if not sector_radius or len(sector_radius) != 2:
+            raise RuntimeError("公共矿扇区缺少有效的半径范围")
+        radius_min = float(min(sector_radius))
+        radius_max = float(max(sector_radius))
+        if radius_min <= 0.0 or radius_max <= radius_min:
+            raise RuntimeError("公共矿扇区半径范围无效")
+        center_x, center_y = map_w / 2.0, map_h / 2.0
+        jitter = math.radians(max(0.0, float(sector_jitter_degrees)))
+        for point_x, point_y in sector_points:
+            base_angle = math.atan2(point_y - center_y, point_x - center_x)
+            sector_placed = False
+            for _attempt in range(500):
+                attempts += 1
+                angle = base_angle + rng.uniform(-jitter, jitter)
+                radius = rng.uniform(radius_min, radius_max)
+                x = center_x + math.cos(angle) * radius
+                y = center_y + math.sin(angle) * radius
+                if not candidate_is_valid(x, y):
+                    continue
+                place_public_resource(x, y)
+                placed += 1
+                sector_placed = True
+                break
+            if not sector_placed:
+                break
+    else:
+        while placed < count and attempts < count * 500:
+            attempts += 1
+            x = rng.uniform(margin, map_w - margin)
+            y = rng.uniform(margin, map_h - margin)
+            if not candidate_is_valid(x, y):
+                continue
+            place_public_resource(x, y)
+            placed += 1
 
     if placed < count:
         raise RuntimeError("无法为地图生成足够的随机矿区")
@@ -2192,7 +2253,13 @@ def start_game(room):
         game, int(room_map.get("publicOreCount", 4)), spawn_points,
         guarded=neutral_ore_guards,
         amount_multiplier=room_map.get("publicOreAmountMultiplier", 1.0),
-        fixed_amount=room_map.get("publicOreAmount"))
+        fixed_amount=room_map.get("publicOreAmount"),
+        sector_points=(room_map.get("botDeployPoints")
+                       if room_map.get("publicOrePerSector") else None),
+        sector_radius=room_map.get("publicOreSectorRadius"),
+        sector_jitter_degrees=room_map.get(
+            "publicOreSectorJitterDegrees", 0.0),
+        sector_clearance=room_map.get("publicOreSectorClearance", 0.0))
 
     # 折叠开局的人类玩家完全自行选址。AI 没有人拖动基地车，给它写入一个
     # 私有的外环目标；bot_maybe_pack 会先沿放射路驶离中央，到点后再展开。
@@ -4375,7 +4442,15 @@ def apply_slow(projectile, target):
     target["slowTimer"] = slow["duration"]
 
 
+def mark_unit_combat(entity, game):
+    """Refresh an army unit's out-of-combat timer; structures do not regen."""
+    if (entity and entity.get("id", "").startswith("u") and game):
+        entity["_lastCombatAt"] = float(game.get("elapsed", 0.0))
+
+
 def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
+    # 发射就算交战：不能让远程弹丸在飞行时攻击者先回血。
+    mark_unit_combat(attacker, game)
     span = math.hypot(target["x"] - attacker["x"], target["y"] - attacker["y"])
     # 弹种只影响客户端表现：老兵天启换等离子弹/双臂炮，不在既有军衔倍率
     # 之外额外改变伤害、弹速或溅射。
@@ -4466,12 +4541,22 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
             applied = 0.0
         else:
             applied *= damage_armor_multiplier(damage_type, armor)
+    game_state = game or room.get("game")
+    # 范围伤害会连续结算多个目标。调用方已知攻击源时直接复用；
+    # 旧调用只给 source_id 时保留兼容回退。
+    if source_unit is None and source_id and game_state:
+        for unit in game_state["units"]:
+            if unit["id"] == source_id:
+                source_unit = unit
+                break
     target["hp"] -= applied
+    if applied > 0.0:
+        mark_unit_combat(target, game_state)
+        mark_unit_combat(source_unit, game_state)
     if target["id"].startswith("s") and not target.get("active", True):
         target["constructionDamage"] = target.get("constructionDamage", 0.0) + applied
     if target["hp"] <= 0:
         target["hp"] = 0
-        game_state = game or room.get("game")
         owner = room["players"].get(target["owner"])
         source = room["players"].get(source_owner)
         if owner and target["id"].startswith("u"):
@@ -4479,28 +4564,21 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
         if source and source_owner != target["owner"]:
             source["kills"] += 1
             award_combat_reward(room, game_state, source_owner, target)
-        if source_id and game and source_owner != target["owner"]:
-            # 范围伤害会连续结算许多目标。调用方已知攻击源时直接复用，避免
-            # 每杀一个目标都重新线性扫描整支部队；旧调用仍保留兼容回退。
-            if source_unit is None:
-                for u in game["units"]:
-                    if u["id"] == source_id:
-                        source_unit = u
-                        break
-            if source_unit:
-                new_kills = source_unit.get("kills", 0) + 1
-                source_unit["kills"] = new_kills
-                # 升军衔瞬间（3/8/16 杀，与 tick_units 的分级阈值一致）发一个晋升
-                # 特效，客户端据此画金色礼花并播晋升音。
-                if new_kills in (3, 8, 16):
-                    game["effects"].append({
-                        "id": new_id("e"), "type": "promote",
-                        "x": source_unit["x"], "y": source_unit["y"], "ttl": 1.0,
-                    })
-                    if new_kills == 16 and source:
-                        add_chat(room, "作战系统",
-                                 easter_eggs.promote_16_line(source), True)
-                emit_dog_kill_egg(room, game, source_unit, target)
+        if (source_id and game_state and source_owner != target["owner"]
+                and source_unit and source_unit.get("id", "").startswith("u")):
+            new_kills = source_unit.get("kills", 0) + 1
+            source_unit["kills"] = new_kills
+            # 升军衔瞬间发一个晋升特效，阈值来自公用军衔目录。
+            # 客户端据此画金色礼花并播晋升音。
+            if new_kills in VETERAN_PROMOTION_KILLS:
+                game_state["effects"].append({
+                    "id": new_id("e"), "type": "promote",
+                    "x": source_unit["x"], "y": source_unit["y"], "ttl": 1.0,
+                })
+                if new_kills == 16 and source:
+                    add_chat(room, "作战系统",
+                             easter_eggs.promote_16_line(source), True)
+            emit_dog_kill_egg(room, game_state, source_unit, target)
         # 自爆单位被打死也要炸。game 可能由调用方传入，缺了就用房间里的。
         if target["id"].startswith("u"):
             if game_state:
@@ -4836,36 +4914,22 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
         if unit["hp"] <= 0:
             continue
         definition = UNIT_TYPES[unit["kind"]]
-        kills = unit.get("kills", 0)
-        if kills >= 16:
-            rank = 3
-            dam_mult = 1.6
-            spd_mult = 1.3
-            cd_mult = 0.55
-            heal_rate = 1.0
-        elif kills >= 8:
-            rank = 2
-            dam_mult = 1.4
-            spd_mult = 1.2
-            cd_mult = 0.7
-            heal_rate = 0.5
-        elif kills >= 3:
-            rank = 1
-            dam_mult = 1.2
-            spd_mult = 1.1
-            cd_mult = 0.85
-            heal_rate = 0.0
-        else:
-            rank = 0
-            dam_mult = 1.0
-            spd_mult = 1.0
-            cd_mult = 1.0
-            heal_rate = 0.0
+        rank_stats = veteran_rank(unit.get("kills", 0))
+        dam_mult = rank_stats["damageMultiplier"]
+        spd_mult = rank_stats["speedMultiplier"]
+        cd_mult = rank_stats["cooldownMultiplier"]
+        regen_fraction = rank_stats["regenMaxHpPerSecond"]
         combat_mult = fielded_combat_multiplier(room, unit["owner"])
         dam_mult *= combat_mult
         spd_mult *= combat_mult
-        if heal_rate > 0:
-            unit["hp"] = min(unit["maxHp"], unit["hp"] + heal_rate * dt)
+        out_of_combat = (game.get("elapsed", 0.0)
+                         - unit.get("_lastCombatAt", -VETERAN_REGEN_DELAY))
+        if (regen_fraction > 0.0 and unit["hp"] < unit["maxHp"]
+                and unit.get("order") != "repair"
+                and out_of_combat >= VETERAN_REGEN_DELAY):
+            unit["hp"] = min(
+                unit["maxHp"],
+                unit["hp"] + unit["maxHp"] * regen_fraction * dt)
         unit["repairing"] = False
         unit["cooldown"] = max(0.0, unit["cooldown"] - dt * (1.0 / cd_mult))
         unit["scan"] = max(0.0, unit["scan"] - dt)
