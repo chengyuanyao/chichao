@@ -3774,11 +3774,15 @@ import {
   }
 
   function drawGame(dt, timestamp) {
+    var me = ownPlayer();
     view3d.setCamera(camera);
     view3d.render({
       game: roomState.game,
       dt: dt,
       time: timestamp,
+      // 失败者进入全图观战：服务端已给淘汰玩家完整实体快照，渲染层在
+      // 同一帧清除主画面和小地图共用的战争迷雾。
+      revealMap: !!(me && me.eliminated),
       selectedUnitIds: selectedUnits,
       selectedStructureId: selectedStructureId,
       selectedResourceId: selectedResourceId,

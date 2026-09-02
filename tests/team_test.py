@@ -200,6 +200,13 @@ def main():
     assert team_b1["eliminated"] is True, "b1 should be eliminated"
     assert team_b2["eliminated"] is False, "b2 should still be alive"
     assert room2["status"] != "finished", "game should continue (b2 alive)"
+    defeated_view = server.public_room(room2, viewer_id=team_b1["id"])["game"]
+    assert {item["id"] for item in defeated_view["units"]} == \
+        {item["id"] for item in game2["units"]}, \
+        "淘汰玩家应收到全地图单位，进入观战视野"
+    assert {item["id"] for item in defeated_view["structures"]} == \
+        {item["id"] for item in game2["structures"]}, \
+        "淘汰玩家应收到全地图建筑，进入观战视野"
 
     # Eliminate b2 by destroying the HQ
     for s in game2["structures"]:

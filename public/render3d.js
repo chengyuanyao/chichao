@@ -4171,6 +4171,7 @@ export function createRenderer(canvas) {
   let fogGradientCanvas = null;
   let fogTexture = null;
   let fogPlane = null;
+  let fogRevealed = false;
   const fogMapSize = new THREE.Vector2(1, 1);
   const fogMaskedShaders = [];
   const waterShaders = [];
@@ -4407,7 +4408,39 @@ export function createRenderer(canvas) {
     fogTexture.needsUpdate = true;
   }
 
+  /**
+   * 淘汰后的观战视野会永久揭开本局地图。服务端同时会改为下发完整战场
+   * 快照；这里负责清除主画面与小地图共用的黑幕，并让点选/矿区图例也按
+   * 全图可见处理。切换到新对局时可以恢复正常探索状态。
+   */
+  function setFogRevealed(revealed) {
+    const next = !!revealed;
+    if (fogRevealed === next) return;
+    fogRevealed = next;
+    lastFogGame = null;
+    if (!fogCtx || !exploredCtx) return;
+
+    fogApplied.clear();
+    fogPx0 = Infinity; fogPy0 = Infinity; fogPx1 = -Infinity; fogPy1 = -Infinity;
+    if (next) {
+      exploredCtx.fillStyle = '#fff';
+      exploredCtx.fillRect(0, 0, exploredCanvas.width, exploredCanvas.height);
+      fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
+      if (fogCover) fogCover.fill(1);
+      fogFullRepaint = false;
+      fogLastUpload = performance.now();
+      if (fogTexture) fogTexture.needsUpdate = true;
+      return;
+    }
+
+    exploredCtx.clearRect(0, 0, exploredCanvas.width, exploredCanvas.height);
+    if (fogCover) fogCover.fill(0);
+    fogFullRepaint = true;
+    fogLastUpload = 0;
+  }
+
   function isVisible(x, y) {
+    if (fogRevealed) return true;
     for (let i = 0; i < visionSources.length; i += 3) {
       const dx = visionSources[i] - x;
       const dy = visionSources[i + 1] - y;
@@ -6638,6 +6671,8 @@ export function createRenderer(canvas) {
     const dt = payload.dt;
     if (!game || !state.map) return;
 
+    setFogRevealed(payload.revealMap);
+
     const cameraChanged = applyCamera();
     const camDist = camera.position.distanceTo(
       vecPos.set(state.camX, 0, state.camY));
@@ -7300,6 +7335,7 @@ export function createRenderer(canvas) {
     unitPickScore: unitPickScore,
     isVisible: isVisible,
     render: render,
+    setFogRevealed: setFogRevealed,
 
     /** 合成好的迷雾贴图，小地图直接叠加使用。 */
     getFogCanvas: function () { return fogCanvas; },
@@ -7345,9 +7381,11 @@ export function createRenderer(canvas) {
      * 单位与建筑，揭开之后也只能看到地形。
      */
     revealAll: function () {
-      if (!exploredCtx) return;
+      if (!exploredCtx || !fogCtx) return;
       exploredCtx.fillStyle = '#fff';
       exploredCtx.fillRect(0, 0, exploredCanvas.width, exploredCanvas.height);
+      fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
+      if (fogTexture) fogTexture.needsUpdate = true;
     },
 
     /** 换局时清空所有单位/建筑，避免上一局的模型残留。 */

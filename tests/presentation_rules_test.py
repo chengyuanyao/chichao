@@ -58,6 +58,11 @@ def main():
     assert "exploredCtx.drawImage(fogGradientCanvas" in render
     assert "fogCtx.drawImage(exploredCanvas" in render
     assert "fogCtx.globalAlpha = 0.62" not in render
+    # 淘汰玩家进入全图观战，主画面、小地图、矿区与点选共用同一揭雾状态。
+    assert "setFogRevealed(payload.revealMap)" in render
+    assert "if (fogRevealed) return true" in render
+    assert "fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height)" in render
+    assert "revealMap: !!(me && me.eliminated)" in app
 
     # 小地图不能从全量静态资源表泄露矿点；只登记进入过友军视野的矿，
     # 并在换局时清空登记表。
