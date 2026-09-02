@@ -36,7 +36,7 @@ def main():
     random.seed(20260725)
 
     small = make_room("SMALL1", "narrow_standoff")   # 4800 x 3200
-    large = make_room("LARGE1", "north_conflict")    # 9600 x 6000
+    large = make_room("LARGE1", "gold_crater_small")  # 6400 x 6400
     server.start_game(small)
     server.start_game(large)
 
@@ -45,49 +45,50 @@ def main():
     large_terrain = server.game_terrain(large["game"])
     assert small_terrain is not large_terrain, "different maps need different terrain"
     for map_id, terrain in (("narrow_standoff", small_terrain),
-                            ("north_conflict", large_terrain)):
+                            ("gold_crater_small", large_terrain)):
         expected = (float(server.MAPS[map_id]["width"]), float(server.MAPS[map_id]["height"]))
         assert (terrain.width, terrain.height) == expected, \
             "%s should be %s, got %s" % (map_id, expected, (terrain.width, terrain.height))
     print("  Per-room terrain context: PASS")
 
     # --- Test 2: rooms on the SAME map share one context (grid built once) ---
-    twin = make_room("LARGE2", "north_conflict")
+    twin = make_room("LARGE2", "gold_crater_small")
     server.start_game(twin)
     assert server.game_terrain(twin["game"]) is large_terrain, \
         "rooms on the same map should share the navigation grid"
     print("  Same-map context sharing: PASS")
 
-    # --- Test 3: mountain blockers stay correct while the other room ticks ---
-    # Pick a point that is mountain on north_conflict but open on narrow_standoff.
+    # --- Test 3: blockers stay correct while the other room ticks ---
+    # Pick a point blocked on gold_crater_small but open on narrow_standoff.
     probe = None
-    for mountain in large_terrain.mountains:
-        cx, cy = mountain["x"], mountain["y"]
-        if (0 < cx < small_terrain.width and 0 < cy < small_terrain.height
-                and large_terrain.point_in_mountain(cx, cy)
-                and not small_terrain.point_in_mountain(cx, cy)):
-            probe = (cx, cy)
+    for cx in range(160, int(small_terrain.width), 80):
+        for cy in range(160, int(small_terrain.height), 80):
+            if (large_terrain.blocked(cx, cy)
+                    and not small_terrain.blocked(cx, cy)):
+                probe = (cx, cy)
+                break
+        if probe:
             break
-    assert probe, "expected a mountain point that is open on the other map"
+    assert probe, "expected a blocked point that is open on the other map"
 
     for _ in range(20):
         # Interleave ticks the way game_loop() does across live rooms.
         server.tick_game(small, 0.05)
         server.tick_game(large, 0.05)
         # Terrain answers must depend on the game, not on who ticked last.
-        assert large_terrain.point_in_mountain(*probe), \
-            "north_conflict mountain must stay blocked regardless of tick order"
-        assert not small_terrain.point_in_mountain(*probe), \
+        assert large_terrain.blocked(*probe), \
+            "gold_crater_small blocker must stay active regardless of tick order"
+        assert not small_terrain.blocked(*probe), \
             "narrow_standoff must stay open at the other map's mountain point"
         assert not server.position_clear(large["game"], probe[0], probe[1], 30), \
-            "building on a north_conflict mountain must be rejected mid-interleave"
+            "building on gold_crater_small blocked terrain must be rejected mid-interleave"
     print("  Interleaved ticks keep mountain blockers correct: PASS")
 
     # --- Test 4: interleaved ticks do not thrash the path cache ---
     small_terrain._path_cache.clear()
     large_terrain._path_cache.clear()
     small_terrain.find_path(200, 200, small_terrain.width - 400, small_terrain.height - 400)
-    large_terrain.find_path(700, 600, 6500, 3800)
+    large_terrain.find_path(3200, 750, 4640, 5182)
     assert len(small_terrain._path_cache) > 0 and len(large_terrain._path_cache) > 0
 
     for _ in range(20):
@@ -99,7 +100,7 @@ def main():
     # A repeated query must be served from cache, not recomputed.
     t0 = time.time()
     for _ in range(50):
-        large_terrain.find_path(700, 600, 6500, 3800)
+        large_terrain.find_path(3200, 750, 4640, 5182)
     cached_ms = (time.time() - t0) * 1000
     assert cached_ms < 25, "50 cached lookups took %.1f ms; cache is being flushed" % cached_ms
     print("  Path cache survives interleaving (50 lookups %.1f ms): PASS" % cached_ms)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""4/5 人开局：每名入座玩家都必须带着活着的总部，不能一进图就彻底战败。"""
+"""保留地图的 2/4/5 人开局：每名玩家都必须拥有活着的总部或基地车。"""
 
 from __future__ import print_function
 
@@ -14,8 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 
 
-MAPS_4P = ("island_hop", "urban_siege", "valley_clash")
-MAPS_LARGER = ("north_conflict", "gold_crater", "gold_crater_small")
+SHIPPED_MAPS = ("central_scramble", "gold_crater_small", "narrow_standoff")
 TICKS = 24
 
 
@@ -67,7 +66,7 @@ def assert_seated_alive(room, label):
     assert game is not None, "%s: 对局未开始" % label
     seated = list(room["players"].values())
     assert len(seated) >= 2, label
-    hq_cells = []
+    command_cells = []
     for player in seated:
         hqs, mcvs = living_command(game, player["id"])
         has_command = server.player_has_command(game, player["id"])
@@ -79,11 +78,11 @@ def assert_seated_alive(room, label):
                 [(s["kind"], s["hp"], s["x"], s["y"]) for s in hqs],
                 [(u["kind"], u["hp"], u["x"], u["y"]) for u in mcvs])
         assert hqs or mcvs, "%s: %s 指挥建筑为空" % (label, player["name"])
-        if hqs:
-            hq_cells.append((round(hqs[0]["x"], 1), round(hqs[0]["y"], 1)))
+        command = hqs[0] if hqs else mcvs[0]
+        command_cells.append((round(command["x"], 1), round(command["y"], 1)))
     chats = defeat_chats(room)
     assert not chats, "%s: 出现战败提示 %s" % (label, chats)
-    return hq_cells
+    return command_cells
 
 
 def start_and_check(map_id, factions, seed=20260821, spawns=None, teams=None, n=4):
@@ -112,68 +111,55 @@ def builtin_maps_from_client():
 
 
 def main():
-    print("=== 4 人图：科技 / 魔法开局都要有指挥 ===")
-    for map_id in MAPS_4P:
-        for factions in (("tech", "tech", "tech", "tech"),
-                         ("magic", "magic", "magic", "magic"),
-                         ("tech", "magic", "tech", "magic")):
-            room, cells = start_and_check(map_id, factions)
-            assert len(set(cells)) == 4, \
-                "%s %s 出生点重叠 %s" % (map_id, factions, cells)
-            print("  %s %s: 4 座总部分散，无战败" % (map_id, factions))
+    assert tuple(server.MAPS) == SHIPPED_MAPS
+    assert server.DEFAULT_MAP == "gold_crater_small"
 
-    print("\n=== 大战场坐满 4 人 ===")
-    for map_id in MAPS_LARGER:
-        for factions in (("tech",) * 4, ("magic",) * 4):
-            room, cells = start_and_check(map_id, factions, seed=77)
-            assert len(set(cells)) == 4, (map_id, cells)
-            print("  %s %s: 4 人入座均有总部" % (map_id, factions))
+    print("=== 狭路对峙满 2 人 ===")
+    for factions in (("tech", "tech"), ("magic", "magic"), ("tech", "magic")):
+        _room, cells = start_and_check(
+            "narrow_standoff", factions, seed=66, n=2)
+        assert len(set(cells)) == 2, cells
+        print("  narrow_standoff %s: 两席均有指挥" % (factions,))
 
-    print("\n=== 赤金陨坑满 5 人（大图 / 紧凑版）===")
-    for map_id in ("gold_crater", "gold_crater_small"):
-        for factions in (("tech",) * 5,
-                         ("magic",) * 5,
-                         ("tech", "magic", "tech", "magic", "tech")):
-            room, cells = start_and_check(
-                map_id, factions, seed=88, n=5)
-            assert len(set(cells)) == 5, (map_id, factions, cells)
-            print("  %s %s: 5 座总部分散，无战败" % (map_id, factions))
+    print("\n=== 两张 5 人图支持 4 人与满 5 人开局 ===")
+    for map_id in ("gold_crater_small", "central_scramble"):
+        for count in (4, 5):
+            factions = tuple("tech" if i % 2 == 0 else "magic"
+                             for i in range(count))
+            _room, cells = start_and_check(
+                map_id, factions, seed=70 + count, n=count)
+            assert len(set(cells)) == count, (map_id, cells)
+            print("  %s: %d 人指挥单位分散，无战败" % (map_id, count))
 
     print("\n=== 大厅复用同一出生点时必须拆开 ===")
-    for map_id in MAPS_4P:
-        room, cells = start_and_check(
-            map_id, ("tech", "magic", "tech", "magic"),
-            seed=3, spawns=(0, 0, 0, 0))
-        assert len(set(cells)) == 4, \
-            "%s 四个 spawn=0 仍叠在一起 %s" % (map_id, cells)
-        print("  %s 重复出生点已拆成 4 席" % map_id)
-    for map_id in ("gold_crater", "gold_crater_small"):
-        room, cells = start_and_check(
-            map_id, ("tech", "magic", "tech", "magic", "tech"),
-            seed=4, spawns=(0, 0, 0, 0, 0), n=5)
-        assert len(set(cells)) == 5, \
-            "%s 五个 spawn=0 仍叠在一起 %s" % (map_id, cells)
-        print("  %s 重复出生点已拆成 5 席" % map_id)
+    _room, cells = start_and_check(
+        "gold_crater_small", ("tech", "magic", "tech", "magic", "tech"),
+        seed=4, spawns=(0, 0, 0, 0, 0), n=5)
+    assert len(set(cells)) == 5, \
+        "五个 spawn=0 仍叠在一起 %s" % (cells,)
+    print("  gold_crater_small 重复出生点已拆成 5 席")
 
-    print("\n=== 6 人图残留的出生下标不能让 4 人图开局崩掉 ===")
-    room, cells = start_and_check(
-        "island_hop", ("tech",) * 4, seed=11, spawns=(0, 1, 2, 5))
+    print("\n=== 已删除地图的旧出生下标必须安全回落 ===")
+    _room, cells = start_and_check(
+        "gold_crater_small", ("tech",) * 4,
+        seed=11, spawns=(0, 1, 2, 5), n=4)
     assert len(set(cells)) == 4, cells
-    print("  island_hop spawn=5 回落到空席")
+    print("  越界 spawn=5 已回落到空席")
 
-    print("\n=== 客户端内置目录必须带上三张 4 人图与紧凑版赤金陨坑 ===")
+    print("\n=== 客户端与服务端都只发布三张地图 ===")
     builtin = builtin_maps_from_client()
-    for map_id in MAPS_4P:
+    for map_id in SHIPPED_MAPS:
         assert ("%s:" % map_id) in builtin, \
-            "BUILTIN_MAPS 缺少 %s，大厅回退会按 6 个出生点发出无效 setSpawn" % map_id
-    assert "gold_crater_small:" in builtin, \
-        "BUILTIN_MAPS 缺少 gold_crater_small，大厅回退会用错出生点"
+            "BUILTIN_MAPS 缺少 %s" % map_id
+    for retired in ("north_conflict", "gold_crater", "triple_pass",
+                    "island_hop", "urban_siege", "valley_clash"):
+        assert ("%s:" % retired) not in builtin, retired
     assert "function lobbySpawnCount" in open(
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                      "public", "app.js"), encoding="utf-8").read()
-    print("  BUILTIN_MAPS 含 island_hop / urban_siege / valley_clash / gold_crater_small")
+    print("  BUILTIN_MAPS 与 MAPS 均只含 central_scramble / gold_crater_small / narrow_standoff")
 
-    print("\nfour-player start tests ok")
+    print("\nretained-map start tests ok")
 
 
 if __name__ == "__main__":

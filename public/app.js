@@ -1167,15 +1167,9 @@ import {
     snipe: '偷家'
   };
   var BUILTIN_MAPS = {
-    north_conflict: { id: 'north_conflict', name: '北境冲突区', width: 9600, height: 6000, maxPlayers: 6, theme: 'grassland', spawnLabels: ['左上', '中上', '右上', '左下', '中下', '右下'], spawnPoints: [[900,800],[4800,700],[8700,800],[900,5200],[4800,5300],[8700,5200]] },
-    narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
-    triple_pass: { id: 'triple_pass', name: '三岔隘口', width: 5400, height: 4200, maxPlayers: 3, theme: 'arid', spawnLabels: ['西境营地', '东北营地', '东南营地'], spawnPoints: [[700,2100],[3700,368],[3700,3832]] },
-    gold_crater: { id: 'gold_crater', name: '赤金陨坑', width: 10000, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、突击兵和火箭兵看守。外环邻里路口被密林切开，只能从林间小路穿过。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[5000,750],[7330,2443],[6440,5182],[3560,5182],[2670,2443]] },
-    gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '赤金陨坑的紧凑版：五方围着陨石核打，地图小一圈，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[4691,2443],[4122,5182],[2278,5182],[1709,2443]] },
-    central_scramble: { id: 'central_scramble', name: '五车争疆', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在中央同时落地。先抢方向再展开；外围五片随机位置矿各有23万，中央矿为双倍的46万，且没有中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
-    island_hop: { id: 'island_hop', name: '三谷争夺', width: 7200, height: 6000, maxPlayers: 4, theme: 'grassland', spawnLabels: ['西北高地', '东北高地', '西南高地', '东南高地'], spawnPoints: [[900,900],[6300,900],[900,5100],[6300,5100]] },
-    urban_siege: { id: 'urban_siege', name: '围城战', width: 6400, height: 6400, maxPlayers: 4, theme: 'urban', spawnLabels: ['西区', '北区', '东区', '南区'], spawnPoints: [[900,3200],[3200,900],[5500,3200],[3200,5500]] },
-    valley_clash: { id: 'valley_clash', name: '峡谷交锋', width: 6400, height: 4800, maxPlayers: 4, theme: 'grassland', spawnLabels: ['左路前哨', '左路后哨', '右路前哨', '右路后哨'], spawnPoints: [[800,1800],[800,3000],[5600,1800],[5600,3000]] }
+    central_scramble: { id: 'central_scramble', name: '五车争霸', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在中央同时落地。先抢方向再展开；外围五片随机位置矿各有23万，中央矿为双倍的46万，且没有中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
+    gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着陨石核打，地图紧凑，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[5530,2443],[4640,5182],[1760,5182],[870,2443]] },
+    narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] }
   };
 
   // 地图目录只在大厅和首帧下发，缓存住供整局使用
@@ -1192,7 +1186,7 @@ import {
     if (roomState && roomState.mapConfig && roomState.mapConfig.id) {
       return roomState.mapConfig;
     }
-    return BUILTIN_MAPS.north_conflict;
+    return BUILTIN_MAPS.gold_crater_small;
   }
   var canvas = $('#gameCanvas');
   var view3d = createRenderer(canvas);
@@ -1285,6 +1279,11 @@ import {
   var audioContext = null;
   var renderStarted = false;
   var actionInFlight = false;
+  // 房主改队伍时还会连带重排出生位。过去这些请求并发飞出去，房主紧接着
+  // 点“开始”就可能让服务端在一半新配置、一半旧配置上开局。把大厅配置
+  // 串成一条队列；开始按钮也排在同一条队列末尾。
+  var lobbyMutationTail = Promise.resolve();
+  var lobbyMutationsPending = 0;
   var lastHudUpdate = 0;
   var lastHudOverlayAt = -Infinity;
   var lastReadyBuildId = null;
@@ -1402,7 +1401,7 @@ import {
     return -1;
   }
 
-  function autoAssignSpawns() {
+  async function autoAssignSpawns() {
     if (!roomState || !roomState.players) { return; }
     var me = ownPlayer();
     if (!me || !me.isHost) { return; }
@@ -1453,12 +1452,16 @@ import {
       });
     });
 
-    assignments.forEach(function (entry) {
+    for (var assignmentIndex = 0; assignmentIndex < assignments.length; assignmentIndex++) {
+      var entry = assignments[assignmentIndex];
       var currentSpawn = entry.player.spawn == null ? -1 : entry.player.spawn;
       if (currentSpawn !== entry.spawn) {
-        sendAction('setSpawn', { playerId: entry.player.id, spawn: entry.spawn });
+        await sendAction('setSpawn', {
+          playerId: entry.player.id,
+          spawn: entry.spawn
+        });
       }
-    });
+    }
   }
 
   async function randomAssignSpawns(rs, mapConfig) {
@@ -1593,6 +1596,19 @@ import {
       }
       throw error;
     }
+  }
+
+  function queueLobbyMutation(work) {
+    lobbyMutationsPending += 1;
+    updateLobbyStartAvailability();
+    var run = lobbyMutationTail.catch(function () {}).then(work);
+    // 后续配置必须继续执行，即使前一项被服务端拒绝；调用方仍拿到原始 run
+    // 并负责显示这一次的错误。
+    lobbyMutationTail = run.catch(function () {});
+    return run.finally(function () {
+      lobbyMutationsPending = Math.max(0, lobbyMutationsPending - 1);
+      updateLobbyStartAvailability();
+    });
   }
 
   function saveSession(value) {
@@ -1896,6 +1912,32 @@ import {
     }
   }
 
+  function updateLobbyStartAvailability() {
+    if (!roomState || roomState.status !== 'lobby') { return; }
+    var me = ownPlayer();
+    if (!me) { return; }
+    var guestsReady = roomState.players.filter(function (p) {
+      return !p.isBot && !p.isHost;
+    }).every(function (p) { return p.ready; });
+    if (startGameBtn) {
+      startGameBtn.disabled = roomState.players.length < 2 || !guestsReady ||
+        lobbyMutationsPending > 0;
+    }
+    if (me.isHost) {
+      if (lobbyMutationsPending > 0) {
+        lobbyHint.textContent = '正在确认队伍与出生位置，请稍候';
+      } else if (roomState.players.length < 2) {
+        lobbyHint.textContent = '请等待玩家加入，或添加一个 AI 对手';
+      } else if (!guestsReady) {
+        lobbyHint.textContent = '等待其他指挥官准备';
+      } else {
+        lobbyHint.textContent = '作战序列已就绪，可以开始战斗';
+      }
+    } else {
+      lobbyHint.textContent = me.ready ? '已进入战备状态，等待房主开始' : '准备后即可参加战斗';
+    }
+  }
+
   function renderLobby() {
     if (!roomState) {
       return;
@@ -1964,7 +2006,9 @@ import {
         removeButton.textContent = '×';
         removeButton.title = '移除 AI';
         removeButton.addEventListener('click', function () {
-          sendAction('removeBot', { botId: player.id });
+          queueLobbyMutation(function () {
+            return sendAction('removeBot', { botId: player.id });
+          }).catch(function () {});
         });
         slot.appendChild(removeButton);
       }
@@ -1981,8 +2025,10 @@ import {
         });
         teamSelect.addEventListener('change', function () {
           var newTeam = parseInt(teamSelect.value, 10);
-          sendAction('setTeam', { playerId: player.id, team: newTeam });
-          autoAssignSpawns(newTeam);
+          queueLobbyMutation(async function () {
+            await sendAction('setTeam', { playerId: player.id, team: newTeam });
+            await autoAssignSpawns();
+          }).catch(function () {});
         });
         slot.appendChild(teamSelect);
 
@@ -2003,7 +2049,10 @@ import {
           spawnSelect.appendChild(opt);
         });
         spawnSelect.addEventListener('change', function () {
-          sendAction('setSpawn', { playerId: player.id, spawn: parseInt(spawnSelect.value, 10) });
+          var nextSpawn = parseInt(spawnSelect.value, 10);
+          queueLobbyMutation(function () {
+            return sendAction('setSpawn', { playerId: player.id, spawn: nextSpawn });
+          }).catch(function () {});
         });
         slot.appendChild(spawnSelect);
       }
@@ -2023,7 +2072,13 @@ import {
       factionSelect.disabled = !canEditFaction;
       if (canEditFaction) {
         factionSelect.addEventListener('change', function () {
-          sendAction('setFaction', { playerId: player.id, faction: factionSelect.value });
+          var nextFaction = factionSelect.value;
+          queueLobbyMutation(function () {
+            return sendAction('setFaction', {
+              playerId: player.id,
+              faction: nextFaction
+            });
+          }).catch(function () {});
         });
       }
       slot.appendChild(factionSelect);
@@ -2065,20 +2120,7 @@ import {
     startGameBtn.classList.toggle('hidden', !me.isHost);
     randomTeamBtn.classList.toggle('hidden', !me.isHost || roomState.players.length < 2);
     randomSpawnBtn.classList.toggle('hidden', !me.isHost || roomState.players.length < 2);
-    var guestsReady = roomState.players.filter(function (p) { return !p.isBot && !p.isHost; }).every(function (p) { return p.ready; });
-    startGameBtn.disabled = roomState.players.length < 2 || !guestsReady;
-
-    if (me.isHost) {
-      if (roomState.players.length < 2) {
-        lobbyHint.textContent = '请等待玩家加入，或添加一个 AI 对手';
-      } else if (!guestsReady) {
-        lobbyHint.textContent = '等待其他指挥官准备';
-      } else {
-        lobbyHint.textContent = '作战序列已就绪，可以开始战斗';
-      }
-    } else {
-      lobbyHint.textContent = me.ready ? '已进入战备状态，等待房主开始' : '准备后即可参加战斗';
-    }
+    updateLobbyStartAvailability();
     renderChat(lobbyChatMessages, roomState.chat, 30);
   }
 
@@ -2170,7 +2212,7 @@ import {
     mapSelectHost.style.display = '';
     var maps = getMaps();
     var mapConfig = getMapConfig();
-    var selected = mapConfig.id || 'north_conflict';
+    var selected = mapConfig.id || 'gold_crater_small';
     var currentKey = selected + '|' + Object.keys(maps).join();
     if (mapSelectDropdown.dataset.key === currentKey) { return; }
     mapSelectDropdown.dataset.key = currentKey;
@@ -2187,7 +2229,10 @@ import {
     if (!mapSelectDropdown.dataset.listenerAttached) {
       mapSelectDropdown.dataset.listenerAttached = '1';
       mapSelectDropdown.addEventListener('change', function () {
-        sendAction('selectMap', { mapId: mapSelectDropdown.value });
+        var nextMap = mapSelectDropdown.value;
+        queueLobbyMutation(function () {
+          return sendAction('selectMap', { mapId: nextMap });
+        }).catch(function () {});
       });
     }
   }
@@ -4802,9 +4847,14 @@ import {
   function didPlayerWin(game, playerId) {
     if (!game || !playerId) { return false; }
     // 新服务端明确下发整支获胜队伍；不能再拿一个代表性的 winnerId 让其他
-    // 队员显示失败。旧服务端没有 winnerIds 时，按当前队伍关系兼容判断。
-    if (Array.isArray(game.winnerIds)) {
+    // 队员显示失败。空数组不当作“所有人失败”：网络切帧或旧服务端可能只
+    // 带 winnerTeam / winnerId，此时继续按权威获胜队号与当前关系兜底。
+    if (Array.isArray(game.winnerIds) && game.winnerIds.length) {
       return game.winnerIds.indexOf(playerId) !== -1;
+    }
+    var player = playerById(playerId);
+    if (game.winnerTeam > 0 && player && (player.team || 0) === game.winnerTeam) {
+      return true;
     }
     return !!game.winnerId &&
       (game.winnerId === playerId || isFriendly(game.winnerId));
@@ -5129,29 +5179,35 @@ import {
   readyBtn.addEventListener('click', function () {
     var me = ownPlayer();
     if (me) {
-      sendAction('ready', { ready: !me.ready }).then(function () { sound('confirm'); }).catch(function () {});
+      queueLobbyMutation(function () {
+        return sendAction('ready', { ready: !me.ready });
+      }).then(function () { sound('confirm'); }).catch(function () {});
     }
   });
   addBotBtn.addEventListener('click', function () {
-    sendAction('addBot').then(function () { sound('confirm'); }).catch(function () {});
+    queueLobbyMutation(function () {
+      return sendAction('addBot');
+    }).then(function () { sound('confirm'); }).catch(function () {});
   });
   randomTeamBtn.addEventListener('click', async function () {
     if (!roomState || !roomState.players) { return; }
-    var mapConfig = getMapConfig();
     var humans = roomState.players.filter(function (p) { return !p.isBot; });
     if (humans.length < 2) { toast('至少需要2名人类玩家', 'error'); return; }
     randomTeamBtn.disabled = true;
     try {
-      var shuffled = humans.slice().sort(function () { return Math.random() - 0.5; });
-      var mid = Math.ceil(shuffled.length / 2);
-      for (var i = 0; i < shuffled.length; i++) {
-        var p = shuffled[i];
-        var t = i < mid ? 1 : 2;
-        if ((p.team || 0) !== t) {
-          await sendAction('setTeam', { playerId: p.id, team: t });
+      await queueLobbyMutation(async function () {
+        var mapConfig = getMapConfig();
+        var shuffled = humans.slice().sort(function () { return Math.random() - 0.5; });
+        var mid = Math.ceil(shuffled.length / 2);
+        for (var i = 0; i < shuffled.length; i++) {
+          var p = shuffled[i];
+          var t = i < mid ? 1 : 2;
+          if ((p.team || 0) !== t) {
+            await sendAction('setTeam', { playerId: p.id, team: t });
+          }
         }
-      }
-      await randomAssignSpawns(roomState, mapConfig);
+        await randomAssignSpawns(roomState, mapConfig);
+      });
       toast('随机分组完成', 'success');
       sound('confirm');
     } catch (err) {
@@ -5162,10 +5218,11 @@ import {
   });
   randomSpawnBtn.addEventListener('click', async function () {
     if (!roomState || !roomState.players) { return; }
-    var mapConfig = getMapConfig();
     randomSpawnBtn.disabled = true;
     try {
-      await randomAssignSpawns(roomState, mapConfig);
+      await queueLobbyMutation(function () {
+        return randomAssignSpawns(roomState, getMapConfig());
+      });
       toast('随机出生完成', 'success');
       sound('confirm');
     } catch (err) {
@@ -5175,39 +5232,56 @@ import {
     }
   });
   startGameBtn.addEventListener('click', function () {
-    sendAction('start').then(function () { sound('start'); }).catch(function () {});
+    queueLobbyMutation(function () {
+      return sendAction('start');
+    }).then(function () { sound('start'); }).catch(function () {});
   });
   if (orbitalRainToggle) {
     orbitalRainToggle.addEventListener('change', function () {
-      sendAction('setOrbitalRain', { enabled: orbitalRainToggle.checked }).catch(function () {
+      var enabled = orbitalRainToggle.checked;
+      queueLobbyMutation(function () {
+        return sendAction('setOrbitalRain', { enabled: enabled });
+      }).catch(function () {
         if (roomState) { syncOrbitalRainToggle(ownPlayer(), roomState); }
       });
     });
   }
   if (neutralCampsToggle) {
     neutralCampsToggle.addEventListener('change', function () {
-      sendAction('setNeutrals', { enabled: neutralCampsToggle.checked }).catch(function () {
+      var enabled = neutralCampsToggle.checked;
+      queueLobbyMutation(function () {
+        return sendAction('setNeutrals', { enabled: enabled });
+      }).catch(function () {
         if (roomState) { syncNeutralCampsToggle(ownPlayer(), roomState); }
       });
     });
   }
   if (combatRewardsToggle) {
     combatRewardsToggle.addEventListener('change', function () {
-      sendAction('setCombatRewards', { enabled: combatRewardsToggle.checked }).catch(function () {
+      var enabled = combatRewardsToggle.checked;
+      queueLobbyMutation(function () {
+        return sendAction('setCombatRewards', { enabled: enabled });
+      }).catch(function () {
         if (roomState) { syncCombatRewardsToggle(ownPlayer(), roomState); }
       });
     });
   }
   if (dynamicAlliancesToggle) {
     dynamicAlliancesToggle.addEventListener('change', function () {
-      sendAction('setDynamicAlliances', { enabled: dynamicAlliancesToggle.checked }).catch(function () {
+      var enabled = dynamicAlliancesToggle.checked;
+      queueLobbyMutation(function () {
+        return sendAction('setDynamicAlliances', { enabled: enabled });
+      }).catch(function () {
         if (roomState) { syncDynamicAlliancesToggle(ownPlayer(), roomState); }
       });
     });
   }
   if (commanderModeToggle) {
     commanderModeToggle.addEventListener('change', function () {
-      sendAction('setCommanderMode', { enabled: commanderModeToggle.checked }).catch(function () {
+      var enabled = commanderModeToggle.checked;
+      queueLobbyMutation(function () {
+        return sendAction('setCommanderMode', { enabled: enabled });
+      }).catch(function () {
         if (roomState) { syncCommanderModeToggle(ownPlayer(), roomState); }
       });
     });

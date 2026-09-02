@@ -23,6 +23,8 @@ def main():
         "hostId": players[0]["id"],
         "players": {player["id"]: player for player in players},
         "chat": [], "game": None, "createdAt": time.time(),
+        # 五车争霸没有中立守军，适合稳定衡量密集部队本身的实时预算。
+        "selectedMap": "central_scramble",
     }
     server.start_game(room)
     game = room["game"]

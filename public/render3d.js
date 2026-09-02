@@ -2448,7 +2448,7 @@ function resolveTerrainDetail(map, terrain) {
   const themeId = (terrain && terrain.theme) || 'grassland';
   const result = Object.assign({},
     TERRAIN_DETAIL_DEFAULTS[themeId] || TERRAIN_DETAIL_DEFAULTS.grassland);
-  // 兼容未重启的旧服务端：五车争疆可由唯一的 4000×4000 / 五出生点布局识别。
+  // 兼容未重启的旧服务端：五车争霸可由唯一的 4000×4000 / 五出生点布局识别。
   const isCentralScramble = (map && map.id === 'central_scramble') ||
     (map && map.width === 4000 && map.height === 4000);
   if (isCentralScramble) {

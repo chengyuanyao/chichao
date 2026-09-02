@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 
 
-def make_room(map_id="north_conflict", seed=7301, neutrals=None):
+def make_room(map_id="narrow_standoff", seed=7301, neutrals=None):
     random.seed(seed)
     alpha = server.create_human("守矿甲", server.COLORS[0])
     beta = server.create_human("守矿乙", server.COLORS[1])
@@ -215,7 +215,7 @@ def check_flag_off_no_guards():
     server.tick_harvester(room, harvester, 0.5)
     assert harvester["cargo"] > 0.0, "关闭中立守卫后公共矿应立即可采"
 
-    crater, _alpha = make_room("gold_crater", seed=7501, neutrals=False)
+    crater, _alpha = make_room("gold_crater_small", seed=7501, neutrals=False)
     crater_game = crater["game"]
     crater_public = [resource for resource in crater_game["resources"]
                      if resource.get("public")]

@@ -101,14 +101,14 @@ def main():
 
     # --- Test 10: Performance - full path finding within budget ---
     import time
-    map_def = server.MAPS["north_conflict"]
+    map_def = server.MAPS["gold_crater_small"]
     terrain = server.Terrain(
         map_def["rivers"], map_def["bridges"],
         map_def["width"], map_def["height"],
         map_def["mountains"], map_def["roads"])
 
     t0 = time.time()
-    path = terrain.find_path(900, 800, 8700, 5200)
+    path = terrain.find_path(3200, 750, 4640, 5182)
     elapsed = (time.time() - t0) * 1000
     assert len(path) > 1, "should find path across large map"
     assert elapsed < 200, "pathfinding should complete in under 200ms"
@@ -116,7 +116,7 @@ def main():
 
     # Cached path should be instant
     t0 = time.time()
-    path2 = terrain.find_path(900, 800, 8700, 5200)
+    path2 = terrain.find_path(3200, 750, 4640, 5182)
     elapsed2 = (time.time() - t0) * 1000
     assert path == path2, "cached path should be identical"
     assert elapsed2 < 3, "cached lookup should be under 3ms"
@@ -126,11 +126,11 @@ def main():
     t0 = time.time()
     paths = []
     start_positions = [
-        (900, 800), (1400, 900), (2200, 700), (4200, 800), (7000, 800),
-        (900, 5200), (2600, 5100), (4800, 5200), (7000, 5100), (8700, 5200),
+        (3200, 750), (5530, 2443), (4640, 5182), (1760, 5182), (870, 2443),
+        (3200, 1200), (5000, 2200), (4200, 4800), (2200, 4800), (1200, 2200),
     ]
     for sx, sy in start_positions:
-        p = terrain.find_path(sx, sy, 4800, 3000)
+        p = terrain.find_path(sx, sy, 3200, 2740)
         paths.append(p)
     total_elapsed = (time.time() - t0) * 1000
     assert total_elapsed < 500, "10 unique paths should complete under 500ms"

@@ -239,8 +239,7 @@ def main():
     for map_id, map_def in server.MAPS.items():
         assert not map_def.get("landmarks"), map_id
         assert "先挖先富" not in str(map_def)
-    for map_id, core in (("gold_crater", (5000, 3200)),
-                         ("gold_crater_small", (3200, 3200))):
+    for map_id, core in (("gold_crater_small", (3200, 3200)),):
         room, a, b = make_room("EGG-CRATER-%s" % map_id, map_id=map_id)
         assert not (room["game"]["terrain"].get("landmarks") or [])
         pub = server.PUBLIC_MAPS[map_id]

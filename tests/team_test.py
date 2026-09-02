@@ -205,6 +205,9 @@ def main():
     for s in game2["structures"]:
         if s["owner"] == team_b2["id"] and server.structure_role(s["kind"]) == "hq":
             s["hp"] = 0
+    # 模拟一个迟到的大厅响应污染 room.player.team。胜负必须只认开局时写进
+    # game.playerTeams 的战斗快照，否则同队玩家会被漏出 winnerIds。
+    team_a2["team"] = 4
     tick_for(room2, 1.0)
     assert team_b2["eliminated"] is True, "b2 should be eliminated"
     assert room2["status"] == "finished", "game should end (all team B eliminated)"

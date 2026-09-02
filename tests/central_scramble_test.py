@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""五车争疆：中央折叠开局、中央双倍矿、全图无中立矿营。"""
+"""五车争霸：中央折叠开局、中央双倍矿、全图无中立矿营。"""
 
 from __future__ import print_function
 
@@ -26,7 +26,7 @@ def make_room(seed, with_bot=False):
         player["faction"] = "magic" if index % 2 else "tech"
     room = {
         "id": "PACK%d" % seed,
-        "name": "五车争疆测试",
+        "name": "五车争霸测试",
         "status": "lobby",
         "hostId": players[0]["id"],
         "players": {player["id"]: player for player in players},
@@ -62,7 +62,7 @@ def main():
     app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             "public", "app.js")
     with open(app_path, "r", encoding="utf-8") as handle:
-        assert "central_scramble:" in handle.read(), "客户端内置地图目录缺少五车争疆"
+        assert "central_scramble:" in handle.read(), "客户端内置地图目录缺少五车争霸"
 
     print("=== Test 1: 五人都只带折叠基地车，集中停在中央 ===")
     room, players, _bot = make_room(71101)
@@ -128,7 +128,54 @@ def main():
                       headquarters[0]["y"] - 2000) > 900
     print("  AI 沿外环目标迁出并在 45 秒内展开: PASS")
 
-    print("\n=== 五车争疆测试全部通过 ===")
+    print("\n=== Test 5: 2v3 分队开局跑过胜负窗口仍无人误判战败 ===")
+    random.seed(71104)
+    team_players = [
+        server.create_human("分队%d" % (index + 1), server.COLORS[index],
+                            team=(1 if index < 2 else 2), spawn=0)
+        for index in range(5)
+    ]
+    for index, player in enumerate(team_players):
+        player["faction"] = "magic" if index % 2 else "tech"
+        player["ready"] = True
+    team_room = {
+        "id": "PACKTEAM", "name": "五车分队回归", "status": "lobby",
+        "hostId": team_players[0]["id"],
+        "players": {player["id"]: player for player in team_players},
+        "chat": [], "game": None, "createdAt": time.time(),
+        "selectedMap": MAP_ID,
+    }
+    server.start_game(team_room)
+    team_game = team_room["game"]
+    assert len(set(player["spawn"] for player in team_players)) == 5
+    assert all(server.player_has_command(team_game, player["id"])
+               for player in team_players)
+    for _ in range(int(16.0 / 0.05)):
+        server.tick_game(team_room, 0.05)
+    assert team_room["status"] == "playing"
+    assert all(not player["eliminated"] for player in team_players)
+    assert not [line for line in team_room["chat"]
+                if "彻底战败" in line.get("message", "")]
+    print("  重复出生选择被拆成 5 席；2v3 跑过 15 秒仍为进行中: PASS")
+
+    print("\n=== Test 6: 折叠开局兜底仍补发本阵营基地车 ===")
+    repaired_player = team_players[-1]
+    team_game["units"] = [
+        unit for unit in team_game["units"]
+        if unit["owner"] != repaired_player["id"]
+    ]
+    spawn_x, spawn_y = map_def["spawnPoints"][repaired_player["spawn"]]
+    repaired = server.ensure_starting_command(
+        team_game, repaired_player, spawn_x, spawn_y, packed_start=True)
+    assert repaired is not None
+    assert repaired["kind"] == server.faction_loadout(
+        repaired_player["faction"])["mcv"]
+    assert server.unit_role(repaired["kind"]) == "mcv"
+    assert not [structure for structure in team_game["structures"]
+                if structure["owner"] == repaired_player["id"]]
+    print("  缺席时补迁徙法阵/基地车，不会错误预送一座总部: PASS")
+
+    print("\n=== 五车争霸测试全部通过 ===")
 
 
 if __name__ == "__main__":

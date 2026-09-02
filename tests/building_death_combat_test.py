@@ -32,6 +32,7 @@ def make_room(tag, teams=None, magic_b=False):
         "hostId": alpha["id"],
         "players": {alpha["id"]: alpha, beta["id"]: beta},
         "chat": [], "game": None, "createdAt": time.time(),
+        "selectedMap": "narrow_standoff",
     }
     server.start_game(room)
     game = room["game"]

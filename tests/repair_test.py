@@ -28,9 +28,12 @@ def main():
         "hostId": alpha["id"],
         "players": {alpha["id"]: alpha, beta["id"]: beta},
         "chat": [], "game": None, "createdAt": time.time(),
+        "selectedMap": "narrow_standoff",
+        "neutrals": False,
     }
     server.start_game(room)
     game = room["game"]
+    game["terrainCtx"] = server.FLAT_TERRAIN
     game["victoryClock"] = 999.0
 
     repair_bay = server.make_structure("repair", alpha["id"], 820, 720, True)
@@ -98,9 +101,12 @@ def main():
         "hostId": mage["id"],
         "players": {mage["id"]: mage, foe["id"]: foe},
         "chat": [], "game": None, "createdAt": time.time(),
+        "selectedMap": "narrow_standoff",
+        "neutrals": False,
     }
     server.start_game(magic_room)
     magic_game = magic_room["game"]
+    magic_game["terrainCtx"] = server.FLAT_TERRAIN
     magic_game["victoryClock"] = 999.0
     mage["cash"] = 99999
     try:

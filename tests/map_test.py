@@ -63,7 +63,7 @@ def check_map(map_id, map_def):
         "%s: 出生点标签数量不符" % map_id
 
     # 每张地图都要拿到完整的视觉地表档案；它只随 terrain JSON 下发，不能
-    # 混进寻路 Terrain。五车争疆另有更强的外围起伏和中央平整展开圈。
+    # 混进寻路 Terrain。五车争霸另有更强的外围起伏和中央平整展开圈。
     detail = server.visual_terrain_detail(map_def)
     assert set(detail) == {
         "relief", "colorVariation", "grassDensity", "rockDensity",
@@ -94,23 +94,17 @@ def check_map(map_id, map_def):
                 assert not terrain.blocked(px, py), \
                     "%s: 出生点 %d 周围 %d 处被地形阻挡" % (map_id, index, dist)
 
-    # 赤金陨坑大图 / 紧凑版用外环河+桥做邻里卡口；其余图仍只靠山地分区。
-    if map_id in ("gold_crater", "gold_crater_small"):
+    # 赤金陨坑·紧凑用外环河+桥做邻里卡口；其余图只靠山地分区。
+    if map_id == "gold_crater_small":
         assert map_def.get("rivers"), "%s: 外环卡口需要河流" % map_id
         assert map_def.get("bridges"), "%s: 外环卡口需要桥梁" % map_id
     else:
         assert not map_def.get("rivers"), "%s: 不应再包含河流" % map_id
         assert not map_def.get("bridges"), "%s: 不应再包含桥梁" % map_id
 
-    # 锁住恢复后的大战场尺寸，防止后续改地形时又意外缩图。
+    # 锁住当前保留的三张地图及其尺寸。
     expected_sizes = {
-        "north_conflict": (9600, 6000),
-        "island_hop": (7200, 6000),
-        "urban_siege": (6400, 6400),
         "narrow_standoff": (4800, 3200),
-        "triple_pass": (5400, 4200),
-        "valley_clash": (6400, 4800),
-        "gold_crater": (10000, 6400),
         "gold_crater_small": (6400, 6400),
         "central_scramble": (4000, 4000),
     }
@@ -183,20 +177,20 @@ def main():
         check_map(map_id, server.MAPS[map_id])
 
     # --- 道路确实影响寻路与速度 ---
-    road_map = server.MAPS["north_conflict"]
+    road_map = server.MAPS["narrow_standoff"]
     terrain = server.terrain_for_map(road_map)
-    on = terrain.speed_scale(3000, 1636)      # 北侧主干道上
-    off = terrain.speed_scale(3000, 1900)     # 主干道旁的旷野
+    on = terrain.speed_scale(1800, 1600)      # 中央主干道上
+    off = terrain.speed_scale(1800, 1300)     # 主干道旁的旷野
     assert on > off, "道路应当提供行军加成 (%.2f vs %.2f)" % (on, off)
     assert abs(off - 1.0) < 1e-6, "非道路区域不应有加成"
     print("  道路加成 %.2fx（旷野 %.2fx）" % (on, off))
 
     # 同样距离下，沿路的路径代价应低于横穿旷野
-    path_along_road = terrain.find_path(700, 1636, 8900, 1636)
+    path_along_road = terrain.find_path(700, 1600, 4100, 1600)
     assert len(path_along_road) > 1, "沿路路径应当存在"
     print("  沿主干道寻路 %d 个航点" % len(path_along_road))
 
-    for map_id in ("gold_crater", "gold_crater_small"):
+    for map_id in ("gold_crater_small",):
         crater = server.MAPS[map_id]
         pub = server.PUBLIC_MAPS[map_id]
         assert pub.get("rivers") and pub.get("bridges")
@@ -240,14 +234,10 @@ def main():
         resources = room["game"]["resources"]
         return resources
 
-    north_ores = ore_payload("north_conflict", 5)
-    crater_ores = ore_payload("gold_crater", 5)
-    small_ores = ore_payload("gold_crater_small", 5)
-    north_n, north_amt = len(north_ores), sum(r["amount"] for r in north_ores)
-    crater_n, crater_amt = len(crater_ores), sum(r["amount"] for r in crater_ores)
-    assert crater_n > north_n, (crater_n, north_n)
-    assert crater_amt > north_amt, (crater_amt, north_amt)
-    crater = server.MAPS["gold_crater"]
+    crater_ores = ore_payload("gold_crater_small", 5)
+    crater_n = len(crater_ores)
+    crater_amt = sum(r["amount"] for r in crater_ores)
+    crater = server.MAPS["gold_crater_small"]
     crater_cx, crater_cy = crater["width"] / 2.0, crater["height"] / 2.0
     live_center = [r for r in crater_ores
                    if math.hypot(r["x"] - crater_cx, r["y"] - crater_cy) < 700]
@@ -257,33 +247,21 @@ def main():
         nearest = min(math.hypot(r["x"] - planned["x"], r["y"] - planned["y"])
                       for r in live_center)
         assert nearest < 80, (planned["x"], planned["y"], nearest)
-    print("  赤金陨坑 5人矿点 %d / 储量 %.0f  vs 北境 %d / %.0f" % (
-        crater_n, crater_amt, north_n, north_amt))
+    print("  赤金陨坑·紧凑 5人矿点 %d / 储量 %.0f" % (
+        crater_n, crater_amt))
     print("  中庭金库 %d 处 / 储量 %.0f" % (
         len(live_center), sum(r["amount"] for r in live_center)))
 
-    check_gold_crater_chokepoints(crater, crater_ores, CRATER_LAYOUTS["gold_crater"])
-    small = server.MAPS["gold_crater_small"]
-    check_gold_crater_chokepoints(small, small_ores, CRATER_LAYOUTS["gold_crater_small"])
+    check_gold_crater_chokepoints(
+        crater, crater_ores, CRATER_LAYOUTS["gold_crater_small"])
 
     print("map tests ok: %d 张地图通过" % len(server.MAPS))
 
 
 # 外环五处邻里卡口：北岗-东北、东北-东南、东南-西南、西南-西北、西北-北岗。
 # 每道熔水河沿五边形角平分线从陨坑外壁拉到地图边，只在外环公路留桥。
-# 大图 / 紧凑版各自有独立的中心、桥位与金库。
+# 保留的紧凑版拥有独立的中心、桥位与金库。
 CRATER_LAYOUTS = {
-    "gold_crater": {
-        "cx": 5000.0, "cy": 3200.0,
-        "links": (
-            {"name": "北岗-东北", "bridge": (6575, 1032)},
-            {"name": "东北-东南", "bridge": (7549, 4028)},
-            {"name": "东南-西南", "bridge": (5000, 5880)},
-            {"name": "西南-西北", "bridge": (2451, 4028)},
-            {"name": "西北-北岗", "bridge": (3425, 1032)},
-        ),
-        "vault": (5000.0, 2740.0),
-    },
     "gold_crater_small": {
         "cx": 3200.0, "cy": 3200.0,
         "links": (

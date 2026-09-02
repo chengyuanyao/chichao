@@ -133,8 +133,8 @@ def main():
     assert ".command-sidebar > *" in styles
     assert "max-width: 100%;" in styles
 
-    # Other live maps stay mountain-only; the two crater maps are rim-bridge maps.
-    crater_ids = ("gold_crater", "gold_crater_small")
+    # Other live maps stay mountain-only; the retained crater map uses rim bridges.
+    crater_ids = ("gold_crater_small",)
     for map_id in crater_ids:
         crater = server.MAPS[map_id]
         assert crater.get("rivers") and crater.get("bridges")
@@ -145,13 +145,7 @@ def main():
         assert not map_def.get("bridges"), "%s still has bridge data" % map_id
         assert map_def.get("mountains"), "%s needs mountain blockers" % map_id
     expected_sizes = {
-        "north_conflict": (9600, 6000),
-        "island_hop": (7200, 6000),
-        "urban_siege": (6400, 6400),
         "narrow_standoff": (4800, 3200),
-        "triple_pass": (5400, 4200),
-        "valley_clash": (6400, 4800),
-        "gold_crater": (10000, 6400),
         "gold_crater_small": (6400, 6400),
         "central_scramble": (4000, 4000),
     }
@@ -281,12 +275,21 @@ def main():
     assert "groundDetailParts: state.groundDetailParts" in render
     assert "terrainDetail\": visual_terrain_detail(m)" in server_source
     # 团队胜利必须按完整获胜成员列表显示；winnerId 只是兼容字段，不能再让
-    # 同队其余客户端误弹“失败”。旧服务端仍按 isFriendly 回退。
+    # 同队其余客户端误弹“失败”。空名单还要按 winnerTeam / isFriendly 回退，
+    # 不能把网络切帧期间的 [] 当成“所有人都输了”。
     assert "function didPlayerWin(game, playerId)" in app
-    assert "Array.isArray(game.winnerIds)" in app
+    assert "Array.isArray(game.winnerIds) && game.winnerIds.length" in app
+    assert "game.winnerTeam > 0" in app
     assert "isFriendly(game.winnerId)" in app
     assert "roomState.game.winnerId === session.playerId" not in app
     assert '"winnerIds": list(game.get("winnerIds", []))' in server_source
+    # 分队会连带多次 setSpawn；必须串行确认完才能把 start 发给服务端。
+    assert "function queueLobbyMutation(work)" in app
+    assert "var lobbyMutationTail = Promise.resolve();" in app
+    assert "lobbyMutationsPending > 0" in app
+    assert "async function autoAssignSpawns()" in app
+    assert "await autoAssignSpawns();" in app
+    assert "return sendAction('start');" in app
     assert "function tuftParts" not in render
     assert "function pineParts" not in render
     assert "function buildScatter" not in render
@@ -296,13 +299,10 @@ def main():
     assert "terrain-ground.png" not in render
     for theme_id in ("grassland", "arid", "urban", "crater"):
         assert ("  %s:" % theme_id) in render
-    assert server.MAPS["north_conflict"]["theme"] == "grassland"
+    assert server.MAPS["central_scramble"]["theme"] == "grassland"
     assert server.MAPS["narrow_standoff"]["theme"] == "arid"
-    assert server.MAPS["urban_siege"]["theme"] == "urban"
-    assert server.MAPS["gold_crater"]["theme"] == "crater"
     assert server.MAPS["gold_crater_small"]["theme"] == "crater"
     assert "mapBriefingDisplay" in app
-    assert server.MAPS["gold_crater"].get("briefing")
     assert server.MAPS["gold_crater_small"].get("briefing")
     assert "function paintGrassBase(c, w, h, themeId)" in app
     assert "paintTerrainFeatures(miniCtx, roomState.game.terrain, sx, sy)" in app
@@ -343,7 +343,12 @@ def main():
     assert "gRoughness = 0.24; gBumpScale = 0.10" in render
     assert "float gRimGain = gMode > 3.5 ? 0.42 : 0.13;" in render
     # 烘焙目前只在试点兵种上打开；铺开时改这张表即可，管线不用动
-    assert "const OCCLUSION_BAKED_KINDS = { dragon: 1 };" in render
+    occlusion_kinds = re.search(
+        r"const OCCLUSION_BAKED_KINDS = \{([\s\S]*?)\};", render)
+    assert occlusion_kinds
+    for kind in ("dragon", "overlord", "overlord_v1", "overlord_v2"):
+        assert re.search(r"\b%s\s*:\s*1\b" % kind,
+                         occlusion_kinds.group(1)), kind
     assert "OCCLUSION_BAKED_KINDS[kind] ? { occlusion: true } : null" in render
     # 写实升级必须保持合批边界：军械共享压缩贴图；自然草簇和碎石允许整张
     # 地图共用一个额外 Mesh，但不能退回“一棵草/一块石头一个 draw call”。

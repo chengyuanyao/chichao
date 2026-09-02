@@ -31,6 +31,7 @@ def make_room():
         "chat": [],
         "game": None,
         "createdAt": time.time(),
+        "selectedMap": "narrow_standoff",
     }
     return room
 
@@ -38,10 +39,10 @@ def make_room():
 def main():
     random.seed(20260719)
 
-    # --- Test 1: only the two 赤金陨坑 variants use live rivers / bridges ---
+    # --- Test 1: only 赤金陨坑·紧凑 uses live rivers / bridges ---
     for map_id in sorted(server.MAPS):
         map_data = server.MAPS[map_id]
-        if map_id in ("gold_crater", "gold_crater_small"):
+        if map_id == "gold_crater_small":
             assert map_data.get("rivers"), "%s should use rim rivers" % map_id
             assert map_data.get("bridges"), "%s should use rim bridges" % map_id
         else:
@@ -59,10 +60,6 @@ def main():
     assert terrain["mountains"], "game terrain should publish mountains"
 
     # --- Test 3: point_in_water detects water correctly ---
-    # north_conflict river center ~ y=2000-2200, width 120 -> half-width 60
-    # At x=1000, the first river segment goes from (0, 1850) to (1800, 2000)
-    # y=1925 should be near the center of that segment at x=1000
-    
     # Force a known river config
     water = server.Terrain(
         [{"x1": 0, "y1": 2000, "x2": 3600, "y2": 2000, "width": 100}],
@@ -175,9 +172,8 @@ def main():
     assert server.position_clear(room_game, 500, 2400, 30), \
         "dry position should be clear for building"
 
-    # --- Test 11: 赤金陨坑（大图 / 紧凑版）live rivers / bridges ---
+    # --- Test 11: 赤金陨坑·紧凑 live rivers / bridges ---
     crater_rim_checks = {
-        "gold_crater": ((5432, 5382, 4568, 5382), (5220, 5880, 4780, 5880)),
         "gold_crater_small": ((3476, 5382, 2924, 5382), (3341, 5880, 3059, 5880)),
     }
     for map_id, (blocked_way, bridge_way) in crater_rim_checks.items():

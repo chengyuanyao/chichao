@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 
 
-def make_room(seed, map_id="north_conflict"):
+def make_room(seed, map_id="narrow_standoff"):
     random.seed(seed)
     players = [
         server.create_human("经济甲", server.COLORS[0]),
@@ -47,7 +47,7 @@ def check_random_resources():
     assert first[:6] == changed[:6], "出生区保底矿不应随 seed 漂移"
     assert first[6:] != changed[6:], "公共矿应在不同对局随机变化"
 
-    map_def = server.MAPS["north_conflict"]
+    map_def = server.MAPS["narrow_standoff"]
     public_ore = first[6:]
     for x, y in public_ore:
         nearest_spawn = min(math.hypot(x - sx, y - sy)

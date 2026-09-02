@@ -134,52 +134,6 @@ BOT_NAMES = ["北辰", "赤狐", "磐石", "夜枭", "雷霆", "灰熊"]
 ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 MAPS = {
-    "north_conflict": {
-        "id": "north_conflict",
-        "name": "北境冲突区",
-        "width": 9600,
-        "height": 6000,
-        "maxPlayers": 6,
-        "theme": "grassland",
-        "spawnPoints": [
-            (900, 800),
-            (4800, 700),
-            (8700, 800),
-            (900, 5200),
-            (4800, 5300),
-            (8700, 5200),
-        ],
-        "spawnLabels": ["左上", "中上", "右上", "左下", "中下", "右下"],
-        "rivers": [],
-        "bridges": [],
-        # 横向山脊把南北战区隔开，只留下左、中、右三条宽山谷。
-        "mountains": [
-            {"x": 240, "y": 3000, "r": 573},
-            {"x": 960, "y": 3000, "r": 560},
-            {"x": 2960, "y": 3000, "r": 520},
-            {"x": 3760, "y": 3000, "r": 520},
-            {"x": 5840, "y": 3000, "r": 520},
-            {"x": 6640, "y": 3000, "r": 520},
-            {"x": 8640, "y": 3000, "r": 560},
-            {"x": 9360, "y": 3000, "r": 573},
-            {"x": 3267, "y": 2250, "r": 280},
-            {"x": 6333, "y": 3750, "r": 280},
-        ],
-        # 三条纵向道路穿过山谷，山谷本身就是军事要道。
-        "roads": [
-            {"x1": 667, "y1": 1636, "x2": 8933, "y2": 1636, "width": 125},
-            {"x1": 667, "y1": 4364, "x2": 8933, "y2": 4364, "width": 125},
-            {"x1": 2000, "y1": 1500, "x2": 2000, "y2": 4500, "width": 115},
-            {"x1": 4800, "y1": 1432, "x2": 4800, "y2": 4568, "width": 120},
-            {"x1": 7600, "y1": 1500, "x2": 7600, "y2": 4500, "width": 115},
-            {"x1": 1000, "y1": 886, "x2": 2000, "y2": 1636, "width": 100},
-            {"x1": 4800, "y1": 818, "x2": 4800, "y2": 1636, "width": 100},
-            {"x1": 8600, "y1": 886, "x2": 7600, "y2": 1636, "width": 100},
-            {"x1": 1000, "y1": 5114, "x2": 2000, "y2": 4364, "width": 100},
-            {"x1": 4800, "y1": 5182, "x2": 4800, "y2": 4364, "width": 100},
-            {"x1": 8600, "y1": 5114, "x2": 7600, "y2": 4364, "width": 100},
-        ],
-    },
     "narrow_standoff": {
         "id": "narrow_standoff",
         "name": "狭路对峙",
@@ -211,273 +165,6 @@ MAPS = {
             {"x1": 4020, "y1": 1600, "x2": 2400, "y2": 2571, "width": 100},
         ],
     },
-    "triple_pass": {
-        "id": "triple_pass",
-        "name": "三岔隘口",
-        "width": 5400,
-        "height": 4200,
-        "maxPlayers": 3,
-        "theme": "arid",
-        "spawnPoints": [
-            (700, 2100),
-            (3700, 368),
-            (3700, 3832),
-        ],
-        "spawnLabels": ["西境营地", "东北营地", "东南营地"],
-        "rivers": [],
-        "bridges": [],
-        # 中央 Y 形山脊：三条山臂自中心伸向西北 / 正东 / 西南，各自贴住
-        # 上 / 右 / 下地图边缘，把地图切成三个互相独立的扇形营地。
-        # 三臂内端互不相接，留出三个等宽谷口，全部汇入中央会战广场；
-        # 每家只有自家谷口一条路进入广场，配合公路就是三岔对峙。
-        "mountains": [
-            # 西北臂（分隔西境与东北营地）
-            {"x": 2440, "y": 1650, "r": 250},
-            {"x": 2075, "y": 1017, "r": 280},
-            {"x": 1625, "y": 238, "r": 290},
-            # 正东臂（分隔东北与东南营地）
-            {"x": 3220, "y": 2100, "r": 250},
-            {"x": 3950, "y": 2100, "r": 280},
-            {"x": 5150, "y": 2100, "r": 300},
-            # 西南臂（分隔东南与西境营地）
-            {"x": 2440, "y": 2550, "r": 250},
-            {"x": 2075, "y": 3183, "r": 280},
-            {"x": 1625, "y": 3962, "r": 290},
-            # 各家门口的遮蔽岩，提供局部掩护位
-            {"x": 1704, "y": 2675, "r": 210},
-            {"x": 3696, "y": 1525, "r": 210},
-            {"x": 2700, "y": 3250, "r": 210},
-        ],
-        # 三家各一条公路，直通自家谷口，在中央广场汇合。
-        "roads": [
-            {"x1": 700, "y1": 2100, "x2": 2600, "y2": 2100, "width": 125},
-            {"x1": 3650, "y1": 430, "x2": 2800, "y2": 1900, "width": 110},
-            {"x1": 3650, "y1": 3770, "x2": 2800, "y2": 2300, "width": 110},
-        ],
-        "publicOreCount": 3,
-    },
-    "island_hop": {
-        "id": "island_hop",
-        "name": "三谷争夺",
-        "width": 7200,
-        "height": 6000,
-        "maxPlayers": 4,
-        "theme": "grassland",
-        "spawnPoints": [
-            (900, 900),
-            (6300, 900),
-            (900, 5100),
-            (6300, 5100),
-        ],
-        "spawnLabels": ["西北高地", "东北高地", "西南高地", "东南高地"],
-        "rivers": [],
-        "bridges": [],
-        # 横贯地图的山链留下三条争夺谷地，四个角落都有两条以上进攻选择。
-        "mountains": [
-            {"x": 333, "y": 3000, "r": 507},
-            {"x": 1093, "y": 3000, "r": 400},
-            {"x": 2453, "y": 3000, "r": 427},
-            {"x": 2987, "y": 3000, "r": 427},
-            {"x": 4213, "y": 3000, "r": 427},
-            {"x": 4747, "y": 3000, "r": 427},
-            {"x": 6107, "y": 3000, "r": 400},
-            {"x": 6867, "y": 3000, "r": 507},
-            {"x": 2733, "y": 2250, "r": 280},
-            {"x": 4467, "y": 3750, "r": 280},
-        ],
-        "roads": [
-            {"x1": 600, "y1": 1575, "x2": 6600, "y2": 1575, "width": 120},
-            {"x1": 600, "y1": 4425, "x2": 6600, "y2": 4425, "width": 120},
-            {"x1": 1800, "y1": 1425, "x2": 1800, "y2": 4575, "width": 110},
-            {"x1": 3600, "y1": 1425, "x2": 3600, "y2": 4575, "width": 115},
-            {"x1": 5400, "y1": 1425, "x2": 5400, "y2": 4575, "width": 110},
-            {"x1": 933, "y1": 975, "x2": 1800, "y2": 1575, "width": 100},
-            {"x1": 6267, "y1": 975, "x2": 5400, "y2": 1575, "width": 100},
-            {"x1": 933, "y1": 5025, "x2": 1800, "y2": 4425, "width": 100},
-            {"x1": 6267, "y1": 5025, "x2": 5400, "y2": 4425, "width": 100},
-        ],
-    },
-    "urban_siege": {
-        "id": "urban_siege",
-        "name": "围城战",
-        "width": 6400,
-        "height": 6400,
-        "maxPlayers": 4,
-        "theme": "urban",
-        "spawnPoints": [
-            (900, 3200),
-            (3200, 900),
-            (5500, 3200),
-            (3200, 5500),
-        ],
-        "spawnLabels": ["西区", "北区", "东区", "南区"],
-        "rivers": [],
-        "bridges": [],
-        # 城区街块：山体在这里当作成片废墟，切出棋盘式的街道
-        "mountains": [
-            {"x": 2338, "y": 2438, "r": 406},
-            {"x": 4062, "y": 2438, "r": 406},
-            {"x": 2338, "y": 3962, "r": 406},
-            {"x": 4062, "y": 3962, "r": 406},
-            {"x": 985, "y": 1219, "r": 271},
-            {"x": 5415, "y": 1219, "r": 271},
-            {"x": 985, "y": 5181, "r": 271},
-            {"x": 5415, "y": 5181, "r": 271},
-        ],
-        # 城市棋盘路网
-        "roads": [
-            {"x1": 554, "y1": 1676, "x2": 5846, "y2": 1676, "width": 120},
-            {"x1": 492, "y1": 3200, "x2": 5908, "y2": 3200, "width": 130},
-            {"x1": 554, "y1": 4724, "x2": 5846, "y2": 4724, "width": 120},
-            {"x1": 1600, "y1": 686, "x2": 1600, "y2": 5714, "width": 120},
-            {"x1": 3200, "y1": 610, "x2": 3200, "y2": 5790, "width": 130},
-            {"x1": 4800, "y1": 686, "x2": 4800, "y2": 5714, "width": 120},
-        ],
-    },
-    "valley_clash": {
-        "id": "valley_clash",
-        "name": "峡谷交锋",
-        "width": 6400,
-        "height": 4800,
-        "maxPlayers": 4,
-        "theme": "grassland",
-        "spawnPoints": [
-            (800, 1800),
-            (800, 3000),
-            (5600, 1800),
-            (5600, 3000),
-        ],
-        "spawnLabels": ["左路前哨", "左路后哨", "右路前哨", "右路后哨"],
-        "rivers": [],
-        "bridges": [],
-        # 2v2 尺寸保持不变；中央山墙用三处宽谷替代原来的三座桥。
-        "mountains": [
-            {"x": 3200, "y": 180, "r": 380},
-            {"x": 3200, "y": 1550, "r": 390},
-            {"x": 3200, "y": 3150, "r": 390},
-            {"x": 3200, "y": 4620, "r": 380},
-            {"x": 1750, "y": 1350, "r": 240},
-            {"x": 1750, "y": 3450, "r": 240},
-            {"x": 4650, "y": 1350, "r": 240},
-            {"x": 4650, "y": 3450, "r": 240},
-        ],
-        "roads": [
-            {"x1": 500, "y1": 900, "x2": 5900, "y2": 900, "width": 110},
-            {"x1": 500, "y1": 2400, "x2": 5900, "y2": 2400, "width": 125},
-            {"x1": 500, "y1": 3900, "x2": 5900, "y2": 3900, "width": 110},
-            {"x1": 800, "y1": 1800, "x2": 800, "y2": 3000, "width": 100},
-            {"x1": 5600, "y1": 1800, "x2": 5600, "y2": 3000, "width": 100},
-            {"x1": 800, "y1": 1800, "x2": 1600, "y2": 900, "width": 100},
-            {"x1": 800, "y1": 3000, "x2": 1600, "y2": 3900, "width": 100},
-            {"x1": 5600, "y1": 1800, "x2": 4800, "y2": 900, "width": 100},
-            {"x1": 5600, "y1": 3000, "x2": 4800, "y2": 3900, "width": 100},
-        ],
-    },
-    "gold_crater": {
-        "id": "gold_crater",
-        "name": "赤金陨坑",
-        "width": 10000,
-        "height": 6400,
-        "maxPlayers": 5,
-        "theme": "crater",
-        "briefing": (
-            "五方围着一口超级矿坑打。家矿比北境肥一圈，正中金库有炮塔、"
-            "突击兵和火箭兵看守。外环五处邻里路口被密林切开，只能从林间小路穿过；"
-            "抄近路就得贴着陨石核走——带着攻城炮拆塔，采矿车跟坦克一起发财。"
-        ),
-        # 正五边形：北、东北、东南、西南、西北。FFA 均势，2v2 时南北成对，
-        # 多出来的那位落在西北高地。
-        "spawnPoints": [
-            (5000, 750),
-            (7330, 2443),
-            (6440, 5182),
-            (3560, 5182),
-            (2670, 2443),
-        ],
-        "spawnLabels": ["北岗", "东北高地", "东南谷地", "西南谷地", "西北高地"],
-        # 五道 72° 径向密林带把有效发展圈均分成五块。内端继续向金矿环
-        # 推进，把五个入口收窄；中央仍保留约 1000px 半径的完整开放圈。
-        "rivers": [
-            {"x1": 5852, "y1": 2027, "x2": 7303, "y2": 30, "width": 800},
-            {"x1": 6379, "y1": 3648, "x2": 9970, "y2": 4815, "width": 800},
-            {"x1": 5000, "y1": 4650, "x2": 5000, "y2": 6370, "width": 800},
-            {"x1": 3621, "y1": 3648, "x2": 30, "y2": 4815, "width": 800},
-            {"x1": 4148, "y1": 2027, "x2": 2697, "y2": 30, "width": 800},
-        ],
-        # 每道密林只开一条贯穿式狭长小道。线段长度覆盖整条 800px 林带，
-        # 180px 路宽只容少量部队并排，形成真正可设防的单一卡口。
-        "bridges": [
-            {"x": 6575, "y": 1032, "x1": 6009, "y1": 621, "x2": 7141, "y2": 1443, "width": 180},
-            {"x": 7549, "y": 4028, "x1": 7765, "y1": 3362, "x2": 7333, "y2": 4694, "width": 180},
-            {"x": 5000, "y": 5880, "x1": 5700, "y1": 5880, "x2": 4300, "y2": 5880, "width": 180},
-            {"x": 2451, "y": 4028, "x1": 2667, "y1": 4694, "x2": 2235, "y2": 3362, "width": 180},
-            {"x": 3425, "y": 1032, "x1": 2859, "y1": 1443, "x2": 3991, "y2": 621, "width": 180},
-        ],
-        # 发展区内部不再随机塞独立森林/巨石；只保留中央陨石核，确保五家
-        # 沿各自扇区都能从宽谷口进入中央金矿环。
-        "mountains": [
-            {"x": 5000, "y": 3200, "r": 250},
-        ],
-        # 辐条进坑、坑内环路、外环绕行，再加两条贴核近路。
-        "roads": [
-            {"x1": 5000, "y1": 750, "x2": 5000, "y2": 2480, "width": 120},
-            {"x1": 7330, "y1": 2443, "x2": 5685, "y2": 2978, "width": 120},
-            {"x1": 6440, "y1": 5182, "x2": 5423, "y2": 3782, "width": 120},
-            {"x1": 3560, "y1": 5182, "x2": 4577, "y2": 3782, "width": 120},
-            {"x1": 2670, "y1": 2443, "x2": 4315, "y2": 2978, "width": 120},
-            {"x1": 5000, "y1": 2480, "x2": 5685, "y2": 2978, "width": 115},
-            {"x1": 5685, "y1": 2978, "x2": 5423, "y2": 3782, "width": 115},
-            {"x1": 5423, "y1": 3782, "x2": 4577, "y2": 3782, "width": 115},
-            {"x1": 4577, "y1": 3782, "x2": 4315, "y2": 2978, "width": 115},
-            {"x1": 4315, "y1": 2978, "x2": 5000, "y2": 2480, "width": 115},
-            {"x1": 5000, "y1": 750, "x2": 6009, "y2": 621, "width": 110},
-            {"x1": 7141, "y1": 1443, "x2": 7330, "y2": 2443, "width": 110},
-            {"x1": 7330, "y1": 2443, "x2": 7765, "y2": 3362, "width": 110},
-            {"x1": 7333, "y1": 4694, "x2": 6440, "y2": 5182, "width": 110},
-            {"x1": 6440, "y1": 5182, "x2": 5700, "y2": 5880, "width": 110},
-            {"x1": 4300, "y1": 5880, "x2": 3560, "y2": 5182, "width": 110},
-            {"x1": 3560, "y1": 5182, "x2": 2667, "y2": 4694, "width": 110},
-            {"x1": 2235, "y1": 3362, "x2": 2670, "y2": 2443, "width": 110},
-            {"x1": 2670, "y1": 2443, "x2": 2859, "y2": 1443, "width": 110},
-            {"x1": 3991, "y1": 621, "x2": 5000, "y2": 750, "width": 110},
-            {"x1": 4315, "y1": 2978, "x2": 5000, "y2": 2890, "width": 100},
-            {"x1": 5000, "y1": 2890, "x2": 5685, "y2": 2978, "width": 100},
-            {"x1": 4577, "y1": 3782, "x2": 5000, "y2": 3510, "width": 100},
-            {"x1": 5000, "y1": 3510, "x2": 5423, "y2": 3782, "width": 100},
-            # 五条卡口军路与实际长通道完全重合。
-            {"x1": 6009, "y1": 621, "x2": 7141, "y2": 1443, "width": 140},
-            {"x1": 7765, "y1": 3362, "x2": 7333, "y2": 4694, "width": 140},
-            {"x1": 5700, "y1": 5880, "x2": 4300, "y2": 5880, "width": 140},
-            {"x1": 2667, "y1": 4694, "x2": 2235, "y2": 3362, "width": 140},
-            {"x1": 2859, "y1": 1443, "x2": 3991, "y2": 621, "width": 140},
-        ],
-        # 比默认图更肥：每家多一片保底矿，公共矿多两处随机点，
-        # 中庭五处头奖围着陨石核；五条林道两端各放一处邻里口袋矿。
-        # 都按公共矿刷炮塔 / 突击兵 / 火箭兵守军。
-        "homeOreAmounts": (26000, 19000, 17000, 21000),
-        # 家矿放在总部背向中央金库的一侧，给正面发展与出兵让路。
-        "homeOreBehind": True,
-        "homeOreDistance": 450,
-        "publicOreCount": 6,
-        "bonusResources": [
-            # 中庭金库：原北/东南/西南三处加肥，再补东北、西北两处，围核一圈。
-            {"x": 5000, "y": 2740, "amount": 56000, "public": True},
-            {"x": 5437, "y": 3058, "amount": 44000, "public": True},
-            {"x": 5390, "y": 3460, "amount": 44000, "public": True},
-            {"x": 4610, "y": 3460, "amount": 44000, "public": True},
-            {"x": 4563, "y": 3058, "amount": 44000, "public": True},
-            {"x": 6009, "y": 621, "amount": 13000, "public": True},
-            {"x": 7141, "y": 1443, "amount": 13000, "public": True},
-            {"x": 7765, "y": 3362, "amount": 13000, "public": True},
-            {"x": 7333, "y": 4694, "amount": 13000, "public": True},
-            {"x": 5700, "y": 5880, "amount": 13000, "public": True},
-            {"x": 4300, "y": 5880, "amount": 13000, "public": True},
-            {"x": 2667, "y": 4694, "amount": 13000, "public": True},
-            {"x": 2235, "y": 3362, "amount": 13000, "public": True},
-            {"x": 2859, "y": 1443, "amount": 13000, "public": True},
-            {"x": 3991, "y": 621, "amount": 13000, "public": True},
-        ],
-    },
     "gold_crater_small": {
         "id": "gold_crater_small",
         "name": "赤金陨坑·紧凑",
@@ -486,7 +173,7 @@ MAPS = {
         "maxPlayers": 5,
         "theme": "crater",
         "briefing": (
-            "赤金陨坑的紧凑版：五方围着陨石核打，家矿比北境肥一圈，"
+            "五方围着陨石核打，家矿储量充足，"
             "正中金库有炮塔、突击兵和火箭兵看守。外环五处邻里路口被密林"
             "切开，只能从林间小路穿过；地图小一圈，邻里火拼更早打响。"
         ),
@@ -554,7 +241,7 @@ MAPS = {
             {"x1": 867, "y1": 4694, "x2": 435, "y2": 3362, "width": 140},
             {"x1": 1059, "y1": 1443, "x2": 2191, "y2": 621, "width": 140},
         ],
-        # 比默认图更肥：每家多一片保底矿，公共矿多两处随机点，
+        # 每家四片保底矿，公共矿另有六处随机点，
         # 中庭五处头奖围着陨石核（对准五条谷口），外加五处邻里口袋矿。
         # 都按公共矿刷炮塔 / 突击兵 / 火箭兵守军。
         "homeOreAmounts": (26000, 19000, 17000, 21000),
@@ -582,7 +269,7 @@ MAPS = {
     },
     "central_scramble": {
         "id": "central_scramble",
-        "name": "五车争疆",
+        "name": "五车争霸",
         "width": 4000,
         "height": 4000,
         "maxPlayers": 5,
@@ -639,6 +326,14 @@ MAPS = {
         ],
     },
 }
+
+# 当前版本只发布这三张地图；顺序同时作为服务端公共目录的稳定顺序。
+SHIPPED_MAP_IDS = (
+    "central_scramble",
+    "gold_crater_small",
+    "narrow_standoff",
+)
+MAPS = {map_id: MAPS[map_id] for map_id in SHIPPED_MAP_IDS}
 
 # 地表细节只参与客户端表现，不进入 Terrain / 寻路 / 建造碰撞。按主题提供
 # 全地图默认值，再给个别地图做覆盖，避免为了让草地不再像平板而改变战术地形。
@@ -806,7 +501,7 @@ DAMAGE_MULTIPLIER = {
     "explosive": {"infantry": 1.00, "light": 1.00, "heavy": 1.00, "structure": 1.00, "arcane": 1.00},
 }
 
-DEFAULT_MAP = "north_conflict"
+DEFAULT_MAP = "gold_crater_small"
 
 
 def clamp_team(value):
@@ -2214,17 +1909,31 @@ def find_open_start_point(game, x, y, size):
     return x, y
 
 
-def ensure_starting_command(game, player, spawn_x, spawn_y):
-    """If a seated player still has no HQ/MCV after kit drop, plant one."""
+def ensure_starting_command(game, player, spawn_x, spawn_y, packed_start=False):
+    """Guarantee one living command entity before the match becomes visible.
+
+    This is the last line of defence against a stale/duplicate lobby seat.  A
+    packed-start map must be repaired with the faction's MCV rather than a
+    pre-deployed HQ, otherwise one unlucky player would enter 五车争霸 with a
+    different opening kit from everybody else.
+    """
     if player_has_command(game, player["id"]):
-        return
+        return None
     loadout = faction_loadout(player.get("faction", "tech"))
+    if packed_start:
+        command = make_unit(loadout["mcv"], player["id"], spawn_x, spawn_y)
+        center_x = game["map"]["width"] / 2.0
+        center_y = game["map"]["height"] / 2.0
+        command["dir"] = math.atan2(spawn_y - center_y, spawn_x - center_x)
+        game["units"].append(command)
+        return command
     hq_kind = loadout["hq"]
     size = STRUCTURE_TYPES[hq_kind]["size"]
     x, y = find_open_start_point(game, spawn_x, spawn_y, size)
     start_hq = make_structure(hq_kind, player["id"], x, y, True)
     start_hq["packable"] = True
     game["structures"].append(start_hq)
+    return start_hq
 
 
 def start_game(room):
@@ -2267,7 +1976,7 @@ def start_game(room):
         "_publicViewCache": {},
         "pendingStrikes": [],
         "orbitalRain": bool(room.get("orbitalRain")),
-        # 地图可以硬性关闭中立守军；五车争疆即使房间总开关开启也保持无守军。
+        # 地图可以硬性关闭中立守军；五车争霸即使房间总开关开启也保持无守军。
         "neutrals": (neutrals_enabled(room)
                      and bool(room_map.get("neutralOreGuards", True))),
         "combatRewards": bool(room.get("combatRewards")),
@@ -2404,7 +2113,7 @@ def start_game(room):
         x, y = spawn_points[sp]
         toward_x = 1 if x < center_x else -1
         toward_y = 1 if y < center_y else -1
-        # 五车争疆只发一辆折叠基地车；没有预建建筑、矿车或作战单位。
+        # 五车争霸只发一辆折叠基地车；没有预建建筑、矿车或作战单位。
         # 其他地图继续按阵营发完整出生装备：科技(指挥中心/电站/精炼厂/采矿车 + 突击兵/坦克)，
         # 魔法(主堡/法力塔/精炼所/浮游晶簇 + 法师/傀儡)。kind 全部取自阵营装备表。
         loadout = faction_loadout(player.get("faction", "tech"))
@@ -2504,12 +2213,22 @@ def start_game(room):
             command["_openingDeployX"] = target_x
             command["_openingDeployY"] = target_y
 
-    room["game"] = game
-    room["status"] = "playing"
+    # 开局发布必须是原子的：先补齐并复核每个席位的指挥实体，再把房间切到
+    # playing。这样 SSE / 首个胜负扫描永远看不到“对局已开始、某人却还没
+    # 有总部/基地车”的半成品状态。
+    packed_start = bool(room_map.get("packedStart"))
     for player in players:
         spawn = player_spawns[player["id"]]
         sx, sy = spawn_points[spawn]
-        ensure_starting_command(game, player, sx, sy)
+        ensure_starting_command(game, player, sx, sy, packed_start)
+    missing_commands = [
+        player["name"] for player in players
+        if not player_has_command(game, player["id"])
+    ]
+    if missing_commands:
+        raise RuntimeError("开局指挥单位生成失败：%s" % "、".join(missing_commands))
+    room["game"] = game
+    room["status"] = "playing"
     teams_used = set(p.get("team", 0) for p in players)
     if any(t > 0 for t in teams_used):
         team_lines = []
@@ -4308,7 +4027,7 @@ def _scatter_forest_rocks(map_def, count, seed):
 # 每张图按面积比例铺森林巨石；种子由地图名决定，同一张图每次相同。
 for _rock_map_id, _rock_map_def in MAPS.items():
     # 赤金陨坑的阻挡全部集中在五条等分森林带；发展区内不再塞随机孤岛。
-    if _rock_map_id in ("gold_crater", "gold_crater_small"):
+    if _rock_map_id == "gold_crater_small":
         continue
     _rock_count = max(10, int(_rock_map_def["width"] * _rock_map_def["height"] / 2200000.0))
     _rock_seed = sum(ord(ch) for ch in _rock_map_id) + 0x5EED
@@ -6311,13 +6030,18 @@ def record_match_winner(room, winner):
         game["winnerIds"] = []
         game["winnerTeam"] = 0
         return
-    team = winner.get("team", 0)
+    # 对局中的 playerTeams 才是战斗判定的权威数据。大厅 player 字段可能
+    # 正赶上分队请求或动态结盟更新；混用两份状态会让同队客户端拿到不完整
+    # winnerIds，进而把队友显示成失败。
+    team = game.get("playerTeams", {}).get(
+        winner["id"], winner.get("team", 0))
     game["winnerId"] = winner["id"]
     game["winnerTeam"] = team if team > 0 else 0
     if team > 0:
+        winning_owners = friendly_owners(game, winner["id"])
         game["winnerIds"] = [
             player["id"] for player in room["players"].values()
-            if player.get("team", 0) == team
+            if player["id"] in winning_owners
         ]
     else:
         game["winnerIds"] = [winner["id"]]
@@ -6354,7 +6078,8 @@ def check_elimination_and_victory(room, force=False):
     elif force or game["elapsed"] > 15:
         surviving_teams = set()
         for p in alive:
-            t = p.get("team", 0)
+            t = game.get("playerTeams", {}).get(
+                p["id"], p.get("team", 0))
             surviving_teams.add(t if t > 0 else p["id"])
         if len(surviving_teams) <= 1:
             winner = alive[0]
