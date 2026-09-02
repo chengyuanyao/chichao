@@ -573,6 +573,16 @@ def main():
     assert "command: 'move'" not in select_body
     assert "command: 'stop'" not in select_body
     assert "command: 'attackMove'" not in select_body
+    # 3D 模型不能继续用 y=0 地面交点的小圆来点选。渲染层按模型几何包围盒
+    # 投影出屏幕命中区，app 优先采用它，点头部/炮塔/龙翼也不会漏选或选到
+    # 背后的建筑；计算仅发生在鼠标操作时，不进入 render 热循环。
+    assert "function unitModelPickBox(kind)" in render
+    assert "entry.body.computeBoundingBox();" in render
+    assert "function unitPickScore(unit, sx, sy)" in render
+    assert "const padding = 8;" in render
+    assert "unitPickScore: unitPickScore" in render
+    assert "view3d.unitPickScore(unit, clickScreen.x, clickScreen.y)" in app
+    assert "if (bestIsScreenUnit) { return; }" in app
     box_fn = re.search(
         r"function selectBoxUnits\([\s\S]*?\) \{([\s\S]*?)\n  \}",
         app)

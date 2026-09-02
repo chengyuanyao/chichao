@@ -4231,11 +4231,26 @@ import {
     }
     var best = null;
     var bestDistance = Infinity;
+    var bestScreenScore = Infinity;
+    var bestIsScreenUnit = false;
+    // worldX/worldY 是鼠标射线在地面的交点；重新投影可恢复原始 CSS 像素，
+    // 让渲染层用完整 3D 模型轮廓判定，而不是只认单位脚下的小圆。
+    var clickScreen = worldToScreen(worldX, worldY);
     roomState.game.units.forEach(function (unit) {
       var visual = view3d.visualPosition(unit.id) || unit;
       var dist = Math.hypot(visual.x - worldX, visual.y - worldY);
+      var screenScore = view3d.unitPickScore ?
+        view3d.unitPickScore(unit, clickScreen.x, clickScreen.y) : null;
+      if (screenScore != null && screenScore < bestScreenScore) {
+        best = unit;
+        bestDistance = dist;
+        bestScreenScore = screenScore;
+        bestIsScreenUnit = true;
+        return;
+      }
+      if (bestIsScreenUnit) { return; }
       // 玩法碰撞仍使用服务端 size；点选额外覆盖长法杖、龙翼等可见轮廓，
-      // 防止点在模型上却选不中。密集部队依旧由最近中心优先消歧。
+      // 这条是旧浏览器/模型尚未建立时的地面兜底。
       var visualTolerance = unit.size * (UNIT_VISUAL_PICK_SCALE[unit.kind] || 1);
       var tolerance = Math.max(unit.size + 8 / camera.zoom, visualTolerance);
       if (dist <= tolerance && dist < bestDistance) {
@@ -4244,6 +4259,8 @@ import {
       }
     });
     roomState.game.structures.forEach(function (structure) {
+      // 鼠标已经落在单位的可见模型上时，不能再被其脚下或背后的建筑抢走。
+      if (bestIsScreenUnit) { return; }
       var dx = Math.abs(structure.x - worldX);
       var dy = Math.abs(structure.y - worldY);
       if (dx <= structure.size && dy <= structure.size) {

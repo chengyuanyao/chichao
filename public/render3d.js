@@ -2475,7 +2475,8 @@ const UNIT_LOD_DISTANCE = 900;
 const BRIDGE_RENDER_SPAN = 2.0;
 
 /**
- * 单位模型的视觉放大系数（纯表现，不影响碰撞/选取，那些仍用服务端 size）。
+ * 单位模型的视觉放大系数（纯表现，不影响服务端碰撞）。点选会把这一缩放
+ * 应用到模型包围盒，保证画出来的枪管、车身和高大轮廓都能实际点中。
  *
  * 服务端的 size 是给 2D 俯视图定的碰撞半径；照搬到 3D 里，从 RTS 常用的
  * 视距看步兵只有几个像素，根本认不出兵种。这里按兵种放大到能辨识的比例。
@@ -4784,6 +4785,20 @@ export function createRenderer(canvas) {
     return entry;
   }
 
+  /**
+   * 点选使用近景与远景几何体的并集。包围盒只在该兵种第一次被点击时计算，
+   * 之后直接复用；不进入 60FPS 渲染热路径。
+   */
+  function unitModelPickBox(kind) {
+    const entry = unitGeometry(kind);
+    if (entry.pickBox) return entry.pickBox;
+    entry.body.computeBoundingBox();
+    entry.simple.computeBoundingBox();
+    entry.pickBox = entry.body.boundingBox.clone();
+    entry.pickBox.union(entry.simple.boundingBox);
+    return entry.pickBox;
+  }
+
   function ensurePool(kind, needed) {
     let pool = unitPools.get(kind);
     if (!pool) pool = { capacity: 0, mesh: null, simple: null };
@@ -6257,6 +6272,70 @@ export function createRenderer(canvas) {
     };
   }
 
+  /**
+   * 返回鼠标命中某个单位屏幕轮廓的排序分数；未命中返回 null。
+   *
+   * 旧点选先把鼠标射线打到 y=0 地面，再与单位脚下的玩法碰撞圆比较。
+   * 透视镜头下，点在步兵头部、车辆炮塔或龙翼上的射线落到地面时已经偏出
+   * 很远，于是出现“明明点在模型上却选不中”。这里把完整 3D 模型包围盒的
+   * 八个角投影到屏幕，以真实可见轮廓做命中，并额外留 8px 易点边距。
+   * 这段只在点击/双击/右键时执行，不增加逐帧开销。
+   */
+  function unitPickScore(unit, sx, sy) {
+    if (!unit || !Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+    const vis = visual.get(unit.id) || unit;
+    const kind = unitVisualKind(unit);
+    const box = unitModelPickBox(kind);
+    const scale = UNIT_VISUAL_SCALE[kind] || 1;
+    const gameplayRadius = unit.size * (UNIT_VISUAL_PICK_SCALE[unit.kind] || 1);
+    const minX = Math.min(box.min.x * scale, -gameplayRadius);
+    const maxX = Math.max(box.max.x * scale, gameplayRadius);
+    const minZ = Math.min(box.min.z * scale, -gameplayRadius);
+    const maxZ = Math.max(box.max.z * scale, gameplayRadius);
+    const minY = Math.min(0, box.min.y * scale);
+    const maxY = Math.max(box.max.y * scale, unit.size);
+    const ground = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
+    const cos = Math.cos(vis.dir || 0);
+    const sin = Math.sin(vis.dir || 0);
+    let left = Infinity;
+    let right = -Infinity;
+    let top = Infinity;
+    let bottom = -Infinity;
+
+    for (let xi = 0; xi < 2; xi++) {
+      const lx = xi ? maxX : minX;
+      for (let zi = 0; zi < 2; zi++) {
+        const lz = zi ? maxZ : minZ;
+        const wx = vis.x + lx * cos - lz * sin;
+        const wz = vis.y + lx * sin + lz * cos;
+        for (let yi = 0; yi < 2; yi++) {
+          const wy = ground + (yi ? maxY : minY);
+          projected.set(wx, wy, wz).project(camera);
+          const px = (projected.x * 0.5 + 0.5) * state.width;
+          const py = (-projected.y * 0.5 + 0.5) * state.height;
+          left = Math.min(left, px);
+          right = Math.max(right, px);
+          top = Math.min(top, py);
+          bottom = Math.max(bottom, py);
+        }
+      }
+    }
+
+    const padding = 8;
+    if (sx < left - padding || sx > right + padding ||
+        sy < top - padding || sy > bottom + padding) {
+      return null;
+    }
+    // 先偏向真正落在模型包围盒内的候选；多个单位轮廓重叠时，再选择屏幕
+    // 中心离鼠标最近的一个，避免大模型仅凭包围盒宽就总是抢走点击。
+    const outsideX = Math.max(left - sx, 0, sx - right);
+    const outsideY = Math.max(top - sy, 0, sy - bottom);
+    const centerX = (left + right) * 0.5;
+    const centerY = (top + bottom) * 0.5;
+    return Math.hypot(outsideX, outsideY) * 1000 +
+      Math.hypot(sx - centerX, sy - centerY);
+  }
+
   /* -------------------- 逐帧渲染 -------------------- */
 
   // 逐帧复用，避免每单位每帧都分配临时对象
@@ -7218,6 +7297,7 @@ export function createRenderer(canvas) {
 
     screenToWorld: screenToWorld,
     worldToScreen: worldToScreen,
+    unitPickScore: unitPickScore,
     isVisible: isVisible,
     render: render,
 
