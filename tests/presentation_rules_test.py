@@ -192,6 +192,11 @@ def main():
     assert "infantryTab: '圣殿'" in app
     assert "vehicleTab: '法阵'" in app
     assert "function applyFactionHud" in app
+    assert "function hasOwnActiveHeadquarters()" in app
+    assert "总部折叠 · 已暂停" in app
+    assert "需要展开总部" in app
+    assert "activeHeadquarters && definition.requires.every(hasStructure)" in app
+    assert "def player_has_active_headquarters(" in server_source
 
     # 客户端建造锚点、空格回基地、展开/折叠必须走 role，不能写死 hq/mcv。
     assert "function structureRole(kind)" in app

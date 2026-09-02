@@ -2333,6 +2333,16 @@ def has_active_structure(game, player_id, kind):
                for s in game["structures"])
 
 
+def player_has_active_headquarters(game, player_id):
+    """Whether this player currently has an unfolded, completed HQ."""
+    return any(
+        structure["owner"] == player_id
+        and structure.get("hp", 0) > 0
+        and structure.get("active")
+        and structure_role(structure.get("kind")) == "hq"
+        for structure in game["structures"])
+
+
 def construction_anchor_near(game, player_id, x, y):
     for structure in game["structures"]:
         radius = BUILD_ANCHOR_RANGES.get(structure_role(structure["kind"]))
@@ -2366,6 +2376,10 @@ def place_structure(room, player_id, kind, x, y, free=False):
     definition = STRUCTURE_TYPES[kind]
     if definition.get("faction", "tech") != player.get("faction", "tech"):
         raise ValueError("你的阵营无法建造该建筑")
+    # 其他己方核心建筑只提供放置范围，不替代总部的建筑授权。
+    # 折叠迁移时已完工的建筑保留在队列，但要等总部重新展开才能放置。
+    if not player_has_active_headquarters(game, player_id):
+        raise ValueError("请先展开基地车，再部署建筑")
     map_w = game["map"]["width"]
     map_h = game["map"]["height"]
     x = clamp(float(x), definition["size"] + 12, map_w - definition["size"] - 12)
@@ -2395,6 +2409,8 @@ def queue_structure(room, player_id, kind):
     # 阵营校验：科技/魔法各有独立建筑树，跨阵营不能建造
     if definition.get("faction", "tech") != player.get("faction", "tech"):
         raise ValueError("你的阵营无法建造该建筑")
+    if not player_has_active_headquarters(game, player_id):
+        raise ValueError("请先展开基地车，再生产建筑")
     for requirement in definition["requires"]:
         if not has_active_structure(game, player_id, requirement):
             raise ValueError("缺少前置建筑")
@@ -5046,12 +5062,17 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
 
 
 def tick_build_queues(room, dt):
+    game = room["game"]
     for player in room["players"].values():
         queue = player.get("buildQueue", [])
         if not queue or player.get("eliminated"):
             continue
         item = queue[0]
         if item.get("ready"):
+            continue
+        # 最后一座总部折叠/被摧毁后只暂停：不扣新钱、不清队列、不退款，
+        # 重新展开任意一座总部后从原剩余时间继续。
+        if not player_has_active_headquarters(game, player["id"]):
             continue
         production_rate = production_power_factor(room, player["id"], 0.4)
         item["remaining"] = max(0.0, item["remaining"] - dt * production_rate)

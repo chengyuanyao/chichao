@@ -2925,6 +2925,13 @@ import {
     }));
   }
 
+  function hasOwnActiveHeadquarters() {
+    return !!(roomState && roomState.game && roomState.game.structures.some(function (structure) {
+      return structure.owner === session.playerId && structure.active && structure.hp > 0 &&
+        structureRole(structure.kind) === 'hq';
+    }));
+  }
+
   function activateBuildMode(kind, automatic) {
     buildMode = kind;
     commandMode = null;
@@ -2942,6 +2949,18 @@ import {
     var item = me && me.buildQueue && me.buildQueue[0];
     if (!item) {
       lastReadyBuildId = null;
+      return;
+    }
+    if (!hasOwnActiveHeadquarters()) {
+      // 总部折叠后不能留着绿色放置鬼影误导玩家。成品仍在队列里，
+      // 重新展开后点建筑卡即可继续部署。
+      if (buildMode) { cancelModes(); }
+      if (item.ready && item.id !== lastReadyBuildId) {
+        lastReadyBuildId = item.id;
+        toast(((BUILDINGS[item.kind] || {}).name || item.kind) +
+          ' 已生产完成，展开总部后可部署', 'success');
+        sound('complete');
+      }
       return;
     }
     if (item.ready && item.id !== lastReadyBuildId) {
@@ -2964,6 +2983,12 @@ import {
         toast('已取消建筑生产，资金已返还');
         sound('confirm');
       }).catch(function () {});
+      return;
+    }
+    if (!hasOwnActiveHeadquarters()) {
+      toast(item ? '总部已折叠，建筑生产已暂停' :
+        '请先展开基地车，再生产建筑', 'error');
+      sound('error');
       return;
     }
     if (item) {
@@ -3083,8 +3108,9 @@ import {
       var kind = button.dataset.kind;
       var definition = button.dataset.type === 'building' ? BUILDINGS[kind] : UNITS[kind];
       var isBuilding = button.dataset.type === 'building';
+      var activeHeadquarters = hasOwnActiveHeadquarters();
       var requirementsMet = isBuilding
-        ? definition.requires.every(hasStructure)
+        ? activeHeadquarters && definition.requires.every(hasStructure)
         : hasStructure(definition.producer) && (definition.requires || []).every(hasStructure);
       var status = button.querySelector('.command-status');
       var progress = 0;
@@ -3099,12 +3125,18 @@ import {
           progress = buildItem.ready ? 1 : 1 - buildItem.remaining / Math.max(0.01, buildItem.total);
           button.classList.add('queued');
           button.classList.toggle('ready', !!buildItem.ready);
-          status.textContent = buildItem.ready ? '点击部署' : Math.ceil(buildItem.remaining) + ' 秒';
+          status.textContent = !activeHeadquarters ?
+            (buildItem.ready ? '展开总部后部署' : '总部折叠 · 已暂停') :
+            (buildItem.ready ? '点击部署' : Math.ceil(buildItem.remaining) + ' 秒');
+          // 暂停中的队列卡仍可交互，便于 Shift+点击/右键取消退款；
+          // 普通点击会在 handleBuildingCard 里提示先展开总部。
           button.disabled = !!me.eliminated;
-          button.title = definition.desc + ' · Shift+点击取消';
+          button.title = activeHeadquarters ?
+            definition.desc + ' · Shift+点击取消' : '展开总部后自动续造；右键仍可取消退款';
         } else {
           var queueBusy = !!buildItem;
-          status.textContent = queueBusy ? '队列占用' : '◆ ' + definition.cost.toLocaleString('zh-CN');
+          status.textContent = queueBusy ? '队列占用' :
+            (!activeHeadquarters ? '需要展开总部' : '◆ ' + definition.cost.toLocaleString('zh-CN'));
           button.disabled = queueBusy || !requirementsMet || me.cash < definition.cost || me.eliminated;
           button.title = definition.desc + ' · 生产 ' + definition.build + ' 秒';
         }
@@ -3915,6 +3947,9 @@ import {
     if (!definition || !roomState || !roomState.game) {
       return false;
     }
+    if (!hasOwnActiveHeadquarters()) {
+      return false;
+    }
     // 客户端也要挡住山体，否则预览显示可建、服务端却拒绝
     var mountains = (roomState.game.terrain && roomState.game.terrain.mountains) || [];
     for (var mi = 0; mi < mountains.length; mi++) {
@@ -4505,6 +4540,12 @@ import {
       return;
     }
     var kind = buildMode;
+    if (!hasOwnActiveHeadquarters()) {
+      cancelModes();
+      toast('请先展开基地车，再部署建筑', 'error');
+      sound('error');
+      return;
+    }
     if (!positionValidClient(kind, pointer.worldX, pointer.worldY)) {
       toast('这里无法部署：只能依托已完成的核心建筑逐步扩张', 'error');
       sound('error');
