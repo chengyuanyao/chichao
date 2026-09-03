@@ -146,6 +146,7 @@ MAPS = {
         "height": 3200,
         "maxPlayers": 2,
         "theme": "arid",
+        "visualStyle": "arid_wilderness",
         "spawnPoints": [
             (700, 1600),
             (4100, 1600),
@@ -169,6 +170,121 @@ MAPS = {
             {"x1": 4020, "y1": 1600, "x2": 2400, "y2": 686, "width": 100},
             {"x1": 4020, "y1": 1600, "x2": 2400, "y2": 2571, "width": 100},
         ],
+        # 三条战术通道保持不变；可见车辙是彼此独立的风蚀曲径，
+        # 不从基地脚下汇成规整的三叉路口。
+        "visualTrails": [
+            {"width": 94, "points": [
+                [980, 1290], [1250, 1110], [1540, 970], [1900, 780],
+                [2180, 720], [2400, 686], [2650, 735], [2940, 880],
+                [3250, 1010], [3820, 1300],
+            ]},
+            {"width": 108, "points": [
+                [980, 1530], [1260, 1610], [1600, 1540], [1940, 1660],
+                [2400, 1600], [2830, 1530], [3190, 1660], [3820, 1570],
+            ]},
+            {"width": 94, "points": [
+                [980, 1910], [1250, 2090], [1540, 2230], [1900, 2420],
+                [2180, 2480], [2400, 2514], [2650, 2465], [2940, 2320],
+                [3250, 2190], [3820, 1900],
+            ]},
+        ],
+    },
+    "iron_river_duel": {
+        "id": "iron_river_duel",
+        "name": "铁峡争渡",
+        "width": 4800,
+        "height": 3200,
+        "maxPlayers": 2,
+        "theme": "temperate",
+        "visualStyle": "river_valley",
+        "bridgeDeckHeight": 18,
+        "briefing": (
+            "以狭路对峙的左右 1v1 格局重构。一条深河谷纵贯战场，"
+            "只能经上中下三座钢桥过河；中桥适合正面装甲推进，"
+            "两座窄桥提供侧翼包抄。两岸旷野、河岸林与岩台之间只有军车碾出的泥土小道。"
+        ),
+        "spawnPoints": [(700, 1600), (4100, 1600)],
+        "spawnLabels": ["西岸指挥部", "东岸指挥部"],
+        # 服务端仍用一条笔直河流作权威阻挡；客户端按 river_valley
+        # 画出抖动岸线、下沉河床和岩壁，视觉阻挡始终是玩法阻挡的超集。
+        "rivers": [
+            {"x1": 2400, "y1": -180, "x2": 2400, "y2": 3380, "width": 360},
+        ],
+        # 线段端点已落到两岸实地；桥面内宽允许两辆大型载具错身。
+        "bridges": [
+            {"x": 2400, "y": 650, "x1": 2160, "y1": 650,
+             "x2": 2640, "y2": 650, "width": 170, "deckHeight": 18, "ramp": 120},
+            {"x": 2400, "y": 1600, "x1": 2140, "y1": 1600,
+             "x2": 2660, "y2": 1600, "width": 200, "deckHeight": 18, "ramp": 130},
+            {"x": 2400, "y": 2550, "x1": 2160, "y1": 2550,
+             "x2": 2640, "y2": 2550, "width": 170, "deckHeight": 18, "ramp": 120},
+        ],
+        # 四块河岸岩台把三座桥切成独立战线；外围四组高地为
+        # 双方提供对称的扩张边界。
+        "mountains": [
+            {"x": 1940, "y": 1120, "r": 250},
+            {"x": 2860, "y": 1120, "r": 250},
+            {"x": 1940, "y": 2080, "r": 250},
+            {"x": 2860, "y": 2080, "r": 250},
+            {"x": 1350, "y": 450, "r": 190},
+            {"x": 3450, "y": 2750, "r": 190},
+            {"x": 1350, "y": 2750, "r": 190},
+            {"x": 3450, "y": 450, "r": 190},
+        ],
+        # 三套路线都与桥面严格衔接，入口没有斜切河岸。
+        "roads": [
+            {"x1": 480, "y1": 1600, "x2": 2140, "y2": 1600, "width": 145},
+            {"x1": 2140, "y1": 1600, "x2": 2660, "y2": 1600, "width": 170},
+            {"x1": 2660, "y1": 1600, "x2": 4320, "y2": 1600, "width": 145},
+            {"x1": 720, "y1": 1600, "x2": 1520, "y2": 830, "width": 112},
+            {"x1": 1520, "y1": 830, "x2": 2160, "y2": 650, "width": 112},
+            {"x1": 2160, "y1": 650, "x2": 2640, "y2": 650, "width": 145},
+            {"x1": 2640, "y1": 650, "x2": 3280, "y2": 830, "width": 112},
+            {"x1": 3280, "y1": 830, "x2": 4080, "y2": 1600, "width": 112},
+            {"x1": 720, "y1": 1600, "x2": 1520, "y2": 2370, "width": 112},
+            {"x1": 1520, "y1": 2370, "x2": 2160, "y2": 2550, "width": 112},
+            {"x1": 2160, "y1": 2550, "x2": 2640, "y2": 2550, "width": 145},
+            {"x1": 2640, "y1": 2550, "x2": 3280, "y2": 2370, "width": 112},
+            {"x1": 3280, "y1": 2370, "x2": 4080, "y2": 1600, "width": 112},
+        ],
+        # 玩法道路仍保持三座桥的公平寻路骨架；画面改用六条互不相交的
+        # 连续乡间车辙。它们从基地外缘自然出现，不在主堡脚下汇成三叉戟。
+        "visualTrails": [
+            {"width": 116, "points": [
+                [880, 1515], [1160, 1560], [1440, 1510],
+                [1740, 1585], [1990, 1560], [2140, 1600],
+            ]},
+            {"width": 92, "points": [
+                [900, 1330], [1080, 1190], [1240, 1010], [1460, 920],
+                [1680, 820], [1930, 760], [2160, 650],
+            ]},
+            {"width": 92, "points": [
+                [900, 1870], [1080, 2010], [1240, 2190], [1460, 2280],
+                [1680, 2380], [1930, 2440], [2160, 2550],
+            ]},
+            {"width": 116, "points": [
+                [2660, 1600], [2810, 1640], [3060, 1615],
+                [3360, 1690], [3640, 1640], [3920, 1685],
+            ]},
+            {"width": 92, "points": [
+                [2640, 650], [2870, 760], [3120, 820], [3340, 920],
+                [3560, 1010], [3720, 1190], [3900, 1330],
+            ]},
+            {"width": 92, "points": [
+                [2640, 2550], [2870, 2440], [3120, 2380], [3340, 2280],
+                [3560, 2190], [3720, 2010], [3900, 1870],
+            ]},
+        ],
+        "homeOreAmounts": (22000, 16000, 14000),
+        "publicOreCount": 0,
+        "bonusResources": [
+            {"x": 1700, "y": 650, "amount": 22000, "public": True},
+            {"x": 3100, "y": 2550, "amount": 22000, "public": True},
+            {"x": 1700, "y": 2550, "amount": 22000, "public": True},
+            {"x": 3100, "y": 650, "amount": 22000, "public": True},
+            {"x": 1600, "y": 1430, "amount": 26000, "public": True},
+            {"x": 3200, "y": 1770, "amount": 26000, "public": True},
+        ],
     },
     "gold_crater_small": {
         "id": "gold_crater_small",
@@ -177,6 +293,7 @@ MAPS = {
         "height": 6400,
         "maxPlayers": 5,
         "theme": "crater",
+        "visualStyle": "crater_wilderness",
         "briefing": (
             "五方围着陨石核打，家矿储量充足，"
             "正中金库有炮塔、突击兵和火箭兵看守。外环五处邻里路口被密林"
@@ -246,6 +363,25 @@ MAPS = {
             {"x1": 867, "y1": 4694, "x2": 435, "y2": 3362, "width": 140},
             {"x1": 1059, "y1": 1443, "x2": 2191, "y2": 621, "width": 140},
         ],
+        # 五条旋转对称的自然车辙从发展区外缘逐渐显现并弯向陨坑。
+        # 只画主行军痕迹，不把玩法用的内外环路全部暴露成几何图案。
+        "visualTrails": [
+            {"width": 92, "points": [
+                [3080, 1300], [3270, 1620], [3115, 1960], [3320, 2240], [3200, 2480],
+            ]},
+            {"width": 92, "points": [
+                [4970, 2499], [4724, 2778], [4353, 2736], [4150, 3017], [3885, 2978],
+            ]},
+            {"width": 92, "points": [
+                [4414, 4667], [4072, 4519], [3998, 4153], [3667, 4047], [3623, 3782],
+            ]},
+            {"width": 92, "points": [
+                [2180, 4808], [2215, 4437], [2540, 4253], [2539, 3906], [2777, 3782],
+            ]},
+            {"width": 92, "points": [
+                [1356, 2727], [1719, 2645], [1994, 2898], [2324, 2789], [2515, 2978],
+            ]},
+        ],
         # 每家四片保底矿，公共矿另有六处随机点，
         # 中庭五处头奖围着陨石核（对准五条谷口），外加五处邻里口袋矿。
         # 都按公共矿刷炮塔 / 突击兵 / 火箭兵守军。
@@ -279,6 +415,7 @@ MAPS = {
         "height": 4000,
         "maxPlayers": 5,
         "theme": "grassland",
+        "visualStyle": "open_wilderness",
         "briefing": (
             "五名指挥官只带一辆折叠基地车，在中央矿脉旁同时落地。"
             "先抢方向再展开：外围五个方向各随机生成一片 23 万无守军矿区，"
@@ -337,11 +474,12 @@ MAPS = {
     },
 }
 
-# 当前版本只发布这三张地图；顺序同时作为服务端公共目录的稳定顺序。
+# 当前版本发布三张正式图和一张写实风格试制图；顺序同时作为公共目录的稳定顺序。
 SHIPPED_MAP_IDS = (
     "central_scramble",
     "gold_crater_small",
     "narrow_standoff",
+    "iron_river_duel",
 )
 MAPS = {map_id: MAPS[map_id] for map_id in SHIPPED_MAP_IDS}
 
@@ -362,6 +500,14 @@ TERRAIN_DETAIL_PROFILES = {
         "grassDensity": 0.34,
         "rockDensity": 1.18,
         "spawnFlatRadius": 280,
+        "centerFlatRadius": 0,
+    },
+    "temperate": {
+        "relief": 1.44,
+        "colorVariation": 1.52,
+        "grassDensity": 2.00,
+        "rockDensity": 1.54,
+        "spawnFlatRadius": 300,
         "centerFlatRadius": 0,
     },
     "urban": {
@@ -386,12 +532,40 @@ MAP_TERRAIN_DETAIL = {
     # 五辆基地车的中央展开圈保持平整、无散石；外围草坡和碎石比普通草原更密，
     # 解决 4000×4000 战场远看像一块纯平绿板的问题。
     "central_scramble": {
-        "relief": 1.58,
-        "colorVariation": 1.42,
-        "grassDensity": 1.35,
-        "rockDensity": 1.48,
+        "relief": 1.62,
+        "colorVariation": 1.56,
+        "grassDensity": 1.65,
+        "rockDensity": 1.34,
         "spawnFlatRadius": 320,
         "centerFlatRadius": 620,
+    },
+    # 风蚀荒原：沟壑、砂岩和低矮旱生植被比默认沙土地更明显。
+    "narrow_standoff": {
+        "relief": 1.52,
+        "colorVariation": 1.52,
+        "grassDensity": 0.50,
+        "rockDensity": 1.70,
+        "spawnFlatRadius": 300,
+        "centerFlatRadius": 0,
+    },
+    # 陨坑地表增加焦土色差、撞击碎岩和少量复苏植被；出生区保持可建造。
+    "gold_crater_small": {
+        "relief": 1.50,
+        "colorVariation": 1.62,
+        "grassDensity": 0.28,
+        "rockDensity": 1.62,
+        "spawnFlatRadius": 300,
+        "centerFlatRadius": 0,
+    },
+    # 写实展示图：起伏、草木与碎岩都提高，但出生区仍保留
+    # 300px 平整建造面，不让视觉升级破坏 1v1 开局节奏。
+    "iron_river_duel": {
+        "relief": 1.44,
+        "colorVariation": 1.52,
+        "grassDensity": 2.00,
+        "rockDensity": 1.54,
+        "spawnFlatRadius": 300,
+        "centerFlatRadius": 0,
     },
 }
 
@@ -1042,11 +1216,14 @@ PUBLIC_MAPS = {
         # 静态地形一并下发：大厅的地图预览按真实山脉与道路绘制；
         # 而不是一张假想图。地图目录只在大厅阶段发送，体积不敏感。
         "theme": m.get("theme", "grassland"),
+        "visualStyle": m.get("visualStyle", "forest_barrier"),
+        "bridgeDeckHeight": m.get("bridgeDeckHeight", 0),
         "briefing": m.get("briefing", ""),
         "rivers": m.get("rivers", []),
         "bridges": m.get("bridges", []),
         "mountains": m.get("mountains", []),
         "roads": m.get("roads", []),
+        "visualTrails": m.get("visualTrails", []),
         "terrainDetail": visual_terrain_detail(m),
         "resources": m.get("bonusResources", []),
         "neutralOreGuards": bool(m.get("neutralOreGuards", True)),
@@ -2086,7 +2263,12 @@ def start_game(room):
             "bridges": [dict(b) for b in bridges],
             "mountains": [{"x": m["x"], "y": m["y"], "r": m["r"]} for m in mountains],
             "roads": [{"x1": r["x1"], "y1": r["y1"], "x2": r["x2"], "y2": r["y2"], "width": r["width"]} for r in roads],
+            "visualTrails": [dict(t) for t in room_map.get("visualTrails", [])],
             "theme": room_map.get("theme", "grassland"),
+            # 只影响客户端地形表现：普通图继续把 river 画成密林分界，
+            # river_valley 才画真水面、下沉河床和有高度的桥梁。
+            "visualStyle": room_map.get("visualStyle", "forest_barrier"),
+            "bridgeDeckHeight": room_map.get("bridgeDeckHeight", 0),
             # 纯表现参数：客户端用来生成低缓草坡、草簇与不可碰撞的散石。
             "detail": visual_terrain_detail(room_map),
         },
@@ -4160,7 +4342,7 @@ def _scatter_forest_rocks(map_def, count, seed):
 # 每张图按面积比例铺森林巨石；种子由地图名决定，同一张图每次相同。
 for _rock_map_id, _rock_map_def in MAPS.items():
     # 赤金陨坑的阻挡全部集中在五条等分森林带；发展区内不再塞随机孤岛。
-    if _rock_map_id == "gold_crater_small":
+    if _rock_map_id in ("gold_crater_small", "iron_river_duel"):
         continue
     _rock_count = max(10, int(_rock_map_def["width"] * _rock_map_def["height"] / 2200000.0))
     _rock_seed = sum(ord(ch) for ch in _rock_map_id) + 0x5EED

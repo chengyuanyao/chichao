@@ -138,8 +138,8 @@ def main():
     assert ".command-sidebar > *" in styles
     assert "max-width: 100%;" in styles
 
-    # Other live maps stay mountain-only; the retained crater map uses rim bridges.
-    crater_ids = ("gold_crater_small",)
+    # 赤金陨坑用河数据做林带；新双人图用同一权威数据画真河谷。
+    crater_ids = ("gold_crater_small", "iron_river_duel")
     for map_id in crater_ids:
         crater = server.MAPS[map_id]
         assert crater.get("rivers") and crater.get("bridges")
@@ -153,6 +153,7 @@ def main():
         "narrow_standoff": (4800, 3200),
         "gold_crater_small": (6400, 6400),
         "central_scramble": (4000, 4000),
+        "iron_river_duel": (4800, 3200),
     }
     assert {map_id: (map_def["width"], map_def["height"])
             for map_id, map_def in server.MAPS.items()} == expected_sizes
@@ -292,6 +293,30 @@ def main():
     assert "mesh.castShadow = false" in render
     assert "groundDetailParts: state.groundDetailParts" in render
     assert "terrainDetail\": visual_terrain_detail(m)" in server_source
+    # 写实试制图必须有独立真水、道路与实体桥；单位高度和坡道模型共用同一
+    # 个线性公式，禁止重新引入会造成轮胎陷入坡面的 smoothstep 曲线。
+    assert "function bridgeSurfaceHeightAt(x, y, baseHeight)" in render
+    assert "function makeRampGeometry(length, width, height, reverse)" in render
+    assert "function buildBridgeNetwork()" in render
+    assert "mesh.name = 'raised-bridge-network'" in render
+    assert "function buildRiverWater()" in render
+    assert "function buildRoadNetwork()" in render
+    assert "new THREE.CatmullRomCurve3" in render
+    assert "terrain.visualTrails" in render
+    assert "new THREE.OctahedronGeometry" in render
+    assert "crater_wilderness" in render
+    assert "arid_wilderness" in render
+    assert "open_wilderness" in render
+    assert "addLayer(trackParts, 'wilderness-dirt-tracks'" in render
+    assert "addLayer(rutParts, 'wilderness-wheel-ruts'" in render
+    assert "deckDashCount" not in render
+    assert "dashSpan" not in render
+    assert "泥土小道" in server.MAPS["iron_river_duel"]["briefing"]
+    bridge_height_source = render.split(
+        "function bridgeSurfaceHeightAt(x, y, baseHeight)", 1
+    )[1].split("function bridgeTrailAt", 1)[0]
+    assert "smoothstep" not in bridge_height_source
+    assert "(along + ramp) / ramp" in bridge_height_source
     # 团队胜利必须按完整获胜成员列表显示；winnerId 只是兼容字段，不能再让
     # 同队其余客户端误弹“失败”。空名单还要按 winnerTeam / isFriendly 回退，
     # 不能把网络切帧期间的 [] 当成“所有人都输了”。
@@ -315,11 +340,12 @@ def main():
     assert "function buildLandmarks" not in render
     assert "mixGroundPhoto" not in render
     assert "terrain-ground.png" not in render
-    for theme_id in ("grassland", "arid", "urban", "crater"):
+    for theme_id in ("grassland", "arid", "urban", "crater", "temperate"):
         assert ("  %s:" % theme_id) in render
     assert server.MAPS["central_scramble"]["theme"] == "grassland"
     assert server.MAPS["narrow_standoff"]["theme"] == "arid"
     assert server.MAPS["gold_crater_small"]["theme"] == "crater"
+    assert server.MAPS["iron_river_duel"]["theme"] == "temperate"
     assert "mapBriefingDisplay" in app
     assert server.MAPS["gold_crater_small"].get("briefing")
     assert "function paintGrassBase(c, w, h, themeId)" in app

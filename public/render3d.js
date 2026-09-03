@@ -2381,6 +2381,30 @@ export const MAP_DISPLAY_THEMES = {
     tex: [1.00, 0.90, 0.68],
     minimap: { base: '#6a5a38', dry: 'rgba(220,180,90,.16)', light: 'rgba(236,212,150,', dark: 'rgba(28,18,8,', mountain: '#7a8a3c' }
   },
+  temperate: {
+    id: 'temperate',
+    grass: [0.34, 0.40, 0.20],
+    lush: [0.22, 0.35, 0.15],
+    dry: [0.54, 0.47, 0.27],
+    dirt: [0.43, 0.32, 0.19],
+    packed: [0.36, 0.32, 0.25],
+    rock: [0.49, 0.38, 0.28],
+    forest: [0.14, 0.30, 0.11],
+    skirt: 0x46523a,
+    pad: 0x555044,
+    fog: 0xa8c1c3,
+    horizon: 0xeee0c1,
+    mid: 0xa8c9d7,
+    zenith: 0x4f8eb9,
+    skyGround: 0x829a91,
+    hemiSky: 0xc1d9e0,
+    hemiGround: 0x4a5333,
+    sun: 0xffdfad,
+    fill: 0x91aeb7,
+    rim: 0xc3d9dc,
+    tex: [0.95, 0.94, 0.72],
+    minimap: { base: '#536039', dry: 'rgba(190,158,83,.17)', light: 'rgba(226,224,178,', dark: 'rgba(7,16,9,', mountain: '#746344' }
+  },
   urban: {
     id: 'urban',
     grass: [0.32, 0.36, 0.28],
@@ -2440,6 +2464,7 @@ function displayTheme(themeId) {
 const TERRAIN_DETAIL_DEFAULTS = {
   grassland: { relief: 1.20, colorVariation: 1.18, grassDensity: 1.00, rockDensity: 0.78, spawnFlatRadius: 280, centerFlatRadius: 0 },
   arid: { relief: 1.32, colorVariation: 1.26, grassDensity: 0.34, rockDensity: 1.18, spawnFlatRadius: 280, centerFlatRadius: 0 },
+  temperate: { relief: 1.44, colorVariation: 1.52, grassDensity: 2.00, rockDensity: 1.54, spawnFlatRadius: 300, centerFlatRadius: 0 },
   urban: { relief: 0.62, colorVariation: 0.82, grassDensity: 0.18, rockDensity: 0.62, spawnFlatRadius: 300, centerFlatRadius: 0 },
   crater: { relief: 1.42, colorVariation: 1.34, grassDensity: 0.16, rockDensity: 1.34, spawnFlatRadius: 290, centerFlatRadius: 0 }
 };
@@ -2453,8 +2478,8 @@ function resolveTerrainDetail(map, terrain) {
     (map && map.width === 4000 && map.height === 4000);
   if (isCentralScramble) {
     Object.assign(result, {
-      relief: 1.58, colorVariation: 1.42, grassDensity: 1.35,
-      rockDensity: 1.48, spawnFlatRadius: 320, centerFlatRadius: 620
+      relief: 1.62, colorVariation: 1.56, grassDensity: 1.65,
+      rockDensity: 1.34, spawnFlatRadius: 320, centerFlatRadius: 620
     });
   }
   Object.assign(result, (terrain && terrain.detail) || {});
@@ -3063,16 +3088,84 @@ export function createRenderer(canvas) {
     return ox * ox + oy * oy;
   }
 
+  function riverValleyMode() {
+    return !!(state.terrain && state.terrain.visualStyle === 'river_valley');
+  }
+
+  function terrainVisualStyle() {
+    return (state.terrain && state.terrain.visualStyle) || 'forest_barrier';
+  }
+
+  function authoredTrailMode() {
+    return !!(state.terrain && (state.terrain.visualTrails || []).length);
+  }
+
+  /**
+   * 桥面的权威视觉高度。单位、选中环、血条和弹道都通过
+   * groundHeight 读这个值，与桥面模型共用同一份 deckHeight / ramp，
+   * 因此车辆在引桥上平滑抬升，进入主桥后履带始终贴住桥面。
+   */
+  function bridgeSurfaceHeightAt(x, y, baseHeight) {
+    if (!riverValleyMode()) return baseHeight;
+    const bridges = (state.terrain && state.terrain.bridges) || [];
+    let result = baseHeight;
+    for (let i = 0; i < bridges.length; i++) {
+      const b = bridges[i];
+      if (!Number.isFinite(b.x1) || !Number.isFinite(b.y1) ||
+          !Number.isFinite(b.x2) || !Number.isFinite(b.y2)) continue;
+      const dx = b.x2 - b.x1;
+      const dy = b.y2 - b.y1;
+      const length = Math.hypot(dx, dy);
+      if (length < 0.01) continue;
+      const ux = dx / length;
+      const uy = dy / length;
+      const relX = x - b.x1;
+      const relY = y - b.y1;
+      const along = relX * ux + relY * uy;
+      const lateral = Math.abs(relX * -uy + relY * ux);
+      const halfWidth = (b.width || 150) * 0.5;
+      const ramp = Math.max(40, Number(b.ramp) || 110);
+      if (lateral > halfWidth + 6 || along < -ramp || along > length + ramp) continue;
+      let rise = 1;
+      // Keep this interpolation identical to makeRampGeometry's planar top.
+      // A smooth curve here would put wheels either above or inside the ramp.
+      if (along < 0) rise = THREE.MathUtils.clamp((along + ramp) / ramp, 0, 1);
+      else if (along > length) rise = THREE.MathUtils.clamp(1 - (along - length) / ramp, 0, 1);
+      const deck = Number(b.deckHeight) ||
+        Number(state.terrain.bridgeDeckHeight) || 18;
+      result = Math.max(result, deck * rise);
+    }
+    return result;
+  }
+
   function bridgeTrailAt(x, y) {
     const bridges = (state.terrain && state.terrain.bridges) || [];
     for (let i = 0; i < bridges.length; i++) {
       const b = bridges[i];
       if (Number.isFinite(b.x1) && Number.isFinite(b.y1) &&
           Number.isFinite(b.x2) && Number.isFinite(b.y2)) {
-        const core = b.width * 0.5;
-        const feather = 55;
-        const distance = Math.sqrt(pointSegmentDistanceSq(
-          x, y, b.x1, b.y1, b.x2, b.y2));
+        const craterTrail = terrainVisualStyle() === 'crater_wilderness';
+        const core = b.width * (craterTrail ? 0.34 : 0.5);
+        const feather = craterTrail ? 34 : 55;
+        let distance;
+        if (craterTrail) {
+          // 权威通道保持笔直、等宽，视觉泥径只在其内部轻微摆动。
+          // 首尾偏移归零，林道仍准确接上两侧发展区。
+          const dx = b.x2 - b.x1;
+          const dy = b.y2 - b.y1;
+          const lenSq = Math.max(1, dx * dx + dy * dy);
+          const len = Math.sqrt(lenSq);
+          const t = THREE.MathUtils.clamp(
+            ((x - b.x1) * dx + (y - b.y1) * dy) / lenSq, 0, 1);
+          const bend = Math.sin(t * Math.PI) *
+            (20 * Math.sin(i * 2.17 + 0.8) + 9 * Math.sin(t * Math.PI * 2 + i));
+          const cx = b.x1 + dx * t - dy / len * bend;
+          const cy = b.y1 + dy * t + dx / len * bend;
+          distance = Math.hypot(x - cx, y - cy);
+        } else {
+          distance = Math.sqrt(pointSegmentDistanceSq(
+            x, y, b.x1, b.y1, b.x2, b.y2));
+        }
         if (distance <= core) return 1;
         if (distance < core + feather) {
           return 1 - (distance - core) / feather;
@@ -3125,6 +3218,21 @@ export function createRenderer(canvas) {
       best = Math.max(best, circle(spawns[i][0], spawns[i][1],
         detail.spawnFlatRadius, 180));
     }
+    // 写实桥头要有可预期的坡度。先压平桥梁及引桥周边的装饰起伏，
+    // 再由 bridgeSurfaceHeightAt 给单位和桥面加上完全一致的线性抬升。
+    if (riverValleyMode()) {
+      const bridges = (state.terrain && state.terrain.bridges) || [];
+      for (let i = 0; i < bridges.length; i++) {
+        const b = bridges[i];
+        const flattenRadius = Math.max((b.width || 150) * 0.5 + 80,
+          (Number(b.ramp) || 110) + 24);
+        if (pointSegmentDistanceSq(
+            x, y, b.x1, b.y1, b.x2, b.y2) < flattenRadius * flattenRadius) {
+          best = 1;
+          break;
+        }
+      }
+    }
     return best;
   }
 
@@ -3162,16 +3270,17 @@ export function createRenderer(canvas) {
     const key = (kx << 16) | (ky & 0xffff);
     const cached = _ghCache.get(key);
     if (cached !== undefined) return cached;
-    // 河道不挖深槽：渲染成平地树林（riverDepthAt 只用于着色与种树），
-    // 桥从林间跨过。视觉上比下沉沟壑清楚，也不用担心桥头插进土里。
     const roll = rollingHeight(x, y);
-    const result = roll + mountainHeightAt(x, y);
+    // 普通图的 river 仍是密林分界；只有 river_valley 向下挖出河床。
+    const bed = riverValleyMode() ? riverDepthAt(x, y) * 72 : 0;
+    const result = roll + mountainHeightAt(x, y) - bed;
     _ghCache.set(key, result);
     return result;
   }
 
   function groundHeight(x, y) {
-    return baseGroundHeight(x, y);
+    const base = baseGroundHeight(x, y);
+    return bridgeSurfaceHeightAt(x, y, base);
   }
 
   function spawnWearAt(x, y) {
@@ -3272,6 +3381,445 @@ export function createRenderer(canvas) {
     if (buildingPadMat) buildingPadMat.color.setHex(theme.pad);
   }
 
+  function applyWaterSurface(material) {
+    const prevCompile = material.onBeforeCompile;
+    material.onBeforeCompile = function (shader) {
+      if (prevCompile) prevCompile(shader);
+      shader.uniforms.uTime = { value: 0 };
+      waterShaders.push(shader);
+      shader.fragmentShader = 'uniform float uTime;\n' + shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        '#include <color_fragment>\n' +
+        '  float wrBend = sin(vFogWorld.z * 0.027 - uTime * 0.54) * 0.72;\n' +
+        '  float wrWave = sin(vFogWorld.x * 0.072 + wrBend + uTime * 1.18);\n' +
+        '  float wrCrest = pow(max(0.0, wrWave), 12.0);\n' +
+        '  float wrShimmer = 0.5 + 0.5 * sin(vFogWorld.z * 0.006 + uTime * 0.22);\n' +
+        '  diffuseColor.rgb *= 0.92 + wrShimmer * 0.045 + wrCrest * 0.028;');
+    };
+    const prevKey = material.customProgramCacheKey;
+    material.customProgramCacheKey = function () {
+      return (prevKey ? prevKey.call(material) : '') + '+river-water2';
+    };
+    return material;
+  }
+
+  function terrainTrailDefinitions() {
+    const terrain = state.terrain || {};
+    const authored = terrain.visualTrails || [];
+    if (authored.length) return authored;
+    return (terrain.roads || []).map(function (road) {
+      return {
+        width: road.width,
+        points: [[road.x1, road.y1], [road.x2, road.y2]]
+      };
+    });
+  }
+
+  function terrainTrailSegments() {
+    const result = [];
+    terrainTrailDefinitions().forEach(function (trail) {
+      const points = trail.points || [];
+      for (let i = 1; i < points.length; i++) {
+        result.push({
+          x1: points[i - 1][0], y1: points[i - 1][1],
+          x2: points[i][0], y2: points[i][1], width: trail.width
+        });
+      }
+    });
+    return result;
+  }
+
+  function makeTrailRibbonGeometry(points, width, lateral, lift, wander) {
+    const controls = (points || []).map(function (point) {
+      return new THREE.Vector3(point[0], 0, point[1]);
+    });
+    const curve = new THREE.CatmullRomCurve3(controls, false, 'centripetal', 0.5);
+    let length = 0;
+    for (let i = 1; i < controls.length; i++) {
+      length += controls[i].distanceTo(controls[i - 1]);
+    }
+    length = Math.max(1, length);
+    const steps = Math.max(3, Math.ceil(length / 42));
+    const positions = [];
+    const uvs = [];
+    const indices = [];
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    const phase = first.x * 0.0017 + first.z * 0.0023 +
+      last.x * 0.0009 - last.z * 0.0011;
+    for (let step = 0; step <= steps; step++) {
+      const t = step / steps;
+      const point = curve.getPoint(t);
+      const tangent = curve.getTangent(t);
+      const tangentLength = Math.max(0.0001, Math.hypot(tangent.x, tangent.z));
+      const nx = -tangent.z / tangentLength;
+      const ny = tangent.x / tangentLength;
+      // 控制点决定大尺度弯路，低频漂移只负责模拟车轮绕过局部软地。
+      const envelope = Math.sin(t * Math.PI);
+      const drift = (wander || 0) * envelope *
+        (Math.sin(t * 7.1 + phase) * 0.66 + Math.sin(t * 15.3 - phase) * 0.34);
+      const widthNoise = 0.90 + 0.10 * Math.sin(t * 12.7 + phase * 1.9);
+      const cx = point.x + nx * ((lateral || 0) + drift);
+      const cy = point.z + ny * ((lateral || 0) + drift);
+      const halfWidth = width * widthNoise * 0.5;
+      const leftX = cx + nx * halfWidth;
+      const leftY = cy + ny * halfWidth;
+      const rightX = cx - nx * halfWidth;
+      const rightY = cy - ny * halfWidth;
+      positions.push(leftX, groundHeight(leftX, leftY) + lift, leftY);
+      positions.push(rightX, groundHeight(rightX, rightY) + lift, rightY);
+      uvs.push(t * length / 220, 0, t * length / 220, 1);
+      if (step < steps) {
+        const a = step * 2;
+        indices.push(a, a + 2, a + 1, a + 2, a + 3, a + 1);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  function buildRoadNetwork() {
+    if (!riverValleyMode() && !authoredTrailMode()) return;
+    const trails = terrainTrailDefinitions();
+    const shoulderParts = [];
+    const trackParts = [];
+    const rutParts = [];
+    for (let i = 0; i < trails.length; i++) {
+      const trail = trails[i];
+      const points = trail.points || [];
+      if (points.length < 2) continue;
+      const width = trail.width || 110;
+      const wander = Math.min(9, width * 0.08);
+      // 旷野里没有人工路肩。底层只是被反复踩秃的暖色土壤，颜色贴近周围
+      // 草地；两道细车辙承担路线识别，草原仍然是画面主体。
+      shoulderParts.push({
+        geo: makeTrailRibbonGeometry(points, width * 0.62, 0, 0.18, wander),
+        matrix: new THREE.Matrix4(), rgb: [0.48, 0.40, 0.25]
+      });
+      trackParts.push({
+        geo: makeTrailRibbonGeometry(points, width * 0.32, 0, 0.28, wander),
+        matrix: new THREE.Matrix4(), rgb: [0.46, 0.36, 0.20]
+      });
+      // 只留双轮辙，没有路中线、柏油或规整路肩。
+      const trackOffset = width * 0.18;
+      for (let side = -1; side <= 1; side += 2) {
+        rutParts.push({
+          geo: makeTrailRibbonGeometry(points,
+            Math.max(3.2, width * 0.032), side * trackOffset, 0.48, wander),
+          matrix: new THREE.Matrix4(), rgb: [0.20, 0.15, 0.09]
+        });
+      }
+    }
+    const addLayer = function (parts, name, opacity, order) {
+      if (!parts.length) return;
+      const mesh = new THREE.Mesh(
+        mergeParts(parts),
+        applyFogMask(new THREE.MeshLambertMaterial({
+          vertexColors: true, transparent: true, opacity: opacity,
+          depthWrite: false
+        })));
+      mesh.name = name;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = false;
+      mesh.renderOrder = order;
+      terrainGroup.add(mesh);
+    };
+    // 两层半透明裸土形成柔和边缘，最上层才是窄车辙；三次绘制换掉整片硬边色带。
+    addLayer(shoulderParts, 'wilderness-dirt-shoulders', 0.13, 2);
+    addLayer(trackParts, 'wilderness-dirt-tracks', 0.18, 3);
+    addLayer(rutParts, 'wilderness-wheel-ruts', 0.46, 4);
+  }
+
+  function makeWaterRibbonGeometry(river) {
+    const dx = river.x2 - river.x1;
+    const dy = river.y2 - river.y1;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const nx = -dy / length;
+    const ny = dx / length;
+    const steps = Math.max(12, Math.ceil(length / 72));
+    const positions = [];
+    const uvs = [];
+    const indices = [];
+    for (let step = 0; step <= steps; step++) {
+      const t = step / steps;
+      const wobble = 0.94 + 0.055 * Math.sin(t * 17.1 + river.x1 * 0.01)
+        + 0.035 * Math.sin(t * 31.7 - river.y1 * 0.007);
+      const half = river.width * 0.5 * wobble;
+      const cx = river.x1 + dx * t;
+      const cy = river.y1 + dy * t;
+      positions.push(cx + nx * half, 0, cy + ny * half);
+      positions.push(cx - nx * half, 0, cy - ny * half);
+      uvs.push(t * length / 300, 0, t * length / 300, 1);
+      if (step < steps) {
+        const a = step * 2;
+        indices.push(a, a + 2, a + 1, a + 2, a + 3, a + 1);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  function buildRiverWater() {
+    waterMesh = null;
+    waterShaders.length = 0;
+    if (!riverValleyMode()) return;
+    const rivers = (state.terrain && state.terrain.rivers) || [];
+    const parts = rivers.map(function (river) {
+      return { geo: makeWaterRibbonGeometry(river), matrix: new THREE.Matrix4(),
+        rgb: [0.16, 0.35, 0.40] };
+    });
+    if (!parts.length) return;
+    waterMesh = new THREE.Mesh(
+      mergeParts(parts),
+      applyWaterSurface(applyFogMask(new THREE.MeshPhysicalMaterial({
+        color: 0x376a72, vertexColors: true, roughness: 0.28,
+        metalness: 0.06, transparent: true, opacity: 0.88,
+        depthWrite: false, side: THREE.DoubleSide
+      }))));
+    waterMesh.name = 'river-water';
+    waterMesh.position.y = -7;
+    waterMesh.userData.baseY = -7;
+    waterMesh.receiveShadow = true;
+    waterMesh.renderOrder = 1;
+    terrainGroup.add(waterMesh);
+  }
+
+  function makeRampGeometry(length, width, height, reverse) {
+    const lx = -length * 0.5;
+    const rx = length * 0.5;
+    const hz = width * 0.5;
+    const leftTop = reverse ? height : 0;
+    const rightTop = reverse ? 0 : height;
+    const floor = -4;
+    const positions = [
+      lx, floor, -hz, lx, floor, hz, rx, floor, -hz, rx, floor, hz,
+      lx, leftTop, -hz, lx, leftTop, hz, rx, rightTop, -hz, rx, rightTop, hz
+    ];
+    const indices = [
+      0, 2, 1, 2, 3, 1, 4, 5, 6, 6, 5, 7,
+      0, 4, 2, 2, 4, 6, 1, 3, 5, 3, 7, 5,
+      0, 1, 4, 1, 5, 4, 2, 6, 3, 3, 6, 7
+    ];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  function buildBridgeNetwork() {
+    if (!riverValleyMode()) return;
+    const bridges = (state.terrain && state.terrain.bridges) || [];
+    const parts = [];
+    const addBox = function (w, h, d, x, y, z, angle, rgb) {
+      const transform = new THREE.Matrix4().makeRotationY(-angle);
+      transform.setPosition(x, y, z);
+      parts.push({ geo: new THREE.BoxGeometry(w, h, d), matrix: transform, rgb: rgb });
+    };
+    const addBeam = function (x1, y1, z1, x2, y2, z2, thickness, rgb) {
+      const direction = new THREE.Vector3(x2 - x1, y2 - y1, z2 - z1);
+      const length = direction.length();
+      if (length < 0.01) return;
+      const rotation = new THREE.Quaternion().setFromUnitVectors(
+        new THREE.Vector3(1, 0, 0), direction.normalize());
+      const transform = new THREE.Matrix4().compose(
+        new THREE.Vector3((x1 + x2) * 0.5, (y1 + y2) * 0.5, (z1 + z2) * 0.5),
+        rotation, new THREE.Vector3(1, 1, 1));
+      parts.push({ geo: new THREE.BoxGeometry(length, thickness, thickness),
+        matrix: transform, rgb: rgb });
+    };
+    for (let i = 0; i < bridges.length; i++) {
+      const b = bridges[i];
+      const dx = b.x2 - b.x1;
+      const dy = b.y2 - b.y1;
+      const length = Math.hypot(dx, dy);
+      if (length < 1) continue;
+      const ux = dx / length;
+      const uy = dy / length;
+      const nx = -uy;
+      const ny = ux;
+      const angle = Math.atan2(dy, dx);
+      const width = b.width || 160;
+      const deck = Number(b.deckHeight) ||
+        Number(state.terrain.bridgeDeckHeight) || 18;
+      const ramp = Math.max(40, Number(b.ramp) || 110);
+      const mx = (b.x1 + b.x2) * 0.5;
+      const my = (b.y1 + b.y2) * 0.5;
+      // 风化承重板 + 蒙尘钢板，没有柏油与道路标线。二者最上表面都严格
+      // 落在 deck，所以单位读取 bridgeSurfaceHeightAt 后不会陷进装饰层。
+      addBox(length, 9.3, width, mx, deck - 5, my, angle, [0.34, 0.31, 0.24]);
+      addBox(length - 8, 0.35, width - 20, mx, deck - 0.175, my,
+        angle, [0.33, 0.31, 0.25]);
+
+      const startRamp = new THREE.Matrix4().makeRotationY(-angle);
+      startRamp.setPosition(b.x1 - ux * ramp * 0.5, 0, b.y1 - uy * ramp * 0.5);
+      parts.push({ geo: makeRampGeometry(ramp, width, deck, false),
+        matrix: startRamp, rgb: [0.40, 0.34, 0.23] });
+      const endRamp = new THREE.Matrix4().makeRotationY(-angle);
+      endRamp.setPosition(b.x2 + ux * ramp * 0.5, 0, b.y2 + uy * ramp * 0.5);
+      parts.push({ geo: makeRampGeometry(ramp, width, deck, true),
+        matrix: endRamp, rgb: [0.40, 0.34, 0.23] });
+
+      // 桥面边梁、护栏、桥墩和黄色入口警示块全部合并成一个网格。
+      for (let side = -1; side <= 1; side += 2) {
+        const sx = mx + nx * side * (width * 0.5 - 4);
+        const sy = my + ny * side * (width * 0.5 - 4);
+        addBox(length, 5, 8, sx, deck + 2.5, sy, angle, [0.42, 0.39, 0.30]);
+        addBox(length, 3, 3, sx, deck + 17, sy, angle, [0.24, 0.26, 0.25]);
+        for (let post = 0; post <= 8; post++) {
+          const t = post / 8;
+          addBox(3.5, 17, 3.5,
+            b.x1 + dx * t + nx * side * (width * 0.5 - 4),
+            deck + 8.5,
+            b.y1 + dy * t + ny * side * (width * 0.5 - 4),
+            angle, [0.25, 0.27, 0.26]);
+        }
+        // 低矮交叉桁架让桥梁从“灰色平台”读成军用钢桥，同时不遮挡单位。
+        for (let bay = 0; bay < 8; bay++) {
+          const ta = bay / 8;
+          const tb = (bay + 1) / 8;
+          const ax = b.x1 + dx * ta + nx * side * (width * 0.5 - 4);
+          const az = b.y1 + dy * ta + ny * side * (width * 0.5 - 4);
+          const bx = b.x1 + dx * tb + nx * side * (width * 0.5 - 4);
+          const bz = b.y1 + dy * tb + ny * side * (width * 0.5 - 4);
+          const flip = (bay + (side > 0 ? 1 : 0)) % 2;
+          addBeam(ax, deck + (flip ? 5 : 16), az,
+            bx, deck + (flip ? 16 : 5), bz, 2.4, [0.31, 0.32, 0.29]);
+        }
+      }
+      // 两根纵向腹梁与横向伸缩缝强化承重结构，均位于行驶面下方或齐平。
+      for (let side = -1; side <= 1; side += 2) {
+        addBox(length, 7, 5,
+          mx + nx * side * width * 0.28, deck - 9.5,
+          my + ny * side * width * 0.28, angle, [0.18, 0.20, 0.19]);
+      }
+      for (let joint = 1; joint <= 4; joint++) {
+        const t = joint / 5;
+        addBox(3, 0.45, width - 20,
+          b.x1 + dx * t, deck + 0.02, b.y1 + dy * t,
+          angle, [0.08, 0.09, 0.08]);
+      }
+      // 两道泥尘色轮迹把桥外车辙自然接上桥板，没有公路式中央虚线。
+      for (let track = -1; track <= 1; track += 2) {
+        addBox(length - 14, 0.12, 4.2,
+          mx + nx * track * width * 0.23, deck + 0.02,
+          my + ny * track * width * 0.23,
+          angle, [0.21, 0.17, 0.11]);
+      }
+      for (let pier = 1; pier <= 3; pier++) {
+        const t = pier / 4;
+        const h = deck + 54;
+        addBox(16, h, width * 0.72,
+          b.x1 + dx * t, deck - h * 0.5, b.y1 + dy * t,
+          angle, [0.30, 0.29, 0.25]);
+      }
+      for (let end = 0; end <= 1; end++) {
+        const ex = end ? b.x2 : b.x1;
+        const ey = end ? b.y2 : b.y1;
+        addBox(9, 4, width - 24, ex, deck + 2, ey, angle,
+          [0.58, 0.43, 0.12]);
+      }
+    }
+    if (!parts.length) return;
+    const mesh = new THREE.Mesh(
+      mergeParts(parts),
+      applyFogMask(new THREE.MeshStandardMaterial({
+        vertexColors: true, roughness: 0.86, metalness: 0.22
+      })));
+    mesh.name = 'raised-bridge-network';
+    mesh.castShadow = state.shadows !== 'off';
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    terrainGroup.add(mesh);
+  }
+
+  function buildRiverCliffs() {
+    if (!riverValleyMode()) return;
+    const rivers = (state.terrain && state.terrain.rivers) || [];
+    let cliffGeo = new THREE.DodecahedronGeometry(1, 0);
+    if (cliffGeo.index) cliffGeo = cliffGeo.toNonIndexed();
+    let reedGeo = new THREE.ConeGeometry(0.9, 15, 4);
+    if (reedGeo.index) reedGeo = reedGeo.toNonIndexed();
+    const parts = [];
+    for (let r = 0; r < rivers.length; r++) {
+      const river = rivers[r];
+      const dx = river.x2 - river.x1;
+      const dy = river.y2 - river.y1;
+      const length = Math.hypot(dx, dy);
+      const ux = dx / length;
+      const uy = dy / length;
+      const nx = -uy;
+      const ny = ux;
+      const count = Math.ceil(length / 30);
+      for (let k = 0; k <= count; k++) {
+        const t = k / count;
+        for (let side = -1; side <= 1; side += 2) {
+          const wave = Math.sin(k * 1.73 + r * 3.1 + side) * 18;
+          const offset = river.width * 0.5 + 42 + wave;
+          const x = river.x1 + dx * t + nx * side * offset;
+          const y = river.y1 + dy * t + ny * side * offset;
+          if (x < 20 || y < 20 || x > state.map.width - 20 ||
+              y > state.map.height - 20 || bridgeTrailAt(x, y) > 0.03) continue;
+          const size = 15 + 11 * (0.5 + 0.5 * Math.sin(k * 2.31 + side));
+          const transform = new THREE.Matrix4().makeRotationY(k * 1.17);
+          transform.multiply(new THREE.Matrix4().makeRotationX((side + k % 3) * 0.12));
+          transform.scale(new THREE.Vector3(size * 1.25, size * 0.92, size));
+          transform.setPosition(x, baseGroundHeight(x, y) + size * 0.34, y);
+          const shade = 0.82 + (k % 4) * 0.055;
+          parts.push({ geo: cliffGeo, matrix: transform,
+            rgb: [0.48 * shade, 0.36 * shade, 0.25 * shade] });
+
+          // 第二层竖向岩板向河内下探，遮住地形网格的直切边，形成连续峭壁。
+          const lowerOffset = river.width * 0.5 + 20 + wave * 0.45;
+          const lx = river.x1 + dx * t + nx * side * lowerOffset;
+          const ly = river.y1 + dy * t + ny * side * lowerOffset;
+          const lower = new THREE.Matrix4().makeRotationY(k * 0.91 + side * 0.4);
+          lower.scale(new THREE.Vector3(size * 0.92, size * 1.45, size * 0.72));
+          lower.setPosition(lx, rollingHeight(x, y) - 23, ly);
+          parts.push({ geo: cliffGeo, matrix: lower,
+            rgb: [0.39 * shade, 0.30 * shade, 0.22 * shade] });
+
+          // 岸边芦苇是低面数锥体，成片并入同一网格，不额外产生绘制调用。
+          if (k % 3 === 0) {
+            for (let tuft = -1; tuft <= 1; tuft++) {
+              const reed = new THREE.Matrix4().makeRotationY(k * 1.37 + tuft);
+              const reedH = 0.72 + (tuft + 1) * 0.13;
+              reed.scale(new THREE.Vector3(1, reedH, 1));
+              reed.setPosition(
+                river.x1 + dx * t + nx * side * (river.width * 0.5 - 7) + ux * tuft * 4,
+                -6 + 7.5 * reedH,
+                river.y1 + dy * t + ny * side * (river.width * 0.5 - 7) + uy * tuft * 4);
+              parts.push({ geo: reedGeo, matrix: reed,
+                rgb: tuft === 0 ? [0.26, 0.34, 0.16] : [0.38, 0.39, 0.19] });
+            }
+          }
+        }
+      }
+    }
+    if (!parts.length) return;
+    const mesh = new THREE.Mesh(
+      mergeParts(parts),
+      applyFogMask(new THREE.MeshStandardMaterial({
+        vertexColors: true, roughness: 0.92, metalness: 0.01,
+        flatShading: true
+      })));
+    mesh.name = 'river-cliff-rocks';
+    mesh.castShadow = state.shadows !== 'off';
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    terrainGroup.add(mesh);
+    cliffGeo.dispose();
+    reedGeo.dispose();
+  }
+
   function buildTerrain() {
     const buildStarted = performance.now();
     heightField = null;
@@ -3292,6 +3840,8 @@ export function createRenderer(canvas) {
     const mh = state.map.height;
     const theme = displayTheme(state.terrain && state.terrain.theme);
     const detail = state.terrainDetail || resolveTerrainDetail(state.map, state.terrain);
+    const riverValley = riverValleyMode();
+    const visualStyle = terrainVisualStyle();
     state.groundDetailParts = 0;
     applyWorldTheme(theme);
     if (!groundTexture || groundTexture.userData.themeId !== theme.id) {
@@ -3316,7 +3866,7 @@ export function createRenderer(canvas) {
       const wz = pos.getZ(i) + mh / 2;
       const depth = riverDepthAt(wx, wz);
       const rock = mountainHeightAt(wx, wz);
-      const height = rollingHeight(wx, wz) + rock;
+      const height = rollingHeight(wx, wz) + rock - (riverValley ? depth * 72 : 0);
       heights[i] = height;
       pos.setY(i, height);
 
@@ -3343,6 +3893,30 @@ export function createRenderer(canvas) {
       r += (theme.lush[0] - r) * stripe * 0.16;
       g += (theme.lush[1] - g) * stripe * 0.16;
       b += (theme.lush[2] - b) * stripe * 0.16;
+      if (visualStyle === 'open_wilderness') {
+        // 五车争霸保持开阔，但用断续的风压枯草带打破整片均匀绿地。
+        const wind = Math.max(0, Math.sin(wx * 0.0031 + wz * 0.0012 + rawLush * 4.2));
+        const windMix = wind * (0.035 + (1 - lush) * 0.10);
+        r += (theme.dry[0] - r) * windMix;
+        g += (theme.dry[1] - g) * windMix;
+        b += (theme.dry[2] - b) * windMix;
+      } else if (visualStyle === 'arid_wilderness') {
+        // 狭路对峙的浅色风蚀纹是地表色差，不产生额外模型或碰撞。
+        const erosion = Math.max(0, Math.sin(wx * 0.0044 - wz * 0.0022 + rawLush * 5.1));
+        const erosionMix = erosion * 0.10;
+        r += (theme.rock[0] - r) * erosionMix;
+        g += (theme.rock[1] - g) * erosionMix;
+        b += (theme.rock[2] - b) * erosionMix;
+      } else if (visualStyle === 'crater_wilderness') {
+        // 越靠近陨坑核，焦土和撞击尘越重；边缘用噪声打散，避免规则圆环。
+        const impactDistance = Math.hypot(wx - mw * 0.5, wz - mh * 0.5);
+        const impact = THREE.MathUtils.clamp(
+          1 - (impactDistance - 260 - rawLush * 150) / 1150, 0, 1);
+        const scorch = impact * impact * 0.42;
+        r += (theme.dirt[0] * 0.62 - r) * scorch;
+        g += (theme.dirt[1] * 0.58 - g) * scorch;
+        b += (theme.dirt[2] * 0.55 - b) * scorch;
+      }
       r = r * (1 - bank) + theme.dirt[0] * 1.15 * bank;
       g = g * (1 - bank) + theme.dirt[1] * 1.05 * bank;
       b = b * (1 - bank) + theme.dirt[2] * bank;
@@ -3366,10 +3940,17 @@ export function createRenderer(canvas) {
         g = g * (1 - trail) + theme.dirt[1] * trail;
         b = b * (1 - trail) + theme.dirt[2] * trail;
       }
-      // 河道：深绿林床（树荫 + 腐殖土），上面再立树模型
-      r = r * (1 - ravine) + 0.13 * ravine;
-      g = g * (1 - ravine) + 0.24 * ravine;
-      b = b * (1 - ravine) + 0.12 * ravine;
+      if (riverValley) {
+        // 真河谷的水下是深色泥岩，河岸过渡到暖色砂砾；水面稍后单独铺设。
+        r = r * (1 - ravine) + 0.16 * ravine;
+        g = g * (1 - ravine) + 0.19 * ravine;
+        b = b * (1 - ravine) + 0.17 * ravine;
+      } else {
+        // 其余图的河数据仍表示深绿密林分界。
+        r = r * (1 - ravine) + 0.13 * ravine;
+        g = g * (1 - ravine) + 0.24 * ravine;
+        b = b * (1 - ravine) + 0.12 * ravine;
+      }
       r *= topo; g *= topo; b *= topo;
       colors[i * 3] = r;
       colors[i * 3 + 1] = g;
@@ -3395,10 +3976,12 @@ export function createRenderer(canvas) {
     };
     _ghCache.clear();
 
-    // 河道与山丘都不画水面/岩石：渲染成树林（riverDepthAt / mountainHeightAt
-    // 决定林带位置），桥从林间跨过。没有水，也没有岩石 —— 走到林边看到的
-    // 是真的过不去的密林，一眼就能看出桥是唯一的通路。
-    waterMesh = null;
+    // 新展示图使用真水面、岩质河岸、磨损道路和抬高桥梁；
+    // 旧图仍保持密林分界，不被这次试制的美术方向意外改变。
+    buildRiverWater();
+    buildRoadNetwork();
+    buildBridgeNetwork();
+    buildRiverCliffs();
 
     // 树林：沿河道与山丘撒树，桥盒（含渲染加长段）两侧留出桥头空地。
     // 所有树干 + 树冠合并进一个网格，一次绘制调用。
@@ -3413,6 +3996,27 @@ export function createRenderer(canvas) {
           matrix: new THREE.Matrix4().setPosition(x, y, z),
           rgb: rgb
         });
+      };
+      // 写实图不再用三块长方体充当树冠。五边形树干 + 不对称叶簇
+      // 仍合并为一个 draw call，轮廓圆润了，性能负担不随树的数量增加。
+      let organicTrunkGeo = null;
+      let organicCrownGeo = null;
+      const organicForest = riverValley || terrainVisualStyle() === 'crater_wilderness';
+      if (organicForest) {
+        organicTrunkGeo = new THREE.CylinderGeometry(0.72, 1, 1, 5);
+        // 密林图使用八面体叶簇：轮廓不再是方块，同时三层树冠总面数
+        // 低于旧版四个 Box，数千棵树仍能维持原来的性能预算。
+        organicCrownGeo = riverValley
+          ? new THREE.DodecahedronGeometry(1, 0)
+          : new THREE.OctahedronGeometry(1, 0);
+        if (organicTrunkGeo.index) organicTrunkGeo = organicTrunkGeo.toNonIndexed();
+        if (organicCrownGeo.index) organicCrownGeo = organicCrownGeo.toNonIndexed();
+      }
+      const organicPart = function (geo, sx, sy, sz, x, y, z, rotation, rgb) {
+        const transform = new THREE.Matrix4().makeRotationY(rotation || 0);
+        transform.scale(new THREE.Vector3(sx, sy, sz));
+        transform.setPosition(x, y, z);
+        forestParts.push({ geo: geo, matrix: transform, rgb: rgb });
       };
       // 确定性哈希：同一张图每次打开树的位置不变
       const treeRand = function (n) {
@@ -3430,10 +4034,15 @@ export function createRenderer(canvas) {
       const FOLIAGE_DARK = [
         baseForest[0] * 0.72, baseForest[1] * 0.82, baseForest[2] * 0.72
       ];
-      const placeTree = function (tx, ty, seed) {
-        if (riverDepthAt(tx, ty) > 0.05 || mountainHeightAt(tx, ty) > 0.05) {
+      const placeTree = function (tx, ty, seed, groundOverride) {
+        const forcedGround = Number.isFinite(groundOverride);
+        const canGrow = forcedGround || (riverValley
+          ? mountainHeightAt(tx, ty) > 0.05
+          : (riverDepthAt(tx, ty) > 0.05 || mountainHeightAt(tx, ty) > 0.05));
+        if (canGrow) {
           // 树底落在实际地面上（含山丘），避免树干悬空或埋进坡里
-          const gy = rollingHeight(tx, ty) + mountainHeightAt(tx, ty);
+          const gy = forcedGround ? groundOverride
+            : rollingHeight(tx, ty) + mountainHeightAt(tx, ty);
           const big = treeRand(seed * 3.1 + 97) > 0.38;
           // 最高的魔法主堡约 144 高；森林树顶提高到约 147–178，
           // 保证每棵成树都越过建筑天际线，并在远处形成连续林冠。
@@ -3443,7 +4052,6 @@ export function createRenderer(canvas) {
           const crownH = big ? 64 : 58;
           const trunkShade = 0.84 + treeRand(seed * 2.7 + 9) * 0.24;
           const trunk = [0.30 * trunkShade, 0.20 * trunkShade, 0.10 * trunkShade];
-          treeSlab(trunkW, trunkH, trunkW, tx, gy + trunkH * 0.5, ty, trunk);
           const foliage = treeRand(seed * 5.7 + 41);
           const rgb = foliage > 0.72 ? FOLIAGE_DARK
             : (foliage > 0.3 ? FOLIAGE_A : FOLIAGE_B);
@@ -3459,13 +4067,28 @@ export function createRenderer(canvas) {
           const crownLow = shadeFoliage(0.76);
           const crownMid = shadeFoliage(0.96);
           const crownTop = shadeFoliage(1.16);
-          // 三层收尖树冠：底层互相搭接形成林墙，上层保持单棵树的高耸轮廓。
-          treeSlab(crownR * 2.1, crownH * 0.72, crownR * 2.1,
-                   tx, gy + trunkH + crownH * 0.28, ty, crownLow);
-          treeSlab(crownR * 1.5, crownH * 0.68, crownR * 1.5,
-                   tx, gy + trunkH + crownH * 0.72, ty, crownMid);
-          treeSlab(crownR * 0.86, crownH * 0.5, crownR * 0.86,
-                   tx, gy + trunkH + crownH * 1.12, ty, crownTop);
+          if (organicForest) {
+            organicPart(organicTrunkGeo, trunkW, trunkH, trunkW,
+              tx, gy + trunkH * 0.5, ty, treeRand(seed + 3) * TAU, trunk);
+            organicPart(organicCrownGeo, crownR * 1.18, crownH * 0.40, crownR,
+              tx - crownR * 0.32, gy + trunkH + crownH * 0.30,
+              ty + crownR * 0.12, treeRand(seed + 11) * TAU, crownLow);
+            organicPart(organicCrownGeo, crownR, crownH * 0.46, crownR * 1.12,
+              tx + crownR * 0.34, gy + trunkH + crownH * 0.61,
+              ty - crownR * 0.18, treeRand(seed + 23) * TAU, crownMid);
+            organicPart(organicCrownGeo, crownR * 0.72, crownH * 0.38, crownR * 0.78,
+              tx - crownR * 0.06, gy + trunkH + crownH * 0.95,
+              ty + crownR * 0.20, treeRand(seed + 37) * TAU, crownTop);
+          } else {
+            treeSlab(trunkW, trunkH, trunkW, tx, gy + trunkH * 0.5, ty, trunk);
+            // 旧图保留低顶点的三层收尖树冠，避免密林面数突增。
+            treeSlab(crownR * 2.1, crownH * 0.72, crownR * 2.1,
+                     tx, gy + trunkH + crownH * 0.28, ty, crownLow);
+            treeSlab(crownR * 1.5, crownH * 0.68, crownR * 1.5,
+                     tx, gy + trunkH + crownH * 0.72, ty, crownMid);
+            treeSlab(crownR * 0.86, crownH * 0.5, crownR * 0.86,
+                     tx, gy + trunkH + crownH * 1.12, ty, crownTop);
+          }
         }
       };
       const nearBridge = function (tx, ty) {
@@ -3489,9 +4112,38 @@ export function createRenderer(canvas) {
         }
         return false;
       };
+      // 真河谷的林带压在服务端河流阻挡区内，既丰富河岸轮廓，也不会产生
+      // “看似能走却被装饰树挡住”或单位直接穿树的问题。桥头各留出完整净空。
+      if (riverValley) {
+        for (let r = 0; r < rivers.length; r++) {
+          const rv = rivers[r];
+          const rdx = rv.x2 - rv.x1;
+          const rdy = rv.y2 - rv.y1;
+          const len = Math.max(1, Math.hypot(rdx, rdy));
+          const ux = rdx / len;
+          const uy = rdy / len;
+          const nx = -uy;
+          const ny = ux;
+          const count = Math.max(24, Math.ceil(len / 58));
+          for (let k = 1; k < count; k++) {
+            const t = k / count;
+            for (let side = -1; side <= 1; side += 2) {
+              if ((k + (side > 0 ? 2 : 0)) % 4 === 0) continue;
+              const alongJitter = (treeRand(k * 9.7 + side * 31 + r * 101) - 0.5) * 34;
+              const bankInset = rv.width * 0.5 - 7 - treeRand(k * 4.3 + side) * 12;
+              const tx = rv.x1 + rdx * t + ux * alongJitter + nx * side * bankInset;
+              const ty = rv.y1 + rdy * t + uy * alongJitter + ny * side * bankInset;
+              if (nearBridge(tx, ty)) continue;
+              const rimGround = rollingHeight(
+                tx + nx * side * 85, ty + ny * side * 85) - 2;
+              placeTree(tx, ty, 18000 + r * 2000 + k * 7 + side, rimGround);
+            }
+          }
+        }
+      }
       // 河道林带：树量同时随长度和宽度增加；加厚后的五条分界带会形成
       // 多排密林，而不是只把一排树横向拉散。
-      for (let r = 0; r < rivers.length; r++) {
+      for (let r = 0; r < rivers.length && !riverValley; r++) {
         const rv = rivers[r];
         const rdx = rv.x2 - rv.x1;
         const rdy = rv.y2 - rv.y1;
@@ -3507,7 +4159,11 @@ export function createRenderer(canvas) {
           const t = (k + 0.5) / count;
           const cx = rv.x1 + rdx * t;
           const cy = rv.y1 + rdy * t;
-          const lateral = (treeRand(k + r * 131) * 2 - 1) * half * 0.94;
+          // 沿程宽窄连续变化，让林缘呈天然波浪，而不是平行尺画出的带状边界。
+          // 树仍落在权威森林内部，视觉不会制造假的可通行缺口。
+          const edgeScale = 0.76 + 0.20 * (0.5 + 0.5 *
+            Math.sin(t * 19.3 + r * 2.7));
+          const lateral = (treeRand(k + r * 131) * 2 - 1) * half * edgeScale;
           const alongJitter = (treeRand(k * 7.3 + r * 19) - 0.5) *
             Math.max(16, len / count * 1.8);
           const tx = cx + nx * lateral + ux * alongJitter;
@@ -3519,9 +4175,11 @@ export function createRenderer(canvas) {
       }
       // 山丘森林：每座山按半径撒树，山顶到山脚密度递减，
       // 大树/小树/三种绿色混出「各种森林」
-      for (let mi = 0; mi < mountains.length; mi++) {
+      const woodedMountains = terrainVisualStyle() !== 'arid_wilderness' &&
+        terrainVisualStyle() !== 'crater_wilderness';
+      for (let mi = 0; mi < mountains.length && woodedMountains; mi++) {
         const m = mountains[mi];
-        const mcount = Math.max(10, Math.round(m.r / 14));
+        const mcount = Math.max(10, Math.round(m.r / (riverValley ? 7.5 : 14)));
         for (let k = 0; k < mcount; k++) {
           const ang = treeRand(k * 3.7 + mi * 29) * Math.PI * 2;
           const rad = m.r * (0.12 + treeRand(k * 1.9 + mi * 13) * 0.85);
@@ -3544,11 +4202,9 @@ export function createRenderer(canvas) {
         forestMesh.frustumCulled = false;
         terrainGroup.add(forestMesh);
       }
+      if (organicTrunkGeo) organicTrunkGeo.dispose();
+      if (organicCrownGeo) organicCrownGeo.dispose();
     }
-
-    // 林间小路：没有桥面模型 —— 通道碰撞盒在网格顶点色里画成土路
-    // （bridgeTrailAt），树已避开这片区域，森林在这里断开成一条豁口。
-    // 单位直接走在平地上，服务端寻路不变。
 
     // 地图边界：一圈向外倾斜下沉的裙边，颜色贴近雾色，让边缘融进远景而
     // 不是留下一道生硬的黑边
@@ -3671,7 +4327,9 @@ export function createRenderer(canvas) {
     const mh = state.map.height;
     const area = mw * mh;
     const theme = displayTheme(state.terrain && state.terrain.theme);
-    const roads = (state.terrain && state.terrain.roads) || [];
+    const visualStyle = terrainVisualStyle();
+    const trailSegments = (authoredTrailMode() || riverValleyMode())
+      ? terrainTrailSegments() : [];
     const resources = state.resources || [];
     const spawns = state.spawnPoints || [];
 
@@ -3701,9 +4359,10 @@ export function createRenderer(canvas) {
         if (Math.hypot(x - resource.x, y - resource.y) <
             (resource.radius || 70) + clearance + 35) return false;
       }
-      for (let i = 0; i < roads.length; i++) {
-        const road = roads[i];
-        const safeWidth = (road.width || 100) * 0.5 + clearance + 18;
+      for (let i = 0; i < trailSegments.length; i++) {
+        const road = trailSegments[i];
+        const safeWidth = (road.width || 100) * 0.5 + clearance +
+          (riverValleyMode() ? 3 : 18);
         if (pointSegmentDistanceSq(x, y, road.x1, road.y1, road.x2, road.y2) <
             safeWidth * safeWidth) return false;
       }
@@ -3734,6 +4393,16 @@ export function createRenderer(canvas) {
       pebbleGeo = indexed.toNonIndexed();
       indexed.dispose();
     }
+    let shrubGeo = null;
+    let logGeo = null;
+    const wildernessProps = riverValleyMode() ||
+      visualStyle === 'open_wilderness' ||
+      visualStyle === 'arid_wilderness' ||
+      visualStyle === 'crater_wilderness';
+    if (wildernessProps) {
+      shrubGeo = new THREE.DodecahedronGeometry(1, 0);
+      logGeo = new THREE.CylinderGeometry(1, 1.2, 1, 6);
+    }
     const parts = [];
     const addPart = function (geo, x, y, sx, sy, sz, rotation, tilt, rgb) {
       const matrix = new THREE.Matrix4().makeRotationY(rotation);
@@ -3763,9 +4432,13 @@ export function createRenderer(canvas) {
         const width = 3.0 + rand() * 2.2;
         const mix = rand();
         const shade = 0.90 + rand() * 0.30;
+        const dried = visualStyle === 'arid_wilderness' ||
+          (visualStyle === 'open_wilderness' && rand() < 0.34) ||
+          (visualStyle === 'crater_wilderness' && rand() < 0.62);
+        const highColor = dried ? theme.dry : theme.lush;
         const rgb = [0, 1, 2].map(function (channel) {
           return Math.min(1, (theme.grass[channel] * (1 - mix) +
-            theme.lush[channel] * mix) * shade);
+            highColor[channel] * mix) * shade);
         });
         addPart(grassGeo, x, y, width, height, width * (0.72 + rand() * 0.35),
           rand() * TAU, (rand() - 0.5) * 0.18, rgb);
@@ -3800,6 +4473,78 @@ export function createRenderer(canvas) {
       }
     }
 
+    if (wildernessProps) {
+      // 各张旷野图在可通行地面增加自己的低矮植被、倒木与天然碎石。
+      // 仍与草叶/散石合并成同一个网格，所以场景变丰富不会带来额外 draw call。
+      // 数量按生境单独封顶，中央混战图最稀疏，保持旷野尺度与选取清晰度。
+      const shrubConfig = visualStyle === 'open_wilderness' ? [55, 260000]
+        : (visualStyle === 'arid_wilderness' ? [38, 300000]
+          : (visualStyle === 'crater_wilderness' ? [65, 350000] : [92, 165000]));
+      const shrubTarget = Math.min(shrubConfig[0], Math.round(area / shrubConfig[1]));
+      let shrubs = 0;
+      for (let attempt = 0; attempt < shrubTarget * 16 && shrubs < shrubTarget; attempt++) {
+        const x = 100 + rand() * (mw - 200);
+        const y = 100 + rand() * (mh - 200);
+        if (!clearAt(x, y, 26)) continue;
+        shrubs++;
+        const cluster = 2 + Math.floor(rand() * 3);
+        for (let leaf = 0; leaf < cluster; leaf++) {
+          const angle = rand() * TAU;
+          const distance = rand() * 14;
+          const size = 6 + rand() * 8;
+          const shade = 0.74 + rand() * 0.34;
+          const shrubBase = visualStyle === 'arid_wilderness'
+            ? [0.38, 0.35, 0.13]
+            : (visualStyle === 'crater_wilderness'
+              ? [theme.forest[0] * 0.72, theme.forest[1] * 0.68, theme.forest[2] * 0.65]
+              : theme.forest);
+          addPart(shrubGeo, x + Math.cos(angle) * distance,
+            y + Math.sin(angle) * distance,
+            size * (0.8 + rand() * 0.5), size * (0.55 + rand() * 0.35),
+            size * (0.8 + rand() * 0.5), rand() * TAU, 0,
+            [shrubBase[0] * shade, shrubBase[1] * shade,
+             shrubBase[2] * shade]);
+        }
+      }
+      const propConfig = visualStyle === 'open_wilderness' ? [36, 360000]
+        : (visualStyle === 'arid_wilderness' ? [48, 230000]
+          : (visualStyle === 'crater_wilderness' ? [64, 400000] : [52, 290000]));
+      const propTarget = Math.min(propConfig[0], Math.round(area / propConfig[1]));
+      let props = 0;
+      for (let attempt = 0; attempt < propTarget * 20 && props < propTarget; attempt++) {
+        const x = 130 + rand() * (mw - 260);
+        const y = 130 + rand() * (mh - 260);
+        if (!clearAt(x, y, 42)) continue;
+        props++;
+        const logChance = visualStyle === 'open_wilderness' ? 0.34
+          : (visualStyle === 'arid_wilderness' ? 0.18
+            : (visualStyle === 'crater_wilderness' ? 0.24 : 0.46));
+        if (rand() < logChance) {
+          const length = 12 + rand() * 17;
+          addPart(logGeo, x, y, 2.8 + rand() * 1.5, length,
+            2.8 + rand() * 1.5, rand() * TAU, Math.PI * 0.5,
+            visualStyle === 'crater_wilderness' ? [0.16, 0.11, 0.08] : [0.30, 0.20, 0.11]);
+        } else {
+          const pieces = 2 + Math.floor(rand() * 4);
+          for (let piece = 0; piece < pieces; piece++) {
+            const angle = rand() * TAU;
+            const distance = 4 + rand() * 19;
+            const size = 4 + rand() * 7;
+            const shade = 0.74 + rand() * 0.34;
+            const stoneBase = visualStyle === 'crater_wilderness'
+              ? [theme.rock[0] * 0.72, theme.rock[1] * 0.64, theme.rock[2] * 0.62]
+              : theme.rock;
+            addPart(pebbleGeo, x + Math.cos(angle) * distance,
+              y + Math.sin(angle) * distance,
+              size * (0.8 + rand()), size * (0.35 + rand() * 0.45),
+              size * (0.7 + rand()), rand() * TAU, (rand() - 0.5) * 0.32,
+              [stoneBase[0] * shade, stoneBase[1] * shade,
+               stoneBase[2] * shade]);
+          }
+        }
+      }
+    }
+
     state.groundDetailParts = parts.length;
     if (parts.length) {
       const merged = mergeParts(parts);
@@ -3814,6 +4559,8 @@ export function createRenderer(canvas) {
     }
     grassGeo.dispose();
     pebbleGeo.dispose();
+    if (shrubGeo) shrubGeo.dispose();
+    if (logGeo) logGeo.dispose();
   }
 
   /* -------------------- 矿脉 -------------------- */
@@ -7209,7 +7956,8 @@ export function createRenderer(canvas) {
 
     // 水面：整体轻微涨落 + 推进波纹时间
     if (waterMesh) {
-      waterMesh.position.y = -2 + Math.sin(payload.time * 0.0011) * 1.2;
+      waterMesh.position.y = (waterMesh.userData.baseY == null
+        ? -2 : waterMesh.userData.baseY) + Math.sin(payload.time * 0.0011) * 0.7;
       for (let i = 0; i < waterShaders.length; i++) {
         waterShaders[i].uniforms.uTime.value = payload.time * 0.001;
       }
@@ -7288,9 +8036,10 @@ export function createRenderer(canvas) {
       const t = state.terrain;
       const worldKey = [
         map.id || '', map.width, map.height, map.seed,
-        t.theme || '',
+        t.theme || '', t.visualStyle || '', t.bridgeDeckHeight || 0,
         (t.rivers || []).length, (t.bridges || []).length,
         (t.mountains || []).length, (t.roads || []).length,
+        (t.visualTrails || []).length,
         state.resources.length,
         JSON.stringify(state.terrainDetail)
       ].join('|');

@@ -14,7 +14,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 
 
-SHIPPED_MAPS = ("central_scramble", "gold_crater_small", "narrow_standoff")
+SHIPPED_MAPS = (
+    "central_scramble", "gold_crater_small", "narrow_standoff",
+    "iron_river_duel")
 TICKS = 24
 
 
@@ -139,6 +141,13 @@ def main():
         "五个 spawn=0 仍叠在一起 %s" % (cells,)
     print("  gold_crater_small 重复出生点已拆成 5 席")
 
+    print("\n=== 铁峡争渡满 2 人 ===")
+    for factions in (("tech", "tech"), ("magic", "magic"), ("tech", "magic")):
+        _room, cells = start_and_check(
+            "iron_river_duel", factions, seed=166, n=2)
+        assert len(set(cells)) == 2, cells
+        print("  iron_river_duel %s: 两岸均有指挥" % (factions,))
+
     print("\n=== 五车争霸连续多局不得有玩家进场即败 ===")
     terrain_contexts = []
     for match_index in range(8):
@@ -160,7 +169,7 @@ def main():
     assert len(set(cells)) == 4, cells
     print("  越界 spawn=5 已回落到空席")
 
-    print("\n=== 客户端与服务端都只发布三张地图 ===")
+    print("\n=== 客户端与服务端都发布新的双人展示图 ===")
     builtin = builtin_maps_from_client()
     for map_id in SHIPPED_MAPS:
         assert ("%s:" % map_id) in builtin, \
@@ -171,7 +180,7 @@ def main():
     assert "function lobbySpawnCount" in open(
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                      "public", "app.js"), encoding="utf-8").read()
-    print("  BUILTIN_MAPS 与 MAPS 均只含 central_scramble / gold_crater_small / narrow_standoff")
+    print("  BUILTIN_MAPS 与 MAPS 均包含 iron_river_duel")
 
     print("\nretained-map start tests ok")
 

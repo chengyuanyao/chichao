@@ -121,8 +121,9 @@ def main():
     assert "seed" in started["game"]["map"]
     # REST 拉取始终是完整帧：静态数据（地形/矿脉布局/视距表）都在
     assert started["game"]["full"] is True
-    assert not started["game"]["terrain"]["rivers"]
-    assert not started["game"]["terrain"]["bridges"]
+    default_map = server.MAPS[server.DEFAULT_MAP]
+    assert bool(started["game"]["terrain"]["rivers"]) == bool(default_map.get("rivers"))
+    assert bool(started["game"]["terrain"]["bridges"]) == bool(default_map.get("bridges"))
     assert started["game"]["terrain"]["mountains"]
     assert started["game"]["resources"]
     assert started["game"]["sight"]["units"]["rifle"] > 0
@@ -180,8 +181,8 @@ def main():
         assert first["status"] == "playing"
         # 首帧带全部静态数据
         assert first["game"]["full"] is True
-        assert not first["game"]["terrain"]["rivers"]
-        assert not first["game"]["terrain"]["bridges"]
+        assert bool(first["game"]["terrain"]["rivers"]) == bool(default_map.get("rivers"))
+        assert bool(first["game"]["terrain"]["bridges"]) == bool(default_map.get("bridges"))
         assert first["game"]["terrain"]["mountains"]
         assert first["game"]["sight"]
         assert first["maps"]

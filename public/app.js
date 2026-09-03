@@ -1188,7 +1188,8 @@ import {
   var BUILTIN_MAPS = {
     central_scramble: { id: 'central_scramble', name: '五车争霸', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在中央同时落地。先抢方向再展开；外围五个方向各有一片随机位置的23万矿，中央矿为双倍的46万，且没有中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
     gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着陨石核打，地图紧凑，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[5530,2443],[4640,5182],[1760,5182],[870,2443]] },
-    narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] }
+    narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
+    iron_river_duel: { id: 'iron_river_duel', name: '铁峡争渡', width: 4800, height: 3200, maxPlayers: 2, theme: 'temperate', briefing: '狭路对峙的写实河谷版：上中下三座钢桥分出正面与两路侧翼战线。', spawnLabels: ['西岸指挥部', '东岸指挥部'], spawnPoints: [[700,1600],[4100,1600]] }
   };
 
   // 地图目录只在大厅和首帧下发，缓存住供整局使用
@@ -2187,6 +2188,7 @@ import {
     var full = (mapConfig.id && maps[mapConfig.id]) || mapConfig;
     var terrain = {
       theme: full.theme || mapConfig.theme,
+      visualStyle: full.visualStyle || mapConfig.visualStyle,
       rivers: full.rivers || mapConfig.rivers,
       mountains: full.mountains || mapConfig.mountains,
       roads: full.roads || mapConfig.roads,
@@ -4089,13 +4091,19 @@ import {
         c.fill();
       }
     }
-    // 树林带：深绿外发光 → 深色林底 → 亮绿芯线，三遍各画完整条林带，
+    var riverValley = terrain.visualStyle === 'river_valley';
+    // 密林带使用深绿层次；真河谷则改成蓝绿色水面与浅色岸缘。
+    // 三遍各画完整条带，分段接头由圆头笔帽自然焊上。
     // 分段折线的接头会被同一遍的圆头笔帽自然焊上
     if (rivers.length) {
       c.save();
       c.lineCap = 'round';
       c.lineJoin = 'round';
-      var passes = [
+      var passes = riverValley ? [
+        ['rgba(160,136,92,.45)', 7, 0],
+        ['#173f45', 2.5, 0],
+        ['#2d6970', 0, 0.68]
+      ] : [
         ['rgba(34,64,28,.35)', 6, 0],
         ['#14280f', 2.5, 0],
         ['#2b5422', 0, 0.55]

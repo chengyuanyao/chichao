@@ -94,19 +94,25 @@ def check_map(map_id, map_def):
                 assert not terrain.blocked(px, py), \
                     "%s: 出生点 %d 周围 %d 处被地形阻挡" % (map_id, index, dist)
 
-    # 赤金陨坑·紧凑用外环河+桥做邻里卡口；其余图只靠山地分区。
+    # 赤金陨坑用河数据做密林卡口；铁峡争渡则将它渲染为真河谷。
     if map_id == "gold_crater_small":
         assert map_def.get("rivers"), "%s: 外环卡口需要河流" % map_id
         assert map_def.get("bridges"), "%s: 外环卡口需要桥梁" % map_id
+    elif map_id == "iron_river_duel":
+        assert map_def.get("rivers"), "%s: 需要中央河谷" % map_id
+        assert len(map_def.get("bridges") or []) == 3, \
+            "%s: 需要上中下三座桥" % map_id
+        assert map_def.get("visualStyle") == "river_valley"
     else:
         assert not map_def.get("rivers"), "%s: 不应再包含河流" % map_id
         assert not map_def.get("bridges"), "%s: 不应再包含桥梁" % map_id
 
-    # 锁住当前保留的三张地图及其尺寸。
+    # 锁住当前发布地图及其尺寸。
     expected_sizes = {
         "narrow_standoff": (4800, 3200),
         "gold_crater_small": (6400, 6400),
         "central_scramble": (4000, 4000),
+        "iron_river_duel": (4800, 3200),
     }
     assert (width, height) == expected_sizes[map_id], \
         "%s: 地图尺寸意外变化 (%dx%d)" % (map_id, width, height)
@@ -190,6 +196,34 @@ def main():
     assert len(path_along_road) > 1, "沿路路径应当存在"
     print("  沿主干道寻路 %d 个航点" % len(path_along_road))
 
+    # 新双人图的三座桥都是真正的大单位通道，不只是视觉模型。
+    duel = server.MAPS["iron_river_duel"]
+    trails = duel.get("visualTrails") or []
+    assert len(trails) == 6, "两岸应各有三条彼此分离的自然车辙"
+    assert all(len(t["points"]) >= 6 for t in trails), "车辙必须用多点曲线而非直线"
+    left_starts = [tuple(t["points"][0]) for t in trails[:3]]
+    assert len(set(left_starts)) == 3, "基地外缘的三条小径不能汇成三叉戟"
+    assert server.PUBLIC_MAPS["iron_river_duel"]["visualTrails"] == trails
+    duel_terrain = server.terrain_for_map(duel)
+    dry_duel = server.Terrain(
+        duel["rivers"], [], duel["width"], duel["height"],
+        duel.get("mountains"), duel.get("roads"))
+    for bridge in duel["bridges"]:
+        assert dry_duel.point_in_water(bridge["x"], bridge["y"])
+        assert not duel_terrain.blocked(bridge["x"], bridge["y"], 24)
+        path = duel_terrain.find_path(1900, bridge["y"], 2900, bridge["y"])
+        assert path, (bridge["x"], bridge["y"])
+    print("  铁峡争渡三座桥均可供大型单位通行")
+
+    narrow = server.MAPS["narrow_standoff"]
+    assert narrow.get("visualStyle") == "arid_wilderness"
+    assert len(narrow.get("visualTrails") or []) == 3
+    assert all(len(t["points"]) >= 8 for t in narrow["visualTrails"])
+
+    scramble = server.MAPS["central_scramble"]
+    assert scramble.get("visualStyle") == "open_wilderness"
+    assert not scramble.get("visualTrails"), "五车争霸不能出现五星放射道路"
+
     for map_id in ("gold_crater_small",):
         crater = server.MAPS[map_id]
         pub = server.PUBLIC_MAPS[map_id]
@@ -197,6 +231,8 @@ def main():
         assert crater["maxPlayers"] == 5
         assert len(crater["spawnPoints"]) == 5
         assert crater["theme"] == "crater"
+        assert crater.get("visualStyle") == "crater_wilderness"
+        assert len(crater.get("visualTrails") or []) == 5
         assert not crater.get("landmarks")
         assert not pub.get("landmarks")
         assert crater.get("publicOreCount", 4) > 4

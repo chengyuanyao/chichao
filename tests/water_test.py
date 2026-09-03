@@ -39,10 +39,11 @@ def make_room():
 def main():
     random.seed(20260719)
 
-    # --- Test 1: only 赤金陨坑·紧凑 uses live rivers / bridges ---
+    # --- Test 1: 赤金陨坑与写实河谷图使用权威 rivers / bridges ---
+    river_maps = {"gold_crater_small", "iron_river_duel"}
     for map_id in sorted(server.MAPS):
         map_data = server.MAPS[map_id]
-        if map_id == "gold_crater_small":
+        if map_id in river_maps:
             assert map_data.get("rivers"), "%s should use rim rivers" % map_id
             assert map_data.get("bridges"), "%s should use rim bridges" % map_id
         else:
