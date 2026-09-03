@@ -584,6 +584,9 @@ SEPARATION_CELL_SIZE = 64.0
 REPAIR_RATE = 105.0
 REPAIR_COST_PER_HP = 0.35
 REPAIR_DOCKS_PER_RING = 8
+# 建筑现场维修按最大生命比例结算：正常供电下从空血修满约 50 秒。
+# 单点费用与载具维修一致，避免维修成为免费拖延手段。
+STRUCTURE_REPAIR_MAX_HP_PER_SECOND = 0.02
 
 # 公共矿区由不属于任何玩家的中立守军占据。守军只在矿区周围警戒，
 # 追击目标越过缰绳半径后会立即脱战并回到自己的哨位。
@@ -936,6 +939,8 @@ def public_structure(structure):
         result["packable"] = True
     if structure.get("rally"):
         result["rally"] = [round(structure["rally"][0], 1), round(structure["rally"][1], 1)]
+    if structure.get("repairing"):
+        result["repairing"] = True
     if not structure["active"]:
         result["buildRemaining"] = round(structure["buildRemaining"], 2)
         result["buildTotal"] = structure["buildTotal"]
@@ -1746,6 +1751,7 @@ def make_structure(kind, owner, x, y, active=True):
         "buildTotal": deploy_total,
         "constructionDamage": 0.0,
         "queue": [], "cooldown": random.random(), "dir": 0.0, "rally": None,
+        "repairing": False,
         # 防御建筑默认自动索敌；玩家右键点名时才暂存手动目标。
         "targetId": None,
     }
@@ -2860,6 +2866,31 @@ def issue_repair(game, player_id, unit_ids, structure_id):
         unit["order"] = "repair"
 
 
+def toggle_structure_repair(game, player_id, structure_id, enabled=None):
+    """Start or stop paid field repair on one completed owned structure.
+
+    ``enabled`` makes browser retries idempotent; ``None`` keeps the helper's
+    convenient toggle behavior for direct callers and older clients.
+    """
+    structure = find_entity(game, structure_id)
+    if (not structure or not structure.get("id", "").startswith("s")
+            or structure.get("owner") != player_id
+            or structure.get("hp", 0) <= 0):
+        raise ValueError("请选择己方建筑")
+    if not structure.get("active"):
+        raise ValueError("施工中的建筑不能维修")
+    if enabled is False or (enabled is None and structure.get("repairing")):
+        structure["repairing"] = False
+        return False
+    if enabled is True and structure.get("repairing"):
+        return True
+    if structure["hp"] >= structure["maxHp"] - 0.1:
+        structure["hp"] = structure["maxHp"]
+        raise ValueError("建筑生命值已满")
+    structure["repairing"] = True
+    return True
+
+
 def command_unit_ids(payload):
     """Named units only. Missing/empty unitIds is a no-op, never 'all mine'."""
     values = payload.get("unitIds")
@@ -3583,6 +3614,7 @@ def tick_orbital_rain(room):
 
 AGENT_ALLOWED_COMMANDS = frozenset((
     "move", "attackMove", "attack", "structureAttack", "repair",
+    "structureRepair",
     "deploy", "undeploy", "stop", "train", "prepareBuild", "placeBuild",
     "cancelBuild", "cancelTrain", "sell", "setRally",
 ))
@@ -3613,6 +3645,12 @@ def handle_game_command(room, player, payload, role="commander"):
         issue_repair(
             game, player["id"], command_unit_ids(payload),
             payload.get("structureId"))
+    elif command == "structureRepair":
+        repair_enabled = payload.get("enabled")
+        if not isinstance(repair_enabled, bool):
+            repair_enabled = None
+        toggle_structure_repair(
+            game, player["id"], payload.get("structureId"), repair_enabled)
     elif command == "deploy":
         issue_deploy(game, player["id"], command_unit_ids(payload))
     elif command == "undeploy":
@@ -5312,13 +5350,55 @@ def tick_build_queues(room, dt):
             item["ready"] = True
 
 
+def tick_structure_repair(room, structure, dt, power_cache):
+    """Apply authoritative paid healing for a toggled building repair."""
+    if not structure.get("repairing"):
+        return
+    if (not structure.get("active") or structure.get("hp", 0) <= 0
+            or structure["hp"] >= structure["maxHp"] - 0.1):
+        if structure.get("hp", 0) > 0:
+            structure["hp"] = min(structure["hp"], structure["maxHp"])
+        structure["repairing"] = False
+        return
+    player = room["players"].get(structure["owner"])
+    if (not player or player.get("eliminated")
+            or player.get("cash", 0.0) <= 0.0):
+        structure["repairing"] = False
+        return
+    power_factor = power_cache.get(structure["owner"])
+    if power_factor is None:
+        power_factor = production_power_factor(room, structure["owner"], 0.35)
+        power_cache[structure["owner"]] = power_factor
+    missing = structure["maxHp"] - structure["hp"]
+    affordable = player["cash"] / REPAIR_COST_PER_HP
+    healed = min(
+        structure["maxHp"] * STRUCTURE_REPAIR_MAX_HP_PER_SECOND
+        * power_factor * dt,
+        missing,
+        affordable,
+    )
+    if healed <= 0:
+        structure["repairing"] = False
+        return
+    structure["hp"] += healed
+    player["cash"] = max(
+        0.0, player["cash"] - healed * REPAIR_COST_PER_HP)
+    if structure["hp"] >= structure["maxHp"] - 0.1:
+        structure["hp"] = structure["maxHp"]
+        structure["repairing"] = False
+    elif player["cash"] <= 0.0:
+        structure["repairing"] = False
+
+
 def tick_structures(room, dt, combat_spatial=None, entity_index=None):
     game = room["game"]
     terrain = game_terrain(game)
+    repair_power_cache = {}
     for structure in game["structures"]:
         if structure["hp"] <= 0:
             continue
         if not structure["active"]:
+            structure["repairing"] = False
             rate = production_power_factor(room, structure["owner"], 0.55)
             structure["buildRemaining"] = max(0.0, structure["buildRemaining"] - dt * rate)
             progress = 1.0 - structure["buildRemaining"] / max(0.01, structure["buildTotal"])
@@ -5360,6 +5440,8 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
                     if structure.get("rally"):
                         unit["destX"], unit["destY"] = structure["rally"]
                         unit["order"] = "move"
+
+        tick_structure_repair(room, structure, dt, repair_power_cache)
 
         if structure_role(structure["kind"]) == "defense":
             definition = STRUCTURE_TYPES[structure["kind"]]

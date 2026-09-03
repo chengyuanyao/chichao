@@ -90,7 +90,61 @@ def main():
     except ValueError as error:
         assert "维修厂" in str(error)
 
-    print("repair ok: routing, paid healing, completion, interruption and validation")
+    # Completed owned structures can toggle paid field repair without a bay.
+    factory = server.make_structure("factory", alpha["id"], 1120, 720, True)
+    factory["hp"] = 800.0
+    game["structures"].append(factory)
+    alpha["cash"] = 1000.0
+    started = server.toggle_structure_repair(game, alpha["id"], factory["id"])
+    assert started is True and factory["repairing"] is True
+    public_factory = next(
+        item for item in server.public_game(game, alpha["id"])["structures"]
+        if item["id"] == factory["id"])
+    assert public_factory["repairing"] is True
+    hp_before = factory["hp"]
+    cash_before = alpha["cash"]
+    server.tick_structure_repair(room, factory, 2.0, {})
+    assert factory["hp"] > hp_before
+    assert alpha["cash"] < cash_before
+    assert server.toggle_structure_repair(
+        game, alpha["id"], factory["id"], True) is True
+
+    stopped = server.toggle_structure_repair(
+        game, alpha["id"], factory["id"], False)
+    assert stopped is False and factory["repairing"] is False
+    hp_stopped = factory["hp"]
+    server.tick_structure_repair(room, factory, 1.0, {})
+    assert factory["hp"] == hp_stopped
+
+    # Running out of cash ends repair instead of leaving a stale wrench active.
+    factory["hp"] = 800.0
+    alpha["cash"] = 0.5
+    server.toggle_structure_repair(game, alpha["id"], factory["id"])
+    server.tick_structure_repair(room, factory, 1.0, {})
+    assert alpha["cash"] == 0.0
+    assert factory["repairing"] is False
+    assert factory["hp"] > 800.0
+
+    factory["hp"] = factory["maxHp"]
+    try:
+        server.toggle_structure_repair(game, alpha["id"], factory["id"])
+        raise AssertionError("full-health structures must reject repair")
+    except ValueError as error:
+        assert "生命值已满" in str(error)
+    factory["active"] = False
+    factory["hp"] = factory["maxHp"] * 0.5
+    try:
+        server.toggle_structure_repair(game, alpha["id"], factory["id"])
+        raise AssertionError("unfinished structures must reject repair")
+    except ValueError as error:
+        assert "施工中" in str(error)
+    try:
+        server.toggle_structure_repair(game, alpha["id"], enemy_bay["id"])
+        raise AssertionError("enemy structures must reject repair")
+    except ValueError as error:
+        assert "己方建筑" in str(error)
+
+    print("repair ok: vehicle bay plus paid structure repair, toggle and validation")
 
     print("\n=== Magic 圣泉: queue/place + golem repair path ===")
     mage = server.create_human("秘法甲", server.COLORS[2])

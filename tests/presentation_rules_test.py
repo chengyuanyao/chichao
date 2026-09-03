@@ -233,6 +233,21 @@ def main():
     assert "repairBtn.classList.toggle('hidden', isMagic)" not in app
     assert "structureRole(structure.kind) === 'repair'" in app
     assert "structureRole(target.kind) === 'repair'" in app
+    # 己方已完成建筑可在选中面板切换付费维修；状态由服务端下发，主画面
+    # 给所有可见的维修中建筑绘制扳手，而不是只做一个本地按钮动画。
+    assert "def toggle_structure_repair(" in server_source
+    assert 'elif command == "structureRepair":' in server_source
+    assert 'result["repairing"] = True' in server_source
+    assert "STRUCTURE_REPAIR_MAX_HP_PER_SECOND = 0.02" in server_source
+    assert "id=\"repairSelectedStructureBtn\"" in app
+    assert "command: 'structureRepair'" in app
+    assert "enabled: !wasRepairing" in app
+    assert "function renderSelectionInfo(force)" in app
+    assert "renderSelectionInfo(true);" in app
+    assert "game.structures.forEach(function (structure)" in app
+    assert "hudCtx.fillText('🔧'" in app
+    assert ".selected-structure-actions" in styles
+    assert ".sell-button.structure-repair-button" in styles
     assert catalog["buildings"]["mspring"]["role"] == "repair"
     assert catalog["buildings"]["mspring"]["faction"] == "magic"
     assert catalog["buildings"]["mspring"]["cost"] == server.STRUCTURE_TYPES["repair"]["cost"]
@@ -350,6 +365,15 @@ def main():
     assert server.MAPS["gold_crater_small"].get("briefing")
     assert "function paintGrassBase(c, w, h, themeId)" in app
     assert "paintTerrainFeatures(miniCtx, roomState.game.terrain, sx, sy)" in app
+    # 生产页签不能只依赖浏览器在滚动容器里最终合成的 click；轻微指针
+    # 位移也必须在 pointerdown 阶段立即切换，并保留键盘 click 兜底。
+    assert "function activateCommandTab(button)" in app
+    assert "commandTabsElement.addEventListener('pointerdown'" in app
+    assert "commandTabsElement.addEventListener('click'" in app
+    assert "commandTabsElement.addEventListener('keydown'" in app
+    assert "commandGrid.dataset.key = '';" in app
+    assert "touch-action: none;" in styles
+    assert 'role="tab" aria-selected="true"' in hud
     # 道路只留玩法数据：不再铺 3D 条带、路肩脏土或小地图/大厅描线。
     assert "function buildRoads" not in render
     assert "function roadWearAt" not in render

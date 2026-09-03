@@ -2142,6 +2142,9 @@ kbd {
   gap: 4px;
   padding: 7px 10px 14px;
   background: rgba(10, 10, 6, 0.4);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* 危险条纹分隔（全局第 2 处） */
@@ -2155,13 +2158,14 @@ kbd {
   background: var(--hazard-stripe);
   opacity: 0.6;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
 }
 
 .command-tab {
   position: relative;
   z-index: 0;
   min-width: 0;
-  height: 30px;
+  height: 38px;
   border: 0;
   background: none;
   cursor: pointer;
@@ -2171,6 +2175,13 @@ kbd {
   font-weight: 700;
   letter-spacing: 0.14em;
   transition: color 0.12s;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.command-tab::before,
+.command-tab::after {
+  pointer-events: none;
 }
 
 .command-tab::before {
@@ -2678,7 +2689,14 @@ kbd {
   pointer-events: none;
 }
 
-/* 出售 / 折叠按钮（#sellSelectedBtn / #packSelectedBtn） */
+/* 建筑维修 / 出售 / 折叠按钮 */
+.selected-structure-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+}
+
 .sell-button {
   min-width: 40px;
   height: 32px;
@@ -2698,6 +2716,29 @@ kbd {
 
 .sell-button:hover {
   filter: brightness(1.25);
+}
+
+.sell-button:disabled {
+  cursor: default;
+  filter: grayscale(0.65);
+  opacity: 0.42;
+}
+
+.sell-button.structure-repair-button {
+  border-color: rgba(105, 224, 158, 0.55);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 46%),
+    linear-gradient(180deg, #16452f, #0c2a1d);
+  color: #a8f2c9;
+}
+
+.sell-button.structure-repair-button span {
+  margin-right: 4px;
+}
+
+.sell-button.structure-repair-button.active {
+  border-color: #7df0b4;
+  box-shadow: 0 0 8px rgba(73, 221, 143, 0.35), inset 0 -2px 3px rgba(0, 0, 0, 0.5);
 }
 
 /* --- 命令按钮行 --- */

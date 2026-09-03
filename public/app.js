@@ -3203,11 +3203,11 @@ import {
     });
   }
 
-  function renderSelectionInfo() {
+  function renderSelectionInfo(force) {
     if (!roomState || !roomState.game) {
       return;
     }
-    if (selectionInfo.matches(':hover')) {
+    if (!force && selectionInfo.matches(':hover')) {
       return;
     }
     var units = roomState.game.units.filter(function (unit) { return selectedUnits.has(unit.id); });
@@ -3266,7 +3266,9 @@ import {
       if (structure.owner === 'neutral') {
         activeText = '中立矿区守卫 · 清除全部守军后解锁矿脉';
       }
-      if (structure.queue.length) {
+      if (structure.repairing) {
+        activeText = '维修中 · 生命 ' + Math.ceil(structure.hp) + ' / ' + Math.ceil(structure.maxHp);
+      } else if (structure.queue.length) {
         activeText = '生产 ' + ((UNITS[structure.queue[0].kind] || {}).name || structure.queue[0].kind) + ' · ' +
           Math.floor((1 - structure.queue[0].remaining / structure.queue[0].total) * 100) + '%';
       } else if (structure.active && structureRole(structure.kind) === 'repair') {
@@ -3276,21 +3278,48 @@ import {
           structureRole(structure.kind) === 'defense') {
         activeText = '防御系统待命 · 右键敌军指定攻击';
       }
+      var ownCompletedStructure = structure.owner === session.playerId && structure.active;
+      var repair = ownCompletedStructure ?
+        '<button class="sell-button structure-repair-button' + (structure.repairing ? ' active' : '') +
+        '" id="repairSelectedStructureBtn"' +
+        (!structure.repairing && structure.hp >= structure.maxHp - 0.1 ? ' disabled' : '') +
+        '><span aria-hidden="true">🔧</span>' + (structure.repairing ? '停止' : '维修') + '</button>' : '';
       var sell = structure.owner === session.playerId && structureRole(structure.kind) !== 'hq' ?
-        '<button class="sell-button" id="sellSelectedBtn">出售</button>' : '<span></span>';
+        '<button class="sell-button" id="sellSelectedBtn">出售</button>' : '';
       var packBtn = structure.owner === session.playerId && structureRole(structure.kind) === 'hq' && structure.packable ?
         '<button class="sell-button" id="packSelectedBtn" style="color:#6dd897;border-color:rgba(109,216,151,.4)">折叠</button>' : '';
+      var structureActions = repair || packBtn || sell ?
+        '<div class="selected-structure-actions">' + repair + packBtn + sell + '</div>' : '<span></span>';
       var structureInfoKey = 's|' + structure.id + ':' + Math.ceil(structure.hp) + ':' +
-        activeText + ':' + (structure.packable ? 1 : 0);
+        activeText + ':' + (structure.packable ? 1 : 0) + ':' + (structure.repairing ? 1 : 0);
       if (selectionInfo.dataset.key === structureInfoKey) { return; }
       selectionInfo.dataset.key = structureInfoKey;
       selectionInfo.innerHTML =
         '<div class="selected-summary"><div class="selected-portrait"></div>' +
         '<div><strong>' + (STRUCTURE_NAMES[structure.kind] || structure.kind) + '</strong><small>' + activeText + '</small>' +
         '<div class="health-track"><i style="width:' + Math.max(0, structure.hp / structure.maxHp * 100) + '%"></i></div></div>' +
-        packBtn + sell + '</div>';
+        structureActions + '</div>';
       selectionInfo.querySelector('.selected-portrait')
         .appendChild(makePortraitCanvas(structure.kind, true, 0));
+      var repairStructureButton = $('#repairSelectedStructureBtn');
+      if (repairStructureButton) {
+        repairStructureButton.addEventListener('click', function () {
+          var wasRepairing = !!structure.repairing;
+          sendAction('command', {
+            command: 'structureRepair',
+            structureId: structure.id,
+            enabled: !wasRepairing
+          }).then(function () {
+            selectionInfo.dataset.key = '';
+            renderSelectionInfo(true);
+            toast(wasRepairing ? '建筑维修已停止' : '建筑维修已启动', 'success');
+            sound(wasRepairing ? 'select' : 'repair');
+          }).catch(function (err) {
+            toast((err && err.message) || '建筑维修失败', 'error');
+            sound('error');
+          });
+        });
+      }
       var sellButton = $('#sellSelectedBtn');
       if (sellButton) {
         sellButton.addEventListener('click', function () {
@@ -3943,6 +3972,32 @@ import {
         hudCtx.strokeText(chevronText, top.x, chevronY);
         hudCtx.fillText(chevronText, top.x, chevronY);
       }
+    });
+
+    game.structures.forEach(function (structure) {
+      if (!structure.repairing || !visibleAt(structure.x, structure.y, structure.size)) { return; }
+      var top = view3d.worldToScreen(
+        structure.x,
+        structure.y,
+        view3d.groundHeight(structure.x, structure.y) + structure.size * 2.1 + 10
+      );
+      if (top.behind) { return; }
+      var pulse = 0.82 + Math.sin(timestamp * 0.008) * 0.12;
+      hudCtx.globalAlpha = pulse;
+      hudCtx.fillStyle = 'rgba(18, 30, 22, .88)';
+      hudCtx.beginPath();
+      hudCtx.arc(top.x, top.y - 8, 11, 0, Math.PI * 2);
+      hudCtx.fill();
+      hudCtx.fillStyle = '#7df0b4';
+      hudCtx.strokeStyle = 'rgba(0, 0, 0, .85)';
+      hudCtx.lineWidth = 2;
+      hudCtx.font = '15px "Segoe UI Symbol", sans-serif';
+      hudCtx.textAlign = 'center';
+      hudCtx.textBaseline = 'middle';
+      hudCtx.strokeText('🔧', top.x, top.y - 8);
+      hudCtx.fillText('🔧', top.x, top.y - 8);
+      hudCtx.globalAlpha = 1;
+      hudCtx.textBaseline = 'alphabetic';
     });
 
     // 地图信标
@@ -5500,13 +5555,54 @@ import {
       sendAction('chat', { message: message }).catch(function () {});
     }
   });
-  $$('.command-tab').forEach(function (button) {
-    button.addEventListener('click', function () {
-      activeTab = button.dataset.tab;
-      $$('.command-tab').forEach(function (tab) { tab.classList.toggle('active', tab === button); });
-      renderCommandGrid(true);
-      sound('select');
+  function activateCommandTab(button) {
+    if (!button || !button.dataset ||
+        ['buildings', 'infantry', 'vehicles'].indexOf(button.dataset.tab) < 0) {
+      return false;
+    }
+    var nextTab = button.dataset.tab;
+    var changed = activeTab !== nextTab || !button.classList.contains('active');
+    activeTab = nextTab;
+    $$('.command-tab').forEach(function (tab) {
+      var selected = tab === button;
+      tab.classList.toggle('active', selected);
+      tab.setAttribute('aria-selected', selected ? 'true' : 'false');
     });
+    if (!changed) { return false; }
+    // 主动清缓存并同步重绘；下一条服务器状态帧不会把刚切好的页签覆盖回去。
+    commandGrid.dataset.key = '';
+    renderCommandGrid(true);
+    sound('select');
+    return true;
+  }
+
+  var commandTabsElement = $('.command-tabs');
+  // 页签位于可滚动侧栏内。只依赖 click 时，轻微的鼠标/触控位移会被浏览器
+  // 当成滚动并取消 click；主指针按下即切换，响应不会再丢一拍。
+  commandTabsElement.addEventListener('pointerdown', function (event) {
+    var button = event.target.closest && event.target.closest('.command-tab');
+    if (!button || !commandTabsElement.contains(button) ||
+        (event.button !== 0 && event.pointerType !== 'touch')) { return; }
+    event.preventDefault();
+    activateCommandTab(button);
+    try { button.focus({ preventScroll: true }); } catch (error) { button.focus(); }
+  });
+  // 键盘、辅助技术与不支持 PointerEvent 的旧浏览器仍会产生 click。
+  commandTabsElement.addEventListener('click', function (event) {
+    var button = event.target.closest && event.target.closest('.command-tab');
+    if (!button || !commandTabsElement.contains(button)) { return; }
+    activateCommandTab(button);
+  });
+  commandTabsElement.addEventListener('keydown', function (event) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') { return; }
+    var tabs = $$('.command-tab');
+    var current = tabs.indexOf(document.activeElement);
+    if (current < 0) { return; }
+    event.preventDefault();
+    var direction = event.key === 'ArrowRight' ? 1 : -1;
+    var next = tabs[(current + direction + tabs.length) % tabs.length];
+    activateCommandTab(next);
+    next.focus();
   });
   $('#attackMoveBtn').addEventListener('click', function () { setCommandMode('attackMove'); });
   $('#repairBtn').addEventListener('click', repairSelectedAtNearestBay);
