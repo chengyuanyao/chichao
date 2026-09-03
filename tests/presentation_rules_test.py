@@ -456,7 +456,7 @@ def main():
     assert server.UNIT_TYPES["golem"]["size"] == server.UNIT_TYPES["tank"]["size"]
     assert "奥术法师：高挑长袍施法者，暗紫袍 + 金饰法杖" in render
     assert "冰霜女巫：宽檐帽 + 苍白斗篷 + 霜环" in render
-    assert "秘法巨龙：「玉剑传说」路线的东方玉龙" in render
+    assert "秘法巨龙：「奥德赛」硬表面构装龙" in render
     assert "天启级巨型持盾构装" in render
     assert "}, 1.18, 1.14, 1.18);" in render
     assert "warden: 1.55" in render
@@ -510,26 +510,31 @@ def main():
             "mantleProfile", "seerProfile", "cuirassProfile", "beastProfile",
             "launchBaseProfile", "migrateBaseProfile"):
         assert profile_name in builder_block
-    # 巨龙走「玉剑传说」玉龙路线：躯干仍是椭球不能退回方盒；明度必须保持
-    # 墨玉背 / 翡翠身 / 白玉腹三段，翼膜也要分出翼尖那一段透光的白玉，
-    # 否则又变回通体一个调的深色剪影。金角、龙须、玉鳍是东方龙的辨识件。
-    assert "ellipsoid(14.2, 4.2, 5.7" in builder_block
-    for jade in ("MAT.jadeScaleDark", "MAT.jadeScale", "MAT.jadeBelly",
-                 "MAT.jadeFin", "MAT.jadeMembrane", "MAT.jadeMembraneLit"):
-        assert jade in builder_block, jade
-    assert "分叉鹿角" in builder_block
-    assert "后掠长龙须" in builder_block
-    # 玉件必须走晶体表面通道，金件走金属：一次绘制调用里三种高光
+    # 巨龙走「奥德赛」硬表面路线：躯干是分离甲片扣在一条能量脊梁上，头是
+    # 面甲加横向目镜（没有兽眼），翼是挂在金梁上的全息板。色相仍留在秘法会
+    # 这边（暗紫黑铬 + 青金霓虹），不能滑成钢铁军团那种冷灰钢。
+    for ody in ("MAT.odyPlate", "MAT.odyPlateLit", "MAT.odyFrame",
+                "MAT.odyChrome", "MAT.odyGold", "MAT.odySeam", "MAT.odyCore"):
+        assert ody in render, ody
+    assert "横向目镜" in builder_block
+    assert "后掠天线角" in builder_block
+    assert "全息翼板" in builder_block
+    for jade in ("jadeScale", "jadeBelly", "jadeMembrane", "jadeGlow", "P_JADE"):
+        assert jade not in render, jade            # 玉龙调色板整组退役
+        assert jade not in app, jade
+    # 硬表面件走金属通道、全息翼板走晶体：一次绘制调用里仍是多种高光
     assert "surfaced(SURF.crystal, [" in builder_block
     assert "surfaced(SURF.metal, [" in builder_block
-    # 攻击特效跟模型一起换玉色：火球是巨龙独有弹道，不能残留橙火配色。
+    # 巨龙从兽皮改成金属材质，否则皮毛粗糙度会把甲板和铬边的折角一起照哑
+    assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1 };" in render
+    # 攻击特效跟模型一起换紫青：火球是巨龙独有弹道，不能残留橙火或玉绿。
     # projectile 键仍是 fireball（服务端目录约定），只换表现。
     assert server.UNIT_TYPES["dragon"]["projectile"] == "fireball"
-    assert "fireball: { len: 15, thick: 3.1, color: 0x4fd8a0" in render
+    assert "fireball: { len: 15, thick: 3.1, color: 0xa864ff" in render
     for orange in ("0xff7a28", "0xff7a2a", "0xffb060", "0xffc878"):
         assert orange not in render, orange
-    assert "flashAt(x, y, 0x7dffc8);" in render        # 命中闪光
-    assert "flashAt(x, y, 0x9fffdc);" in render        # 龙口喷吐闪光
+    assert "flashAt(x, y, 0xb47dff);" in render        # 命中闪光
+    assert "flashAt(x, y, 0xc79dff);" in render        # 龙口喷吐闪光
     assert "} else if (kind === 'fireball') {" in render
 
     # 建筑同样逐项覆盖目录，所有非发光直角盒会在首次缓存时换成倒角截面。
@@ -551,7 +556,7 @@ def main():
             "ellipsoid(3.6, 0.48, 3.55", "chamferedBox(5.8, 0.55, 6.1",
             "box(6.4, 0.70, 4.8", "chamferedBox(5.0, 0.52, 5.5",
             "ellipsoid(4.55, 0.62, 3.4", "taperedBox(10.0, 6.8",
-            "box(14.0, 0.75, 6.2", "box(10.4, 0.95, 6.8",
+            "taperedBox(13.6, 11.0", "box(10.4, 0.95, 6.8",
             "taperedBox(15.2, 9.8", "taperedBox(27, 16",
             "profiledVolume(deckProfile, 7.8, 6.5", "taperedBox(19, 13",
             "torus(4.2, 0.45"):
@@ -569,7 +574,7 @@ def main():
             "box(6.0, 1.6, 7", "box(5.8, 0.65, 6.0",
             "box(6.4, 0.70, 4.8", "box(5.2, 0.65, 5.8",
             "box(9.0, 0.90, 6.6", "taperedBox(10.0, 6.8",
-            "box(14.0, 0.75, 6.2", "box(10.4, 0.95, 6.8",
+            "box(30, 1.8, 3.6", "box(10.4, 0.95, 6.8",
             "taperedBox(15.2, 9.8", "taperedBox(27, 16",
             "taperedBox(15, 12", "taperedBox(19, 13",
             "torus(4.2, 0.45"):

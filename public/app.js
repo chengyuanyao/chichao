@@ -53,7 +53,7 @@ import {
     oracle: { icon: '◎', desc: '超远棱晶点射，玻璃后排，无溅射' },
     golem: { icon: '⛰', desc: '构装前排，高血投石溅射' },
     panther: { icon: '♞', desc: '全场最快魔兽，近战侧翼包抄' },
-    dragon: { icon: '✹', desc: '重型远程火球，大溅射压轴 · 需圣泉' },
+    dragon: { icon: '✹', desc: '重型远程奥术龙息，大溅射压轴 · 需圣泉' },
     warden: { icon: '⛊', desc: '晶铠前排，混甲抗磁暴/狙击/军犬 · 需圣泉' },
     colossus: { icon: '☄', desc: '远程晶陨，专拆建筑 · 需圣泉' },
     comet: { icon: '✺', desc: '超远程坠星，曲射拆建筑，弹速慢能躲 · 需圣泉' },
@@ -238,12 +238,13 @@ import {
   var P_GOLDTRIM = '#e0c25a';
   var P_RUNE = '#5ef0ff';
   var P_VIOLET = '#3a2060';
-  // 秘法巨龙走「玉剑传说」玉龙配色：墨玉背 / 翡翠身 / 白玉腹 + 金饰，
-  // 和 render3d.js 里的 jadeScaleDark / jadeScale / jadeBelly 对齐。
-  var P_JADE_D = '#1f4d47';
-  var P_JADE = '#3d8569';
-  var P_JADE_L = '#d1e0bd';
-  var P_JADE_GLOW = '#7dffc8';
+  // 秘法巨龙走「奥德赛」硬表面配色：暗紫黑铬甲板 + 青金霓虹，
+  // 和 render3d.js 里的 odyPlate / odyPlateLit / odyChrome / odySeam 对齐。
+  var P_ODY_D = '#1b1728';
+  var P_ODY = '#2f2a44';
+  var P_ODY_L = '#75718f';
+  var P_ODY_SEAM = '#4fe4ff';
+  var P_ODY_CORE = '#b46bff';
   var P_MITE = '#8ad4ff';
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
@@ -906,32 +907,40 @@ import {
     },
     dragon: function (c) {
       pShadow(c, 50, 61, 30);
-      // 长尾 + 扁长躯干 + 腿，俯视一眼是龙；配色跟 3D 模型一起换成玉龙
-      pLine(c, 30, 48, 6, 54, 3.2, P_JADE_D);
-      pPoly(c, [[22, 52], [64, 50], [62, 38], [28, 40]], P_JADE);
-      pPoly(c, [[24, 51], [62, 49], [61, 44], [26, 46]], P_JADE_L);  // 白玉腹
-      pRect(c, 32, 50, 3.2, 10, P_JADE_D);
-      pRect(c, 50, 49, 3.2, 11, P_JADE_D);
-      // 大后掠双翼：金梁 + 由深到浅的玉膜
-      pPoly(c, [[28, 40], [46, 6], [58, 38]], P_JADE);
-      pPoly(c, [[36, 40], [68, 10], [62, 40]], P_JADE_D);
-      pPoly(c, [[40, 38], [72, 20], [60, 40]], P_JADE_L);
+      // 长尾 + 分离甲片躯干 + 腿，俯视一眼仍是龙；配色跟 3D 模型一起换成
+      // 奥德赛构装龙：暗紫黑铬底、一条贯穿首尾的青色能量脊线、紫色环绕核球。
+      pLine(c, 30, 48, 6, 54, 3.2, P_ODY_D);
+      pPoly(c, [[22, 52], [64, 50], [62, 38], [28, 40]], P_ODY);
+      pRect(c, 32, 50, 3.2, 10, P_ODY_D);
+      pRect(c, 50, 49, 3.2, 11, P_ODY_D);
+      // 分离背甲三片：片间留缝，缝里是能量脊线
+      pLine(c, 26, 44, 66, 42, 3.0, P_ODY_SEAM);
+      pPoly(c, [[30, 41], [44, 40], [43, 34], [31, 35]], P_ODY_L);
+      pPoly(c, [[46, 40], [58, 39], [57, 34], [46, 35]], P_ODY_L);
+      pPoly(c, [[20, 45], [29, 44], [28, 39], [21, 40]], P_ODY_L);
+      // 大后掠双翼：金梁 + 全息翼板，外缘一条青边
+      pPoly(c, [[28, 40], [46, 6], [58, 38]], P_ODY);
+      pPoly(c, [[36, 40], [68, 10], [62, 40]], P_ODY_D);
+      pPoly(c, [[40, 38], [72, 20], [60, 40]], P_ODY_L);
       pLine(c, 30, 40, 47, 8, 1.6, P_GOLDTRIM);
       pLine(c, 38, 40, 67, 12, 1.4, P_GOLDTRIM);
-      // 背脊玉鳍：后倒的一排，东方龙的辨识线
-      pPoly(c, [[52, 38], [46, 26], [44, 38]], P_JADE_L);
-      pPoly(c, [[42, 39], [36, 28], [34, 39]], P_JADE_L);
-      // 长颈 + 头 + 白玉下颌 + 分叉金角 + 后掠龙须
-      pLine(c, 60, 40, 76, 22, 5.2, P_JADE);
-      pPoly(c, [[72, 24], [88, 18], [90, 25], [74, 30]], P_JADE);
-      pPoly(c, [[75, 27], [89, 22], [90, 25], [76, 30]], P_JADE_L);
+      pLine(c, 46, 8, 70, 13, 1.2, P_ODY_SEAM);
+      // 悬浮背鳍：硬边直板，不是生物鳍
+      pPoly(c, [[52, 38], [47, 27], [44, 38]], P_ODY_L);
+      pPoly(c, [[42, 39], [37, 29], [34, 39]], P_ODY_L);
+      // 长颈 + 面甲头 + 铬下颌 + 后掠天线角
+      pLine(c, 60, 40, 76, 22, 5.2, P_ODY);
+      pPoly(c, [[72, 24], [88, 18], [90, 25], [74, 30]], P_ODY);
+      pPoly(c, [[75, 27], [89, 22], [90, 25], [76, 30]], P_ODY_L);
       pLine(c, 76, 22, 71, 8, 1.8, P_GOLDTRIM);
-      pLine(c, 73, 14, 66, 9, 1.3, P_GOLDTRIM);
       pLine(c, 80, 21, 77, 9, 1.6, P_GOLDTRIM);
-      pLine(c, 84, 26, 66, 34, 1.2, P_GOLDTRIM);
-      // 口中玉息 + 眼
-      pPoly(c, [[90, 20], [102, 16], [92, 27]], P_JADE_GLOW);
-      pCirc(c, 80, 22, 1.6, '#eaffe4');
+      // 环绕核球：颈根上方的三颗，奥德赛最直接的辨识件
+      pCirc(c, 58, 20, 2.6, P_ODY_CORE);
+      pCirc(c, 70, 30, 2.2, P_ODY_CORE);
+      pCirc(c, 64, 12, 1.8, P_ODY_CORE);
+      // 龙息 + 横向目镜（没有兽眼）
+      pPoly(c, [[90, 20], [102, 16], [92, 27]], P_ODY_CORE);
+      pLine(c, 78, 22.5, 84, 22.5, 2.0, P_ODY_SEAM);
     },
     warden: function (c) {
       pShadow(c, 48, 61, 28);
