@@ -6305,68 +6305,59 @@ export function createRenderer(canvas) {
     };
   }
 
+  const pickRay = new THREE.Ray();
+  const pickMatrix = new THREE.Matrix4();
+  const pickInverse = new THREE.Matrix4();
+  const pickPosition = new THREE.Vector3();
+  const pickScale = new THREE.Vector3();
+  const pickQuaternion = new THREE.Quaternion();
+  const pickUp = new THREE.Vector3(0, 1, 0);
+  const pickBox = new THREE.Box3();
+  const pickLocalHit = new THREE.Vector3();
+  const pickWorldHit = new THREE.Vector3();
+
   /**
-   * 返回鼠标命中某个单位屏幕轮廓的排序分数；未命中返回 null。
+   * 返回鼠标射线命中单位模型包围盒的深度；未命中返回 null。
    *
-   * 旧点选先把鼠标射线打到 y=0 地面，再与单位脚下的玩法碰撞圆比较。
-   * 透视镜头下，点在步兵头部、车辆炮塔或龙翼上的射线落到地面时已经偏出
-   * 很远，于是出现“明明点在模型上却选不中”。这里把完整 3D 模型包围盒的
-   * 八个角投影到屏幕，以真实可见轮廓做命中，并额外留 8px 易点边距。
-   * 这段只在点击/双击/右键时执行，不增加逐帧开销。
+   * 旧实现把八个角投影成一个屏幕矩形。坦克长炮管、巨龙双翼会形成很大的
+   * 空心矩形，鼠标明明点在旁边地面也会被它们抢走；镜头背后的大单位甚至
+   * 可能反投影到屏幕内。现在把鼠标射线变换到单位本地坐标，直接与旋转后
+   * 的 3D 包围盒相交，并用交点深度处理重叠单位。仍只在鼠标操作时计算。
    */
   function unitPickScore(unit, sx, sy) {
     if (!unit || !Number.isFinite(sx) || !Number.isFinite(sy)) return null;
     const vis = visual.get(unit.id) || unit;
+    if (vis.inRenderRange === false) return null;
     const kind = unitVisualKind(unit);
-    const box = unitModelPickBox(kind);
+    const modelBox = unitModelPickBox(kind);
     const scale = UNIT_VISUAL_SCALE[kind] || 1;
     const gameplayRadius = unit.size * (UNIT_VISUAL_PICK_SCALE[unit.kind] || 1);
-    const minX = Math.min(box.min.x * scale, -gameplayRadius);
-    const maxX = Math.max(box.max.x * scale, gameplayRadius);
-    const minZ = Math.min(box.min.z * scale, -gameplayRadius);
-    const maxZ = Math.max(box.max.z * scale, gameplayRadius);
-    const minY = Math.min(0, box.min.y * scale);
-    const maxY = Math.max(box.max.y * scale, unit.size);
     const ground = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
-    const cos = Math.cos(vis.dir || 0);
-    const sin = Math.sin(vis.dir || 0);
-    let left = Infinity;
-    let right = -Infinity;
-    let top = Infinity;
-    let bottom = -Infinity;
+    projected.set(vis.x, ground + Math.max(unit.size, modelBox.max.y * scale) * 0.5,
+      vis.y).project(camera);
+    if (projected.z < -1 || projected.z > 1) return null;
 
-    for (let xi = 0; xi < 2; xi++) {
-      const lx = xi ? maxX : minX;
-      for (let zi = 0; zi < 2; zi++) {
-        const lz = zi ? maxZ : minZ;
-        const wx = vis.x + lx * cos - lz * sin;
-        const wz = vis.y + lx * sin + lz * cos;
-        for (let yi = 0; yi < 2; yi++) {
-          const wy = ground + (yi ? maxY : minY);
-          projected.set(wx, wy, wz).project(camera);
-          const px = (projected.x * 0.5 + 0.5) * state.width;
-          const py = (-projected.y * 0.5 + 0.5) * state.height;
-          left = Math.min(left, px);
-          right = Math.max(right, px);
-          top = Math.min(top, py);
-          bottom = Math.max(bottom, py);
-        }
-      }
-    }
+    ndc.x = (sx / state.width) * 2 - 1;
+    ndc.y = -(sy / state.height) * 2 + 1;
+    raycaster.setFromCamera(ndc, camera);
+    pickQuaternion.setFromAxisAngle(pickUp, -(vis.dir || 0));
+    pickMatrix.compose(
+      pickPosition.set(vis.x, ground, vis.y), pickQuaternion,
+      pickScale.set(scale, scale, scale));
+    pickInverse.copy(pickMatrix).invert();
+    pickRay.copy(raycaster.ray).applyMatrix4(pickInverse);
 
-    const padding = 8;
-    if (sx < left - padding || sx > right + padding ||
-        sy < top - padding || sy > bottom + padding) {
-      return null;
-    }
-    // 先偏向真正落在模型包围盒内的候选；多个单位轮廓重叠时，再选择屏幕
-    // 中心离鼠标最近的一个，避免大模型仅凭包围盒宽就总是抢走点击。
-    const outsideX = Math.max(left - sx, 0, sx - right);
-    const outsideY = Math.max(top - sy, 0, sy - bottom);
-    const centerX = (left + right) * 0.5;
-    const centerY = (top + bottom) * 0.5;
-    return Math.hypot(outsideX, outsideY) * 1000 +
-      Math.hypot(sx - centerX, sy - centerY);
+    pickBox.copy(modelBox);
+    pickBox.min.x = Math.min(pickBox.min.x, -gameplayRadius / scale);
+    pickBox.max.x = Math.max(pickBox.max.x, gameplayRadius / scale);
+    pickBox.min.z = Math.min(pickBox.min.z, -gameplayRadius / scale);
+    pickBox.max.z = Math.max(pickBox.max.z, gameplayRadius / scale);
+    pickBox.min.y = Math.min(pickBox.min.y, 0);
+    pickBox.max.y = Math.max(pickBox.max.y, unit.size / scale);
+    pickBox.expandByScalar(5 / Math.max(0.3, state.zoom) / scale);
+    if (!pickRay.intersectBox(pickBox, pickLocalHit)) return null;
+    pickWorldHit.copy(pickLocalHit).applyMatrix4(pickMatrix);
+    return raycaster.ray.origin.distanceTo(pickWorldHit);
   }
 
   /* -------------------- 逐帧渲染 -------------------- */

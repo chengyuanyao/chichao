@@ -3,9 +3,9 @@
 """Two rooms on different maps must not share terrain or navigation state.
 
 Regression test. Terrain used to live in module globals that tick_game
-overwrote for whichever room ticked last, so a build validated on an HTTP
-thread could be checked against another room's mountains, and the shared A*
-grid was rebuilt (flushing the path cache) on every interleaved tick.
+overwrote for whichever room ticked last. Later it was cached per map, but the
+cache also shared random neutral-camp costs, so second and later matches kept
+inheriting old danger zones and invalidating each other's A* routes.
 """
 
 from __future__ import print_function
@@ -51,12 +51,17 @@ def main():
             "%s should be %s, got %s" % (map_id, expected, (terrain.width, terrain.height))
     print("  Per-room terrain context: PASS")
 
-    # --- Test 2: rooms on the SAME map share one context (grid built once) ---
+    # --- Test 2: rooms on the SAME map still isolate mutable navigation ---
+    original_zones = set(large_terrain._camp_zones)
     twin = make_room("LARGE2", "gold_crater_small")
     server.start_game(twin)
-    assert server.game_terrain(twin["game"]) is large_terrain, \
-        "rooms on the same map should share the navigation grid"
-    print("  Same-map context sharing: PASS")
+    twin_terrain = server.game_terrain(twin["game"])
+    assert twin_terrain is not large_terrain, \
+        "same-map rooms must not share camp zones or route caches"
+    assert set(large_terrain._camp_zones) == original_zones, \
+        "starting another match must not append danger zones to a live match"
+    assert twin_terrain._camp_zones, "new match should carry its own guarded ore zones"
+    print("  Same-map mutable navigation isolation: PASS")
 
     # --- Test 3: blockers stay correct while the other room ticks ---
     # Pick a point blocked on gold_crater_small but open on narrow_standoff.

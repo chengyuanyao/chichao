@@ -139,6 +139,20 @@ def main():
         "五个 spawn=0 仍叠在一起 %s" % (cells,)
     print("  gold_crater_small 重复出生点已拆成 5 席")
 
+    print("\n=== 五车争霸连续多局不得有玩家进场即败 ===")
+    terrain_contexts = []
+    for match_index in range(8):
+        room, _cells = start_and_check(
+            "central_scramble",
+            ("tech", "magic", "tech", "magic", "tech"),
+            seed=900 + match_index, n=5)
+        terrain_contexts.append(server.game_terrain(room["game"]))
+    assert all(terrain_contexts[left] is not terrain_contexts[right]
+               for left in range(len(terrain_contexts))
+               for right in range(left + 1, len(terrain_contexts))), \
+        "连续对局复用了可变导航状态"
+    print("  连续 8 局、40 个席位均有指挥单位，导航状态彼此隔离")
+
     print("\n=== 已删除地图的旧出生下标必须安全回落 ===")
     _room, cells = start_and_check(
         "gold_crater_small", ("tech",) * 4,

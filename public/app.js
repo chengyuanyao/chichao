@@ -1239,6 +1239,7 @@ import {
   var session = null;
   var roomState = null;
   var eventSource = null;
+  var eventStreamGeneration = 0;
   var currentScreen = 'home';
   var roomRefreshTimer = null;
   var lastRoomRenderKey = '';
@@ -1593,6 +1594,7 @@ import {
     if (!session) {
       throw new Error('会话已失效');
     }
+    var requestSession = session;
     try {
       var data = await request('/api/action', {
         method: 'POST',
@@ -1604,7 +1606,9 @@ import {
           payload: payload || {}
         }
       });
-      if (data.room) {
+      // 离开/换房期间，旧请求可能比新会话更晚返回。它的响应只能结束原
+      // 请求，不能把上一局的房间状态重新盖到当前页面上。
+      if (data.room && session === requestSession) {
         applyRoomState(data.room);
       }
       return data;
@@ -1716,13 +1720,18 @@ import {
     if (!session) {
       return;
     }
-    if (eventSource) {
-      eventSource.close();
-    }
+    closeEvents();
+    var generation = eventStreamGeneration;
+    var streamSession = session;
     var query = new URLSearchParams(session).toString();
-    eventSource = new EventSource('/api/events?' + query);
+    var source = new EventSource('/api/events?' + query);
+    eventSource = source;
     setConnectionState(false);
-    eventSource.addEventListener('state', function (event) {
+    source.addEventListener('state', function (event) {
+      if (eventSource !== source || eventStreamGeneration !== generation ||
+          session !== streamSession) {
+        return;
+      }
       try {
         var state = JSON.parse(event.data);
         lastSnapshotAt = performance.now();
@@ -1732,12 +1741,21 @@ import {
         setConnectionState(false);
       }
     });
-    eventSource.onopen = function () {
+    source.onopen = function () {
+      if (eventSource !== source || eventStreamGeneration !== generation) { return; }
       setConnectionState(true);
     };
-    eventSource.onerror = function () {
+    source.onerror = function () {
+      if (eventSource !== source || eventStreamGeneration !== generation) { return; }
       setConnectionState(false);
     };
+  }
+
+  function closeEvents() {
+    eventStreamGeneration += 1;
+    var source = eventSource;
+    eventSource = null;
+    if (source) { source.close(); }
   }
 
   function setConnectionState(connected) {
@@ -1869,6 +1887,11 @@ import {
   }
 
   function applyRoomState(state) {
+    // 已关闭的旧 SSE / 旧指令响应可能仍排在浏览器事件队列里。房间身份不
+    // 匹配时直接丢弃，避免上一局的 finished/eliminated 状态污染下一局。
+    if (!state || !session || state.id !== session.roomId) {
+      return false;
+    }
     var previousStatus = roomState && roomState.status;
     var previousRewardTotal = null;
     if (roomState && roomState.players && session) {
@@ -2648,16 +2671,15 @@ import {
   }
 
   async function leaveRoom() {
+    // 先使事件流失效再发离开请求；否则服务端处理“放弃本局”时产生的最后
+    // 一帧战败快照，可能在下一房间建立后才进入浏览器事件队列。
+    closeEvents();
     if (session) {
       try {
         await sendAction('leave', {}, true);
       } catch (_error) {
         // Leaving locally is still safe if the connection disappeared.
       }
-    }
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
     }
     saveSession(null);
     roomState = null;
@@ -2684,6 +2706,7 @@ import {
     if (gameKey !== nextKey) {
       gameKey = nextKey;
       resultShown = false;
+      $('#resultModal').classList.add('hidden');
       selectedUnits.clear();
       selectedStructureId = null;
       selectedResourceId = null;

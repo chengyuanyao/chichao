@@ -1594,6 +1594,39 @@ def make_unit(kind, owner, x, y):
     }
 
 
+def find_unit_spawn_point(game, structure, kind, preferred_angle=None):
+    """Find terrain-safe ground around a producer for a newly built unit.
+
+    Buildings may legally sit close to a forest or river. A single random
+    production angle therefore is not enough for large tanks/dragons: their
+    centre can be dry while their footprint overlaps blocked terrain. Search
+    the producer perimeter deterministically from the preferred angle and
+    expand outward only when every nearby exit is obstructed.
+    """
+    definition = UNIT_TYPES[kind]
+    terrain = game_terrain(game)
+    angle = (random.random() * math.pi * 2
+             if preferred_angle is None else float(preferred_angle))
+    base_radius = structure["size"] + definition["size"] + 16.0
+    clearance = max(8.0, definition["size"] * 0.55)
+    for ring in range(4):
+        radius = base_radius + ring * 28.0
+        for offset in range(16):
+            current = angle + offset * (math.pi * 2.0 / 16.0)
+            x = clamp(structure["x"] + math.cos(current) * radius,
+                      definition["size"], terrain.width - definition["size"])
+            y = clamp(structure["y"] + math.sin(current) * radius,
+                      definition["size"], terrain.height - definition["size"])
+            if not terrain.blocked(x, y, clearance):
+                return x, y
+    first_x = clamp(structure["x"] + math.cos(angle) * base_radius,
+                    definition["size"], terrain.width - definition["size"])
+    first_y = clamp(structure["y"] + math.sin(angle) * base_radius,
+                    definition["size"], terrain.height - definition["size"])
+    return terrain.nearest_open_point(
+        first_x, first_y, structure["x"], structure["y"], clearance)
+
+
 def add_resource(game, x, y, amount=8500, public=False):
     """放置一处矿脉。
 
@@ -2057,9 +2090,10 @@ def start_game(room):
             # 纯表现参数：客户端用来生成低缓草坡、草簇与不可碰撞的散石。
             "detail": visual_terrain_detail(room_map),
         },
-        # Shared per-map navigation context. Never serialized: public_game()
-        # copies only the plain "terrain" dict above.
-        "terrainCtx": terrain_for_map(room_map),
+        # 每局独立的导航状态。静态山河虽然相同，但随机守军危险区、A* 代价
+        # 和路径缓存都属于本局；跨房间复用会让第二局继承第一局的绕行区。
+        # Never serialized: public_game() only copies the plain terrain above.
+        "terrainCtx": terrain_for_match(room_map),
     }
 
     # Assign spawns: honor explicit selections, auto-assign rest with team grouping.
@@ -2521,6 +2555,14 @@ def issue_move(game, player_id, unit_ids, x, y, attack_move=False):
     terrain = game_terrain(game)
     target_x = clamp(float(x), 15, game["map"]["width"] - 15)
     target_y = clamp(float(y), 15, game["map"]["height"] - 15)
+    # 工厂贴着森林/河岸时，旧版随机出兵角度可能把大体积坦克或巨龙刷进
+    # 阻挡边缘。接到玩家命令时先把这种非法位置推出地形，避免看似已选中、
+    # 服务端也收到了命令，单位却原地反复重算路线。
+    for unit in selected:
+        clearance = max(8.0, unit["size"] * 0.5)
+        if terrain.blocked(unit["x"], unit["y"], clearance):
+            unit["x"], unit["y"] = terrain.nearest_open_point(
+                unit["x"], unit["y"], target_x, target_y, clearance)
     origin_x = sum(unit["x"] for unit in selected) / float(len(selected))
     origin_y = sum(unit["y"] for unit in selected) / float(len(selected))
     group_clearance = max(8.0, max(unit["size"] for unit in selected) * 0.35)
@@ -3500,8 +3542,8 @@ ROAD_SPEED_BONUS = 1.35
 # 非"禁止"，采矿车仍能进矿。
 CAMP_PATH_COST = 4.0
 CAMP_THREAT_RADIUS = 480.0
-# 一局公共矿最多约 16 口；长期运行后允许跨房间并集到几局量级，再多就不
-# 再加了——全图都抬价等于没抬价，还不如维持"几局并集"的保守程度。
+# 一局公共矿最多约 16 口。cap 是单局异常数据的保险；危险区绝不能跨局
+# 累积，否则服务器运行越久，后续对局的可行路线就越少。
 _CAMP_ZONE_CAP = 48
 _PATH_NEIGHBORS = ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1))
 _CIRCLE8 = ((1.0, 0.0), (0.70710678, 0.70710678), (0.0, 1.0),
@@ -3518,13 +3560,11 @@ def _path_heuristic(ax, ay, bx, by):
 
 
 class Terrain(object):
-    """Per-map terrain: water, mountains, roads and A* navigation.
+    """Per-match terrain: water, mountains, roads and A* navigation.
 
-    One instance is shared by every room playing the same map. This state used
-    to live in module globals that ``tick_game`` overwrote for whichever room
-    ticked last, which meant command handlers on HTTP threads validated builds
-    against another room's rivers, and two rooms on different maps rebuilt the
-    navigation grid -- flushing the path cache -- on every single tick.
+    Static map validation may reuse an instance, but a running match owns its
+    Terrain because neutral-camp costs and route caches are mutable.  Sharing
+    those fields made later games inherit earlier games' danger zones.
 
     地形分三类：
       rivers   —— 水面，除桥梁外不可通行
@@ -3825,12 +3865,9 @@ class Terrain(object):
     def add_camp_zone(self, x, y, radius):
         """动态标记一处中立守卫威胁圈，让 A* 行军尽量绕开。
 
-        公共矿每局随机落位，Terrain 实例又是跨房间共享的静态缓存，所以
-        威胁圈只能在对局生成守军时追加。代价是"更贵"不是"禁止"：绕路省兵
-        的命，采矿车需要进矿时仍能走进去。
-
-        跨房间共享意味着各区会累积成并集（路径只是更保守，不会出错）；
-        cap 防止服务器长期运行后全图都被抬价、绕路失效。
+        公共矿每局随机落位，因此 Terrain 必须属于单独一局。危险区代价是
+        "更贵"而非"禁止"：绕路省兵的命，采矿车需要进矿时仍能走进去。
+        cap 只防止一局内异常数据无限扩张。
         """
         if len(self._camp_zones) >= _CAMP_ZONE_CAP:
             return
@@ -4044,7 +4081,7 @@ FLAT_TERRAIN = Terrain([], [], 9600, 6000)
 
 
 def terrain_for_map(map_def):
-    """Return the shared Terrain for a map definition, building it on demand."""
+    """Return a shared, static Terrain for map validation and previews."""
     key = map_def["id"]
     cached = _TERRAIN_BY_MAP.get(key)
     if cached is None:
@@ -4053,6 +4090,19 @@ def terrain_for_map(map_def):
                          map_def.get("mountains"), map_def.get("roads"))
         _TERRAIN_BY_MAP[key] = cached
     return cached
+
+
+def terrain_for_match(map_def):
+    """Build isolated mutable navigation state for one live match.
+
+    A Terrain contains random neutral-camp costs and route caches in addition
+    to immutable mountains/rivers.  Sharing it between matches made later
+    games inherit every earlier camp and could also invalidate a live room's
+    routes when another room started on the same map.
+    """
+    return Terrain(map_def.get("rivers"), map_def.get("bridges"),
+                   map_def["width"], map_def["height"],
+                   map_def.get("mountains"), map_def.get("roads"))
 
 
 def _point_segment_distance(px, py, road):
@@ -5100,14 +5150,13 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
                 game["effects"].append({"id": new_id("e"), "type": "complete", "x": structure["x"], "y": structure["y"], "ttl": 1.2})
                 # 新精炼厂按所属玩家阵营赠送对应采集单位（采矿车/浮游晶簇）
                 if structure_role(structure["kind"]) == "refinery":
-                    spawn_angle = random.random() * math.pi * 2
-                    spawn_x = structure["x"] + math.cos(spawn_angle) * 70
-                    spawn_y = structure["y"] + math.sin(spawn_angle) * 70
-                    if not terrain.blocked(spawn_x, spawn_y):
-                        owner_faction = room["players"][structure["owner"]].get("faction", "tech")
-                        gift_kind = faction_loadout(owner_faction)["harvester"]
-                        gift = make_unit(gift_kind, structure["owner"], spawn_x, spawn_y)
-                        game["units"].append(gift)
+                    owner_faction = room["players"][structure["owner"]].get("faction", "tech")
+                    gift_kind = faction_loadout(owner_faction)["harvester"]
+                    spawn_x, spawn_y = find_unit_spawn_point(
+                        game, structure, gift_kind)
+                    gift = make_unit(
+                        gift_kind, structure["owner"], spawn_x, spawn_y)
+                    game["units"].append(gift)
             continue
 
         if structure["queue"]:
@@ -5119,11 +5168,10 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
                 item = structure["queue"][0]
                 item["remaining"] = max(0.0, item["remaining"] - dt * production_rate)
                 if item["remaining"] <= 0:
-                    angle = random.random() * math.pi * 2
-                    radius = structure["size"] + UNIT_TYPES[item["kind"]]["size"] + 16
-                    unit = make_unit(item["kind"], structure["owner"],
-                                     structure["x"] + math.cos(angle) * radius,
-                                     structure["y"] + math.sin(angle) * radius)
+                    spawn_x, spawn_y = find_unit_spawn_point(
+                        game, structure, item["kind"])
+                    unit = make_unit(
+                        item["kind"], structure["owner"], spawn_x, spawn_y)
                     game["units"].append(unit)
                     structure["queue"].pop(0)
                     game["effects"].append({"id": new_id("e"), "type": "complete", "x": unit["x"], "y": unit["y"], "ttl": 0.8})

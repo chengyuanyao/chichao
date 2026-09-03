@@ -591,16 +591,24 @@ def main():
     assert "command: 'move'" not in select_body
     assert "command: 'stop'" not in select_body
     assert "command: 'attackMove'" not in select_body
-    # 3D 模型不能继续用 y=0 地面交点的小圆来点选。渲染层按模型几何包围盒
-    # 投影出屏幕命中区，app 优先采用它，点头部/炮塔/龙翼也不会漏选或选到
-    # 背后的建筑；计算仅发生在鼠标操作时，不进入 render 热循环。
+    # 3D 模型不能继续用 y=0 地面交点的小圆来点选，也不能把大模型投影成
+    # 含大量空白的屏幕矩形。鼠标射线与旋转后的 3D 包围盒求交并按深度消歧。
     assert "function unitModelPickBox(kind)" in render
     assert "entry.body.computeBoundingBox();" in render
     assert "function unitPickScore(unit, sx, sy)" in render
-    assert "const padding = 8;" in render
+    assert "pickRay.copy(raycaster.ray).applyMatrix4(pickInverse)" in render
+    assert "pickRay.intersectBox(pickBox, pickLocalHit)" in render
+    assert "if (vis.inRenderRange === false) return null" in render
     assert "unitPickScore: unitPickScore" in render
     assert "view3d.unitPickScore(unit, clickScreen.x, clickScreen.y)" in app
     assert "if (bestIsScreenUnit) { return; }" in app
+    # 关闭旧对局后，迟到的 SSE/HTTP 快照必须按事件流代次和房间号双重丢弃。
+    assert "var eventStreamGeneration = 0;" in app
+    assert "eventSource !== source || eventStreamGeneration !== generation" in app
+    assert "state.id !== session.roomId" in app
+    assert "session === requestSession" in app
+    assert app.index("closeEvents();", app.index("async function leaveRoom")) < \
+        app.index("await sendAction('leave'", app.index("async function leaveRoom"))
     box_fn = re.search(
         r"function selectBoxUnits\([\s\S]*?\) \{([\s\S]*?)\n  \}",
         app)
