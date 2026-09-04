@@ -3954,7 +3954,7 @@ export function createRenderer(canvas) {
         g += (theme.dry[1] - g) * windMix;
         b += (theme.dry[2] - b) * windMix;
       } else if (visualStyle === 'arid_wilderness') {
-        // 狭路对峙的浅色风蚀纹是地表色差，不产生额外模型或碰撞。
+        // 荒漠主题的浅色风蚀纹只提供地表色差，不产生额外模型或碰撞。
         const erosion = Math.max(0, Math.sin(wx * 0.0044 - wz * 0.0022 + rawLush * 5.1));
         const erosionMix = erosion * 0.10;
         r += (theme.rock[0] - r) * erosionMix;

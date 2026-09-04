@@ -139,56 +139,6 @@ BOT_NAMES = ["北辰", "赤狐", "磐石", "夜枭", "雷霆", "灰熊"]
 ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 MAPS = {
-    "narrow_standoff": {
-        "id": "narrow_standoff",
-        "name": "狭路对峙",
-        "width": 4800,
-        "height": 3200,
-        "maxPlayers": 2,
-        "theme": "arid",
-        "visualStyle": "arid_wilderness",
-        "spawnPoints": [
-            (700, 1600),
-            (4100, 1600),
-        ],
-        "spawnLabels": ["左翼阵地", "右翼阵地"],
-        "rivers": [],
-        "bridges": [],
-        # 中央纵向山脊留出上、中、下三条通道，主力走中谷、侧翼可绕行。
-        "mountains": [
-            {"x": 2400, "y": 171, "r": 331},
-            {"x": 2400, "y": 1086, "r": 297},
-            {"x": 2400, "y": 2091, "r": 297},
-            {"x": 2400, "y": 3029, "r": 331},
-            {"x": 1416, "y": 743, "r": 240},
-            {"x": 3384, "y": 2457, "r": 240},
-        ],
-        "roads": [
-            {"x1": 480, "y1": 1600, "x2": 4320, "y2": 1600, "width": 125},
-            {"x1": 780, "y1": 1600, "x2": 2400, "y2": 686, "width": 100},
-            {"x1": 780, "y1": 1600, "x2": 2400, "y2": 2571, "width": 100},
-            {"x1": 4020, "y1": 1600, "x2": 2400, "y2": 686, "width": 100},
-            {"x1": 4020, "y1": 1600, "x2": 2400, "y2": 2571, "width": 100},
-        ],
-        # 三条战术通道保持不变；可见车辙是彼此独立的风蚀曲径，
-        # 不从基地脚下汇成规整的三叉路口。
-        "visualTrails": [
-            {"width": 94, "points": [
-                [980, 1290], [1250, 1110], [1540, 970], [1900, 780],
-                [2180, 720], [2400, 686], [2650, 735], [2940, 880],
-                [3250, 1010], [3820, 1300],
-            ]},
-            {"width": 108, "points": [
-                [980, 1530], [1260, 1610], [1600, 1540], [1940, 1660],
-                [2400, 1600], [2830, 1530], [3190, 1660], [3820, 1570],
-            ]},
-            {"width": 94, "points": [
-                [980, 1910], [1250, 2090], [1540, 2230], [1900, 2420],
-                [2180, 2480], [2400, 2514], [2650, 2465], [2940, 2320],
-                [3250, 2190], [3820, 1900],
-            ]},
-        ],
-    },
     "iron_river_duel": {
         "id": "iron_river_duel",
         "name": "铁峡争渡",
@@ -199,7 +149,7 @@ MAPS = {
         "visualStyle": "river_valley",
         "bridgeDeckHeight": 18,
         "briefing": (
-            "以狭路对峙的左右 1v1 格局重构。一条深河谷纵贯战场，"
+            "左右对称的 1v1 战场由一条深河谷纵向切开，"
             "只能经上中下三座钢桥过河；中桥适合正面装甲推进，"
             "两座窄桥提供侧翼包抄。两岸旷野、河岸林与岩台之间只有军车碾出的泥土小道。"
         ),
@@ -474,11 +424,10 @@ MAPS = {
     },
 }
 
-# 当前版本发布三张正式图和一张写实风格试制图；顺序同时作为公共目录的稳定顺序。
+# 当前版本只发布三张正式图；顺序同时作为公共目录的稳定顺序。
 SHIPPED_MAP_IDS = (
     "central_scramble",
     "gold_crater_small",
-    "narrow_standoff",
     "iron_river_duel",
 )
 MAPS = {map_id: MAPS[map_id] for map_id in SHIPPED_MAP_IDS}
@@ -538,15 +487,6 @@ MAP_TERRAIN_DETAIL = {
         "rockDensity": 1.34,
         "spawnFlatRadius": 320,
         "centerFlatRadius": 620,
-    },
-    # 风蚀荒原：沟壑、砂岩和低矮旱生植被比默认沙土地更明显。
-    "narrow_standoff": {
-        "relief": 1.52,
-        "colorVariation": 1.52,
-        "grassDensity": 0.50,
-        "rockDensity": 1.70,
-        "spawnFlatRadius": 300,
-        "centerFlatRadius": 0,
     },
     # 陨坑地表增加焦土色差、撞击碎岩和少量复苏植被；出生区保持可建造。
     "gold_crater_small": {
@@ -1220,6 +1160,7 @@ def public_game(game, viewer_id=None, full=True):
             "combatRewards": bool(game.get("combatRewards")),
             "commanderMode": bool(game.get("commanderMode")),
             "dynamicAlliances": bool(game.get("dynamicAlliances", True)),
+            "mobileConstruction": bool(game.get("mobileConstruction", True)),
         }
         view_cache[view_key] = (frame["stamp"], dynamic)
 
@@ -1287,6 +1228,7 @@ def public_room(room, include_game=True, viewer_id=None, full=True,
         "combatRewards": bool(room.get("combatRewards") or (room.get("game") or {}).get("combatRewards")),
         "commanderMode": commander_mode_on(room),
         "dynamicAlliances": dynamic_alliances_enabled(room),
+        "mobileConstruction": mobile_construction_enabled(room, room.get("game")),
         "mapConfig": {
             "id": room_map["id"],
             "name": room_map["name"],
@@ -2292,6 +2234,9 @@ def start_game(room):
         "commanderMode": bool(room.get("commanderMode")),
         # 只锁定战斗中的队伍变更；大厅已经分好的 team 原样写入 playerTeams。
         "dynamicAlliances": dynamic_alliances_enabled(room),
+        # 默认保留经典规则：总部折叠成基地车后，已取得资格的建筑队列仍可
+        # 继续生产，并能在现有基地控制区内部署。
+        "mobileConstruction": mobile_construction_enabled(room),
         "nextOrbitalRainAt": (
             random.uniform(ORBITAL_RAIN_FIRST_MIN, ORBITAL_RAIN_FIRST_MAX)
             if room.get("orbitalRain") else None),
@@ -2597,6 +2542,35 @@ def player_has_active_headquarters(game, player_id):
         for structure in game["structures"])
 
 
+def mobile_construction_enabled(*sources):
+    """Whether a folded, living MCV keeps construction authorized.
+
+    Missing fields mean enabled so old rooms preserve the classic rule.
+    """
+    for source in sources:
+        if source is not None and source.get("mobileConstruction") is False:
+            return False
+    return True
+
+
+def player_has_mobile_headquarters(game, player_id):
+    """Whether the player's headquarters currently exists as a living MCV."""
+    return any(
+        unit["owner"] == player_id
+        and unit.get("hp", 0) > 0
+        and unit_role(unit.get("kind")) == "mcv"
+        for unit in game["units"])
+
+
+def player_has_construction_authority(room, player_id):
+    """An unfolded HQ, or an enabled living MCV, authorizes construction."""
+    game = room["game"]
+    return (
+        player_has_active_headquarters(game, player_id)
+        or (mobile_construction_enabled(room, game)
+            and player_has_mobile_headquarters(game, player_id)))
+
+
 def construction_anchor_near(game, player_id, x, y):
     for structure in game["structures"]:
         radius = BUILD_ANCHOR_RANGES.get(structure_role(structure["kind"]))
@@ -2622,7 +2596,8 @@ def position_clear(game, x, y, size):
     return True
 
 
-def place_structure(room, player_id, kind, x, y, free=False):
+def place_structure(room, player_id, kind, x, y, free=False,
+                    requirements_locked=False):
     game = room["game"]
     player = room["players"][player_id]
     if kind not in STRUCTURE_TYPES or structure_role(kind) == "hq":
@@ -2630,17 +2605,20 @@ def place_structure(room, player_id, kind, x, y, free=False):
     definition = STRUCTURE_TYPES[kind]
     if definition.get("faction", "tech") != player.get("faction", "tech"):
         raise ValueError("你的阵营无法建造该建筑")
-    # 其他己方核心建筑只提供放置范围，不替代总部的建筑授权。
-    # 折叠迁移时已完工的建筑保留在队列，但要等总部重新展开才能放置。
-    if not player_has_active_headquarters(game, player_id):
-        raise ValueError("请先展开基地车，再部署建筑")
+    # 机动建造开启时，折叠后的基地车保留总部授权；实际落点仍必须靠近
+    # 已完成的核心建筑，基地车本身不会变成可移动的建造半径。
+    if not player_has_construction_authority(room, player_id):
+        raise ValueError("请先展开基地车，或开启机动建造")
     map_w = game["map"]["width"]
     map_h = game["map"]["height"]
     x = clamp(float(x), definition["size"] + 12, map_w - definition["size"] - 12)
     y = clamp(float(y), definition["size"] + 12, map_h - definition["size"] - 12)
-    for requirement in definition["requires"]:
-        if not has_active_structure(game, player_id, requirement):
-            raise ValueError("缺少前置建筑")
+    # 正常直接建造仍检查科技树；已付费且生产完成的成品在排队时已经通过
+    # 授权，落地时不因前置建筑后来被摧毁/折叠而作废。
+    if not requirements_locked:
+        for requirement in definition["requires"]:
+            if not has_active_structure(game, player_id, requirement):
+                raise ValueError("缺少前置建筑")
     if not construction_anchor_near(game, player_id, x, y):
         raise ValueError("建筑必须靠近已完成的核心基地建筑")
     if not position_clear(game, x, y, definition["size"]):
@@ -2663,8 +2641,8 @@ def queue_structure(room, player_id, kind):
     # 阵营校验：科技/魔法各有独立建筑树，跨阵营不能建造
     if definition.get("faction", "tech") != player.get("faction", "tech"):
         raise ValueError("你的阵营无法建造该建筑")
-    if not player_has_active_headquarters(game, player_id):
-        raise ValueError("请先展开基地车，再生产建筑")
+    if not player_has_construction_authority(room, player_id):
+        raise ValueError("请先展开基地车，或开启机动建造")
     for requirement in definition["requires"]:
         if not has_active_structure(game, player_id, requirement):
             raise ValueError("缺少前置建筑")
@@ -2687,7 +2665,9 @@ def place_prepared_structure(room, player_id, kind, x, y):
     queue = player.get("buildQueue", [])
     if not queue or queue[0]["kind"] != kind or not queue[0].get("ready"):
         raise ValueError("该建筑尚未生产完成")
-    structure = place_structure(room, player_id, kind, x, y, free=True)
+    structure = place_structure(
+        room, player_id, kind, x, y, free=True,
+        requirements_locked=True)
     player["buildQueue"] = []
     return structure
 
@@ -3085,6 +3065,23 @@ def set_combat_rewards(room, player, enabled):
         add_chat(room, "作战系统", "已开启可选模式：战斗奖励。", True)
     else:
         add_chat(room, "作战系统", "已关闭可选模式：战斗奖励。", True)
+    return enabled
+
+
+def set_mobile_construction(room, player, enabled):
+    """房主在大厅决定基地车移动时是否保留建筑生产与部署授权。"""
+    if room.get("status") != "lobby":
+        raise ValueError("战斗已经开始")
+    if not player or room.get("hostId") != player.get("id"):
+        raise ValueError("只有房主可以设置模式")
+    enabled = bool(enabled)
+    if mobile_construction_enabled(room) == enabled:
+        return enabled
+    room["mobileConstruction"] = enabled
+    if enabled:
+        add_chat(room, "作战系统", "已开启机动建造：基地车移动时建筑队列继续运转。", True)
+    else:
+        add_chat(room, "作战系统", "已关闭机动建造：总部折叠后建筑生产暂停。", True)
     return enabled
 
 
@@ -5427,9 +5424,9 @@ def tick_build_queues(room, dt):
         item = queue[0]
         if item.get("ready"):
             continue
-        # 最后一座总部折叠/被摧毁后只暂停：不扣新钱、不清队列、不退款，
-        # 重新展开任意一座总部后从原剩余时间继续。
-        if not player_has_active_headquarters(game, player["id"]):
+        # 关闭机动建造时，最后一座总部折叠后暂停；默认开启时，存活基地车
+        # 继续承接建筑生产。总部与基地车都不存在则始终没有建造授权。
+        if not player_has_construction_authority(room, player["id"]):
             continue
         production_rate = production_power_factor(room, player["id"], 0.4)
         item["remaining"] = max(0.0, item["remaining"] - dt * production_rate)
@@ -6994,6 +6991,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 "combatRewards": False,
                 "commanderMode": False,
                 "dynamicAlliances": True,
+                "mobileConstruction": True,
                 "lock": threading.RLock(),
             }
             ROOMS[room_id] = room
@@ -7107,6 +7105,8 @@ class GameHandler(BaseHTTPRequestHandler):
                 set_neutrals(room, player, payload.get("enabled"))
             elif action == "setCombatRewards":
                 set_combat_rewards(room, player, payload.get("enabled"))
+            elif action == "setMobileConstruction":
+                set_mobile_construction(room, player, payload.get("enabled"))
             elif action == "setDynamicAlliances":
                 set_dynamic_alliances(room, player, payload.get("enabled"))
             elif action == "setCommanderMode":

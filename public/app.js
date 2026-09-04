@@ -1184,6 +1184,8 @@ import {
   var combatRewardsBadge = $('#combatRewardsBadge');
   var dynamicAlliancesRow = $('#dynamicAlliancesRow');
   var dynamicAlliancesToggle = $('#dynamicAlliancesToggle');
+  var mobileConstructionRow = $('#mobileConstructionRow');
+  var mobileConstructionToggle = $('#mobileConstructionToggle');
   var commanderModeRow = $('#commanderModeRow');
   var commanderModeToggle = $('#commanderModeToggle');
   var commanderModeBadge = $('#commanderModeBadge');
@@ -1197,8 +1199,7 @@ import {
   var BUILTIN_MAPS = {
     central_scramble: { id: 'central_scramble', name: '五车争霸', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在中央同时落地。先抢方向再展开；外围五个方向各有一片随机位置的23万矿，中央矿为双倍的46万，且没有中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
     gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着陨石核打，地图紧凑，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[5530,2443],[4640,5182],[1760,5182],[870,2443]] },
-    narrow_standoff: { id: 'narrow_standoff', name: '狭路对峙', width: 4800, height: 3200, maxPlayers: 2, theme: 'arid', spawnLabels: ['左翼阵地', '右翼阵地'], spawnPoints: [[700,1600],[4100,1600]] },
-    iron_river_duel: { id: 'iron_river_duel', name: '铁峡争渡', width: 4800, height: 3200, maxPlayers: 2, theme: 'temperate', briefing: '狭路对峙的写实河谷版：上中下三座钢桥分出正面与两路侧翼战线。', spawnLabels: ['西岸指挥部', '东岸指挥部'], spawnPoints: [[700,1600],[4100,1600]] }
+    iron_river_duel: { id: 'iron_river_duel', name: '铁峡争渡', width: 4800, height: 3200, maxPlayers: 2, theme: 'temperate', briefing: '左右对称的写实河谷战场：上中下三座钢桥分出正面与两路侧翼战线。', spawnLabels: ['西岸指挥部', '东岸指挥部'], spawnPoints: [[700,1600],[4100,1600]] }
   };
 
   // 地图目录只在大厅和首帧下发，缓存住供整局使用
@@ -2027,6 +2028,7 @@ import {
     syncNeutralCampsToggle(me, roomState);
     syncCombatRewardsToggle(me, roomState);
     syncDynamicAlliancesToggle(me, roomState);
+    syncMobileConstructionToggle(me, roomState);
     syncCommanderModeToggle(me, roomState);
 
     // Only rebuild the roster DOM when something actually changed.
@@ -2376,6 +2378,26 @@ import {
     dynamicAlliancesToggle.disabled = !canEdit;
     if (dynamicAlliancesRow) {
       dynamicAlliancesRow.classList.toggle('disabled', !canEdit);
+    }
+  }
+
+  function roomHasMobileConstruction(state) {
+    if (!state) { return true; }
+    if (state.mobileConstruction === false) { return false; }
+    if (state.game && state.game.mobileConstruction === false) { return false; }
+    return true;
+  }
+
+  function syncMobileConstructionToggle(me, state) {
+    if (!mobileConstructionToggle) { return; }
+    var on = roomHasMobileConstruction(state);
+    if (mobileConstructionToggle.checked !== on) {
+      mobileConstructionToggle.checked = on;
+    }
+    var canEdit = !!(me && me.isHost && state && state.status === 'lobby');
+    mobileConstructionToggle.disabled = !canEdit;
+    if (mobileConstructionRow) {
+      mobileConstructionRow.classList.toggle('disabled', !canEdit);
     }
   }
 
@@ -2966,6 +2988,17 @@ import {
     }));
   }
 
+  function hasOwnMobileHeadquarters() {
+    return !!(roomState && roomState.game && roomState.game.units.some(function (unit) {
+      return unit.owner === session.playerId && unit.hp > 0 && unitRole(unit.kind) === 'mcv';
+    }));
+  }
+
+  function hasConstructionAuthority() {
+    return hasOwnActiveHeadquarters() ||
+      (roomHasMobileConstruction(roomState) && hasOwnMobileHeadquarters());
+  }
+
   function activateBuildMode(kind, automatic) {
     buildMode = kind;
     commandMode = null;
@@ -2985,9 +3018,8 @@ import {
       lastReadyBuildId = null;
       return;
     }
-    if (!hasOwnActiveHeadquarters()) {
-      // 总部折叠后不能留着绿色放置鬼影误导玩家。成品仍在队列里，
-      // 重新展开后点建筑卡即可继续部署。
+    if (!hasConstructionAuthority()) {
+      // 关闭机动建造且总部折叠时不显示放置鬼影；成品仍保留在队列中。
       if (buildMode) { cancelModes(); }
       if (item.ready && item.id !== lastReadyBuildId) {
         lastReadyBuildId = item.id;
@@ -3019,9 +3051,9 @@ import {
       }).catch(function () {});
       return;
     }
-    if (!hasOwnActiveHeadquarters()) {
+    if (!hasConstructionAuthority()) {
       toast(item ? '总部已折叠，建筑生产已暂停' :
-        '请先展开基地车，再生产建筑', 'error');
+        '请先展开基地车，或在大厅开启机动建造', 'error');
       sound('error');
       return;
     }
@@ -3143,8 +3175,10 @@ import {
       var definition = button.dataset.type === 'building' ? BUILDINGS[kind] : UNITS[kind];
       var isBuilding = button.dataset.type === 'building';
       var activeHeadquarters = hasOwnActiveHeadquarters();
+      var constructionAuthorized = activeHeadquarters ||
+        (roomHasMobileConstruction(roomState) && hasOwnMobileHeadquarters());
       var requirementsMet = isBuilding
-        ? activeHeadquarters && definition.requires.every(hasStructure)
+        ? constructionAuthorized && definition.requires.every(hasStructure)
         : hasStructure(definition.producer) && (definition.requires || []).every(hasStructure);
       var status = button.querySelector('.command-status');
       var progress = 0;
@@ -3159,18 +3193,20 @@ import {
           progress = buildItem.ready ? 1 : 1 - buildItem.remaining / Math.max(0.01, buildItem.total);
           button.classList.add('queued');
           button.classList.toggle('ready', !!buildItem.ready);
-          status.textContent = !activeHeadquarters ?
+          status.textContent = !constructionAuthorized ?
             (buildItem.ready ? '展开总部后部署' : '总部折叠 · 已暂停') :
-            (buildItem.ready ? '点击部署' : Math.ceil(buildItem.remaining) + ' 秒');
+            (!activeHeadquarters && !buildItem.ready ?
+              '基地机动 · ' + Math.ceil(buildItem.remaining) + ' 秒' :
+              (buildItem.ready ? '点击部署' : Math.ceil(buildItem.remaining) + ' 秒'));
           // 暂停中的队列卡仍可交互，便于 Shift+点击/右键取消退款；
           // 普通点击会在 handleBuildingCard 里提示先展开总部。
           button.disabled = !!me.eliminated;
-          button.title = activeHeadquarters ?
+          button.title = constructionAuthorized ?
             definition.desc + ' · Shift+点击取消' : '展开总部后自动续造；右键仍可取消退款';
         } else {
           var queueBusy = !!buildItem;
           status.textContent = queueBusy ? '队列占用' :
-            (!activeHeadquarters ? '需要展开总部' : '◆ ' + definition.cost.toLocaleString('zh-CN'));
+            (!constructionAuthorized ? '需要展开总部' : '◆ ' + definition.cost.toLocaleString('zh-CN'));
           button.disabled = queueBusy || !requirementsMet || me.cash < definition.cost || me.eliminated;
           button.title = definition.desc + ' · 生产 ' + definition.build + ' 秒';
         }
@@ -5472,6 +5508,16 @@ import {
         return sendAction('setDynamicAlliances', { enabled: enabled });
       }).catch(function () {
         if (roomState) { syncDynamicAlliancesToggle(ownPlayer(), roomState); }
+      });
+    });
+  }
+  if (mobileConstructionToggle) {
+    mobileConstructionToggle.addEventListener('change', function () {
+      var enabled = mobileConstructionToggle.checked;
+      queueLobbyMutation(function () {
+        return sendAction('setMobileConstruction', { enabled: enabled });
+      }).catch(function () {
+        if (roomState) { syncMobileConstructionToggle(ownPlayer(), roomState); }
       });
     });
   }

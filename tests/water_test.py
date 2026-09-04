@@ -31,7 +31,7 @@ def make_room():
         "chat": [],
         "game": None,
         "createdAt": time.time(),
-        "selectedMap": "narrow_standoff",
+        "selectedMap": "central_scramble",
     }
     return room
 

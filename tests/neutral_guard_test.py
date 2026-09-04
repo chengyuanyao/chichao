@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 
 
-def make_room(map_id="narrow_standoff", seed=7301, neutrals=None):
+def make_room(map_id="iron_river_duel", seed=7301, neutrals=None):
     random.seed(seed)
     alpha = server.create_human("守矿甲", server.COLORS[0])
     beta = server.create_human("守矿乙", server.COLORS[1])
@@ -46,8 +46,9 @@ def check_spawn_and_lock(room, alpha):
     game = room["game"]
     public_ore = [resource for resource in game["resources"]
                   if resource.get("public")]
-    assert len(public_ore) == 4
-    assert len(game["neutralCamps"]) == 4
+    expected = expected_public_camps(server.MAPS[room["selectedMap"]])
+    assert len(public_ore) == expected
+    assert len(game["neutralCamps"]) == expected
     assert server.NEUTRAL_OWNER not in room["players"]
 
     for resource in public_ore:
@@ -182,7 +183,8 @@ def check_flag_off_no_guards():
     game = room["game"]
     assert game.get("neutrals") is False
     public_ore = [resource for resource in game["resources"] if resource.get("public")]
-    assert len(public_ore) == 4, len(public_ore)
+    expected = expected_public_camps(server.MAPS[room["selectedMap"]])
+    assert len(public_ore) == expected, len(public_ore)
     assert game.get("neutralCamps") == []
     assert living_neutrals(game) == []
     assert all(not resource.get("guarded") for resource in public_ore)

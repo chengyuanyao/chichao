@@ -109,7 +109,6 @@ def check_map(map_id, map_def):
 
     # 锁住当前发布地图及其尺寸。
     expected_sizes = {
-        "narrow_standoff": (4800, 3200),
         "gold_crater_small": (6400, 6400),
         "central_scramble": (4000, 4000),
         "iron_river_duel": (4800, 3200),
@@ -183,7 +182,7 @@ def main():
         check_map(map_id, server.MAPS[map_id])
 
     # --- 道路确实影响寻路与速度 ---
-    road_map = server.MAPS["narrow_standoff"]
+    road_map = server.MAPS["iron_river_duel"]
     terrain = server.terrain_for_map(road_map)
     on = terrain.speed_scale(1800, 1600)      # 中央主干道上
     off = terrain.speed_scale(1800, 1300)     # 主干道旁的旷野
@@ -214,11 +213,6 @@ def main():
         path = duel_terrain.find_path(1900, bridge["y"], 2900, bridge["y"])
         assert path, (bridge["x"], bridge["y"])
     print("  铁峡争渡三座桥均可供大型单位通行")
-
-    narrow = server.MAPS["narrow_standoff"]
-    assert narrow.get("visualStyle") == "arid_wilderness"
-    assert len(narrow.get("visualTrails") or []) == 3
-    assert all(len(t["points"]) >= 8 for t in narrow["visualTrails"])
 
     scramble = server.MAPS["central_scramble"]
     assert scramble.get("visualStyle") == "open_wilderness"

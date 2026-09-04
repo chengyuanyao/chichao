@@ -150,7 +150,6 @@ def main():
         assert not map_def.get("bridges"), "%s still has bridge data" % map_id
         assert map_def.get("mountains"), "%s needs mountain blockers" % map_id
     expected_sizes = {
-        "narrow_standoff": (4800, 3200),
         "gold_crater_small": (6400, 6400),
         "central_scramble": (4000, 4000),
         "iron_river_duel": (4800, 3200),
@@ -199,9 +198,10 @@ def main():
     assert "vehicleTab: '法阵'" in app
     assert "function applyFactionHud" in app
     assert "function hasOwnActiveHeadquarters()" in app
+    assert "function hasConstructionAuthority()" in app
     assert "总部折叠 · 已暂停" in app
     assert "需要展开总部" in app
-    assert "activeHeadquarters && definition.requires.every(hasStructure)" in app
+    assert "constructionAuthorized && definition.requires.every(hasStructure)" in app
     assert "def player_has_active_headquarters(" in server_source
 
     # 客户端建造锚点、空格回基地、展开/折叠必须走 role，不能写死 hq/mcv。
@@ -375,7 +375,6 @@ def main():
     for theme_id in ("grassland", "arid", "urban", "crater", "temperate"):
         assert ("  %s:" % theme_id) in render
     assert server.MAPS["central_scramble"]["theme"] == "grassland"
-    assert server.MAPS["narrow_standoff"]["theme"] == "arid"
     assert server.MAPS["gold_crater_small"]["theme"] == "crater"
     assert server.MAPS["iron_river_duel"]["theme"] == "temperate"
     assert "mapBriefingDisplay" in app
@@ -753,6 +752,16 @@ def main():
     assert "setNeutrals" in app
     assert "function syncNeutralCampsToggle" in app
     assert "function roomHasNeutrals" in app
+
+    # 机动建造默认开；折叠基地车保留建筑队列授权，房主也可在大厅关闭。
+    assert "机动建造" in hud
+    assert "基地车移动时继续生产、部署建筑，默认开" in hud
+    assert 'data-mode="mobile_construction"' in hud
+    assert 'id="mobileConstructionToggle" checked' in hud
+    assert "机动建造" in readme
+    assert "setMobileConstruction" in app
+    assert "function roomHasMobileConstruction" in app
+    assert "def set_mobile_construction(" in server_source
 
     # 可选模式「指挥官模式」：大厅开关、方针条、小地图焦点。
     assert "指挥官模式" in hud

@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 
 
-def make_room(seed, map_id="narrow_standoff"):
+def make_room(seed, map_id="gold_crater_small"):
     random.seed(seed)
     players = [
         server.create_human("经济甲", server.COLORS[0]),
@@ -41,25 +41,29 @@ def check_random_resources():
     repeated = resource_positions(4101)
     changed = resource_positions(4102)
 
-    # 两名玩家各有一片三矿点的保底矿，另有四片公共矿。
-    assert len(first) == 10, len(first)
+    map_def = server.MAPS["gold_crater_small"]
+    home_count = len(map_def["homeOreAmounts"]) * 2
+    fixed_count = home_count + len(map_def.get("bonusResources") or ())
+    random_count = map_def["publicOreCount"]
+    assert len(first) == fixed_count + random_count, len(first)
     assert first == repeated, "同一个地图 seed 应生成相同矿区"
-    assert first[:6] == changed[:6], "出生区保底矿不应随 seed 漂移"
-    assert first[6:] != changed[6:], "公共矿应在不同对局随机变化"
+    assert first[:fixed_count] == changed[:fixed_count], \
+        "家矿与固定争夺矿不应随 seed 漂移"
+    assert first[fixed_count:] != changed[fixed_count:], \
+        "随机公共矿应在不同对局变化"
 
-    map_def = server.MAPS["narrow_standoff"]
-    public_ore = first[6:]
+    public_ore = first[fixed_count:]
     for x, y in public_ore:
         nearest_spawn = min(math.hypot(x - sx, y - sy)
                             for sx, sy in map_def["spawnPoints"])
         assert nearest_spawn >= 959.0, nearest_spawn
     for index, (x, y) in enumerate(public_ore):
-        for ox, oy in first[:6] + public_ore[:index]:
+        for ox, oy in first[:fixed_count] + public_ore[:index]:
             assert math.hypot(x - ox, y - oy) >= 519.0
 
 
 def check_harvester_drives_home():
-    room, players = make_room(5101, "narrow_standoff")
+    room, players = make_room(5101, "gold_crater_small")
     game = room["game"]
     owner = players[0]
     game["terrainCtx"] = server.FLAT_TERRAIN

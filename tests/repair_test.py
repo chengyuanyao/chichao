@@ -28,7 +28,7 @@ def main():
         "hostId": alpha["id"],
         "players": {alpha["id"]: alpha, beta["id"]: beta},
         "chat": [], "game": None, "createdAt": time.time(),
-        "selectedMap": "narrow_standoff",
+        "selectedMap": "iron_river_duel",
         "neutrals": False,
     }
     server.start_game(room)
@@ -155,7 +155,7 @@ def main():
         "hostId": mage["id"],
         "players": {mage["id"]: mage, foe["id"]: foe},
         "chat": [], "game": None, "createdAt": time.time(),
-        "selectedMap": "narrow_standoff",
+        "selectedMap": "iron_river_duel",
         "neutrals": False,
     }
     server.start_game(magic_room)

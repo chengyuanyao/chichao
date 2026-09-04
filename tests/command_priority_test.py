@@ -22,7 +22,7 @@ def make_room():
         "hostId": alpha["id"],
         "players": {alpha["id"]: alpha, beta["id"]: beta},
         "chat": [], "game": None, "createdAt": time.time(),
-        "selectedMap": "narrow_standoff",
+        "selectedMap": "iron_river_duel",
     }
     server.start_game(room)
     game = room["game"]

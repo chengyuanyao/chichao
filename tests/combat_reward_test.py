@@ -21,7 +21,7 @@ def make_lobby(tag="REWARD"):
         "hostId": alpha["id"],
         "players": {alpha["id"]: alpha, beta["id"]: beta},
         "chat": [], "game": None, "createdAt": time.time(),
-        "selectedMap": "narrow_standoff", "combatRewards": False,
+        "selectedMap": "iron_river_duel", "combatRewards": False,
     }
     return room, alpha, beta
 

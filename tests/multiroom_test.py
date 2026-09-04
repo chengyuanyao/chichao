@@ -35,7 +35,7 @@ def make_room(room_id, map_id):
 def main():
     random.seed(20260725)
 
-    small = make_room("SMALL1", "narrow_standoff")   # 4800 x 3200
+    small = make_room("SMALL1", "iron_river_duel")   # 4800 x 3200
     large = make_room("LARGE1", "gold_crater_small")  # 6400 x 6400
     server.start_game(small)
     server.start_game(large)
@@ -44,7 +44,7 @@ def main():
     small_terrain = server.game_terrain(small["game"])
     large_terrain = server.game_terrain(large["game"])
     assert small_terrain is not large_terrain, "different maps need different terrain"
-    for map_id, terrain in (("narrow_standoff", small_terrain),
+    for map_id, terrain in (("iron_river_duel", small_terrain),
                             ("gold_crater_small", large_terrain)):
         expected = (float(server.MAPS[map_id]["width"]), float(server.MAPS[map_id]["height"]))
         assert (terrain.width, terrain.height) == expected, \
@@ -64,7 +64,7 @@ def main():
     print("  Same-map mutable navigation isolation: PASS")
 
     # --- Test 3: blockers stay correct while the other room ticks ---
-    # Pick a point blocked on gold_crater_small but open on narrow_standoff.
+    # Pick a point blocked on gold_crater_small but open on iron_river_duel.
     probe = None
     for cx in range(160, int(small_terrain.width), 80):
         for cy in range(160, int(small_terrain.height), 80):
@@ -84,7 +84,7 @@ def main():
         assert large_terrain.blocked(*probe), \
             "gold_crater_small blocker must stay active regardless of tick order"
         assert not small_terrain.blocked(*probe), \
-            "narrow_standoff must stay open at the other map's mountain point"
+            "iron_river_duel must stay open at the other map's mountain point"
         assert not server.position_clear(large["game"], probe[0], probe[1], 30), \
             "building on gold_crater_small blocked terrain must be rejected mid-interleave"
     print("  Interleaved ticks keep mountain blockers correct: PASS")
@@ -111,11 +111,11 @@ def main():
     print("  Path cache survives interleaving (50 lookups %.1f ms): PASS" % cached_ms)
 
     # --- Test 5: units in the small room stay inside the small map ---
-    small_w = server.MAPS["narrow_standoff"]["width"]
-    small_h = server.MAPS["narrow_standoff"]["height"]
+    small_w = server.MAPS["iron_river_duel"]["width"]
+    small_h = server.MAPS["iron_river_duel"]["height"]
     for unit in small["game"]["units"]:
         assert 0 <= unit["x"] <= small_w and 0 <= unit["y"] <= small_h, \
-            "unit escaped narrow_standoff bounds: %s" % ((unit["x"], unit["y"]),)
+            "unit escaped iron_river_duel bounds: %s" % ((unit["x"], unit["y"]),)
     print("  Small-map bounds respected: PASS")
 
     # --- Test 6: rooms no longer share one global sim lock ---
