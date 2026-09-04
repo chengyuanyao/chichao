@@ -3858,7 +3858,7 @@ kbd {
 .front-keyart {
   position: absolute;
   inset: -2.5%;
-  background: #080a0d url("/assets/front-war-keyart-v2.webp") center center / cover no-repeat;
+  background: #080a0d url("/assets/front-war-keyart-v3.webp") center center / cover no-repeat;
   transform: scale(1.025);
   animation: front-camera-drift 18s ease-in-out infinite alternate;
   will-change: transform;

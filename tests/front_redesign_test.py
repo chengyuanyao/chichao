@@ -20,14 +20,14 @@ def main():
     html = read("public/index.html")
     render = read("public/render3d.js")
     styles = read("public/styles.css")
-    keyart = os.path.join(ROOT, "public", "assets", "front-war-keyart-v2.webp")
+    keyart = os.path.join(ROOT, "public", "assets", "front-war-keyart-v3.webp")
 
     assert 'class="front-stage"' in html
     assert 'class="front-keyart"' in html
     assert 'class="command-deck"' in html
     assert 'class="access-grid"' in html
-    assert 'rel="preload" href="/assets/front-war-keyart-v2.webp"' in html
-    assert 'url("/assets/front-war-keyart-v2.webp")' in styles
+    assert 'rel="preload" href="/assets/front-war-keyart-v3.webp"' in html
+    assert 'url("/assets/front-war-keyart-v3.webp")' in styles
     assert os.path.getsize(keyart) > 100000
 
     for element_id in (
