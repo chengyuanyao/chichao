@@ -1290,8 +1290,11 @@ import {
   var stopKeyDownAt = 0;
   var controlGroups = {};
   var lastGroupTap = {};
-  var structureHpSnap = {};
-  var structureAlertUntil = {};
+  var seenAttackAlertIds = new Set();
+  var seenAttackAlertOrder = [];
+  var attackAlertCycleIds = [];
+  var attackAlertCycleIndex = -1;
+  var attackAlertCycleSignature = '';
   var displayedCash = 0;
   // 资金 LCD 的“已上屏”缓存：-1 保证首帧一定会写一次 DOM
   var lastPaintedCash = -1;
@@ -1549,7 +1552,9 @@ import {
   function setScreen(name) {
     if (name === 'game' && currentScreen !== 'game') { startAmbient(); }
     if (name !== 'game' && currentScreen === 'game') { stopAmbient(); }
+    if (name !== currentScreen && name !== 'game') { window.scrollTo(0, 0); }
     currentScreen = name;
+    document.body.setAttribute('data-front-screen', name);
     homeScreen.classList.toggle('hidden', name !== 'home');
     lobbyScreen.classList.toggle('hidden', name !== 'lobby');
     gameScreen.classList.toggle('hidden', name !== 'game');
@@ -1950,6 +1955,11 @@ import {
       }
       if (previousStatus !== state.status && state.status === 'finished') {
         renderResult();
+      }
+      if (state.status === 'playing') {
+        processAttackAlertNotifications();
+      } else {
+        updateAttackAlertBanner([]);
       }
       syncPreparedBuilding();
       if (performance.now() - lastHudUpdate > 180 || previousStatus !== state.status) {
@@ -2701,6 +2711,7 @@ import {
     selectedResourceId = null;
     controlGroups = {};
     lastGroupTap = {};
+    resetAttackAlertState();
     activeAgentPair = null;
     lastAgentRenderKey = '';
     agentMessageCache = [];
@@ -2723,6 +2734,7 @@ import {
       selectedResourceId = null;
       controlGroups = {};
       lastGroupTap = {};
+      resetAttackAlertState();
       buildMode = null;
       commandMode = null;
       view3d.clearEntities();
@@ -2845,18 +2857,6 @@ import {
       gameScreenEl.style.boxShadow = 'inset 0 0 ' + (20 + pulse * 60) + 'px rgba(255,20,20,' + (0.08 + pulse * 0.2) + ')';
     } else {
       gameScreenEl.style.boxShadow = '';
-    }
-
-    if (roomState.game.structures) {
-      var now = performance.now();
-      roomState.game.structures.forEach(function (s) {
-        if (s.owner !== me.id) return;
-        var prev = structureHpSnap[s.id];
-        if (prev != null && s.hp < prev - 0.5 && s.active) {
-          structureAlertUntil[s.id] = now + 2500;
-        }
-        structureHpSnap[s.id] = s.hp;
-      });
     }
 
     var dynamicAlliances = roomHasDynamicAlliances(roomState);
@@ -3516,141 +3516,6 @@ import {
     pointer.worldY = world.y;
   }
 
-  var homeBgCanvas = null;
-  var homeBgCtx = null;
-  // 重设 canvas.width 会清空画布并重置全部上下文状态，以前每帧都做等于
-  // 白白多付一次全屏重建的代价——尺寸缓存下来，窗口真的变了才赋值
-  var homeBgW = 0;
-  var homeBgH = 0;
-  var homeBaseLayer = null;   // 静态底：黑绿渐变 + 地平线微光 + 暗角
-  var homeEdgeLayer = null;   // 红色警报边缘光：预渲染，每帧只调 globalAlpha
-
-  function rebuildHomeLayers(w, h) {
-    homeBaseLayer = document.createElement('canvas');
-    homeBaseLayer.width = w;
-    homeBaseLayer.height = h;
-    var c = homeBaseLayer.getContext('2d');
-    var g = c.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, '#0a0a06');
-    g.addColorStop(0.55, '#15170f');
-    g.addColorStop(1, '#0a0a06');
-    c.fillStyle = g;
-    c.fillRect(0, 0, w, h);
-    // 地平线上一点冷灰绿，避免画面沉成纯黑
-    var hz = c.createRadialGradient(w * 0.5, h * 0.78, 10, w * 0.5, h * 0.78, w * 0.7);
-    hz.addColorStop(0, 'rgba(42,45,32,.5)');
-    hz.addColorStop(1, 'rgba(42,45,32,0)');
-    c.fillStyle = hz;
-    c.fillRect(0, 0, w, h);
-    var vg = c.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.hypot(w, h) * 0.6);
-    vg.addColorStop(0, 'rgba(10,10,6,0)');
-    vg.addColorStop(1, 'rgba(10,10,6,.55)');
-    c.fillStyle = vg;
-    c.fillRect(0, 0, w, h);
-
-    homeEdgeLayer = document.createElement('canvas');
-    homeEdgeLayer.width = w;
-    homeEdgeLayer.height = h;
-    var e = homeEdgeLayer.getContext('2d');
-    var depth = Math.max(70, Math.min(w, h) * 0.14);
-    var edges = [
-      [0, 0, 0, depth, 0, 0, w, depth],
-      [0, h, 0, h - depth, 0, h - depth, w, depth],
-      [0, 0, depth, 0, 0, 0, depth, h],
-      [w, 0, w - depth, 0, w - depth, 0, depth, h]
-    ];
-    for (var i = 0; i < edges.length; i++) {
-      var ed = edges[i];
-      var eg = e.createLinearGradient(ed[0], ed[1], ed[2], ed[3]);
-      eg.addColorStop(0, 'rgba(200,36,30,.42)');
-      eg.addColorStop(1, 'rgba(200,36,30,0)');
-      e.fillStyle = eg;
-      e.fillRect(ed[4], ed[5], ed[6], ed[7]);
-    }
-  }
-
-  // 大团烟雾：径向渐变一次画一团，颜色带透明度直接淡出到底色
-  function drawSmokeBlob(c, x, y, r, color) {
-    var g = c.createRadialGradient(x, y, r * 0.05, x, y, r);
-    g.addColorStop(0, color);
-    g.addColorStop(1, 'rgba(10,10,6,0)');
-    c.fillStyle = g;
-    c.fillRect(x - r, y - r, r * 2, r * 2);
-  }
-
-  // 探照光束：底部亮、尖端透明的细长梯形，angle 以竖直向上为 0
-  function drawSearchBeam(c, x, y, angle, len, color) {
-    var half = len * 0.085;
-    c.save();
-    c.translate(x, y);
-    c.rotate(angle);
-    var g = c.createLinearGradient(0, 0, 0, -len);
-    g.addColorStop(0, color);
-    g.addColorStop(1, 'rgba(243,233,212,0)');
-    c.fillStyle = g;
-    c.beginPath();
-    c.moveTo(-6, 0);
-    c.lineTo(6, 0);
-    c.lineTo(half, -len);
-    c.lineTo(-half, -len);
-    c.closePath();
-    c.fill();
-    c.restore();
-  }
-
-  function drawHomeBackground(timestamp) {
-    if (!homeBgCanvas) {
-      homeBgCanvas = document.getElementById('homeBg');
-      if (!homeBgCanvas) return;
-      homeBgCtx = homeBgCanvas.getContext('2d');
-    }
-    var w = window.innerWidth;
-    var h = window.innerHeight;
-    if (w !== homeBgW || h !== homeBgH) {
-      homeBgW = w;
-      homeBgH = h;
-      homeBgCanvas.width = w;
-      homeBgCanvas.height = h;
-      rebuildHomeLayers(w, h);
-    }
-    var c = homeBgCtx;
-    // 10 秒无缝循环：所有周期项都用 ph 的整数倍频率，跨过循环点不会跳变
-    var LOOP = 10;
-    var tl = (timestamp * 0.001) % LOOP;
-    var ph = tl / LOOP * Math.PI * 2;
-    var big = Math.max(w, h);
-    c.drawImage(homeBaseLayer, 0, 0);
-
-    // 烟雾层：三团深红/灰绿的大渐变团按不同倍频漂移，形成远近层次
-    drawSmokeBlob(c, w * (0.24 + 0.05 * Math.sin(ph)), h * (0.30 + 0.04 * Math.cos(ph * 2)), big * 0.42, 'rgba(74,16,19,.34)');
-    drawSmokeBlob(c, w * (0.78 + 0.06 * Math.sin(ph * 2 + 2.1)), h * (0.62 + 0.05 * Math.sin(ph + 4.2)), big * 0.5, 'rgba(58,13,16,.4)');
-    drawSmokeBlob(c, w * (0.5 + 0.08 * Math.sin(ph * 3 + 1.2)), h * (0.85 + 0.03 * Math.cos(ph)), big * 0.36, 'rgba(42,45,32,.5)');
-
-    // 探照光束：来回摆动（sin 本身跨循环连续），一左一右错开相位
-    drawSearchBeam(c, w * 0.16, h + 60, -0.42 + 0.38 * Math.sin(ph), h * 1.5, 'rgba(243,233,212,.055)');
-    drawSearchBeam(c, w * 0.86, h + 60, 0.46 + 0.3 * Math.sin(ph * 2 + 2.6), h * 1.4, 'rgba(243,233,212,.04)');
-
-    // 屏幕边缘红色警报呼吸：只调预渲染层的透明度，代价近乎为零
-    c.globalAlpha = 0.35 + 0.3 * (0.5 + 0.5 * Math.sin(ph * 3));
-    c.drawImage(homeEdgeLayer, 0, 0);
-    c.globalAlpha = 1;
-
-    // 上升余烬：确定性伪随机（cellHash），同一颗粒子每圈走同一条路，
-    // 淡入淡出用 sin(pπ) 保证在循环两端都是 0，不会闪现
-    for (var i = 0; i < 42; i++) {
-      var seed = cellHash(i, 101);
-      var seed2 = cellHash(i, 202);
-      var p = (tl / LOOP + seed) % 1;
-      var ex = seed2 * w + Math.sin(ph * 2 + i * 1.7) * 16;
-      var ey = h * (1.04 - 1.1 * p);
-      var sz = 0.8 + seed * 1.7;
-      c.globalAlpha = Math.sin(p * Math.PI) * (0.3 + 0.5 * seed2);
-      c.fillStyle = i % 3 === 0 ? '#ffd23e' : '#e8a13a';
-      c.fillRect(ex, ey, sz, sz);
-    }
-    c.globalAlpha = 1;
-  }
-
   function clampCamera() {
     if (!roomState || !roomState.game) {
       return;
@@ -3746,8 +3611,6 @@ import {
       if (performance.now() - lastSnapshotAt > 2500) {
         setConnectionState(false);
       }
-    } else if (currentScreen === 'home') {
-      drawHomeBackground(timestamp);
     }
     requestAnimationFrame(frame);
   }
@@ -4367,17 +4230,26 @@ import {
       miniCtx.restore();
     }
     var alertNow = performance.now();
-    roomState.game.structures.forEach(function (s) {
-      var until = structureAlertUntil[s.id];
-      if (!until || alertNow > until || s.hp <= 0) return;
-      var pulse = Math.sin(alertNow * 0.015) * 0.5 + 0.5;
-      miniCtx.fillStyle = 'rgba(255,30,30,' + (0.3 + pulse * 0.5) + ')';
+    activeAttackAlerts().forEach(function (alert, index) {
+      var px = alert.x * sx;
+      var py = alert.y * sy;
+      var pulse = Math.sin(alertNow * 0.014 + index * 0.9) * 0.5 + 0.5;
+      var radius = 6 + pulse * 7 + (alert.structure ? 2 : 0);
+      miniCtx.save();
+      miniCtx.strokeStyle = 'rgba(255,66,52,' + (0.68 + pulse * 0.3) + ')';
+      miniCtx.fillStyle = 'rgba(255,24,18,' + (0.12 + pulse * 0.22) + ')';
+      miniCtx.lineWidth = alert.structure ? 2.2 : 1.7;
       miniCtx.beginPath();
-      miniCtx.arc(s.x * sx, s.y * sy, 5 + pulse * 4, 0, Math.PI * 2);
+      miniCtx.arc(px, py, radius, 0, Math.PI * 2);
       miniCtx.fill();
-      miniCtx.strokeStyle = 'rgba(255,80,80,' + (0.7 + pulse * 0.3) + ')';
-      miniCtx.lineWidth = 1.5;
       miniCtx.stroke();
+      miniCtx.beginPath();
+      miniCtx.moveTo(px - 4, py);
+      miniCtx.lineTo(px + 4, py);
+      miniCtx.moveTo(px, py - 4);
+      miniCtx.lineTo(px, py + 4);
+      miniCtx.stroke();
+      miniCtx.restore();
     });
     roomState.game.pings.forEach(function (ping) {
       miniCtx.strokeStyle = ownerColor(ping.owner);
@@ -4719,7 +4591,7 @@ import {
     }
   }
 
-  function issueContextCommand(worldX, worldY, event) {
+  function issueContextCommand(worldX, worldY) {
     // 选中兵营/重装工厂且无部队选中时，右键设集结点
     if (selectedStructureId && !selectedUnits.size) {
       var prod = roomState.game.structures.find(function (s) {
@@ -4736,13 +4608,8 @@ import {
       }
     }
     var target = entityAt(worldX, worldY);
-    // Own-unit context click is a selection change, never a move/stop.
-    // Otherwise a right-click or macOS ctrl-click meant to pick group B
-    // would re-order group A onto B's feet and abort A's march.
-    if (target && target.id.charAt(0) === 'u' && target.owner === session.playerId) {
-      selectAt(worldX, worldY, isAdditiveSelect(event));
-      return;
-    }
+    // 右键只下达命令，绝不改变当前选择。误点到己方单位时按其脚下位置
+    // 执行普通移动；选择只能由左键点击、双击或拖框产生。
     var defense = !selectedUnits.size && selectedStructureId ?
       roomState.game.structures.find(function (s) {
         return s.id === selectedStructureId && s.owner === session.playerId &&
@@ -4869,6 +4736,106 @@ import {
     }).then(function () { sound('select'); }).catch(function () {});
   }
 
+  function resetAttackAlertState() {
+    seenAttackAlertIds.clear();
+    seenAttackAlertOrder.length = 0;
+    attackAlertCycleIds.length = 0;
+    attackAlertCycleIndex = -1;
+    attackAlertCycleSignature = '';
+    var banner = $('#attackAlertBanner');
+    if (banner) { banner.classList.add('hidden'); }
+  }
+
+  function activeAttackAlerts() {
+    if (!roomState || !roomState.game) { return []; }
+    return (roomState.game.attackAlerts || []).filter(function (alert) {
+      return alert && alert.ttl > 0;
+    });
+  }
+
+  function attackAlertLabel(alert) {
+    var owner = playerById(alert.owner);
+    var side = alert.owner === session.playerId ? '我方' :
+      ('盟友' + (owner ? ' ' + owner.name : '') + '：');
+    var targetName = alert.structure ?
+      (STRUCTURE_NAMES[alert.entityKind] || '建筑') :
+      (((UNITS[alert.entityKind] || {}).name) || '部队');
+    return side + targetName + '遭袭';
+  }
+
+  function updateAttackAlertBanner(alerts) {
+    var banner = $('#attackAlertBanner');
+    var label = $('#attackAlertBannerText');
+    if (!banner || !label) { return; }
+    if (!alerts.length) {
+      banner.classList.add('hidden');
+      return;
+    }
+    var focus = alerts.slice().sort(function (a, b) {
+      return Number(b.structure) - Number(a.structure) || b.ttl - a.ttl;
+    })[0];
+    label.textContent = attackAlertLabel(focus) +
+      (alerts.length > 1 ? ' · 共 ' + alerts.length + ' 处战区' : '');
+    banner.classList.remove('hidden');
+  }
+
+  function processAttackAlertNotifications() {
+    var alerts = activeAttackAlerts();
+    updateAttackAlertBanner(alerts);
+    var fresh = [];
+    alerts.forEach(function (alert) {
+      if (seenAttackAlertIds.has(alert.id)) { return; }
+      seenAttackAlertIds.add(alert.id);
+      seenAttackAlertOrder.push(alert.id);
+      fresh.push(alert);
+    });
+    while (seenAttackAlertOrder.length > 256) {
+      seenAttackAlertIds.delete(seenAttackAlertOrder.shift());
+    }
+    if (!fresh.length) { return; }
+    fresh.sort(function (a, b) {
+      return Number(b.structure) - Number(a.structure) || b.ttl - a.ttl;
+    });
+    fresh.slice(0, 2).forEach(function (alert) {
+      toast('⚠ ' + attackAlertLabel(alert) + ' · 按空格跳转', 'attack');
+    });
+    if (fresh.length > 2) {
+      toast('⚠ 另有 ' + (fresh.length - 2) + ' 处战区正在遭袭 · 按空格循环查看', 'attack');
+    }
+    sound('error');
+  }
+
+  function jumpToAttackAlert() {
+    var alerts = activeAttackAlerts();
+    if (!alerts.length) { return false; }
+    var byId = {};
+    alerts.forEach(function (alert) { byId[alert.id] = alert; });
+    var signature = alerts.map(function (alert) { return alert.id; }).sort().join('|');
+    if (signature !== attackAlertCycleSignature) {
+      attackAlertCycleSignature = signature;
+      attackAlertCycleIds = alerts.slice().sort(function (a, b) {
+        var da = Math.hypot(a.x - camera.x, a.y - camera.y);
+        var db = Math.hypot(b.x - camera.x, b.y - camera.y);
+        return da - db;
+      }).map(function (alert) { return alert.id; });
+      attackAlertCycleIndex = 0;
+    } else {
+      attackAlertCycleIndex = (attackAlertCycleIndex + 1) % attackAlertCycleIds.length;
+    }
+    var target = byId[attackAlertCycleIds[attackAlertCycleIndex]];
+    if (!target) {
+      attackAlertCycleSignature = '';
+      return jumpToAttackAlert();
+    }
+    camera.x = target.x;
+    camera.y = target.y;
+    clampCamera();
+    toast('战区 ' + (attackAlertCycleIndex + 1) + '/' + attackAlertCycleIds.length +
+      ' · ' + attackAlertLabel(target), 'info');
+    sound('select');
+    return true;
+  }
+
   function centerOnBase() {
     if (!roomState || !roomState.game) {
       return;
@@ -4886,14 +4853,14 @@ import {
   function toast(message, type) {
     var stack = $('#toastStack');
     if (!stack) return;
-    var icons = { error: '✕', success: '✓', info: '●' };
+    var icons = { error: '✕', success: '✓', info: '●', attack: '!' };
     var icon = icons[type] || '●';
     var item = document.createElement('div');
     item.className = 'toast' + (type ? ' ' + type : '');
     item.innerHTML = '<span class="toast-icon">' + icon + '</span><span class="toast-msg">' + htmlEscape(message) + '</span><div class="toast-bar"></div>';
     stack.appendChild(item);
     var bar = item.querySelector('.toast-bar');
-    var duration = 2800;
+    var duration = type === 'attack' ? 4200 : 2800;
     // 进度条交给合成器：toast-drain 的 keyframes（宽度 100%→0）由样式层
     // 提供，JS 只设时长，不再用 16ms 定时器逐帧改 style.width
     bar.style.animation = 'toast-drain ' + duration + 'ms linear forwards';
@@ -5116,7 +5083,7 @@ import {
       if (buildMode || commandMode) {
         cancelModes();
       } else {
-        issueContextCommand(pointer.worldX, pointer.worldY, event);
+        issueContextCommand(pointer.worldX, pointer.worldY);
       }
       return;
     }
@@ -5336,7 +5303,9 @@ import {
       setCommandMode('strike');
     } else if (event.code === 'Space') {
       event.preventDefault();
-      centerOnBase();
+      if (!event.repeat && !jumpToAttackAlert()) {
+        centerOnBase();
+      }
     } else if (event.code === 'Enter') {
       event.preventDefault();
       // 副官面板占着 .battle-chat 的位置，此时聊天框是 display:none，
@@ -5702,15 +5671,16 @@ import {
   // index.html only reports errors that happen before the lobby is usable.
   window.__ironFrontBooted = true;
   playerNameInput.value = localStorage.getItem(NAME_KEY) || ('指挥官' + String(Math.floor(Math.random() * 900 + 100)));
+  // 登录背景不必等待目录与旧会话恢复；先出画面，网络状态随后异步补齐。
+  if (!renderStarted) {
+    renderStarted = true;
+    requestAnimationFrame(frame);
+  }
   catalogPromise.then(function () {
     return restoreSession();
   }).then(function (restored) {
     if (!restored) {
       setScreen('home');
-    }
-    if (!renderStarted) {
-      renderStarted = true;
-      requestAnimationFrame(frame);
     }
   });
 }());

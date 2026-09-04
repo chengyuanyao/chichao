@@ -588,6 +588,12 @@ REPAIR_DOCKS_PER_RING = 8
 # 单点费用与载具维修一致，避免维修成为免费拖延手段。
 STRUCTURE_REPAIR_MAX_HP_PER_SECOND = 0.02
 
+# 受袭警报按战区聚合：密集交火不会让每发子弹都刷一条消息。同一区域
+# 持续挨打会续期，战斗结束后 8 秒自动从小地图和空格跳转队列移除。
+ATTACK_ALERT_TTL = 8.0
+ATTACK_ALERT_MERGE_RADIUS = 320.0
+ATTACK_ALERT_MAX_PER_OWNER = 8
+
 # 公共矿区由不属于任何玩家的中立守军占据。守军只在矿区周围警戒，
 # 追击目标越过缰绳半径后会立即脱战并回到自己的哨位。
 NEUTRAL_OWNER = "neutral"
@@ -972,6 +978,19 @@ def public_effect(effect):
     return result
 
 
+def public_attack_alert(alert, elapsed):
+    return {
+        "id": alert["id"],
+        "owner": alert["owner"],
+        "x": round(alert["x"], 1),
+        "y": round(alert["y"], 1),
+        "entityKind": alert.get("entityKind", ""),
+        "structure": bool(alert.get("structure")),
+        "hits": alert.get("hits", 1),
+        "ttl": round(max(0.0, alert["expiresAt"] - elapsed), 2),
+    }
+
+
 def public_resource(resource):
     return {
         "id": resource["id"], "x": resource["x"], "y": resource["y"],
@@ -1000,9 +1019,13 @@ def public_entity_frame(game):
     version = game.get("_snapshotVersion", 0)
     # 长度/时间戳让直接调用 public_game 的测试与调试代码在 append 实体后也能
     # 自动失效；正常对局仍走上面的显式版本号，计算成本为常数。
+    alert_stamp = tuple(
+        (alert["id"], alert.get("hits", 1), round(alert["expiresAt"], 2))
+        for alert in game.get("attackAlerts", []))
     stamp = (version, game["elapsed"], len(game["units"]), len(game["structures"]),
              len(game["projectiles"]), len(game["effects"]), len(game["pings"]),
              len(game.get("crates", [])), len(game.get("pendingStrikes", [])),
+             alert_stamp,
              game.get("winnerId"), tuple(game.get("winnerIds", [])),
              game.get("winnerTeam", 0))
     cached = game.get("_publicEntityFrame")
@@ -1019,6 +1042,8 @@ def public_entity_frame(game):
         "projectiles": [(projectile, public_projectile(projectile))
                         for projectile in game["projectiles"]],
         "effects": [(effect, public_effect(effect)) for effect in game["effects"]],
+        "attackAlerts": [public_attack_alert(alert, elapsed)
+                         for alert in game.get("attackAlerts", [])],
         "pings": [(ping, {
             "owner": ping["owner"], "x": round(ping["x"], 1),
             "y": round(ping["y"], 1), "ttl": round(ping["ttl"], 2),
@@ -1146,6 +1171,7 @@ def public_game(game, viewer_id=None, full=True):
             visible_projectiles = [public for _raw, public in frame["projectiles"]]
             visible_effects = [public for _raw, public in frame["effects"]]
             pings = [public for _raw, public in frame["pings"]]
+            attack_alerts = list(frame["attackAlerts"])
         else:
             seen = field.visible
             friendly = friendly_owners(game, viewer_id)
@@ -1171,6 +1197,10 @@ def public_game(game, viewer_id=None, full=True):
                 public for ping, public in frame["pings"]
                 if ping["owner"] in friendly
             ]
+            attack_alerts = [
+                alert for alert in frame["attackAlerts"]
+                if alert["owner"] in friendly
+            ]
         dynamic = {
             "elapsed": frame["elapsed"],
             "units": visible_units,
@@ -1179,6 +1209,7 @@ def public_game(game, viewer_id=None, full=True):
             "projectiles": visible_projectiles,
             "effects": visible_effects,
             "pings": pings,
+            "attackAlerts": attack_alerts,
             "winnerId": frame["winnerId"],
             "winnerIds": frame["winnerIds"],
             "winnerTeam": frame["winnerTeam"],
@@ -2243,6 +2274,7 @@ def start_game(room):
         "elapsed": 0.0, "units": [], "structures": [], "resources": [],
         "neutralCamps": [],
         "projectiles": [], "effects": [], "pings": [],
+        "attackAlerts": [],
         "winnerId": None, "winnerIds": [], "winnerTeam": 0,
         "playerTeams": {p["id"]: p.get("team", 0) for p in room["players"].values()},
         "botClock": 1.0, "victoryClock": 1.0,
@@ -4809,6 +4841,60 @@ def award_combat_reward(room, game, source_owner, target):
     return reward
 
 
+def register_attack_alert(room, target):
+    """Merge one damage event into the target owner's active battle zone."""
+    game = room.get("game")
+    owner_id = target.get("owner")
+    if not game or owner_id not in room.get("players", {}):
+        return None
+    elapsed = float(game.get("elapsed", 0.0))
+    alerts = game.setdefault("attackAlerts", [])
+    is_structure = target.get("id", "").startswith("s")
+    merge_radius_sq = ATTACK_ALERT_MERGE_RADIUS ** 2
+    for alert in reversed(alerts):
+        if alert["owner"] != owner_id or alert["expiresAt"] <= elapsed:
+            continue
+        dx = alert["x"] - target["x"]
+        dy = alert["y"] - target["y"]
+        if dx * dx + dy * dy > merge_radius_sq:
+            continue
+        # 建筑坐标比移动中的散兵更适合作为战区锚点；一旦同区建筑遭袭，
+        # 警报就固定到建筑，后续单位受伤不再把标记拖走。
+        if is_structure and not alert.get("structure"):
+            alert["x"] = target["x"]
+            alert["y"] = target["y"]
+            alert["entityKind"] = target.get("kind", "")
+            alert["structure"] = True
+        elif not alert.get("structure"):
+            alert["x"] = alert["x"] * 0.75 + target["x"] * 0.25
+            alert["y"] = alert["y"] * 0.75 + target["y"] * 0.25
+            alert["entityKind"] = target.get("kind", "")
+        alert["hits"] = alert.get("hits", 1) + 1
+        alert["expiresAt"] = elapsed + ATTACK_ALERT_TTL
+        return alert
+
+    alert = {
+        "id": new_id("a"),
+        "owner": owner_id,
+        "x": target["x"], "y": target["y"],
+        "entityKind": target.get("kind", ""),
+        "structure": is_structure,
+        "hits": 1,
+        "createdAt": elapsed,
+        "expiresAt": elapsed + ATTACK_ALERT_TTL,
+    }
+    alerts.append(alert)
+    owner_alerts = [item for item in alerts if item["owner"] == owner_id]
+    if len(owner_alerts) > ATTACK_ALERT_MAX_PER_OWNER:
+        remove_ids = set(
+            item["id"] for item in sorted(
+                owner_alerts, key=lambda item: item["createdAt"]
+            )[:-ATTACK_ALERT_MAX_PER_OWNER])
+        game["attackAlerts"] = [
+            item for item in alerts if item["id"] not in remove_ids]
+    return alert
+
+
 def apply_damage(room, target, damage, source_owner, damage_type=None, game=None,
                  source_id=None, source_unit=None):
     if target["hp"] <= 0:
@@ -4839,6 +4925,7 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
     if applied > 0.0:
         mark_unit_combat(target, game_state)
         mark_unit_combat(source_unit, game_state)
+        register_attack_alert(room, target)
     if target["id"].startswith("s") and not target.get("active", True):
         target["constructionDamage"] = target.get("constructionDamage", 0.0) + applied
     if target["hp"] <= 0:
@@ -6648,6 +6735,11 @@ def tick_game(room, dt):
     tick_projectiles(room, dt, entity_index, combat_spatial)
     tick_orbital_rain(room)
     tick_pending_strikes(room, dt, combat_spatial)
+
+    game["attackAlerts"] = [
+        alert for alert in game.get("attackAlerts", [])
+        if alert["expiresAt"] > game["elapsed"]
+    ]
 
     for effect in game["effects"]:
         effect["ttl"] -= dt

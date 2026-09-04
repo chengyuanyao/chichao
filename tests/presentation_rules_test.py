@@ -248,6 +248,23 @@ def main():
     assert "hudCtx.fillText('🔧'" in app
     assert ".selected-structure-actions" in styles
     assert ".sell-button.structure-repair-button" in styles
+    # 受袭警报由服务端按战区聚合并只下发给己方/盟友；客户端在顶部提示、
+    # 小地图脉冲显示，空格按距离循环，没警报时才回基地。
+    assert "def register_attack_alert(" in server_source
+    assert "ATTACK_ALERT_TTL = 8.0" in server_source
+    assert '"attackAlerts": attack_alerts' in server_source
+    assert "function processAttackAlertNotifications()" in app
+    assert "function updateAttackAlertBanner(alerts)" in app
+    assert "banner.classList.remove('hidden')" in app
+    assert "function jumpToAttackAlert()" in app
+    assert "activeAttackAlerts().forEach(function (alert, index)" in app
+    assert "!jumpToAttackAlert()" in app
+    assert "structureAlertUntil" not in app
+    assert "structureHpSnap" not in app
+    assert ".toast.attack" in styles
+    assert ".attack-alert-banner" in styles
+    assert 'id="attackAlertBanner"' in hud
+    assert "战区 / 基地" in hud
     assert catalog["buildings"]["mspring"]["role"] == "repair"
     assert catalog["buildings"]["mspring"]["faction"] == "magic"
     assert catalog["buildings"]["mspring"]["cost"] == server.STRUCTURE_TYPES["repair"]["cost"]
@@ -619,14 +636,21 @@ def main():
     assert "function landmarkAt" not in app
     assert "type === 'hq_salute'" in app
 
-    # Selection is only the current control set. A left-click / box / additive
-    # gesture must not post move/stop, and a context click on an own unit is
-    # select — otherwise the previous group is re-ordered onto the new pick.
+    # Selection is only the current control set. Left-click / box / additive
+    # gestures may change it, while right-click only issues orders and must
+    # never collapse a group when the pointer happens to hit an own unit.
     assert "function isAdditiveSelect(event)" in app
     assert "function selectedUnitIdList()" in app
     assert "event.shiftKey || event.ctrlKey || event.metaKey" in app
-    assert "selectAt(worldX, worldY, isAdditiveSelect(event));" in app
-    assert "Own-unit context click is a selection change, never a move/stop." in app
+    issue_context = app[
+        app.index("function issueContextCommand"):
+        app.index("function selectedDamagedVehicles")]
+    assert "selectAt(" not in issue_context
+    assert "selectedUnits.clear()" not in issue_context
+    assert "selectedStructureId =" not in issue_context
+    assert "selectedResourceId =" not in issue_context
+    assert "右键只下达命令，绝不改变当前选择" in issue_context
+    assert "issueGroundCommand(worldX, worldY);" in issue_context
     pointer_up = re.search(
         r"canvas\.addEventListener\('pointerup', function \(event\) \{([\s\S]*?)\n  \}\);",
         app)
