@@ -14,7 +14,8 @@ import { createPostFX } from './postfx.js';
 import { disposeOwnedRenderGroup, MaterialShaderRegistry } from './render_resources.js';
 import { wildernessNoise, wildernessBiome, applyWildernessGround, applyWildernessRock,
   applyWildernessTrail, applyBridgeWeathering, makeWeatheredRockGeometry,
-  forestChunkKey } from './wilderness.js';
+  forestChunkKey, prepareWildernessLandforms, wildernessLandformAt,
+  makeTerrainApronGeometry } from './wilderness.js';
 
 const TAU = Math.PI * 2;
 
@@ -2597,7 +2598,7 @@ function resolveTerrainDetail(map, terrain) {
   if (isCentralScramble) {
     Object.assign(result, {
       relief: 1.62, colorVariation: 1.56, grassDensity: 1.65,
-      rockDensity: 1.34, spawnFlatRadius: 320, centerFlatRadius: 620
+      rockDensity: 1.34, spawnFlatRadius: 180, centerFlatRadius: 320
     });
   }
   Object.assign(result, (terrain && terrain.detail) || {});
@@ -2820,7 +2821,7 @@ export function createRenderer(canvas) {
     showProjectiles: true,
     buildTerrainMs: 0, groundDetailParts: 0, forestChunks: 0, forestTrees: 0,
     snapshotUnits: 0, renderedUnits: 0, renderedStructures: 0,
-    sight: null, terrainDetail: null,
+    sight: null, terrainDetail: null, landforms: [],
     palette: new Map(),
     friendly: function () { return false; },
     viewerId: null
@@ -3302,7 +3303,7 @@ export function createRenderer(canvas) {
     return best;
   }
 
-  function rollingHeight(x, y) {
+  function rollingHeight(x, y, authoredForm) {
     // 纯装饰起伏：服务端寻路仍是 2D 平面。长波草坡负责打破桌面感，短波
     // 只刻画土壤；出生/展开区通过平滑权重压回水平，建筑不会架在坡肩上。
     const broad = Math.sin(x * 0.00043 + y * 0.00027) * 7.5
@@ -3314,7 +3315,8 @@ export function createRenderer(canvas) {
       + Math.cos(x * 0.0121 - y * 0.0097) * 1.5
       + Math.sin(x * 0.028 + y * 0.019) * 0.8;
     const relief = state.terrainDetail ? state.terrainDetail.relief : 1;
-    return ground * relief * (1 - terrainFlatnessAt(x, y));
+    const landform = authoredForm || wildernessLandformAt(x, y, state.landforms);
+    return (ground * relief * (1 - landform.level) + landform.height) * (1 - terrainFlatnessAt(x, y));
   }
 
   function baseGroundHeight(x, y) {
@@ -3958,12 +3960,15 @@ export function createRenderer(canvas) {
       const wz = pos.getZ(i) + mh / 2;
       const depth = riverDepthAt(wx, wz);
       const rock = mountainHeightAt(wx, wz);
-      const height = rollingHeight(wx, wz) + rock - (riverValley ? depth * 72 : 0);
+      const landform = wildernessLandformAt(wx, wz, state.landforms);
+      const height = rollingHeight(wx, wz, landform) + rock - (riverValley ? depth * 72 : 0);
       heights[i] = height;
       pos.setY(i, height);
 
       const biome = wildernessBiome(wx, wz, {
-        depth, rock, trail: bridgeTrailAt(wx, wz), wear: spawnWearAt(wx, wz), style: visualStyle
+        depth, rock, trail: bridgeTrailAt(wx, wz), wear: spawnWearAt(wx, wz), style: visualStyle,
+        erosion: landform.erosion * (1 - terrainFlatnessAt(wx, wz)),
+        bedrock: landform.bedrock * (1 - terrainFlatnessAt(wx, wz))
       });
       biomes.set(biome, i * 4);
       // Low-frequency variation is baked once. The albedo atlas, not a uniform
@@ -4197,24 +4202,10 @@ export function createRenderer(canvas) {
     const edgeMat = applyFogMask(new THREE.MeshLambertMaterial({
       color: theme.skirt, fog: true, side: THREE.DoubleSide
     }));
-    const skirt = 900;
-    [[mw / 2, mh, mw + skirt * 2, skirt, 0],
-     [mw / 2, 0, mw + skirt * 2, skirt, Math.PI],
-     [0, mh / 2, mh + skirt * 2, skirt, Math.PI / 2],
-     [mw, mh / 2, mh + skirt * 2, skirt, -Math.PI / 2]].forEach(function (e) {
-      const geo = new THREE.PlaneGeometry(e[2], e[3], 1, 1);
-      geo.rotateX(-Math.PI / 2);
-      const pos = geo.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        // 远离地图的一侧往下沉，形成缓坡
-        if (pos.getZ(i) > 0) pos.setY(i, -190);
-      }
-      geo.computeVertexNormals();
-      const apron = new THREE.Mesh(geo, edgeMat);
-      apron.position.set(e[0], -2, e[1]);
-      apron.rotation.y = e[4];
-      terrainGroup.add(apron);
-    });
+    const apron = new THREE.Mesh(
+      makeTerrainApronGeometry(mw, mh, segX, segY, baseGroundHeight), edgeMat);
+    apron.name = 'terrain-edge-apron';
+    terrainGroup.add(apron);
 
     buildRocks();
     buildGroundDetail();
@@ -4585,7 +4576,9 @@ export function createRenderer(canvas) {
     return loadSharedTexture('/assets/textures/ore-real.webp', true, 4);
   }
 
+  let builtOreKey = '';
   function buildOreField() {
+    builtOreKey = (state.resources || []).map(function (r) { return r.id; }).join('|');
     if (oreGroup) disposeOwnedRenderGroup(oreGroup, oreOwnedResources);
     oreOwnedResources = [];
     oreGroup = new THREE.Group();
@@ -4612,6 +4605,7 @@ export function createRenderer(canvas) {
     oreOwnedResources = [crystalMat, crystalGeo, discGeo, guardRingGeo, guardRingMat];
     state.resources.forEach(function (res) {
       const cluster = new THREE.Group();
+      cluster.visible = false; // No one-frame flash before the first vision snapshot.
       cluster.position.set(res.x, groundHeight(res.x, res.y), res.y);
       cluster.userData.resourceId = res.id;
       const initialTier = oreReserveTier(res.amount);
@@ -4661,6 +4655,7 @@ export function createRenderer(canvas) {
       const oreRotation = new THREE.Quaternion();
       const oreScale = new THREE.Vector3();
       const oreEuler = new THREE.Euler();
+      const groundSamples = [];
       for (let i = 0; i < count; i++) {
         const a = rand() * TAU;
         // 先写入的晶柱更靠近中心；开采后降低 instance count 时，留下的矿簇
@@ -4669,7 +4664,9 @@ export function createRenderer(canvas) {
         const rr = Math.sqrt(rand()) * res.radius * maxTier.footprint * spread;
         const h = (9 + rand() * 15) * maxTier.height;
         const w = (7 + rand() * 9) * (0.92 + maxTier.level * 0.035);
-        orePosition.set(Math.cos(a) * rr, h * 0.26, Math.sin(a) * rr);
+        const ox = Math.cos(a) * rr, oy = Math.sin(a) * rr;
+        orePosition.set(ox, groundHeight(res.x + ox, res.y + oy) - cluster.position.y + h * 0.26, oy);
+        groundSamples.push({x:ox,y:oy,lift:h*0.26});
         oreEuler.set((rand() - 0.5) * 0.16, rand() * TAU, (rand() - 0.5) * 0.16);
         oreRotation.setFromEuler(oreEuler);
         oreScale.set(w, h, w);
@@ -4684,6 +4681,7 @@ export function createRenderer(canvas) {
       cluster.userData.crystalMesh = crystals;
       cluster.userData.crystalCapacity = count;
       cluster.userData.maxTier = maxTier;
+      cluster.userData.groundSamples = groundSamples;
       cluster.add(crystals);
       oreGroup.add(cluster);
       oreMeshes.set(res.id, cluster);
@@ -4691,6 +4689,12 @@ export function createRenderer(canvas) {
   }
 
   function updateOre(ore, time) {
+    // Delta snapshots deliberately omit unseen mines. Hide those cached meshes
+    // before updating current reserves, including on alliance/observer changes.
+    oreMeshes.forEach(function (cluster, id) {
+      const resource = state.resourceById.get(id);
+      cluster.visible = !!(resource && resource.amount > 0.05 && isVisible(resource.x, resource.y));
+    });
     if (!ore) return;
     for (let i = 0; i < ore.length; i++) {
       const cluster = oreMeshes.get(ore[i][0]);
@@ -4703,7 +4707,7 @@ export function createRenderer(canvas) {
       }
       const tier = oreReserveTier(amount);
       const live = amount > 0.05;
-      cluster.visible = live;
+      cluster.visible = !!(live && res && isVisible(res.x, res.y));
       const poorFraction = tier.id === 'poor' ? Math.max(0.10, amount / 8000) : 1;
       const crystals = cluster.userData.crystalMesh;
       if (crystals) {
@@ -4716,6 +4720,20 @@ export function createRenderer(canvas) {
           tier.height / maxTier.height,
           tier.footprint / maxTier.footprint
         );
+        // Tier changes shrink both footprint and height. Re-seat the rock bases
+        // only on those rare changes, rather than scaling hillside offsets into air.
+        if (res && cluster.userData.groundSamples && cluster.userData.appliedTier !== tier.id) {
+          const pose = new THREE.Matrix4();
+          cluster.userData.groundSamples.forEach(function (sample, index) {
+            crystals.getMatrixAt(index, pose);
+            const floor = groundHeight(res.x + sample.x * crystals.scale.x,
+              res.y + sample.y * crystals.scale.z) - cluster.position.y;
+            pose.setPosition(sample.x, floor / crystals.scale.y + sample.lift, sample.y);
+            crystals.setMatrixAt(index, pose);
+          });
+          crystals.instanceMatrix.needsUpdate = true;
+          cluster.userData.appliedTier = tier.id;
+        }
       }
       const disc = cluster.userData.disc;
       if (disc) {
@@ -5036,13 +5054,13 @@ export function createRenderer(canvas) {
     const ss = state.sight.structures;
     for (let i = 0; i < game.units.length; i++) {
       const u = game.units[i];
-      if (state.friendly(u.owner)) {
+      if (u.hp > 0 && state.friendly(u.owner)) {
         visionSources.push(u.x, u.y, us[u.kind] || 350);
       }
     }
     for (let i = 0; i < game.structures.length; i++) {
       const s = game.structures[i];
-      if (state.friendly(s.owner)) {
+      if (s.hp > 0 && state.friendly(s.owner)) {
         visionSources.push(s.x, s.y, (ss[s.kind] || 350) * (s.active ? 1 : 0.45));
       }
     }
@@ -5206,6 +5224,26 @@ export function createRenderer(canvas) {
     if (fogCover) fogCover.fill(0);
     fogFullRepaint = true;
     fogLastUpload = 0;
+  }
+
+  function resetFogState() {
+    fogRevealed = false;
+    visionSources.length = 0;
+    lastFogGame = null;
+    if (exploredCtx) exploredCtx.clearRect(0, 0, exploredCanvas.width, exploredCanvas.height);
+    if (fogCtx) {
+      fogCtx.globalCompositeOperation = 'source-over';
+      fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
+      fogCtx.fillStyle = 'rgba(3, 7, 9, 0.94)';
+      fogCtx.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
+    }
+    if (fogApplied) fogApplied.clear();
+    if (fogCover) fogCover.fill(0);
+    fogFullRepaint = true;
+    fogLastUpload = 0;
+    fogPx0 = Infinity; fogPy0 = Infinity; fogPx1 = -Infinity; fogPy1 = -Infinity;
+    if (fogTexture) fogTexture.needsUpdate = true;
+    oreMeshes.forEach(function (cluster) { cluster.visible = false; });
   }
 
   function isVisible(x, y) {
@@ -7473,7 +7511,8 @@ export function createRenderer(canvas) {
     // 迷雾只依赖服务端快照中的位置。过去 60FPS 每帧都重画一张 Canvas、
     // 上传一次纹理；大军团时这是持续卡顿的主要来源之一。每个 8Hz 快照更新
     // 一次即可，单位本身仍然按 60FPS 插值。
-    if (game !== lastFogGame) {
+    const visionChanged = game !== lastFogGame;
+    if (visionChanged) {
       collectVision(game);
       updateFog();
       lastFogGame = game;
@@ -7803,7 +7842,7 @@ export function createRenderer(canvas) {
       }
     }
     /* --- 矿脉 --- */
-    if (payload.time - lastOreAt >= 50) {
+    if (visionChanged || payload.time - lastOreAt >= 50) {
       updateOre(game.ore, payload.time);
       lastOreAt = payload.time;
     }
@@ -8135,6 +8174,7 @@ export function createRenderer(canvas) {
       if (sight) state.sight = sight;
       state.spawnPoints = spawnPoints || state.spawnPoints || [];
       state.terrainDetail = resolveTerrainDetail(map, state.terrain);
+      state.landforms = prepareWildernessLandforms(state.terrain.landforms);
 
       // 每局开新地图时服务端会给 map.seed 一个新随机值，尺寸与地形要素数量
       // 一并入键，防止「换了图但恰好同尺寸」漏判。
@@ -8145,19 +8185,32 @@ export function createRenderer(canvas) {
         (t.rivers || []).length, (t.bridges || []).length,
         (t.mountains || []).length, (t.roads || []).length,
         (t.visualTrails || []).length,
-        state.resources.length,
+        JSON.stringify(t.landforms || []),
         JSON.stringify(state.terrainDetail)
       ].join('|');
       if (worldKey === builtWorldKey && terrainGroup) {
+        // A full reconnect may carry a different visible mineral subset. Only
+        // rebuild those cheap clusters; preserve the terrain and explored mask.
+        const oreKey = state.resources.map(function (r) { return r.id; }).join('|');
+        if (oreKey !== builtOreKey) buildOreField();
+        lastOreAt = -Infinity;
         return false;
       }
       builtWorldKey = worldKey;
+      resetFogState();
 
       const themeId = t.theme || 'grassland';
       groundTexture = makeProceduralGroundTexture(themeId);
       groundTexture.repeat.set(map.width / 420, map.height / 420);
       buildTerrain();
       return true;
+    },
+
+    setResources: function (resources) {
+      state.resources = resources || [];
+      state.resourceById = new Map(state.resources.map(function (r) { return [r.id, r]; }));
+      buildOreField();
+      lastOreAt = -Infinity;
     },
 
     setPalette: function (players, viewerId, isFriendly) {
@@ -8191,6 +8244,8 @@ export function createRenderer(canvas) {
       let instanced = 0;
       let detailedUnits = 0;
       let lodUnits = 0;
+      let visibleOre = 0;
+      oreMeshes.forEach(function (cluster) { if (cluster.visible) visibleOre++; });
       unitPools.forEach(function (pool) {
         if (pool.mesh) detailedUnits += pool.mesh.count;
         if (pool.simple) lodUnits += pool.simple.count;
@@ -8213,6 +8268,8 @@ export function createRenderer(canvas) {
         groundDetailParts: state.groundDetailParts,
         forestChunks: state.forestChunks,
         forestTrees: state.forestTrees,
+        knownOre: oreMeshes.size,
+        visibleOre: visibleOre,
         geometries: renderer.info.memory.geometries,
         textures: renderer.info.memory.textures,
         sharedTextures: sharedTextureCache.size,
@@ -8247,6 +8304,7 @@ export function createRenderer(canvas) {
 
     /** 换局时清空所有单位/建筑，避免上一局的模型残留。 */
     clearEntities: function () {
+      resetFogState();
       visual.clear();
       snapshotVisuals.length = 0;
       lastFogGame = null;

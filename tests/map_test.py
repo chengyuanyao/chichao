@@ -74,7 +74,8 @@ def check_map(map_id, map_def):
     assert detail["rockDensity"] >= 0
     assert server.PUBLIC_MAPS[map_id]["terrainDetail"] == detail
     if map_id == "central_scramble":
-        assert detail["centerFlatRadius"] >= 600
+        assert 300 <= detail["centerFlatRadius"] <= 360
+        assert detail["spawnFlatRadius"] <= 200
         assert detail["grassDensity"] > \
             server.TERRAIN_DETAIL_PROFILES["grassland"]["grassDensity"]
         assert detail["rockDensity"] > \

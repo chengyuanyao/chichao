@@ -13,7 +13,66 @@ export function wildernessNoise(x, y) {
   return a * (1 - fy) + b * fy;
 }
 
-export function wildernessBiome(x, y, { depth = 0, rock = 0, trail = 0, wear = 0, style = '' } = {}) {
+// Compile static, authored relief once per map. Unit/building placement samples
+// the baked height field; it never loops over these features every frame.
+export function prepareWildernessLandforms(features = []) {
+  return features.filter(f => [f.x, f.y, f.angle, f.length, f.width, f.height].every(Number.isFinite)
+    && f.length > 0 && f.width > 0).map(f => ({...f,
+      cos: Math.cos(f.angle * Math.PI / 180), sin: Math.sin(f.angle * Math.PI / 180),
+      bend: Number(f.bend) || 0}));
+}
+
+export function wildernessLandformAt(x, y, features = []) {
+  let height = 0, erosion = 0, bedrock = 0, level = 0;
+  for (const f of features) {
+    const dx = x - f.x, dy = y - f.y;
+    const u = (dx * f.cos + dy * f.sin) / f.length;
+    if (Math.abs(u) >= 1) continue;
+    const cross = -dx * f.sin + dy * f.cos - f.bend * Math.sin(u * Math.PI);
+    const q = u * u + (cross / f.width) ** 2;
+    if (q >= 1) continue;
+    // Terraces have genuinely level interiors, not rounded mounds under a base.
+    // All transitions finish with zero slope; only server mountain cores are cliffs.
+    const weight = f.kind === 'plateau' ? 1 - smooth(0.25, 1, q) : (1 - q) ** 2;
+    height += f.height * weight;
+    if (f.kind === 'swale') {
+      erosion = Math.max(erosion, weight);
+      bedrock = Math.max(bedrock, weight * 0.28);
+    } else if (f.kind === 'plateau') {
+      level = Math.max(level, weight);
+      const rim = smooth(0.25, 0.50, q) * (1 - smooth(0.86, 1, q));
+      bedrock = Math.max(bedrock, rim * 0.42);
+      erosion = Math.max(erosion, rim * 0.20);
+    } else {
+      bedrock = Math.max(bedrock, weight * 0.48);
+    }
+  }
+  return {height, erosion, bedrock, level};
+}
+
+// Match every boundary vertex of the ground mesh. A flat apron at y=-2 leaves
+// open sky slits when a terrace reaches the map edge. One static draw call.
+export function makeTerrainApronGeometry(width, height, segX, segY, sampleHeight) {
+  const ring=[];
+  for(let i=0;i<segX;i++) ring.push([width*i/segX,0]);
+  for(let i=0;i<segY;i++) ring.push([width,height*i/segY]);
+  for(let i=0;i<segX;i++) ring.push([width*(1-i/segX),height]);
+  for(let i=0;i<segY;i++) ring.push([0,height*(1-i/segY)]);
+  const positions=new Float32Array(ring.length*6), indices=[];
+  ring.forEach(([x,y],i)=>{
+    positions.set([x,sampleHeight(x,y)-.25,y,
+      x+(x/width*2-1)*900,-190,y+(y/height*2-1)*900],i*6);
+    const a=i*2,b=((i+1)%ring.length)*2;
+    indices.push(a,b,a+1,b,b+1,a+1);
+  });
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
+  geometry.setIndex(indices);geometry.computeVertexNormals();
+  return geometry;
+}
+
+export function wildernessBiome(x, y, { depth = 0, rock = 0, trail = 0, wear = 0,
+  erosion = 0, bedrock = 0, style = '' } = {}) {
   const broad = wildernessNoise(x * 0.004, y * 0.004);
   const detail = wildernessNoise(x * 0.013 + 37, y * 0.013 - 19);
   const dry = style === 'arid_wilderness' || style === 'crater_wilderness';
@@ -21,8 +80,8 @@ export function wildernessBiome(x, y, { depth = 0, rock = 0, trail = 0, wear = 0
   const forest = river ? 0 : smooth(0.01, 0.35, depth) * (1 - trail);
   const shore = river ? smooth(0.012, 0.16, depth) : 0;
   const soil = clamp(smooth(dry ? 0.26 : 0.45, dry ? 0.64 : 0.76,
-    broad * 0.75 + detail * 0.25) * 0.91 + wear * 0.28 + shore * 0.6 + trail * 0.85);
-  const stone = clamp(smooth(9, 85, rock) * (0.78 + detail * 0.22) + shore * 0.20);
+    broad * 0.75 + detail * 0.25) * 0.91 + wear * 0.28 + shore * 0.6 + trail * 0.85 + erosion * 0.78);
+  const stone = clamp(smooth(9, 85, rock) * (0.78 + detail * 0.22) + shore * 0.20 + bedrock);
   const litter = clamp(forest * 0.94 + (!dry && !river ? smooth(20, 100, rock) * 0.24 : 0));
   const wet = clamp(shore * 0.7 + forest * 0.28);
   return [soil, stone, litter, wet];

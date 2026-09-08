@@ -1197,7 +1197,7 @@ import {
     snipe: '偷家'
   };
   var BUILTIN_MAPS = {
-    central_scramble: { id: 'central_scramble', name: '五车争霸', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在中央同时落地。先抢方向再展开；外围五个方向各有一片随机位置的23万矿，中央矿为双倍的46万，且没有中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
+    central_scramble: { id: 'central_scramble', name: '五车争霸', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在无矿的中央低地同时落地。外围五个方向各有一片随机位置的23万矿，无中立守军。长缓坡通往五处高地，高耸岩脊与沟谷之间留有侧翼绕行口。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
     gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着陨石核打，地图紧凑，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[5530,2443],[4640,5182],[1760,5182],[870,2443]] },
     iron_river_duel: { id: 'iron_river_duel', name: '铁峡争渡', width: 4800, height: 3200, maxPlayers: 2, theme: 'temperate', briefing: '左右对称的写实河谷战场：上中下三座钢桥分出正面与两路侧翼战线。', spawnLabels: ['西岸指挥部', '东岸指挥部'], spawnPoints: [[700,1600],[4100,1600]] }
   };
@@ -1306,9 +1306,6 @@ import {
   var fpsLastSample = 0;
   var fpsElement = null;
   var seenEffects = new Set();
-  // 小地图矿点只在己方/盟友真正探到后登记，并在本局内永久保留。
-  // 不能直接遍历静态 resources 全画，否则会泄露所有中立矿的位置。
-  var discoveredResourceIds = new Set();
   var audioContext = null;
   var renderStarted = false;
   var actionInFlight = false;
@@ -1852,7 +1849,7 @@ import {
    * 补回快照里被省略的静态数据。
    *
    * 服务端只在每条 SSE 流的首帧（以及每次 REST 拉取）发送地图、地形、
-   * 矿脉布局、视距表和建造目录；之后每帧只带矿脉余量 `ore`。这里把缓存
+   * 视距表和建造目录；矿区情报随当前视野增量下发。这里把缓存
    * 的静态部分贴回去，让后面的代码仍然看到一个完整的 game 对象。
    *
    * 返回这一帧是否可用于渲染：还没收到过任何 full 帧就先来了增量帧的话，
@@ -1886,6 +1883,23 @@ import {
       game.terrain = matchStatic.terrain;
       game.resources = matchStatic.resources;
       game.sight = matchStatic.sight;
+    }
+    // The server sends descriptors only while a deposit is in friendly vision.
+    // Remember geometry already learned, but never display it outside live sight.
+    if (game.resourceIntel && matchStatic) {
+      var addedResource = false;
+      game.resourceIntel.forEach(function (resource) {
+        var known = matchStatic.resourceById[resource.id];
+        if (known) {
+          Object.assign(known, resource);
+        } else {
+          matchStatic.resourceById[resource.id] = resource;
+          matchStatic.resources.push(resource);
+          addedResource = true;
+        }
+      });
+      game.resources = matchStatic.resources;
+      if (addedResource) { view3d.setResources(game.resources); }
     }
     if (game.ore && matchStatic) {
       for (var i = 0; i < game.ore.length; i++) {
@@ -2211,28 +2225,13 @@ import {
       visualStyle: full.visualStyle || mapConfig.visualStyle,
       rivers: full.rivers || mapConfig.rivers,
       mountains: full.mountains || mapConfig.mountains,
+      landforms: full.landforms || mapConfig.landforms,
       roads: full.roads || mapConfig.roads,
       bridges: full.bridges || mapConfig.bridges
     };
     paintGrassBase(ctx, w, h, full.theme || mapConfig.theme);
     paintTerrainFeatures(ctx, terrain, sx, sy);
-    // 矿脉数据若在目录里也一并点出来；没有就跳过
-    var previewResources = full.resources || mapConfig.resources;
-    if (previewResources && previewResources.length) {
-      previewResources.forEach(function (r) {
-        var rx = (r.x != null ? r.x : r[0]) * sx;
-        var ry = (r.y != null ? r.y : r[1]) * sy;
-        // 外层琥珀光晕
-        var g = ctx.createRadialGradient(rx, ry, 1, rx, ry, 5);
-        g.addColorStop(0, 'rgba(255,180,40,.38)');
-        g.addColorStop(1, 'rgba(255,180,40,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(rx - 5, ry - 5, 10, 10);
-        // 核心亮金点
-        ctx.fillStyle = '#ffcc44';
-        ctx.fillRect(rx - 2, ry - 2, 4, 4);
-      });
-    }
+    // 大厅仅预览地形和出生点，不提前公开矿点。
     // 轻暗角 + 内描边，与小地图同一套收边语言
     var vg = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.45,
       w / 2, h / 2, Math.hypot(w, h) * 0.62);
@@ -2745,7 +2744,7 @@ import {
     if (!roomState || !roomState.game) {
       return;
     }
-    var nextKey = roomState.id + ':' + roomState.createdAt;
+    var nextKey = roomState.id + ':' + roomState.createdAt + ':' + roomState.game.map.seed;
     if (gameKey !== nextKey) {
       gameKey = nextKey;
       resultShown = false;
@@ -2760,7 +2759,6 @@ import {
       commandMode = null;
       view3d.clearEntities();
       seenEffects.clear();
-      discoveredResourceIds.clear();
       lastReadyBuildId = null;
       commandGrid.dataset.key = '';
       selectionInfo.dataset.key = '';
@@ -4023,6 +4021,26 @@ import {
     var bridges = terrain.bridges || [];
     var swatch = mapDisplayTheme(terrain.theme).minimap;
     var i;
+    // 地貌与 3D 使用同一组坐标；只画缓坡/干沟，不把可通行浅沟误画成河流。
+    (terrain.landforms || []).forEach(function (form) {
+      c.save();
+      c.scale(sx, sy);
+      c.translate(form.x, form.y);
+      c.rotate(form.angle * Math.PI / 180);
+      c.scale(form.length, form.width);
+      var shade = c.createRadialGradient(0, 0, 0, 0, 0, 1);
+      var highland = form.kind === 'plateau';
+      var landColor = highland ? 'rgba(170,167,110,.48)' :
+        (form.kind === 'swale' ? 'rgba(145,112,64,.52)' : 'rgba(99,115,62,.65)');
+      shade.addColorStop(0, landColor);
+      if (highland) { shade.addColorStop(0.5, landColor); }
+      shade.addColorStop(1, 'rgba(80,91,48,0)');
+      c.fillStyle = shade;
+      c.beginPath();
+      c.arc(0, 0, 1, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    });
     // 森林山丘：绿径向渐变外缘淡出到草色，树点按山体散布。
     // 每座山用哈希取三种绿调之一，树点大小/密度也不同 —— 各种森林。
     var forestTones = ['rgba(48,92,40,.95)', 'rgba(64,104,44,.9)', 'rgba(36,78,32,.95)'];
@@ -4132,7 +4150,8 @@ import {
     var key = 'v5_' + map.width + 'x' + map.height +
       '_' + (terrain.theme || '') +
       '_' + ((terrain.rivers || []).length) +
-      '_' + ((terrain.mountains || []).length);
+      '_' + ((terrain.mountains || []).length) +
+      '_' + JSON.stringify(terrain.landforms || []);
     if (minimapStaticKey === key && minimapStaticCanvas.width === width) { return; }
     minimapStaticCanvas.width = width;
     minimapStaticCanvas.height = height;
@@ -4165,14 +4184,10 @@ import {
     var sx = width / map.width;
     var sy = height / map.height;
     miniCtx.drawImage(minimapStaticCanvas, 0, 0);
-    // 矿脉：只有进入过己方/盟友视野的矿才登记到小地图；登记后永久保留，
-    // 与“探开后不再重新变黑”的探索逻辑一致。采空后仍会自动消失。
+    // 矿区只显示当前己方/盟友视野内的情报；探索过地形不等于永久开矿区雷达。
     roomState.game.resources.forEach(function (resource, idx) {
       if (resource.amount <= 0) { return; }
-      if (!discoveredResourceIds.has(resource.id)) {
-        if (!view3d.isVisible(resource.x, resource.y)) { return; }
-        discoveredResourceIds.add(resource.id);
-      }
+      if (!view3d.isVisible(resource.x, resource.y)) { return; }
       var rx = resource.x * sx;
       var ry = resource.y * sy;
       var tier = oreReserveTier(resource.amount);
@@ -4408,10 +4423,6 @@ import {
         bestDistance = distance;
       }
     });
-    if (best) {
-      // 点击本身也发生在当前视野内，可以安全地登记到已探索小地图。
-      discoveredResourceIds.add(best.id);
-    }
     return best;
   }
 

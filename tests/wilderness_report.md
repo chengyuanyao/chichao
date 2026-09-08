@@ -86,6 +86,37 @@ py -3.13 tests/visual_benchmark_server.py --port 8876 --baseline-public artifact
 密林机位：`?scenario=river&map=gold_crater_small&x=4630&y=1370&zoom=0.50&pitch=0.87&yaw=0.1&bloom=1`。
 五车丘陵机位：`?scenario=map&map=central_scramble&x=900&y=900&zoom=0.66&pitch=0.91&yaw=0.20&bloom=1`。
 
+## 五车争霸：中央无矿、高地与矿区迷雾修复（2026-09-08）
+
+- 移除中央 46 万矿；仅保留外围五个方向各一片 23 万随机矿，无守军。
+- 中央平整落地区缩至 320 半径。外围五处 100 高度的平顶发展高地，通过长缓坡
+  连接中央低地；五组高耸林岩脊、干沟与侧翼缺口取代四角丘陵和随机孤山。
+  十处岩核半径为 260/210，仍使用服务端山体碰撞。坡地可通行，高度与土石混合
+  在建图时烘焙到原地面网格；没有额外增加战斗射程、视野或高地伤害规则。
+- 中央驶离路线、五条宽出口、半径 1440 的环向绕行空间通过 55 半径载具余量检查。
+  五向随机矿多种子检查、49 项离线回归及 6 组 Node 渲染测试通过。
+- 矿石实例在坡面按实际位置落地，储量换档缩放时重新贴合地面；仅在换档时计算。
+  地图裙边替换为贴合每个地面边缘顶点的单个静态网格，修复高地边缘露白缝隙。
+- 三张地图的矿区仅在当前己方/盟友视野内显示；撤离后小地图与 3D 同时隐藏。
+  服务端 full/delta 只下发当前可见的矿区坐标和储量，大厅预览不再暴露矿点。
+  新局清空迷雾/探索状态；失败观战继续显示所有矿区。
+- `resource_fog_test.py` 检查三图服务端隐藏、侦察、侦察兵死亡、盟友视野、解盟及观战。
+  `resource_fog_test.mjs` 执行实际小地图/矿区更新/增量合并函数，覆盖隐藏、撤离、采空、
+  首次发现和重开，并检查矿石储量换档后的坡面高度。
+- 浏览器三图均实测“侦察显示 → 撤离隐藏 → 观战全显 → 重开归零”，无浏览器错误。
+  独立夹具为验证渲染器即使知道坐标也不会泄露，故意预装全部测试矿点；它不代表
+  正式对局的网络数据。两张对照截图：`artifacts/mineral-scouted.jpg`、
+  `artifacts/mineral-out-of-sight.jpg`。
+- 同一 Intel Arc / 1920×1080 / 建筑阴影 / 轻量泛光环境，90 帧预热、300 帧采样：
+  中央 400 移动精细单位 + 15 建筑为 60 FPS，帧间隔 p95 16.8 ms，
+  CPU p50/p95 为 1.6/2.3 ms，166 draw calls、570254 三角形。
+  复现：`/tests/visual_benchmark.html?scenario=army&map=central_scramble&count=400&moving=1&bloom=1`。
+  这是独立渲染夹具测量，不含联网与真实战斗模拟；并不承诺所有硬件都达到该帧率。
+- 三图循环 4 轮，geometries 始终分别为 151/136/157，textures 均为 14，
+  fog shaders 分别为 9/9/18；未出现逐轮增长（不是长期显存测量）。
+- 近景复查机位：`?scenario=map&map=central_scramble&x=2750&y=1270&zoom=0.46&pitch=0.86&yaw=0.18&bloom=1`。
+  当前本地实景：`artifacts/central-highlands-after.jpg`，地形展示视角、全图可见。
+
 素材来源、实际提示词、生成尺寸和压缩记录：
 `public/assets/textures/wilderness-prompts.md`（内置 ImageGen）。
 `artifacts/` 为本机截图/基线归档，加入忽略，避免把整个比较构建提交进仓库。

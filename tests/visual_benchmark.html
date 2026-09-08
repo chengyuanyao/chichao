@@ -23,6 +23,7 @@ input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;
 <button id="apply">应用场景</button><button id="quality">即时应用画质</button><button id="run">运行基准</button>
 <button id="cycles">连续换图检查</button>
 <button id="freeze">固定时间截图</button><button id="resume">继续动画</button><button id="hide">隐藏面板</button>
+<span id="fogControls" hidden><button id="scout">侦察首个矿区</button><button id="retreat">撤走侦察单位</button><button id="observe">淘汰观战</button><button id="restart">重开本图</button></span>
 </div>
 <pre id="results" hidden></pre>
 <script type="module">
@@ -54,11 +55,12 @@ let paused = query.get('paused') === '1', moving = query.get('moving') === '1';
 let frameObserver = null, runningBenchmark = false, frameError = null;
 let halted = false, framePending = false;
 let dpr = Number(query.get('dpr')) || 1;
+let revealMap = query.get('fog') !== '1', fixtureSeed = 90241;
 function resize() { renderer.resize(innerWidth,innerHeight,dpr); }
 addEventListener('resize',resize); resize();
 function terrainFromMap(m) {
   return {rivers:m.rivers,bridges:m.bridges,mountains:m.mountains,roads:m.roads,
-    visualTrails:m.visualTrails,theme:m.theme,visualStyle:m.visualStyle,
+    visualTrails:m.visualTrails,landforms:m.landforms,theme:m.theme,visualStyle:m.visualStyle,
     bridgeDeckHeight:m.bridgeDeckHeight,detail:m.terrainDetail};
 }
 function unit(kind,i,x,y,rank=0) {
@@ -108,13 +110,13 @@ function loadScenario(options={}) {
     Object.keys(catalog.structures).forEach((kind,i)=>game.structures.push(structure(kind,i,
       focus.x-500+(i%8)*140,focus.y-430+Math.floor(i/8)*155)));
   } else if (scenario !== 'river' && scenario !== 'map') throw new Error('Unknown scenario');
-  renderer.setMatch({id:map.id,width:map.width,height:map.height,seed:90241},
+  renderer.setMatch({id:map.id,width:map.width,height:map.height,seed:fixtureSeed},
     terrainFromMap(map),resources,catalog.sight,map.spawnPoints);
   camera = scenario==='map' ? {x:map.width/2,y:map.height/2,zoom:0.18,yaw:0,pitch:1.22}
     : scenario==='river' ? {x:map.width/2,y:map.height/2,zoom:0.58,yaw:0.25,pitch:0.80}
     : {x:focus.x,y:focus.y-100,zoom:0.82,yaw:0.14,pitch:0.96};
   for(const key of ['x','y','zoom','yaw','pitch']) if(query.has(key)) camera[key]=Number(query.get(key));
-  renderer.setCamera(camera); renderer.setFogRevealed(true);
+  renderer.setCamera(camera); renderer.setFogRevealed(revealMap);
   snapshotAt = -Infinity; sceneTime = 18000;
   return {scenario,map:map.id,units:game.units.length,structures:game.structures.length,camera:{...camera}};
 }
@@ -132,7 +134,7 @@ function draw(at) {
   }
   const start=performance.now();
   try {
-    renderer.render({game,dt:Math.min(interval/1000,0.05),time:sceneTime,revealMap:true,
+    renderer.render({game,dt:Math.min(interval/1000,0.05),time:sceneTime,revealMap,
       selectedUnitIds:selected,selectedStructureId:null,selectedResourceId:null,
       newEffects:[],buildPreview:null});
   } catch(error) {
@@ -248,6 +250,27 @@ document.querySelector('#cycles').onclick=()=>window.benchmark.cycleMaps().catch
 document.querySelector('#freeze').onclick=()=>window.benchmark.freeze();
 document.querySelector('#resume').onclick=()=>window.benchmark.resume();
 document.querySelector('#hide').onclick=()=>{for(const id of ['controls','status','results']) document.getElementById(id).hidden=true;};
+if(query.get('fog')==='1') {
+  document.querySelector('#fogControls').hidden=false;
+  const inspectFog = async action => {
+    if(runningBenchmark) return;
+    revealMap=action==='observe';
+    if(action==='restart') {fixtureSeed++;loadScenario({scenario:'map',map:map.id});}
+    const ore=map.resources[0];
+    if(action==='scout' && ore) {
+      game={...game,units:[unit('rifle',0,ore.x,ore.y)]};
+      camera={x:ore.x,y:ore.y,zoom:.8,yaw:0,pitch:.94};renderer.setCamera(camera);
+    } else {game={...game,units:[]};}
+    window.benchmark.resume();await waitFrames(5);halted=true;
+    const result={type:'mineral-fog',action,map:map.id,...renderer.stats()};
+    document.querySelector('#results').textContent=JSON.stringify(result,null,2);
+    document.querySelector('#results').hidden=false;
+    status.textContent=`${map.name} · ${action} · 可见矿区 ${result.visibleOre} / ${result.knownOre}`;
+  };
+  for(const action of ['scout','retreat','observe','restart']) {
+    document.getElementById(action).onclick=()=>inspectFog(action);
+  }
+}
 kick();
 await waitFrames(5);
 window.benchmark.ready=true;

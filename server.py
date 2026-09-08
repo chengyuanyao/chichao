@@ -138,6 +138,46 @@ COLORS = ["#42d9ff", "#ff4f55", "#f6c84a", "#a77bff", "#3ddc84", "#ff8c42"]
 BOT_NAMES = ["北辰", "赤狐", "磐石", "夜枭", "雷霆", "灰熊"]
 ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
+
+def central_wilderness_landscape():
+    """Five equal wilderness belts, between (not across) the expansion routes."""
+    mountains, landforms = [], []
+    for sector in range(5):
+        angle = -54 + sector * 72
+        radians = math.radians(angle)
+
+        def point(radial, lateral):
+            return {
+                "x": round(2000 + math.cos(radians) * radial
+                           - math.sin(radians) * lateral),
+                "y": round(2000 + math.sin(radians) * radial
+                           + math.cos(radians) * lateral),
+            }
+
+        # Two separated wooded rock cores per belt. Their collision uses the same
+        # mountain circles as the renderer; the gap stays open for flank attacks.
+        for radial, lateral, radius in ((1100, -65, 260), (1750, 90, 210)):
+            mountains.append(dict(point(radial, lateral), r=radius))
+        # Broad, gently bent shoulders and dry erosion hollows are walkable.
+        # These heights are baked into the one shared ground mesh, not extra meshes.
+        landforms.append(dict(point(1360, 0), kind="ridge", angle=angle,
+                              length=740, width=440, height=100, bend=90))
+        landforms.append(dict(point(1320, -340), kind="swale", angle=angle - 8,
+                              length=690, width=180, height=-28, bend=110))
+        # Raised development terraces: level interiors for bases, broad natural
+        # slopes toward the low central basin. Cliff-like rock cores remain blocked.
+        heading = math.radians(angle - 36)
+        landforms.append({
+            "x": round(2000 + math.cos(heading) * 1350),
+            "y": round(2000 + math.sin(heading) * 1350),
+            "kind": "plateau", "angle": angle - 36,
+            "length": 700, "width": 720, "height": 100, "bend": 0,
+        })
+    return {"mountains": mountains, "landforms": landforms}
+
+
+_CENTRAL_WILDERNESS = central_wilderness_landscape()
+
 MAPS = {
     "iron_river_duel": {
         "id": "iron_river_duel",
@@ -367,9 +407,9 @@ MAPS = {
         "theme": "grassland",
         "visualStyle": "open_wilderness",
         "briefing": (
-            "五名指挥官只带一辆折叠基地车，在中央矿脉旁同时落地。"
+            "五名指挥官只带一辆折叠基地车，在无矿的中央草甸同时落地。"
             "先抢方向再展开：外围五个方向各随机生成一片 23 万无守军矿区，"
-            "中央固定矿储量 46 万，是外围单片矿的两倍。"
+            "中央低地经长缓坡通往五处高地，岩脊与深浅沟谷之间留有侧翼绕行口。"
         ),
         # 五辆基地车停在中央 190 半径的小环上：彼此都在视野内，但不发生
         # 单位分离。这里是落地点，不是固定发展区；玩家应先驶离中央再展开。
@@ -383,14 +423,11 @@ MAPS = {
         "spawnLabels": ["中央北位", "中央东北位", "中央东南位", "中央西南位", "中央西北位"],
         "rivers": [],
         "bridges": [],
-        # 外围四处岩丘给展开后的基地留出天然侧翼；中央 560 范围由森林
-        # 散布器强制留空，确保五辆基地车开局能向任意方向驶离。
-        "mountains": [
-            {"x": 650, "y": 650, "r": 250},
-            {"x": 3350, "y": 650, "r": 250},
-            {"x": 3350, "y": 3350, "r": 250},
-            {"x": 650, "y": 3350, "r": 250},
-        ],
+        # 五组高耸林岩脊在发展路线之间；中央小片落地草甸平整无矿。
+        # 不再叠加随机孤山，保证五个方向有等量地形、展开空间和绕行开口。
+        "mountains": _CENTRAL_WILDERNESS["mountains"],
+        "landforms": _CENTRAL_WILDERNESS["landforms"],
+        "authoredLandscape": True,
         # 五条放射路只负责把基地车迅速送出中央，不预先划定玩家领地。
         "roads": [
             {"x1": 2000, "y1": 1810, "x2": 2000, "y2": 500, "width": 115},
@@ -409,18 +446,16 @@ MAPS = {
         ],
         "packedStart": True,
         "neutralOreGuards": False,
-        # 总矿区数为 6：中央固定一片，外围五个 72° 扇区各一片。
+        # 中央不放矿：外围五个 72° 扇区各一片，总计五片。
         # 矿点在本扇区内随机偏移，但半径接近、并避开推荐展开点；
-        # 外围每片固定 23 万，中央 46 万，稳定保持 2:1。
+        # 外围每片固定 23 万，矿区数量、矿量和分扇区随机规则不变。
         "publicOreCount": 5,
         "publicOreAmount": 230000,
         "publicOrePerSector": True,
         "publicOreSectorRadius": (1350, 1750),
         "publicOreSectorJitterDegrees": 22,
         "publicOreSectorClearance": 260,
-        "bonusResources": [
-            {"x": 2000, "y": 2000, "amount": 460000, "public": True},
-        ],
+        "bonusResources": [],
     },
 }
 
@@ -478,15 +513,14 @@ TERRAIN_DETAIL_PROFILES = {
 }
 
 MAP_TERRAIN_DETAIL = {
-    # 五辆基地车的中央展开圈保持平整、无散石；外围草坡和碎石比普通草原更密，
-    # 解决 4000×4000 战场远看像一块纯平绿板的问题。
+    # 仅保留中央小片平整落地区；大范围高差由专门的高地/岩脊/沟谷控制。
     "central_scramble": {
         "relief": 1.62,
         "colorVariation": 1.56,
         "grassDensity": 1.65,
         "rockDensity": 1.34,
-        "spawnFlatRadius": 320,
-        "centerFlatRadius": 620,
+        "spawnFlatRadius": 180,
+        "centerFlatRadius": 320,
     },
     # 陨坑地表增加焦土色差、撞击碎岩和少量复苏植被；出生区保持可建造。
     "gold_crater_small": {
@@ -991,6 +1025,7 @@ def public_entity_frame(game):
         }) for ping in game["pings"]],
         "ore": [[r["id"], round(r["amount"], 1), 1 if r.get("guarded") else 0]
                 for r in game["resources"]],
+        "resources": [(r, public_resource(r)) for r in game["resources"]],
         "winnerId": game.get("winnerId"),
         "winnerIds": list(game.get("winnerIds", [])),
         "winnerTeam": game.get("winnerTeam", 0),
@@ -1113,6 +1148,7 @@ def public_game(game, viewer_id=None, full=True):
             visible_effects = [public for _raw, public in frame["effects"]]
             pings = [public for _raw, public in frame["pings"]]
             attack_alerts = list(frame["attackAlerts"])
+            resource_intel = [public for _raw, public in frame["resources"]]
         else:
             seen = field.visible
             friendly = friendly_owners(game, viewer_id)
@@ -1142,11 +1178,19 @@ def public_game(game, viewer_id=None, full=True):
                 alert for alert in frame["attackAlerts"]
                 if alert["owner"] in friendly
             ]
+            # Mineral coordinates and reserves are live intelligence, not public
+            # terrain. Do not leak unseen deposits through full or delta frames.
+            resource_intel = [
+                public for resource, public in frame["resources"]
+                if seen(resource["x"], resource["y"])
+            ]
         dynamic = {
             "elapsed": frame["elapsed"],
             "units": visible_units,
             "structures": visible_structures,
-            "ore": frame["ore"],
+            "ore": [[r["id"], r["amount"], 1 if r["guarded"] else 0]
+                    for r in resource_intel],
+            "resourceIntel": resource_intel,
             "projectiles": visible_projectiles,
             "effects": visible_effects,
             "pings": pings,
@@ -1174,7 +1218,7 @@ def public_game(game, viewer_id=None, full=True):
         result["map"] = dict(game["map"])
         result["terrain"] = (dict(game["terrain"]) if game.get("terrain")
                              else {"rivers": [], "bridges": []})
-        result["resources"] = [public_resource(r) for r in game["resources"]]
+        result["resources"] = list(dynamic["resourceIntel"])
         # Sight radii let the client derive fog of war from the friendly units
         # and structures it already receives, instead of the server re-sending
         # every friendly position a second time as a vision list.
@@ -1202,8 +1246,10 @@ PUBLIC_MAPS = {
         "mountains": m.get("mountains", []),
         "roads": m.get("roads", []),
         "visualTrails": m.get("visualTrails", []),
+        "landforms": m.get("landforms", []),
         "terrainDetail": visual_terrain_detail(m),
-        "resources": m.get("bonusResources", []),
+        # Lobby thumbnails show terrain/spawns, never unscouted ore locations.
+        "resources": [],
         "neutralOreGuards": bool(m.get("neutralOreGuards", True)),
     }
     for mid, m in MAPS.items()
@@ -2251,6 +2297,7 @@ def start_game(room):
             "mountains": [{"x": m["x"], "y": m["y"], "r": m["r"]} for m in mountains],
             "roads": [{"x1": r["x1"], "y1": r["y1"], "x2": r["x2"], "y2": r["y2"], "width": r["width"]} for r in roads],
             "visualTrails": [dict(t) for t in room_map.get("visualTrails", [])],
+            "landforms": [dict(t) for t in room_map.get("landforms", [])],
             "theme": room_map.get("theme", "grassland"),
             # 只影响客户端地形表现：普通图继续把 river 画成密林分界，
             # river_valley 才画真水面、下沉河床和有高度的桥梁。
@@ -4478,7 +4525,8 @@ def _scatter_forest_rocks(map_def, count, seed):
 # 每张图按面积比例铺森林巨石；种子由地图名决定，同一张图每次相同。
 for _rock_map_id, _rock_map_def in MAPS.items():
     # 赤金陨坑的阻挡全部集中在五条等分森林带；发展区内不再塞随机孤岛。
-    if _rock_map_id in ("gold_crater_small", "iron_river_duel"):
+    if (_rock_map_def.get("authoredLandscape")
+            or _rock_map_id in ("gold_crater_small", "iron_river_duel")):
         continue
     _rock_count = max(10, int(_rock_map_def["width"] * _rock_map_def["height"] / 2200000.0))
     _rock_seed = sum(ord(ch) for ch in _rock_map_id) + 0x5EED

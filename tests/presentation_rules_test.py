@@ -64,12 +64,16 @@ def main():
     assert "fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height)" in render
     assert "revealMap: !!(me && me.eliminated)" in app
 
-    # 小地图不能从全量静态资源表泄露矿点；只登记进入过友军视野的矿，
-    # 并在换局时清空登记表。
-    assert "var discoveredResourceIds = new Set();" in app
+    # 三张地图统一使用当前视野，既不保留永久矿点雷达，也不能在换局继承揭雾。
+    assert "discoveredResourceIds" not in app
     assert "if (!view3d.isVisible(resource.x, resource.y)) { return; }" in app
-    assert "discoveredResourceIds.add(resource.id);" in app
-    assert "discoveredResourceIds.clear();" in app
+    assert "roomState.game.map.seed" in app
+    assert "function resetFogState()" in render
+    assert "cluster.visible = !!(live && res && isVisible(res.x, res.y))" in render
+    assert "resourceIntel" in server_source and "game.resourceIntel.forEach" in app
+    assert "view3d.setResources(game.resources)" in app
+    assert 'result["resources"] = list(dynamic["resourceIntel"])' in server_source
+    assert "previewResources" not in app
 
     # 矿脉现在是可选中的情报目标：详情给出准确余量/总量/百分比；四档
     # 图例由渲染层统一提供给 3D 矿簇、小地图和侧栏，且点选不能穿透迷雾。

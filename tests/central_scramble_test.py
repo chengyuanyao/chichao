@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""五车争霸：中央折叠开局、五向均匀矿、中央双倍矿、全图无中立矿营。"""
+"""五车争霸：中央无矿折叠开局、五向均匀矿、自然地貌、全图无中立矿营。"""
 
 from __future__ import print_function
 
@@ -50,6 +50,10 @@ def outer_positions(game):
 
 
 def assert_balanced_outer_ores(game, map_def):
+    assert len(game["resources"]) == 5
+    assert all(resource["amount"] == 230000 for resource in game["resources"])
+    assert all(math.hypot(resource["x"] - 2000, resource["y"] - 2000) >= 1350
+               for resource in game["resources"]), "中央不应再生成矿区"
     outer = [resource for resource in game["resources"]
              if math.hypot(resource["x"] - 2000, resource["y"] - 2000) > 300]
     points = map_def["botDeployPoints"]
@@ -76,6 +80,8 @@ def main():
     assert map_def.get("publicOreCount") == 5
     assert map_def.get("publicOreAmount") == 230000
     assert map_def.get("publicOrePerSector") is True
+    assert not map_def.get("bonusResources")
+    assert not server.PUBLIC_MAPS[MAP_ID]["resources"]
     assert server.PUBLIC_MAPS[MAP_ID]["maxPlayers"] == 5
     app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             "public", "app.js")
@@ -102,18 +108,7 @@ def main():
         assert server.player_has_command(game, player["id"])
     print("  科技基地车/秘法迁徙法阵共 5 辆，中央静止折叠: PASS")
 
-    print("\n=== Test 2: 中央矿量稳定为外围单片矿的两倍 ===")
-    assert len(game["resources"]) == 6, len(game["resources"])
-    center = [resource for resource in game["resources"]
-              if math.hypot(resource["x"] - 2000, resource["y"] - 2000) < 20]
-    outer = [resource for resource in game["resources"] if resource not in center]
-    assert len(center) == 1 and center[0]["amount"] == 460000, center
-    assert len(outer) == 5, len(outer)
-    assert all(resource["amount"] == 230000 for resource in outer), outer
-    assert all(center[0]["amount"] == resource["amount"] * 2
-               for resource in outer), (center, outer)
-    assert all(math.hypot(resource["x"] - 2000, resource["y"] - 2000) > 700
-               for resource in outer)
+    print("\n=== Test 2: 中央无矿，外围五个方向各一片等量随机矿 ===")
     assert all(resource.get("public") for resource in game["resources"])
     assert_balanced_outer_ores(game, map_def)
     room2, _players2, _bot2 = make_room(71102)
@@ -124,9 +119,9 @@ def main():
     for seed in range(71110, 71130):
         sampled_room, _sampled_players, _sampled_bot = make_room(seed)
         assert_balanced_outer_ores(sampled_room["game"], map_def)
-    print("  总计 6 片；五个方向各 1 片 230000，中央 460000，比例 2:1: PASS")
+    print("  总计 5 片；五个方向各 1 片 230000，中央无矿，多种子均衡: PASS")
 
-    print("\n=== Test 3: 固定矿和随机矿都没有中立守军 ===")
+    print("\n=== Test 3: 所有矿区都没有中立守军 ===")
     assert game.get("neutralCamps") == []
     assert all(not resource.get("guarded") for resource in game["resources"])
     assert all(not resource.get("neutralCampId") for resource in game["resources"])
@@ -198,6 +193,37 @@ def main():
     assert not [structure for structure in team_game["structures"]
                 if structure["owner"] == repaired_player["id"]]
     print("  缺席时补迁徙法阵/基地车，不会错误预送一座总部: PASS")
+
+    print("\n=== Test 7: 地貌不封中央、出发通道和外围绕行缺口 ===")
+    terrain = server.terrain_for_map(map_def)
+    assert len(map_def["mountains"]) == 10
+    assert len(map_def["landforms"]) == 15
+    assert len([f for f in map_def["landforms"] if f["kind"] == "ridge"]) == 5
+    assert len([f for f in map_def["landforms"] if f["kind"] == "swale"]) == 5
+    terraces = [f for f in map_def["landforms"] if f["kind"] == "plateau"]
+    assert len(terraces) == 5 and all(f["height"] >= 100 for f in terraces)
+    assert min(m["r"] for m in map_def["mountains"]) >= 210
+    for key in ("mountains", "landforms"):
+        assert server.PUBLIC_MAPS[MAP_ID][key] == map_def[key]
+        assert game["terrain"][key] == map_def[key]
+    for other_id in ("gold_crater_small", "iron_river_duel"):
+        assert not server.MAPS[other_id].get("landforms")
+    padding = 55
+    # A conservative 55-unit vehicle radius, including paths off the speed strip.
+    for angle_index in range(120):
+        angle = angle_index * math.tau / 120
+        for radius in (0, 190, 420, 620, 1440):
+            assert not terrain.blocked(2000 + math.cos(angle) * radius,
+                                       2000 + math.sin(angle) * radius, padding)
+    for road in map_def["roads"]:
+        dx, dy = road["x2"] - road["x1"], road["y2"] - road["y1"]
+        distance = math.hypot(dx, dy)
+        for step in range(41):
+            for side in (-130, 0, 130):
+                x = road["x1"] + dx * step / 40 - dy / distance * side
+                y = road["y1"] + dy * step / 40 + dx / distance * side
+                assert not terrain.blocked(x, y, padding), (x, y)
+    print("  五组林岩丘等量分布；中央、五个宽出口及环向侧击空间可通行: PASS")
 
     print("\n=== 五车争霸测试全部通过 ===")
 

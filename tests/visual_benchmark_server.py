@@ -22,8 +22,23 @@ import server
 
 
 def fixture_catalog():
+    maps = {key: dict(value, resources=server.MAPS[key].get("bonusResources", []))
+            for key, value in server.PUBLIC_MAPS.items()}
+    # Show one real, deterministic peripheral ore layout, not invented markers.
+    # This is an isolated data-only fixture: no rooms, AI or server workers.
+    definition = server.MAPS["central_scramble"]
+    game = {"map": {"width": 4000, "height": 4000, "seed": 90241},
+            "resources": [], "terrainCtx": server.terrain_for_match(definition)}
+    server.add_random_resources(
+        game, definition["publicOreCount"], definition["spawnPoints"], guarded=False,
+        fixed_amount=definition["publicOreAmount"],
+        sector_points=definition["botDeployPoints"],
+        sector_radius=definition["publicOreSectorRadius"],
+        sector_jitter_degrees=definition["publicOreSectorJitterDegrees"],
+        sector_clearance=definition["publicOreSectorClearance"])
+    maps["central_scramble"]["resources"] = game["resources"]
     return {
-        "maps": server.PUBLIC_MAPS,
+        "maps": maps,
         "units": server.UNIT_TYPES,
         "structures": server.STRUCTURE_TYPES,
         "sight": {
