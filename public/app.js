@@ -1288,7 +1288,6 @@ import {
   var pointer = { x: 0, y: 0, worldX: 0, worldY: 0, inside: false };
   var dragging = null;
   var pressedKeys = new Set();
-  var stopKeyDownAt = 0;
   var controlGroups = {};
   var lastGroupTap = {};
   var seenAttackAlertIds = new Set();
@@ -3264,7 +3263,8 @@ import {
       var detail = one && one.repairing ?
         '维修中 · 生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) :
         (one && unitRole(one.kind) === 'harvester' ?
-        '载矿 ' + Math.floor(one.cargo) + ' / ' + Math.floor(one.capacity) :
+        (one.harvestPaused ? '已停止采矿 · ' : '') +
+          '载矿 ' + Math.floor(one.cargo) + ' / ' + Math.floor(one.capacity) :
         (one ? '生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) + rankLabel : '混合编队'));
       var veterancyHtml = '';
       if (one && (UNITS[one.kind] || {}).canVeteran) {
@@ -3281,7 +3281,8 @@ import {
       });
       var unitInfoKey = 'u|' + units.map(function (unit) {
         return unit.id + ':' + Math.ceil(unit.hp) + ':' + Math.floor(unit.cargo || 0) + ':' +
-          (unit.kills || 0) + ':' + (unit.repairing ? 1 : 0);
+          (unit.kills || 0) + ':' + (unit.repairing ? 1 : 0) + ':' +
+          (unit.harvestPaused ? 1 : 0);
       }).join(',');
       if (selectionInfo.dataset.key === unitInfoKey) { return; }
       selectionInfo.dataset.key = unitInfoKey;
@@ -3619,6 +3620,7 @@ import {
         (renderScale < 1 ? ' <small>· ' + Math.round(renderScale * 100) + '%</small>' : '');
       var perfStats = view3d.stats();
       fpsElement.title = '画面单位 ' + perfStats.renderedUnits + ' / ' + perfStats.snapshotUnits +
+        '，精细模型 ' + perfStats.detailedUnits + '，远景模型 ' + perfStats.lodUnits +
         '，绘制调用 ' + perfStats.drawCalls;
       fpsElement.style.display = currentScreen === 'game' ? '' : 'none';
     }
@@ -4547,9 +4549,9 @@ import {
       return;
     }
     var kind = buildMode;
-    if (!hasOwnActiveHeadquarters()) {
+    if (!hasConstructionAuthority()) {
       cancelModes();
-      toast('请先展开基地车，再部署建筑', 'error');
+      toast('请先展开基地车，或在大厅开启机动建造', 'error');
       sound('error');
       return;
     }
@@ -4644,6 +4646,25 @@ import {
       }
     }
     var target = entityAt(worldX, worldY);
+    var resource = target ? null : resourceAt(worldX, worldY);
+    if (resource && selectedUnits.size) {
+      var harvesters = roomState.game.units.filter(function (unit) {
+        return selectedUnits.has(unit.id) && unit.owner === session.playerId &&
+          unitRole(unit.kind) === 'harvester';
+      });
+      if (harvesters.length) {
+        markOrder(resource.x, resource.y, 'move');
+        sendAction('command', {
+          command: 'harvest',
+          unitIds: harvesters.map(function (unit) { return unit.id; }),
+          resourceId: resource.id
+        }).then(function () {
+          toast(harvesters.length + ' 个采矿单位已优先采集指定矿脉', 'success');
+          sound('move');
+        }).catch(function () {});
+        return;
+      }
+    }
     // 右键只下达命令，绝不改变当前选择。误点到己方单位时按其脚下位置
     // 执行普通移动；选择只能由左键点击、双击或拖框产生。
     var defense = !selectedUnits.size && selectedStructureId ?
@@ -4766,10 +4787,19 @@ import {
     if (!selectedUnits.size) {
       return;
     }
+    var stoppedHarvesters = roomState && roomState.game ?
+      roomState.game.units.filter(function (unit) {
+        return selectedUnits.has(unit.id) && unit.owner === session.playerId &&
+          unitRole(unit.kind) === 'harvester';
+      }).length : 0;
     sendAction('command', {
       command: 'stop',
       unitIds: selectedUnitIdList()
-    }).then(function () { sound('select'); }).catch(function () {});
+    }).then(function () {
+      toast(stoppedHarvesters ?
+        '已停止；采矿单位将等待你右键指定矿脉' : '已停止当前命令', 'success');
+      sound('select');
+    }).catch(function () {});
   }
 
   function resetAttackAlertState() {
@@ -5308,13 +5338,9 @@ import {
     } else if (event.code === 'KeyQ') {
       event.preventDefault();
       setCommandMode('attackMove');
-    } else if (event.code === 'KeyS') {
+    } else if (event.code === 'KeyH') {
       event.preventDefault();
-      // Tap S = stop. Hold S = camera pan (WASD). Immediate stop-on-keydown
-      // cancelled marches while the player panned to pick another group.
-      if (!event.repeat && !stopKeyDownAt) {
-        stopKeyDownAt = performance.now();
-      }
+      if (!event.repeat) { stopSelected(); }
     } else if (event.code === 'KeyR') {
       event.preventDefault();
       repairSelectedAtNearestBay();
@@ -5365,17 +5391,9 @@ import {
   });
   window.addEventListener('keyup', function (event) {
     pressedKeys.delete(event.code);
-    if (event.code === 'KeyS' && stopKeyDownAt) {
-      var heldMs = performance.now() - stopKeyDownAt;
-      stopKeyDownAt = 0;
-      if (heldMs < 220 && currentScreen === 'game') {
-        stopSelected();
-      }
-    }
   });
   window.addEventListener('blur', function () {
     pressedKeys.clear();
-    stopKeyDownAt = 0;
   });
 
   createRoomBtn.addEventListener('click', createRoom);

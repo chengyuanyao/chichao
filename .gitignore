@@ -2,3 +2,6 @@
 *.pid
 __pycache__/
 
+# Local renderer captures and archived comparison builds, not game assets.
+artifacts/
+

@@ -89,7 +89,8 @@ def test_orbit_layer():
     # 和天启双臂同一套：合进一份几何体、原点即环绕中心、远景 LOD 不跑这层
     orbit = slice_between(render, u"    /* --- 秘法巨龙：环绕核球 --- */",
                           u"    /* --- 建筑 --- */")
-    assert "if (!useSimple) {" in orbit
+    assert "if (!state.lod || camDist <= HERO_LOD_DISTANCE) {" in orbit
+    assert "const HERO_LOD_DISTANCE = UNIT_LOD_DISTANCE * 1.5;" in render
     assert "dragonOrbitLocal.makeTranslation(DRAGON_ORBIT_PIVOT_X, 0, 0);" in orbit
     assert "dragonOrbitLocal.makeRotationY(" in orbit
     assert "orbs.setMatrixAt(i, matrix);" in orbit
@@ -120,7 +121,9 @@ def test_surface_and_faction():
     render = read("public/render3d.js")
     assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1 };" in render
     assert re.search(r"MAGIC_UNIT_KINDS = \{[^}]*dragon: 1", render, re.S)
-    assert re.search(r"OCCLUSION_BAKED_KINDS = \{[^}]*dragon: 1", render, re.S)
+    # 近景 AO 已推广到全部兵种，巨龙继续受益；远景不再付烘焙成本。
+    assert "body: mergeParts(parts.body.concat(parts.glow || []), { occlusion: true })" in render
+    assert "simple: mergeParts(simpleUnitParts(kind))" in render
     # 秘法会的金饰必须留住，否则黑铬会读成钢铁军团的涂装
     assert "MAT.odyGold" in render
     for jade in ("jadeScale", "jadeBelly", "jadeMembrane", "jadeGlow"):

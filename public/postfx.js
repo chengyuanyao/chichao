@@ -3,7 +3,8 @@
  *
  * 没有用 three.js 的 postprocessing 附加包：UnrealBloomPass 要额外内置约十个
  * 文件、跑五级 mip 的可分离模糊，对一个局域网小游戏太重。这里只做两级半分辨
- * 率模糊，加上合成与 FXAA 共七个 pass，画面收益几乎一样但便宜得多。
+ * 率模糊，加上合成与 FXAA 共七个 pass。快速模式省去远场的两次模糊；关闭辉光
+ * 只留下调色与抗锯齿两个 pass，让低配也保持相同的色彩与清晰边缘。
  *
  * 色彩管线：场景渲染到 HalfFloat 的线性目标（保留 >1 的高光，辉光才有东西可
  * 提取），全部中间 pass 都在线性空间。合成 pass 做「曝光 → 白平衡 → 电影
@@ -73,7 +74,7 @@ uniform float uExposure;
 uniform float uWarmth;
 uniform float uSaturation;
 uniform float uContrast;
-uniform float uTonemap;    // 0 = AgX punchy, 1 = ACES fitted
+uniform float uTonemap;    // 0 = AgX natural, 1 = ACES fitted
 uniform float uTime;
 uniform vec2 uResolution;
 varying vec2 vUv;
@@ -127,12 +128,12 @@ vec3 agxEotf(vec3 val) {
   // 回到线性；最终的 sRGB 编码在输出前统一做
   return pow(max(val, vec3(0.0)), vec3(2.2));
 }
-// 收敛 punchy：饱和提升 1.4→1.18、对比曲线 1.35→1.22。色相分离保留（RTS 靠它
-// 分队/辨兵种），但去掉那股「冲」劲，画面更平、更中性，贴近 Apple/Google 的干净。
-vec3 agxLookPunchy(vec3 val) {
+// 温和的曝光曲线：保留树下、履带和装甲接缝的细节。饱和度必须围绕曲线处理后
+// 的亮度调整，否则旧亮度会额外压暗阴影，灰色物体也会被错误改变亮度。
+vec3 agxLookNatural(vec3 val) {
+  val = pow(clamp(val, 0.0, 1.0), vec3(1.10));
   float luma = dot(val, vec3(0.2126, 0.7152, 0.0722));
-  val = pow(max(val, vec3(0.0)), vec3(1.22));
-  return luma + 1.18 * (val - luma);
+  return luma + 1.04 * (val - luma);
 }
 
 /* 手动 sRGB 编码：见文件头，离屏目标上 three 的自动转换是空操作 */
@@ -144,37 +145,48 @@ vec3 OETFsRGB(vec3 c) {
 
 void main() {
   vec3 scene = texture2D(tScene, vUv).rgb;
-  vec3 bloom = texture2D(tBloomNear, vUv).rgb * 0.62
-             + texture2D(tBloomFar, vUv).rgb * 0.38;
-  vec3 color = scene + bloom * uBloom;
+  vec3 color = scene;
+  // 关闭辉光时既不跑提取/模糊，也不读取两张模糊纹理。
+  if (uBloom > 0.0) {
+    vec3 bloom = texture2D(tBloomNear, vUv).rgb * 0.72
+               + texture2D(tBloomFar, vUv).rgb * 0.28;
+    color += bloom * uBloom;
+  }
 
-  // 线性空间：曝光 + 白平衡（暖阳基调 —— 参考画面是高对比的晴天午后）
-  color *= uExposure * mix(vec3(1.0), vec3(1.06, 1.00, 0.90), uWarmth);
+  // 日照冷暖由场景灯光决定；这里只做轻微白平衡，不叠加橙色滤镜。
+  color *= uExposure * mix(vec3(1.0), vec3(1.04, 1.00, 0.96), uWarmth);
 
   // 电影色调映射：AgX 输出回线性再统一编码，ACES 输出当作显示线性用
   vec3 mapped = uTonemap < 0.5
-    ? agxEotf(agxLookPunchy(agx(color)))
+    ? agxEotf(agxLookNatural(agx(color)))
     : acesFitted(color);
   color = mapped;
 
-  // 显示空间的最后修饰：饱和度（RTS 的可读性靠色相区分）+ 对比
+  // 线性亮度下轻调饱和度，队伍识别色仍保持清楚。
   float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
   color = mix(vec3(luma), color, uSaturation);
-  color = (color - 0.5) * uContrast + 0.5;
 
   // 暗角：把注意力压回战场中心
   vec2 centered = vUv - 0.5;
   float vig = 1.0 - dot(centered, centered) * uVignette;
   color *= clamp(vig, 0.0, 1.0);
 
-  // 极轻的扫描线，给一点显示器质感；太强会显得廉价
+  // 保留旧选项兼容性，写实风格默认关闭扫描线。
   if (uScanline > 0.0) {
     float line = sin(vUv.y * uResolution.y * 1.5708) * 0.5 + 0.5;
     color *= 1.0 - uScanline * line;
   }
 
-  // sRGB 编码进 RGBA8，感知亮度进 alpha 供 FXAA 找边
+  // 在感知空间以中灰为轴拉开层次，两端平滑收敛而不截断黑色。旧的线性 0.5
+  // 对比会直接抹掉暗部；只缩放亮度也避免给金属阴影引入额外色偏。
   vec3 srgb = OETFsRGB(color);
+  float perceptualLuma = clamp(dot(srgb, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
+  const float pivot = 0.46;
+  float contrastLuma = perceptualLuma < pivot
+    ? pivot * pow(perceptualLuma / pivot, uContrast)
+    : 1.0 - (1.0 - pivot) * pow((1.0 - perceptualLuma) / (1.0 - pivot), uContrast);
+  srgb = clamp(srgb * (contrastLuma / max(perceptualLuma, 0.0001)), 0.0, 1.0);
+  // sRGB 编码进 RGBA8，感知亮度进 alpha 供 FXAA 找边。
   gl_FragColor = vec4(srgb, dot(srgb, vec3(0.299, 0.587, 0.114)));
 }
 `;
@@ -312,7 +324,7 @@ export function createPostFX(renderer) {
   const brightMat = new THREE.ShaderMaterial({
     uniforms: {
       tScene: { value: null },
-      uThreshold: { value: 1.0 },
+      uThreshold: { value: 1.10 },
       uKnee: { value: 0.4 }
     },
     vertexShader: FULLSCREEN_VERT,
@@ -339,13 +351,13 @@ export function createPostFX(renderer) {
       tBloomFar: { value: null },
       // 写实材质需要看得见粗糙表面，辉光/曝光太高会把它们重新洗成塑料。
       // 队伍辨识主要交给哑光识别色，小灯和爆炸仍能正常进 bloom。
-      uBloom: { value: 0.46 },
-      uVignette: { value: 0.20 },
+      uBloom: { value: 0.30 },
+      uVignette: { value: 0.12 },
       uScanline: { value: 0.0 },
-      uExposure: { value: 1.46 },
-      uWarmth: { value: 0.20 },
-      uSaturation: { value: 1.02 },
-      uContrast: { value: 1.03 },
+      uExposure: { value: 1.32 },
+      uWarmth: { value: 0.06 },
+      uSaturation: { value: 1.04 },
+      uContrast: { value: 1.04 },
       uTonemap: { value: 0.0 },
       uTime: { value: 0 },
       uResolution: { value: new THREE.Vector2(1, 1) }
@@ -369,13 +381,36 @@ export function createPostFX(renderer) {
 
   // 后处理会多次调用 renderer.render，而 renderer.info.render 每次都会重置，
   // 所以在场景 pass 之后立刻把统计抄下来，供外部读取。
-  const state = { width: 1, height: 1, enabled: true, fxaa: true, fastBloom: false, calls: 0, triangles: 0 };
+  const state = {
+    width: 1, height: 1, enabled: true, fxaa: true, fastBloom: false,
+    bloomEnabled: true, bloom: compositeMat.uniforms.uBloom.value,
+    calls: 0, triangles: 0, postPasses: 0, bloomPasses: 0
+  };
 
   function blit(material, target) {
     quad.material = material;
     renderer.setRenderTarget(target);
     renderer.clear(true, false, false);
     renderer.render(quadScene, quadCamera);
+    state.postPasses++;
+  }
+
+  function sizeBloomTargets() {
+    // 到真正开启辉光时再分配纹理；低配无需四张模糊缓冲区的显存。
+    const nearW = Math.max(1, state.width >> 1);
+    const nearH = Math.max(1, state.height >> 1);
+    if (nearA.width !== nearW || nearA.height !== nearH) {
+      nearA.setSize(nearW, nearH);
+      nearB.setSize(nearW, nearH);
+    }
+    if (!state.fastBloom) {
+      const farW = Math.max(1, state.width >> 2);
+      const farH = Math.max(1, state.height >> 2);
+      if (farA.width !== farW || farA.height !== farH) {
+        farA.setSize(farW, farH);
+        farB.setSize(farW, farH);
+      }
+    }
   }
 
   return {
@@ -383,20 +418,13 @@ export function createPostFX(renderer) {
     get enabled() { return state.enabled; },
 
     setSize: function (width, height, pixelRatio) {
-      const w = Math.max(1, Math.floor(width * pixelRatio));
-      const h = Math.max(1, Math.floor(height * pixelRatio));
+      const ratio = pixelRatio ?? 1;
+      const w = Math.max(1, Math.floor(width * ratio));
+      const h = Math.max(1, Math.floor(height * ratio));
       state.width = w;
       state.height = h;
       sceneTarget.setSize(w, h);
       postTarget.setSize(w, h);
-      const nearW = Math.max(1, w >> 1);
-      const nearH = Math.max(1, h >> 1);
-      const farW = Math.max(1, w >> 2);
-      const farH = Math.max(1, h >> 2);
-      nearA.setSize(nearW, nearH);
-      nearB.setSize(nearW, nearH);
-      farA.setSize(farW, farH);
-      farB.setSize(farW, farH);
       compositeMat.uniforms.uResolution.value.set(w, h);
       fxaaMat.uniforms.uInvRes.value.set(1 / w, 1 / h);
     },
@@ -405,7 +433,8 @@ export function createPostFX(renderer) {
       if (options.enabled != null) state.enabled = !!options.enabled;
       if (options.fxaa != null) state.fxaa = !!options.fxaa;
       if (options.fastBloom != null) state.fastBloom = !!options.fastBloom;
-      if (options.bloom != null) compositeMat.uniforms.uBloom.value = options.bloom;
+      if (options.bloomEnabled != null) state.bloomEnabled = !!options.bloomEnabled;
+      if (options.bloom != null) state.bloom = Math.max(0, options.bloom);
       if (options.threshold != null) brightMat.uniforms.uThreshold.value = options.threshold;
       if (options.vignette != null) compositeMat.uniforms.uVignette.value = options.vignette;
       if (options.scanline != null) compositeMat.uniforms.uScanline.value = options.scanline;
@@ -419,9 +448,13 @@ export function createPostFX(renderer) {
     },
 
     get sceneStats() { return { calls: state.calls, triangles: state.triangles }; },
+    // 后处理绘制次数，不含主场景；方便质量档位/性能面板验证实际工作量。
+    get passStats() { return { total: state.postPasses, bloom: state.bloomPasses }; },
 
     /** 渲染一帧：关闭后处理时直接画到画布。 */
     render: function (scene, camera, time) {
+      state.postPasses = 0;
+      state.bloomPasses = 0;
       if (!state.enabled) {
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
@@ -435,53 +468,46 @@ export function createPostFX(renderer) {
       state.calls = renderer.info.render.calls;
       state.triangles = renderer.info.render.triangles;
 
-      brightMat.uniforms.tScene.value = sceneTarget.texture;
-      blit(brightMat, nearA);
+      const bloomStrength = state.bloomEnabled ? state.bloom : 0;
+      compositeMat.uniforms.uBloom.value = bloomStrength;
+      if (bloomStrength > 0) {
+        sizeBloomTargets();
+        brightMat.uniforms.tScene.value = sceneTarget.texture;
+        blit(brightMat, nearA);
 
-      const nearStep = blurMat.uniforms.uDirection.value;
-      blurMat.uniforms.tSource.value = nearA.texture;
-      nearStep.set(1 / nearA.width, 0);
-      blit(blurMat, nearB);
-      blurMat.uniforms.tSource.value = nearB.texture;
-      nearStep.set(0, 1 / nearA.height);
-      blit(blurMat, nearA);
+        const nearStep = blurMat.uniforms.uDirection.value;
+        blurMat.uniforms.tSource.value = nearA.texture;
+        nearStep.set(1 / nearA.width, 0);
+        blit(blurMat, nearB);
+        blurMat.uniforms.tSource.value = nearB.texture;
+        nearStep.set(0, 1 / nearA.height);
+        blit(blurMat, nearA);
 
-      // 快速泛光：只做一级模糊就合成，省略第二级 + FXAA
-      if (state.fastBloom) {
-        compositeMat.uniforms.tScene.value = sceneTarget.texture;
-        compositeMat.uniforms.tBloomNear.value = nearA.texture;
-        compositeMat.uniforms.tBloomFar.value = nearA.texture;
-        compositeMat.uniforms.uTime.value = time * 0.001;
-        quad.material = compositeMat;
-        renderer.setRenderTarget(null);
-        renderer.render(quadScene, quadCamera);
-        return;
+        // 快速辉光只省去远场光晕；是否抗锯齿由 fxaa 选项独立决定。
+        if (!state.fastBloom) {
+          blurMat.uniforms.tSource.value = nearA.texture;
+          nearStep.set(1 / farA.width, 0);
+          blit(blurMat, farB);
+          blurMat.uniforms.tSource.value = farB.texture;
+          nearStep.set(0, 1 / farA.height);
+          blit(blurMat, farA);
+        }
+        state.bloomPasses = state.postPasses;
       }
 
-      // 第二级：在半分辨率结果上再模糊一次，得到范围更大的柔光
-      blurMat.uniforms.tSource.value = nearA.texture;
-      nearStep.set(1 / farA.width, 0);
-      blit(blurMat, farB);
-      blurMat.uniforms.tSource.value = farB.texture;
-      nearStep.set(0, 1 / farA.height);
-      blit(blurMat, farA);
-
       compositeMat.uniforms.tScene.value = sceneTarget.texture;
-      compositeMat.uniforms.tBloomNear.value = nearA.texture;
-      compositeMat.uniforms.tBloomFar.value = farA.texture;
-      compositeMat.uniforms.uTime.value = time * 0.001;
+      compositeMat.uniforms.tBloomNear.value = bloomStrength > 0 ? nearA.texture : null;
+      compositeMat.uniforms.tBloomFar.value = bloomStrength > 0
+        ? (state.fastBloom ? nearA.texture : farA.texture) : null;
+      compositeMat.uniforms.uTime.value = (time || 0) * 0.001;
 
       if (state.fxaa) {
         blit(compositeMat, postTarget);
         fxaaMat.uniforms.tSrc.value = postTarget.texture;
-        quad.material = fxaaMat;
-        renderer.setRenderTarget(null);
-        renderer.render(quadScene, quadCamera);
+        blit(fxaaMat, null);
       } else {
         // 无 FXAA 时合成直写画布：数据已经手动编码为 sRGB，直接输出
-        quad.material = compositeMat;
-        renderer.setRenderTarget(null);
-        renderer.render(quadScene, quadCamera);
+        blit(compositeMat, null);
       }
     },
 

@@ -318,9 +318,9 @@ def main():
     assert "function resolveTerrainDetail(map, terrain)" in render
     assert "function terrainFlatnessAt(x, y)" in render
     assert "function buildGroundDetail()" in render
-    assert "mesh.name = 'ground-detail'" in render
+    assert "groundDetail.name = 'ground-detail'" in render
     assert "const grassTarget = Math.min(640" in render
-    assert "三片交叉三角叶组成一簇草" in render
+    assert "Five bent grass blades" in render
     assert "const rockTarget = Math.min(180" in render
     assert "mesh.castShadow = false" in render
     assert "groundDetailParts: state.groundDetailParts" in render
@@ -335,7 +335,7 @@ def main():
     assert "function buildRoadNetwork()" in render
     assert "new THREE.CatmullRomCurve3" in render
     assert "terrain.visualTrails" in render
-    assert "new THREE.OctahedronGeometry" in render
+    assert "const leafGeo = leafIndexed.toNonIndexed()" in render
     assert "crater_wilderness" in render
     assert "arid_wilderness" in render
     assert "open_wilderness" in render
@@ -411,7 +411,7 @@ def main():
     assert "召唤法阵：多层平面符环 + 悬浮核" in render
     assert "圣泉：石碗泉盆 + 上升泉光" in render
     assert "奥术塔：扭转尖塔 + 武器晶碟" in render
-    assert "teamOrOwn8-occ-" in render
+    assert "teamOrOwn9-local-lit-" in render
     assert "armyTimeUniform" in render
     # 顶点烘焙遮蔽 + 逐零件表面通道：两条通道必须一直写进合并几何体，
     # 着色器声明了属性却拿不到数据的话，整支部队会被当成全黑。
@@ -425,15 +425,17 @@ def main():
     # 晶体是新增的第五种表面：粗糙度最低、边缘光最强
     assert "const SURF = Object.freeze({" in render
     assert "gRoughness = 0.24; gBumpScale = 0.10" in render
-    assert "float gRimGain = gMode > 3.5 ? 0.42 : 0.13;" in render
-    # 烘焙目前只在试点兵种上打开；铺开时改这张表即可，管线不用动
-    occlusion_kinds = re.search(
-        r"const OCCLUSION_BAKED_KINDS = \{([\s\S]*?)\};", render)
-    assert occlusion_kinds
-    for kind in ("dragon", "overlord", "overlord_v1", "overlord_v2"):
-        assert re.search(r"\b%s\s*:\s*1\b" % kind,
-                         occlusion_kinds.group(1)), kind
-    assert "OCCLUSION_BAKED_KINDS[kind] ? { occlusion: true } : null" in render
+    assert "float gRimGain = gMode > 3.5 ? 0.26 : 0.08;" in render
+    assert "material.specularColor = gF0" in render
+    assert "varying vec3 vArmyLocal;" in render
+    # 所有兵种近景只在首次缓存时烘焙；远景与独立挂件不支付这项成本。
+    unit_geometry = re.search(
+        r"function unitGeometry\(kind\) \{([\s\S]*?)\n  \}", render)
+    assert unit_geometry
+    assert "if (entry) return entry;" in unit_geometry.group(1)
+    assert "body: mergeParts(parts.body.concat(parts.glow || []), { occlusion: true })" in unit_geometry.group(1)
+    assert "simple: mergeParts(simpleUnitParts(kind))" in unit_geometry.group(1)
+    assert "OCCLUSION_BAKED_KINDS" not in render
     # 写实升级必须保持合批边界：军械共享压缩贴图；自然草簇和碎石允许整张
     # 地图共用一个额外 Mesh，但不能退回“一棵草/一块石头一个 draw call”。
     assert "function makeArmySurfaceTexture()" in render
@@ -452,8 +454,8 @@ def main():
     assert "map: makeOreVeinTexture()" in render
     for texture in (
         "army-real-atlas.webp",
-        "ground-real.webp",
-        "foliage-real.webp",
+        "wilderness-atlas-v2.webp",
+        "woodland-leaves-v2.webp",
         "ore-real.webp",
     ):
         assert os.path.isfile(os.path.join(ROOT, "public", "assets", "textures", texture))
@@ -475,11 +477,13 @@ def main():
     assert "运行时仍是一个 InstancedMesh，不增加 draw call" in render
     # 车体与发光件仍旧合并成同一份几何体；烘焙开关只是多传一个参数，
     # 不能演化成「发光件单独一个 Mesh」那种额外 draw call。
-    assert "body: mergeParts(parts.body.concat(parts.glow || []), bake)" in render
-    assert "大头积木人" in render
-    assert "groundTexture.repeat.set(mw / 420, mh / 420);" in render
-    assert "同一棵树的三层树冠分别压暗、保持、提亮" in render
-    assert "真人比例重做" in render
+    assert "body: mergeParts(parts.body.concat(parts.glow || []), { occlusion: true })" in render
+    assert "function trackBelt(length, depth, x, y, z)" in render
+    assert "applyWildernessGround(material)" in render
+    assert "Same-tree lower/middle/top layers darken, hold and brighten the leaves." in render
+    assert "const key = forestChunkKey(tx, ty)" in render
+    assert "alphaTest: 0.42" in render
+    assert "const helmet = new THREE.SphereGeometry(1, 8, 5" in render
     # 秘法会比例校正只变换已有零件，不能靠新增独立 Mesh/实例硬堆体量；
     # 近景、远景和点选半径必须一起更新，玩法 size 则保持与钢铁对位一致。
     assert "function scalePartList(parts, sx, sy, sz)" in render
@@ -537,7 +541,8 @@ def main():
     assert "kind === 'meteor'" in render
     assert "kind === 'comet'" in render
     assert "function emitIdleAura" in render
-    assert "手臂在肘部转折后共同托枪" in render
+    assert "const holdY = weapon === 'rocket'" in render
+    assert "const holdZ = weapon === 'tesla'" in render
     assert "魔法主堡：双尖塔托浮空金冠，不是矮方堡" in render
 
     # 两个阵营目录里的每一种单位都必须有专属近景 builder；不能悄悄回退到
@@ -692,8 +697,11 @@ def main():
         app)
     assert box_fn, "missing selectBoxUnits"
     assert "sendAction" not in box_fn.group(1)
-    assert "heldMs < 220 && currentScreen === 'game'" in app
-    assert "stopKeyDownAt = performance.now();" in app
+    assert "event.code === 'KeyH'" in app
+    assert "if (!event.repeat) { stopSelected(); }" in app
+    assert "stopKeyDownAt" not in app
+    assert "command: 'harvest'" in app
+    assert "preferredResourceId" in server_source
 
     # Playability QoL: double-click same-kind (visible/rendered only) and
     # control groups 1-3 remain, while production hotkeys are fully removed.

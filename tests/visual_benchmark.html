@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>赤潮 · 渲染实测</title>
+<style>
+html,body {margin:0;width:100%;height:100%;overflow:hidden;background:#152329;color:#e8f0ec;font:13px system-ui}
+[hidden] {display:none!important}
+canvas {display:block;width:100%;height:100%}
+#status {position:fixed;top:16px;left:18px;padding:10px 14px;background:#111b22dd;border:1px solid #a8c9bc45;border-radius:5px;pointer-events:none;max-width:80%;line-height:1.6;white-space:pre-wrap}
+#controls {position:fixed;bottom:12px;left:18px;display:flex;flex-wrap:wrap;max-width:calc(100vw - 56px);gap:8px;align-items:center;background:#111b22ed;padding:10px;border-radius:5px}
+button,select,input {font:inherit;background:#263b42;color:#edf5ee;border:1px solid #729385;border-radius:3px;padding:6px}
+input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;overflow:auto;background:#111b22e8;padding:12px;max-width:430px;font-size:11px;white-space:pre-wrap}
+</style>
+<canvas id="world"></canvas><div id="status">正在准备离线渲染场景…</div>
+<div id="controls">
+<select id="scenario"><option value="showcase">双阵营全图鉴</option><option value="army">大军团压力</option><option value="river">河谷光影</option><option value="map">地图全景</option></select>
+<select id="map"></select>
+<select id="shadows"><option value="structures">建筑阴影</option><option value="all">全部阴影</option><option value="off">关闭阴影</option></select>
+<select id="bloom"><option value="0">无泛光</option><option value="1">轻量泛光</option><option value="high">完整泛光</option></select>
+<select id="lod"><option value="auto">自动 LOD</option><option value="off">禁用 LOD</option></select>
+<input id="count" type="number" value="400" min="1" max="2000" aria-label="单位数">
+<button id="apply">应用场景</button><button id="quality">即时应用画质</button><button id="run">运行基准</button>
+<button id="cycles">连续换图检查</button>
+<button id="freeze">固定时间截图</button><button id="resume">继续动画</button><button id="hide">隐藏面板</button>
+</div>
+<pre id="results" hidden></pre>
+<script type="module">
+// Deliberately outside the game client: no login, SSE, rooms, or simulation worker.
+const query = new URLSearchParams(location.search);
+const status = document.querySelector('#status');
+if (query.get('hud') === '0') status.hidden = true;
+const modulePath = query.get('renderer') || '/public/render3d.js';
+const moduleUrl = new URL(modulePath, location.href);
+if (moduleUrl.origin !== location.origin) throw new Error('Renderer must be same-origin');
+const [{createRenderer}, catalog] = await Promise.all([
+  import(moduleUrl.href), fetch('/benchmark-data.json').then(r => r.json())
+]);
+const renderer = createRenderer(document.querySelector('canvas'));
+const canvas = document.querySelector('canvas');
+const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+const gpu = {renderer:gl.getParameter(debugInfo ? debugInfo.UNMASKED_RENDERER_WEBGL : gl.RENDERER),
+  vendor:gl.getParameter(debugInfo ? debugInfo.UNMASKED_VENDOR_WEBGL : gl.VENDOR),version:gl.getParameter(gl.VERSION)};
+const players = [{id:'steel',color:'#de6451'}, {id:'arcane',color:'#5caddc'}];
+renderer.setPalette(players, 'steel', () => true);
+const selected = new Set();
+let settings = {shadows:query.get('shadows') || 'structures', bloom:query.get('bloom') === '1',
+  fastBloom:query.get('bloom') !== 'high', lod:query.get('lod') !== 'off', fogScale:9, particleBudget:150};
+if (query.get('bloom') === 'high') settings.bloom = true;
+renderer.setQuality(settings);
+let game, map, scenario, camera, sceneTime = 18000, lastAt = 0, snapshotAt = -Infinity;
+let paused = query.get('paused') === '1', moving = query.get('moving') === '1';
+let frameObserver = null, runningBenchmark = false, frameError = null;
+let halted = false, framePending = false;
+let dpr = Number(query.get('dpr')) || 1;
+function resize() { renderer.resize(innerWidth,innerHeight,dpr); }
+addEventListener('resize',resize); resize();
+function terrainFromMap(m) {
+  return {rivers:m.rivers,bridges:m.bridges,mountains:m.mountains,roads:m.roads,
+    visualTrails:m.visualTrails,theme:m.theme,visualStyle:m.visualStyle,
+    bridgeDeckHeight:m.bridgeDeckHeight,detail:m.terrainDetail};
+}
+function unit(kind,i,x,y,rank=0) {
+  const def = catalog.units[kind];
+  const owner = def.faction === 'magic' ? 'arcane' : 'steel';
+  return {id:'u'+i,owner,kind,x,y,originX:x,originY:y,dir:owner==='steel'?0.38:2.8,
+    hp:def.hp,maxHp:def.hp,size:def.size,kills:rank,damage:def.damage,range:def.range,
+    cooldown:0,cargo:0,capacity:def.capacity || 0,order:{type:'stop'}};
+}
+function structure(kind,i,x,y) {
+  const def = catalog.structures[kind];
+  return {id:'s'+i,owner:def.faction==='magic'?'arcane':'steel',kind,x,y,
+    hp:def.hp,maxHp:def.hp,size:def.size,active:true,dir:0,buildRemaining:0,buildTotal:0};
+}
+function loadScenario(options={}) {
+  scenario = options.scenario || query.get('scenario') || 'showcase';
+  map = catalog.maps[options.map || query.get('map') || 'iron_river_duel'];
+  if (!map) throw new Error('Unknown map');
+  renderer.clearEntities();
+  const focus = map.id === 'iron_river_duel' ? {x:1000,y:1600}
+    : map.id === 'gold_crater_small' ? {x:3200,y:1000} : {x:2000,y:2000};
+  // Move the same army fixture next to a forest for a worst-case vegetation test.
+  if (query.has('focusX')) focus.x = Number(query.get('focusX'));
+  if (query.has('focusY')) focus.y = Number(query.get('focusY'));
+  const resources = (map.resources || []).map((r,i) => ({...r,id:'ore'+i,radius:r.radius||70,maxAmount:r.amount,guarded:false}));
+  game = {elapsed:0,units:[],structures:[],ore:resources.map(r=>[r.id,r.amount,false]),
+    projectiles:[],effects:[],crates:[],strikes:[],pings:[]};
+  const keys = Object.keys(catalog.units);
+  if (scenario === 'showcase') {
+    const tech = keys.filter(k=>catalog.units[k].faction!=='magic');
+    const magic = keys.filter(k=>catalog.units[k].faction==='magic');
+    for (const [faction,kinds] of [tech,magic].entries()) {
+      kinds.forEach((kind,i)=>game.units.push(unit(kind,game.units.length,
+        focus.x+(faction?1:-1)*100+(i%4-1.5)*66+(faction?130:-130),
+        focus.y-130+Math.floor(i/4)*85)));
+    }
+    game.units.push(unit('overlord',game.units.length,focus.x-90,focus.y+235,100));
+    game.units.push(unit('dragon',game.units.length,focus.x+100,focus.y+235,100));
+    Object.keys(catalog.structures).forEach((kind,i)=>game.structures.push(structure(kind,i,
+      focus.x-490+(i%8)*140,focus.y-410+Math.floor(i/8)*165)));
+  } else if (scenario === 'army') {
+    const count = Math.min(2000,Math.max(1,Number(options.count || query.get('count')) || 400));
+    const columns = Math.ceil(Math.sqrt(count*1.65));
+    for (let i=0;i<count;i++) game.units.push(unit(keys[i%keys.length],i,
+      focus.x+(i%columns-(columns-1)/2)*26,
+      focus.y+(Math.floor(i/columns)-(Math.ceil(count/columns)-1)/2)*28,i%11===0?100:0));
+    Object.keys(catalog.structures).forEach((kind,i)=>game.structures.push(structure(kind,i,
+      focus.x-500+(i%8)*140,focus.y-430+Math.floor(i/8)*155)));
+  } else if (scenario !== 'river' && scenario !== 'map') throw new Error('Unknown scenario');
+  renderer.setMatch({id:map.id,width:map.width,height:map.height,seed:90241},
+    terrainFromMap(map),resources,catalog.sight,map.spawnPoints);
+  camera = scenario==='map' ? {x:map.width/2,y:map.height/2,zoom:0.18,yaw:0,pitch:1.22}
+    : scenario==='river' ? {x:map.width/2,y:map.height/2,zoom:0.58,yaw:0.25,pitch:0.80}
+    : {x:focus.x,y:focus.y-100,zoom:0.82,yaw:0.14,pitch:0.96};
+  for(const key of ['x','y','zoom','yaw','pitch']) if(query.has(key)) camera[key]=Number(query.get(key));
+  renderer.setCamera(camera); renderer.setFogRevealed(true);
+  snapshotAt = -Infinity; sceneTime = 18000;
+  return {scenario,map:map.id,units:game.units.length,structures:game.structures.length,camera:{...camera}};
+}
+function draw(at) {
+  const interval = lastAt ? at-lastAt : 0;
+  lastAt = at;
+  if(!paused) sceneTime += Math.min(interval,100);
+  if(at-snapshotAt>=125) {
+    snapshotAt=at;
+    game={...game,elapsed:sceneTime/1000};
+    if(moving) game.units.forEach((u,i)=> {
+      u.x=u.originX+Math.sin(sceneTime*0.00042+i*0.17)*12;
+      u.y=u.originY+Math.cos(sceneTime*0.00042+i*0.17)*12;
+    });
+  }
+  const start=performance.now();
+  try {
+    renderer.render({game,dt:Math.min(interval/1000,0.05),time:sceneTime,revealMap:true,
+      selectedUnitIds:selected,selectedStructureId:null,selectedResourceId:null,
+      newEffects:[],buildPreview:null});
+  } catch(error) {
+    frameError=String(error.stack||error); status.textContent=frameError;
+    console.error(error); return;
+  }
+  if(frameObserver) frameObserver({interval,cpu:performance.now()-start});
+  kick();
+}
+function kick() {
+  if(!halted && !framePending) {
+    framePending=true;
+    requestAnimationFrame(at=>{framePending=false;if(!halted) draw(at);});
+  }
+}
+function percentile(values,q) {
+  const sorted=values.slice().sort((a,b)=>a-b);
+  return +sorted[Math.min(sorted.length-1,Math.floor((sorted.length-1)*q))].toFixed(3);
+}
+function waitFrames(count) {
+  return new Promise(resolve=>{let left=count;frameObserver=()=>{if(--left<=0){frameObserver=null;resolve();}};});
+}
+window.benchmark = {
+  ready:false, renderer, catalog, loadScenario,
+  stats:()=>renderer.stats(),
+  state:()=>({scenario,map:map.id,camera:{...camera},settings:{...settings},dpr,paused,moving,halted,frameError}),
+  setCamera:patch=>{Object.assign(camera,patch);renderer.setCamera(camera);return {...camera};},
+  setQuality:patch=>{Object.assign(settings,patch);renderer.setQuality(settings);return {...settings};},
+  setDpr:value=>{dpr=value;resize();},
+  async freeze(time=18000) {
+    if(runningBenchmark) return;
+    sceneTime=time;paused=true;halted=false;lastAt=0;kick();
+    await waitFrames(2);halted=true;status.textContent='已固定 18 秒场景 · 渲染暂停，可截图';
+  },
+  resume:()=>{paused=false;halted=false;lastAt=0;kick();},
+  setMoving:value=>{moving=!!value;},
+  async cycleMaps(rounds=4) {
+    if(runningBenchmark) throw new Error('Benchmark already running');
+    runningBenchmark=true;
+    const samples=[];
+    try {
+      halted=false;lastAt=0;kick();
+      for(let round=0;round<rounds;round++) {
+        for(const mapId of Object.keys(catalog.maps)) {
+          loadScenario({scenario:'showcase',map:mapId});
+          status.textContent=`连续换图检查 · 第 ${round+1}/${rounds} 轮 · ${map.name}`;
+          await waitFrames(30);
+          samples.push({round,map:mapId,stats:renderer.stats()});
+        }
+      }
+      const result={type:'map-lifecycle',rendererModule:moduleUrl.pathname,gpu,samples};
+      window.benchmarkResult=result;
+      document.querySelector('#results').textContent=JSON.stringify(result,null,2);
+      document.querySelector('#results').hidden=false;
+      status.textContent=`完成 ${samples.length} 次同渲染器换图 · 已暂停\n比较各轮同地图的 geometries/textures/fogShaders`;
+      return result;
+    } finally {frameObserver=null;runningBenchmark=false;halted=true;}
+  },
+  async run(options={}) {
+    if(runningBenchmark) throw new Error('Benchmark already running');
+    if(frameError) throw new Error(frameError);
+    runningBenchmark=true;
+    try {
+      halted=false;lastAt=0;kick();
+      status.textContent='预热与采样中，请保持当前页面可见…';
+      await waitFrames(Math.max(1,options.warmupFrames ?? 90));
+      const values=[];const cpus=[];const count=Math.max(2,options.frames || 300);
+      await new Promise(resolve=>{frameObserver=sample=>{
+        values.push(sample.interval);cpus.push(sample.cpu);
+        if(values.length>=count){frameObserver=null;resolve();}
+      };});
+      const avg=values.reduce((a,b)=>a+b,0)/values.length;
+      const result={...this.state(),rendererModule:moduleUrl.pathname,gpu,
+        viewport:{width:innerWidth,height:innerHeight,pixelWidth:canvas.width,pixelHeight:canvas.height},
+        samples:values.length,frameMs:{mean:+avg.toFixed(3),p50:percentile(values,0.5),p95:percentile(values,0.95),p99:percentile(values,0.99)},
+        cpuRenderMs:{p50:percentile(cpus,0.5),p95:percentile(cpus,0.95)},fps:+(1000/avg).toFixed(2),
+        stats:renderer.stats(),visibility:document.visibilityState};
+      window.benchmarkResult=result;
+      document.querySelector('#results').textContent=JSON.stringify(result,null,2);
+      document.querySelector('#results').hidden=false;
+      status.textContent=`采样完成 · ${result.fps} FPS · p95 ${result.frameMs.p95} ms\n渲染已暂停，结果见右侧`;
+      return result;
+    } finally {frameObserver=null;runningBenchmark=false;halted=true;}
+  }
+};
+const initial=loadScenario();
+for(const [key,value] of Object.entries(catalog.maps)) {
+  const option=document.createElement('option');option.value=key;option.textContent=value.name;
+  document.querySelector('#map').append(option);
+}
+for(const [id,value] of Object.entries({scenario,map:map.id,shadows:settings.shadows,bloom:query.get('bloom')||'0',lod:settings.lod?'auto':'off',count:query.get('count')||400})) document.getElementById(id).value=value;
+document.querySelector('#apply').onclick=()=>{
+  const next=new URL(location.href);
+  for(const id of ['scenario','map','shadows','bloom','lod','count']) next.searchParams.set(id,document.getElementById(id).value);
+  location.href=next.href;
+};
+document.querySelector('#quality').onclick=async()=>{
+  if(runningBenchmark) {status.textContent='采样进行中，请完成后再切换画质';return;}
+  const bloom=document.querySelector('#bloom').value;
+  window.benchmark.setQuality({shadows:document.querySelector('#shadows').value,
+    bloom:bloom!=='0',fastBloom:bloom!=='high',lod:document.querySelector('#lod').value!=='off'});
+  window.benchmark.resume();
+  await waitFrames(5);
+  const result={type:'live-quality',...window.benchmark.state(),rendererModule:moduleUrl.pathname,
+    gpu,stats:renderer.stats()};
+  window.benchmarkResult=result;
+  document.querySelector('#results').textContent=JSON.stringify(result,null,2);
+  document.querySelector('#results').hidden=false;
+  status.textContent=`已即时应用 · 阴影 ${settings.shadows} · 泛光 ${bloom} · LOD ${settings.lod?'自动':'禁用'}\n当前场景继续渲染，未重建地图`;
+};
+document.querySelector('#run').onclick=()=>window.benchmark.run().catch(error=>{status.textContent=String(error.stack||error);});
+document.querySelector('#cycles').onclick=()=>window.benchmark.cycleMaps().catch(error=>{status.textContent=String(error.stack||error);});
+document.querySelector('#freeze').onclick=()=>window.benchmark.freeze();
+document.querySelector('#resume').onclick=()=>window.benchmark.resume();
+document.querySelector('#hide').onclick=()=>{for(const id of ['controls','status','results']) document.getElementById(id).hidden=true;};
+kick();
+await waitFrames(5);
+window.benchmark.ready=true;
+status.textContent=`${map.name} · ${scenario} · ${initial.units} 单位 / ${initial.structures} 建筑\n${moduleUrl.pathname}\n离线渲染夹具 · window.benchmark.run()`;
+</script>
+</html>

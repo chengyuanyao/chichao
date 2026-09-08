@@ -11,6 +11,10 @@
 
 import * as THREE from './vendor/three.module.min.js';
 import { createPostFX } from './postfx.js';
+import { disposeOwnedRenderGroup, MaterialShaderRegistry } from './render_resources.js';
+import { wildernessNoise, wildernessBiome, applyWildernessGround, applyWildernessRock,
+  applyWildernessTrail, applyBridgeWeathering, makeWeatheredRockGeometry,
+  forestChunkKey } from './wilderness.js';
 
 const TAU = Math.PI * 2;
 
@@ -546,15 +550,6 @@ const MAGIC_UNIT_KINDS = {
 };
 // 一张共享军械图仍只产生四个材质变体。普通步兵/磁暴兵走织物粗糙度，
 // 不再把军服照成钢板；其余车辆、石构和兽类分别复用 metal/stone/hide。
-// 顶点烘焙遮蔽的开启名单。烘焙是建几何体时算一次、写进 aOcc 顶点属性，
-// 运行时零成本，代价只是该形态首次出现时多花 0.6~2ms。只有零件多、体量大、
-// 玩家会凑近看的两个兵种值得付这一次：秘法巨龙和天启坦克（三副形态）。
-// 天启的双臂炮不在名单里 —— 那份几何体的原点是肩轴而不是脚底，地面接触
-// 阴影项按局部 y 算，烘上去会把整条手臂错误地压暗一档。
-const OCCLUSION_BAKED_KINDS = {
-  dragon: 1, overlord: 1, overlord_v1: 1, overlord_v2: 1
-};
-
 const CLOTH_UNIT_KINDS = {
   rifle: 1, rocket: 1, sniper: 1, tesla: 1,
   mage: 1, frost: 1, oracle: 1
@@ -626,32 +621,53 @@ const GLOW_WARM = 1.75;
 const GLOW_HOT = 2.6;
 
 function infantryParts(weapon) {
-  const body = [
-    // 20 米制单位里按约 1:7.5 的真人比例重做：小头、长腿、收腰，去掉“大头积木人”。
-    taperedBox(5.8, 4.2, 6.2, 4.6, 7.0, 0.1, 11.0, 0, MAT.olive),
-    taperedBox(5.2, 4.2, 4.7, 3.8, 2.4, -0.2, 6.7, 0, MAT.cloth),
-    chamferedBox(3.8, 1.0, 7.2, -0.1, 14.0, 0, 0.88), // 窄肩章（团队色）
-    chamferedBox(2.4, 2.3, 3.2, 2.3, 11.0, 0, 0.72), // 胸牌
-    sph(1.85, 10, 0.4, 16.5, 0, MAT.sandArmor),       // 小比例圆头
-    taperedBox(4.0, 3.8, 3.2, 3.0, 1.45, 0.4, 18.0, 0, MAT.sandArmor),
-    chamferedBox(4.5, 0.38, 4.1, 0.45, 17.55, 0, MAT.darkSteel),
-    cyl(0.32, 0.32, 1.3, 8, -1.15, 18.65, 0, MAT.gunmetal),
-    // 两条腿轻微外撇，手臂在肘部转折后共同托枪。
-    limb(1.05, 0.92, -0.3, 6.0, 1.65, -0.5, 1.45, 1.95, MAT.cloth),
-    limb(1.05, 0.92, -0.3, 6.0, -1.65, -0.5, 1.45, -1.95, MAT.cloth),
-    chamferedBox(2.9, 1.35, 2.35, 0.15, 0.8, 1.95, MAT.rubber),
-    chamferedBox(2.9, 1.35, 2.35, 0.15, 0.8, -1.95, MAT.rubber),
-    ellipsoid(1.65, 2.9, 2.25, -3.25, 11.0, 0, MAT.olive),
-    limb(1.0, 0.82, 0.0, 13.2, 3.1, 1.45, 10.9, 3.55, MAT.olive),
-    limb(0.84, 0.68, 1.45, 10.9, 3.55, 4.1, 9.9, 2.35, MAT.olive),
-    limb(1.0, 0.82, 0.0, 13.2, -3.1, 1.25, 10.7, -3.5, MAT.olive),
-    limb(0.84, 0.68, 1.25, 10.7, -3.5, 4.15, 9.8, -2.35, MAT.olive)
-  ];
+  const holdY = weapon === 'rocket' ? 10.7 : weapon === 'tesla' ? 8.7 : 9.9;
+  const holdZ = weapon === 'tesla' ? 1.9 : -2.35;
+  const body = surfaced(SURF.cloth, [
+    // 连续胸腹轮廓收腰，独立大腿/小腿组成微屈的承重姿势；肩部不再是一根横梁。
+    profiledVolume([[0, 0], [0.82, 0.3], [0.9, 2.1], [1, 4.6], [0.62, 6.2], [0, 6.6]],
+      2.2, 2.65, 8, 0, 8.0, 0, MAT.olive),
+    taperedBox(3.6, 4.0, 3.9, 4.6, 2.1, -0.1, 7.4, 0, MAT.cloth),
+    limb(1.05, 0.88, -0.15, 7.6, 1.5, 0.65, 4.35, 1.8, MAT.olive),
+    limb(0.87, 0.70, 0.65, 4.35, 1.8, -0.1, 1.45, 1.95, MAT.cloth),
+    limb(1.05, 0.88, -0.15, 7.6, -1.5, -0.6, 4.15, -1.8, MAT.olive),
+    limb(0.87, 0.70, -0.6, 4.15, -1.8, 0.35, 1.45, -1.95, MAT.cloth),
+    profiledVolume([[0, -2.7], [0.86, -2.25], [1, 1.9], [0.7, 2.65], [0, 2.9]],
+      1.2, 2.05, 8, -2.65, 11.4, 0, MAT.olive),
+    // 支撑手横过胸前托住枪管；握把手与不同武器的实际高度对齐。
+    limb(0.92, 0.75, 0, 13.4, 2.7, 1.8, 10.7, 3.0, MAT.olive),
+    limb(0.75, 0.60, 1.8, 10.7, 3.0, 5.05, holdY, holdZ + 0.35, MAT.olive),
+    limb(0.92, 0.75, 0, 13.4, -2.7, 1.8, 10.7, -3.0, MAT.olive),
+    limb(0.75, 0.60, 1.8, 10.7, -3.0, 3.25, holdY, holdZ, MAT.olive)
+  ]).concat(surfaced(SURF.metal, [
+    taperedBox(3.2, 2.15, 2.9, 1.8, 1.9, 0, 13.6, 2.7, 0.88),
+    taperedBox(3.2, 2.15, 2.9, 1.8, 1.9, 0, 13.6, -2.7, 0.88),
+    taperedBox(1.0, 3.4, 1.2, 4.2, 4.0, 2.0, 11.45, 0, 0.78),
+    taperedBox(0.8, 1.8, 0.7, 1.6, 1.55, 1.35, 4.35, 1.8, MAT.darkSteel),
+    taperedBox(0.8, 1.8, 0.7, 1.6, 1.55, 0.1, 4.15, -1.8, MAT.darkSteel)
+  ]), surfaced(SURF.hide, [
+    ellipsoid(1.35, 1.65, 1.4, 0.35, 16.45, 0, MAT.sandArmor),
+    taperedBox(2.9, 2.0, 2.25, 1.7, 1.45, 0.3, 0.82, 1.95, MAT.rubber),
+    taperedBox(2.9, 2.0, 2.25, 1.7, 1.45, 0.75, 0.82, -1.95, MAT.rubber)
+  ]));
+  // 半球头盔与两个低面数手套只在建缓存时生成，不增加独立材质或实例。
+  const helmet = new THREE.SphereGeometry(1, 8, 5, 0, TAU, 0, Math.PI * 0.58);
+  helmet.scale(1.78, 1.65, 1.78);
+  body.push(Object.assign({ geo: helmet,
+    matrix: new THREE.Matrix4().makeTranslation(0.2, 17.05, 0), surf: SURF.metal }, tint(0.84)));
+  [[5.05, holdZ + 0.35], [3.25, holdZ]].forEach(function (hand) {
+    const geo = new THREE.IcosahedronGeometry(0.7, 0);
+    geo.scale(1.05, 0.78, 0.84);
+    body.push(Object.assign({ geo: geo,
+      matrix: new THREE.Matrix4().makeTranslation(hand[0], holdY, hand[1]),
+      surf: SURF.hide }, tint(MAT.rubber)));
+  });
   const glow = [
-    chamferedBox(0.35, 0.65, 2.4, 2.15, 16.4, 0, GLOW_HOT),
-    box(1.8, 0.35, 0.35, -4.45, 11.8, 0, GLOW_SOFT)
+    box(0.22, 0.35, 1.7, 1.7, 16.75, 0, GLOW_SOFT),
+    box(0.24, 0.35, 0.6, -3.8, 11.8, 0, GLOW_SOFT)
   ];
 
+  const weaponStart = body.length;
   if (weapon === 'rifle') {
     body.push(cyl(0.48, 0.48, 10.5, 8, 5.2, 9.9, -2.35, MAT.gunmetal, ROT_Z90));
     body.push(chamferedBox(2.2, 1.55, 0.75, 2.0, 10.0, -2.35, MAT.darkSteel));
@@ -681,27 +697,74 @@ function infantryParts(weapon) {
     glow.push(sph(1.5, 6, -4.4, 18.0, -2.2, MAT.teslaArc));
     glow.push(sph(1.1, 6, 11.6, 9.0, 1.9, MAT.teslaArc));
   }
+  for (let i = weaponStart; i < body.length; i++) body[i].surf = SURF.metal;
   return { body: body, glow: glow };
 }
 
-/** 履带底盘：侧裙 + 负重轮，比两条方条更像装甲车辆。 */
+/** 中空履带，12 点圆端轮廓共 96 面；空出的侧面让负重轮真正露出来。 */
+function trackBelt(length, depth, x, y, z) {
+  const contour = [];
+  const radius = 2.6;
+  for (let end = 0; end < 2; end++) {
+    for (let i = 0; i < 6; i++) {
+      const angle = -Math.PI / 2 + end * Math.PI + i * Math.PI / 5;
+      const center = (end === 0 ? 1 : -1) * (length / 2 - radius);
+      contour.push([center, Math.cos(angle), Math.sin(angle)]);
+    }
+  }
+  const positions = [];
+  const loop = contour.length;
+  const ringPoint = function (i, inner, side) {
+    const c = contour[i % loop], r = inner ? 1.93 : radius;
+    return [c[0] + c[1] * r, c[2] * r, side * depth / 2];
+  };
+  const quad = function (a, b, c, d) {
+    [a, b, c, a, c, d].forEach(function (p) {
+      positions.push(p[0], p[1], p[2]);
+    });
+  };
+  for (let i = 0; i < loop; i++) {
+    // 圆端的分片法线会自然接光，避免逐节生成高成本履带齿。
+    quad(ringPoint(i, false, 1), ringPoint(i + 1, false, 1),
+      ringPoint(i + 1, true, 1), ringPoint(i, true, 1));
+    quad(ringPoint(i, true, -1), ringPoint(i + 1, true, -1),
+      ringPoint(i + 1, false, -1), ringPoint(i, false, -1));
+    quad(ringPoint(i, false, -1), ringPoint(i + 1, false, -1),
+      ringPoint(i + 1, false, 1), ringPoint(i, false, 1));
+    quad(ringPoint(i, true, 1), ringPoint(i + 1, true, 1),
+      ringPoint(i + 1, true, -1), ringPoint(i, true, -1));
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.computeVertexNormals();
+  return { geo: geo, matrix: new THREE.Matrix4().makeTranslation(x, y, z),
+    rgb: MAT.track, surf: SURF.hide };
+}
+
+/** 履带底盘：收分首上甲板、独立侧裙和中空履带，所有零件继续合批。 */
 function trackedHull(len, wid, hullH, shade) {
   const half = wid / 2;
   const parts = [
-    taperedBox(len, wid * 0.92, len * 0.86, wid * 0.78, hullH, 0, hullH / 2 + 3.4, 0, shade),
-    box(len * 0.3, hullH * 0.8, wid * 0.9, len * 0.42, hullH / 2 + 3.0, 0, shade * 0.85)
+    taperedBox(len, wid * 0.92, len * 0.84, wid * 0.78, hullH, 0, hullH / 2 + 3.4, 0, shade),
+    taperedBox(len * 0.31, wid * 0.9, len * 0.19, wid * 0.78,
+      hullH * 0.68, len * 0.35, hullH / 2 + 3.0, 0, shade * 0.85)
   ];
   [1, -1].forEach(function (side) {
-    parts.push(box(len * 1.04, 5.2, 3.8, 0, 3.0, side * (half + 0.6), MAT.track));
-    parts.push(box(len * 0.98, 2.6, 1.6, 0, 6.4, side * (half + 1.0), 0.42));  // 侧裙留团队色
-    for (let i = -1; i <= 1; i++) {
-      parts.push(cyl(2.0, 2.0, 1.6, 8, i * len * 0.3, 2.8, side * (half + 0.6),
-        MAT.darkSteel, ROT_X90));
+    parts.push(trackBelt(len * 1.04, 3.8, 0, 3.0, side * (half + 0.6)));
+    parts.push(taperedBox(len * 0.91, 1.35, len * 0.85, 1.65,
+      2.1, -len * 0.02, 6.5, side * (half + 1.0), 0.54));
+    for (let i = -2; i <= 2; i++) {
+      parts.push(cyl(1.86, 1.86, 2.7, 8, i * len * 0.21, 2.85, side * (half + 0.6),
+        i === -2 || i === 2 ? MAT.steel : MAT.darkSteel, ROT_X90));
     }
   });
   // 车尾排气口：一点橙色自发光，打破整车的单色
   parts.push(box(2.2, 2.0, 3.0, -len * 0.5, hullH * 0.7 + 3, wid * 0.22, MAT.gunmetal));
   parts.push(box(0.9, 1.2, 2.0, -len * 0.53, hullH * 0.7 + 3, wid * 0.22, MAT.exhaust));
+  // 履带保留橡胶表面，装甲/负重轮/排气全部使用金属通道。
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i].surf === undefined) parts[i].surf = SURF.metal;
+  }
   return parts;
 }
 
@@ -2294,7 +2357,9 @@ function structureGeometries(kind, size) {
   // 着色器靠 aTeam 与色值量级就能区分，不再需要分材质。一座建筑因此只占
   // 一次绘制调用（原来是三次）。
   entry = {
-    team: parts.length ? mergeParts(parts) : null,
+    // 主体以地基为原点，首次缓存时烘焙墙角与屋檐的体积阴影；各实例共享。
+    // 炮塔/旋转件使用局部轴，仍保持下面的普通合并，避免错误地面遮蔽。
+    team: parts.length ? mergeParts(parts, { occlusion: true }) : null,
     hull: null,
     head: null,
     spin: null
@@ -2549,6 +2614,8 @@ function resolveTerrainDetail(map, terrain) {
 // 硬切低模：InstancedMesh 的绘制调用本来就按兵种合批，数量阈值只会造成
 // 模型突然一起变成盒子，却没有省下任何 draw call。
 const UNIT_LOD_DISTANCE = 900;
+// 巨龙和高阶天启的轮廓在普通单位已很小时仍占几十像素，延后一级简化。
+const HERO_LOD_DISTANCE = UNIT_LOD_DISTANCE * 1.5;
 // 渲染出来的通道比碰撞尺寸长这么多倍，用来跨过做了抖动加宽的林带
 const BRIDGE_RENDER_SPAN = 2.0;
 
@@ -2665,7 +2732,7 @@ export function createRenderer(canvas) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
   // 软阴影：PCFSoft 的软边比硬 PCF 更接近 Apple 那种柔和的接触影
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.setClearColor(0x9ec8d8);
 
   const textureLoader = new THREE.TextureLoader();
@@ -2726,7 +2793,7 @@ export function createRenderer(canvas) {
 
   const sun = new THREE.DirectionalLight(0xffedc2, 2.0);
   sun.castShadow = true;
-  // 阴影默认关闭、开了就是要画质，所以给到 1024，软边的细节才出得来
+  // 固定 1024 阴影预算，避免大地图和混战额外占用显存/填充率。
   sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.camera.near = 50;
   sun.shadow.camera.far = 3200;
@@ -2739,6 +2806,7 @@ export function createRenderer(canvas) {
   scene.add(fill);
   const rim = new THREE.DirectionalLight(0xa8e2f2, 0.26);
   scene.add(rim);
+  scene.add(fill.target, rim.target);
 
   const worldRoot = new THREE.Group();
   scene.add(worldRoot);
@@ -2750,7 +2818,7 @@ export function createRenderer(canvas) {
     shadows: 'structures', lod: true, fogScale: 6, particleBudget: 600,
     bloom: true,
     showProjectiles: true,
-    buildTerrainMs: 0, groundDetailParts: 0,
+    buildTerrainMs: 0, groundDetailParts: 0, forestChunks: 0, forestTrees: 0,
     snapshotUnits: 0, renderedUnits: 0, renderedStructures: 0,
     sight: null, terrainDetail: null,
     palette: new Map(),
@@ -2836,14 +2904,14 @@ export function createRenderer(canvas) {
       shader.vertexShader = 'attribute float aTeam;\nattribute float aOcc;\n' +
         'attribute float aSurf;\nvarying float vTeamMix;\nvarying float vOcc;\n' +
         'varying float vSurf;\n' +
-        'varying vec3 vOwnColor;\nvarying vec3 vArmyWorld;\n' + shader.vertexShader
+        'varying vec3 vOwnColor;\nvarying vec3 vArmyWorld;\nvarying vec3 vArmyLocal;\n' + shader.vertexShader
           .replace(
             '#include <color_vertex>',
             '#include <color_vertex>\n  vTeamMix = aTeam;\n  vOwnColor = color;\n' +
             '  vOcc = aOcc;\n  vSurf = aSurf;')
           .replace(
             '#include <begin_vertex>',
-            '#include <begin_vertex>\n' +
+            '#include <begin_vertex>\n  vArmyLocal = transformed;\n' +
             '  {\n' +
             '    vec4 armyWorld = vec4(transformed, 1.0);\n' +
             '#ifdef USE_INSTANCING\n' +
@@ -2853,7 +2921,7 @@ export function createRenderer(canvas) {
             '  }');
       shader.fragmentShader = 'varying float vTeamMix;\nvarying float vOcc;\n' +
         'varying float vSurf;\nvarying vec3 vOwnColor;\n' +
-        'varying vec3 vArmyWorld;\nuniform vec3 uSunDirView;\nuniform float uArmyTime;\n' +
+        'varying vec3 vArmyWorld;\nvarying vec3 vArmyLocal;\nuniform vec3 uSunDirView;\nuniform float uArmyTime;\n' +
         'uniform sampler2D uArmySurface;\nuniform float uArmySurfaceMode;\n' +
         shader.fragmentShader
           .replace('#include <color_fragment>',
@@ -2890,20 +2958,23 @@ export function createRenderer(canvas) {
             '  } else if (gMode > 3.5) {\n' +
             '    gRoughness = 0.24; gBumpScale = 0.10; gSurfaceBlend = 0.07;\n' +
             '  }\n' +
-            // 世界空间镜像投影：左半旧钢、右半玄武岩。一次采样同时提供颜色、
-            // 粗糙度依据和凹凸高度，仍然不拆单位/建筑的合批。
+            // 模型本地空间投影，污渍随车辆/炮塔移动，不再从世界纹理中穿过。
+            // 一次采样提供颜色、粗糙度和凹凸，不增加贴图或材质批次。
             '  if (gEmissive < 0.04) {\n' +
-            '    vec2 gSurfaceUv = vec2(vArmyWorld.x + vArmyWorld.y * 0.37, vArmyWorld.z + vArmyWorld.y * 0.61) * 0.032;\n' +
+            '    vec2 gSurfaceUv = vec2(vArmyLocal.x + vArmyLocal.y * 0.37, vArmyLocal.z + vArmyLocal.y * 0.61) * 0.032;\n' +
             '    vec2 gMirror = abs(fract(gSurfaceUv * 0.5) * 2.0 - 1.0);\n' +
             '    vec2 gAtlasUv = vec2(mix(0.01, 0.51, gAtlasSide) + gMirror.x * 0.48, 0.01 + gMirror.y * 0.98);\n' +
             '    vec3 gSurface = texture2D(uArmySurface, gAtlasUv).rgb;\n' +
-            '    gSurfaceLum = dot(gSurface, vec3(0.299, 0.587, 0.114));\n' +
-            '    vec3 gNeutral = gSurface / max(gSurfaceLum, 0.10);\n' +
-            '    float gRelief = mix(0.68, 1.30, smoothstep(0.08, 0.78, gSurfaceLum));\n' +
+            // sRGB 纹理已自动线性化，旧阈值却仍按感知亮度计算，整张图被压成了
+            // 同一档污黑。色相用线性值，凹凸/粗糙度改用感知亮度保留表面层次。
+            '    float gLinearLum = dot(gSurface, vec3(0.299, 0.587, 0.114));\n' +
+            '    gSurfaceLum = sqrt(max(gLinearLum, 0.0001));\n' +
+            '    vec3 gNeutral = gSurface / max(gLinearLum, 0.015);\n' +
+            '    float gRelief = mix(0.62, 1.42, smoothstep(0.17, 0.60, gSurfaceLum));\n' +
             '    diffuseColor.rgb *= mix(vec3(1.0), gNeutral, gSurfaceBlend) * gRelief;\n' +
-            '    float gGrime = smoothstep(0.36, 0.10, gSurfaceLum);\n' +
+            '    float gGrime = 1.0 - smoothstep(0.20, 0.38, gSurfaceLum);\n' +
             '    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.58, 0.55, 0.50), gGrime * 0.36);\n' +
-            '    gRoughness = clamp(gRoughness + (0.45 - gSurfaceLum) * 0.18, 0.38, 0.94);\n' +
+            '    gRoughness = clamp(gRoughness + (0.45 - gSurfaceLum) * 0.18, 0.18, 0.94);\n' +
             '  }')
           .replace('#include <normal_fragment_begin>',
             '#include <normal_fragment_begin>\n' +
@@ -2916,28 +2987,35 @@ export function createRenderer(canvas) {
             '    vec3 gR2 = cross(normal, gSigmaX);\n' +
             '    float gDet = dot(gSigmaX, gR1);\n' +
             '    vec3 gGrad = sign(gDet) * (dFdx(gSurfaceLum) * gR1 + dFdy(gSurfaceLum) * gR2);\n' +
-            '    normal = normalize(abs(gDet) * normal - gBumpScale * gGrad);\n' +
+            '    float gDetailFade = 1.0 - smoothstep(650.0, 1500.0, length(vViewPosition));\n' +
+            '    normal = normalize(max(abs(gDet), 0.00001) * normal - gBumpScale * gDetailFade * gGrad);\n' +
             '  }\n' +
             '  vec3 gUpView = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);\n' +
             '  diffuseColor.rgb *= mix(0.88, 1.045, smoothstep(-0.45, 1.0, dot(normal, gUpView)));')
-          .replace('#include <dithering_fragment>',
-            '#include <dithering_fragment>\n' +
+          // 交给逐光源高光管线：金属、涂装、布、石、晶体各自的响应仍合在一批。
+          // 高光现在遵循太阳阴影和大气雾，不再事后无条件叠一层亮斑。
+          .replace('#include <lights_phong_fragment>',
+            '#include <lights_phong_fragment>\n' +
+            '  float gMetal = 1.0 - step(0.5, gMode);\n' +
+            '  vec3 gF0 = mix(vec3(0.035), mix(vec3(0.30), diffuseColor.rgb * 0.5, 0.35), gMetal);\n' +
+            '  gF0 = mix(gF0, vec3(0.055), vTeamMix * gMetal);\n' +
+            '  if (gMode > 1.5 && gMode < 2.5) gF0 = vec3(0.012);\n' +
+            '  if (gMode > 3.5) gF0 = vec3(0.15);\n' +
+            '  material.specularColor = gF0 * vOcc * (1.0 - gEmissive);\n' +
+            '  material.specularShininess = mix(8.0, 100.0, pow(1.0 - gRoughness, 2.0));\n')
+          .replace('#include <opaque_fragment>',
             '  {\n' +
             '    vec3 gN = normalize(normal);\n' +
             '    vec3 gV = normalize(vViewPosition);\n' +
             '    float gRim = pow(1.0 - clamp(dot(gN, gV), 0.0, 1.0), 3.0);\n' +
-            '    vec3 gH = normalize(gV + uSunDirView);\n' +
-            '    float gGloss = 1.0 - gRoughness;\n' +
-            '    float gSpec = pow(max(dot(gN, gH), 0.0), mix(12.0, 56.0, gGloss));\n' +
-            '    float gRimGain = gMode > 3.5 ? 0.42 : 0.13;\n' +
-            '    gl_FragColor.rgb += (vec3(0.34, 0.42, 0.46) * gRim * gRimGain\n' +
-            '      + vec3(1.0, 0.93, 0.78) * gSpec * mix(0.10, 0.52, gGloss))\n' +
+            '    float gRimGain = gMode > 3.5 ? 0.26 : 0.08;\n' +
+            '    outgoingLight += vec3(0.34, 0.42, 0.46) * gRim * gRimGain\n' +
             '      * (1.0 - gEmissive) * vOcc;\n' +
             '    float gPulse = 0.86 + 0.14 * sin(uArmyTime * 2.1 + vArmyWorld.x * 0.03);\n' +
-            '    gl_FragColor.rgb = mix(gl_FragColor.rgb, gBase * gPulse, gEmissive);\n' +
-            '  }');
+            '    outgoingLight = mix(outgoingLight, gBase * gPulse, gEmissive);\n' +
+            '  }\n#include <opaque_fragment>');
     };
-    material.customProgramCacheKey = function () { return 'teamOrOwn8-occ-' + surfaceMode; };
+    material.customProgramCacheKey = function () { return 'teamOrOwn9-local-lit-' + surfaceMode; };
     return material;
   }
 
@@ -2959,7 +3037,7 @@ export function createRenderer(canvas) {
       shader.uniforms.uFogMask = { value: fogTexture };
       shader.uniforms.uMapSize = { value: fogMapSize };
       shader.uniforms.uCloudTime = cloudTimeUniform;
-      fogMaskedShaders.push(shader);
+      fogMaskedShaders.add(material, shader);
       shader.vertexShader = 'varying vec3 vFogWorld;\n' + shader.vertexShader.replace(
         '#include <begin_vertex>',
         '#include <begin_vertex>\n  vFogWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
@@ -3004,87 +3082,22 @@ export function createRenderer(canvas) {
    *   3) 带解析导数的值噪声扰动法线，让阳光把地面碎成自然明暗。
    */
   function applyTerrainDetail(material) {
-    const prevCompile = material.onBeforeCompile;
-    material.onBeforeCompile = function (shader) {
-      if (prevCompile) prevCompile(shader);
-      shader.uniforms.uDirtTint = terrainDirtTint;
-      shader.uniforms.uDryTint = terrainDryTint;
-      shader.uniforms.uGrassTint = terrainGrassTint;
-      shader.fragmentShader =
-        'uniform vec3 uDirtTint;\nuniform vec3 uDryTint;\nuniform vec3 uGrassTint;\n' +
-        shader.fragmentShader
-        .replace('#include <map_fragment>',
-          '  vec4 tdTex = texture2D(map, vMapUv);\n' +
-          '  float tdLum = dot(tdTex.rgb, vec3(0.30, 0.50, 0.20));\n' +
-          '  vec3 tdNeutral = tdTex.rgb / max(tdLum, 0.12);\n' +
-          '  float tdRelief = mix(0.76, 1.23, smoothstep(0.12, 0.78, tdLum));\n' +
-          '  diffuseColor.rgb *= mix(vec3(1.0), tdNeutral, 0.36) * tdRelief;\n' +
-          // 片元里再混一层土斑/枯草：顶点色负责大色块，这里负责近景草皮。
-          // 必须写在 map_fragment，不能再碰 dithering_fragment —— 迷雾注入已经占用它。
-          '  {\n' +
-          '    vec2 tdW = vFogWorld.xz;\n' +
-          '    float tdPatch = fmNoise(tdW * 0.0048);\n' +
-          '    tdPatch += 0.45 * fmNoise(tdW * 0.011 + vec2(17.0, 9.0));\n' +
-          // 贴图已经携带多方向的草痕/砂砾，复用本次采样的亮度，不再在片元里
-          // 生成整幅平行正弦条纹，也省掉第三次值噪声。
-          '    float tdGrain = smoothstep(0.42, 0.72, tdLum);\n' +
-          '    diffuseColor.rgb = mix(diffuseColor.rgb, uDryTint, smoothstep(0.48, 0.84, tdPatch) * 0.30);\n' +
-          '    diffuseColor.rgb = mix(diffuseColor.rgb, uDirtTint, (1.0 - tdGrain) * 0.10);\n' +
-          '    diffuseColor.rgb = mix(diffuseColor.rgb, uGrassTint, 0.035);\n' +
-          '  }')
-        .replace('#include <normal_fragment_begin>',
-          '#include <normal_fragment_begin>\n' +
-          '  {\n' +
-          '    vec3 tdSigmaX = dFdx(vViewPosition);\n' +
-          '    vec3 tdSigmaY = dFdy(vViewPosition);\n' +
-          '    vec3 tdR1 = cross(tdSigmaY, normal);\n' +
-          '    vec3 tdR2 = cross(normal, tdSigmaX);\n' +
-          '    float tdDet = dot(tdSigmaX, tdR1);\n' +
-          '    vec3 tdGrad = sign(tdDet) * (dFdx(tdLum) * tdR1 + dFdy(tdLum) * tdR2);\n' +
-          '    float tdFade = 1.0 - smoothstep(700.0, 1800.0, length(vViewPosition));\n' +
-          '    normal = normalize(abs(tdDet) * normal - tdGrad * (0.55 * tdFade));\n' +
-          '  }');
-    };
-    const prevKey = material.customProgramCacheKey;
-    material.customProgramCacheKey = function () {
-      return (prevKey ? prevKey.call(material) : '') + '+terraindetail4-real';
-    };
-    return material;
+    return applyWildernessGround(material);
   }
 
-  /**
-   * 树冠继续是一整个合并网格；UV 来自每层低面数树冠，照片叶簇只作用于绿色
-   * 部分，细树干仍保留棕色。亮度导数提供近景叶层凹凸，不再增加第二张贴图。
-   */
+  /** Alpha-tested leaf cards: real cutout silhouettes, opaque depth and shadows. */
   function applyForestRealism(material) {
-    const prevCompile = material.onBeforeCompile;
+    const previous = material.onBeforeCompile;
     material.onBeforeCompile = function (shader) {
-      if (prevCompile) prevCompile(shader);
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <map_fragment>',
-          '  vec4 frTex = texture2D(map, vMapUv);\n' +
-          '  float frLum = dot(frTex.rgb, vec3(0.299, 0.587, 0.114));')
-        .replace('#include <color_fragment>',
-          '#include <color_fragment>\n' +
-          '  float frFoliage = smoothstep(0.015, 0.12, diffuseColor.g - diffuseColor.r);\n' +
-          '  vec3 frNeutral = frTex.rgb / max(frLum, 0.08);\n' +
-          '  float frRelief = mix(0.70, 1.25, smoothstep(0.05, 0.58, frLum));\n' +
-          '  diffuseColor.rgb *= mix(vec3(1.0), frNeutral * frRelief, frFoliage * 0.82);')
-        .replace('#include <normal_fragment_begin>',
-          '#include <normal_fragment_begin>\n' +
-          '  if (frFoliage > 0.01) {\n' +
-          '    vec3 frSigmaX = dFdx(vViewPosition);\n' +
-          '    vec3 frSigmaY = dFdy(vViewPosition);\n' +
-          '    vec3 frR1 = cross(frSigmaY, normal);\n' +
-          '    vec3 frR2 = cross(normal, frSigmaX);\n' +
-          '    float frDet = dot(frSigmaX, frR1);\n' +
-          '    vec3 frGrad = sign(frDet) * (dFdx(frLum) * frR1 + dFdy(frLum) * frR2);\n' +
-          '    normal = normalize(abs(frDet) * normal - frGrad * (0.46 * frFoliage));\n' +
-          '  }');
+      if (previous) previous(shader);
+      // Keep Three's map + alpha-test chunks intact, including shadow-map cutout.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        '#include <color_fragment>\n diffuseColor.rgb *= 1.65;');
     };
-    const prevKey = material.customProgramCacheKey;
+    const previousKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function () {
-      return (prevKey ? prevKey.call(material) : '') + '+forest-real1';
+      return (previousKey ? previousKey.call(this) : '') + '+leaf-cards2';
     };
     return material;
   }
@@ -3358,17 +3371,14 @@ export function createRenderer(canvas) {
 
   const proceduralGroundCache = new Map();
 
-  /**
-   * 512px 实拍式压实土壤（WebP 约 90KB）。主题色仍由地形顶点决定，贴图只
-   * 提供真实砂砾、纤维和小石子；镜像平铺避免素材边缘出现接缝。
-   */
+  /** Four physical surfaces in one shared atlas; world-space stochastic tiling. */
   function makeProceduralGroundTexture(themeId) {
     const cached = proceduralGroundCache.get(themeId);
     if (cached) {
       cached.userData.themeId = themeId;
       return cached;
     }
-    const tex = loadSharedTexture('/assets/textures/ground-real.webp', true, 8);
+    const tex = loadSharedTexture('/assets/textures/wilderness-atlas-v2.webp', false, 8);
     tex.userData.themeId = themeId;
     proceduralGroundCache.set(themeId, tex);
     return tex;
@@ -3439,19 +3449,37 @@ export function createRenderer(canvas) {
     material.onBeforeCompile = function (shader) {
       if (prevCompile) prevCompile(shader);
       shader.uniforms.uTime = { value: 0 };
-      waterShaders.push(shader);
-      shader.fragmentShader = 'uniform float uTime;\n' + shader.fragmentShader.replace(
-        '#include <color_fragment>',
-        '#include <color_fragment>\n' +
-        '  float wrBend = sin(vFogWorld.z * 0.027 - uTime * 0.54) * 0.72;\n' +
-        '  float wrWave = sin(vFogWorld.x * 0.072 + wrBend + uTime * 1.18);\n' +
-        '  float wrCrest = pow(max(0.0, wrWave), 12.0);\n' +
-        '  float wrShimmer = 0.5 + 0.5 * sin(vFogWorld.z * 0.006 + uTime * 0.22);\n' +
-        '  diffuseColor.rgb *= 0.92 + wrShimmer * 0.045 + wrCrest * 0.028;');
+      waterShaders.add(material, shader);
+      shader.vertexShader = 'varying vec2 vRiverUv;\n' + shader.vertexShader.replace(
+        '#include <begin_vertex>', '#include <begin_vertex>\n vRiverUv = uv;');
+      shader.fragmentShader = 'uniform float uTime;\nvarying vec2 vRiverUv;\n' + shader.fragmentShader
+        .replace('#include <color_fragment>', `
+          float wrEdge = abs(vRiverUv.y - 0.5) * 2.0;
+          float wrShore = smoothstep(0.50, 1.0, wrEdge);
+          float wrPhase = vFogWorld.x * 0.067 + vFogWorld.z * 0.039 + uTime * 0.9;
+          float wrWave = sin(wrPhase + sin(vFogWorld.z * 0.031 - uTime * 0.32)) * 0.26
+            + sin(vFogWorld.x * 0.13 - vFogWorld.z * 0.09 + uTime * 1.2) * 0.11;
+          diffuseColor.rgb = mix(vec3(0.018, 0.065, 0.073), vec3(0.12, 0.16, 0.105), wrShore);
+          diffuseColor.rgb *= 0.96 + wrWave * 0.12;
+          diffuseColor.a *= 1.0 - wrShore * 0.25;
+        `)
+        .replace('#include <normal_fragment_begin>', `
+          #include <normal_fragment_begin>
+          vec3 wrDx = dFdx(vViewPosition), wrDy = dFdy(vViewPosition);
+          vec3 wrR1 = cross(wrDy, normal), wrR2 = cross(normal, wrDx);
+          float wrDet = dot(wrDx, wrR1);
+          vec3 wrGrad = sign(wrDet) * (dFdx(wrWave) * wrR1 + dFdy(wrWave) * wrR2);
+          normal = normalize(max(abs(wrDet), 0.00001) * normal - wrGrad * 3.5);
+        `)
+        .replace('#include <lights_fragment_end>', `
+          #include <lights_fragment_end>
+          float wrFresnel = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 4.0);
+          reflectedLight.indirectSpecular += vec3(0.18, 0.27, 0.31) * (0.05 + wrFresnel * 0.45);
+        `);
     };
     const prevKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function () {
-      return (prevKey ? prevKey.call(material) : '') + '+river-water2';
+      return (prevKey ? prevKey.call(material) : '') + '+river-water3';
     };
     return material;
   }
@@ -3571,20 +3599,20 @@ export function createRenderer(canvas) {
       if (!parts.length) return;
       const mesh = new THREE.Mesh(
         mergeParts(parts),
-        applyFogMask(new THREE.MeshLambertMaterial({
-          vertexColors: true, transparent: true, opacity: opacity,
+        applyWildernessTrail(applyFogMask(new THREE.MeshLambertMaterial({
+          map: groundTexture, transparent: true, opacity: opacity,
           depthWrite: false
-        })));
+        })), name === 'wilderness-wheel-ruts'));
       mesh.name = name;
       mesh.receiveShadow = true;
       mesh.frustumCulled = false;
       mesh.renderOrder = order;
       terrainGroup.add(mesh);
     };
-    // 两层半透明裸土形成柔和边缘，最上层才是窄车辙；三次绘制换掉整片硬边色带。
-    addLayer(shoulderParts, 'wilderness-dirt-shoulders', 0.13, 2);
-    addLayer(trackParts, 'wilderness-dirt-tracks', 0.18, 3);
-    addLayer(rutParts, 'wilderness-wheel-ruts', 0.46, 4);
+    // 每层都按横向距离与砂砾亮度衰减，路边能透出草，不再是硬边透明色带。
+    addLayer(shoulderParts, 'wilderness-dirt-shoulders', 0.25, 2);
+    addLayer(trackParts, 'wilderness-dirt-tracks', 0.24, 3);
+    addLayer(rutParts, 'wilderness-wheel-ruts', 0.65, 4);
   }
 
   function makeWaterRibbonGeometry(river) {
@@ -3622,7 +3650,7 @@ export function createRenderer(canvas) {
 
   function buildRiverWater() {
     waterMesh = null;
-    waterShaders.length = 0;
+    waterShaders.clear();
     if (!riverValleyMode()) return;
     const rivers = (state.terrain && state.terrain.rivers) || [];
     const parts = rivers.map(function (river) {
@@ -3784,10 +3812,11 @@ export function createRenderer(canvas) {
     if (!parts.length) return;
     const mesh = new THREE.Mesh(
       mergeParts(parts),
-      applyFogMask(new THREE.MeshStandardMaterial({
-        vertexColors: true, roughness: 0.86, metalness: 0.22
-      })));
+      applyBridgeWeathering(applyFogMask(new THREE.MeshStandardMaterial({
+        map: groundTexture, vertexColors: true, roughness: 0.91, metalness: 0.12
+      }))));
     mesh.name = 'raised-bridge-network';
+    mesh.userData.shadowCaster = true;
     mesh.castShadow = state.shadows !== 'off';
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
@@ -3797,80 +3826,88 @@ export function createRenderer(canvas) {
   function buildRiverCliffs() {
     if (!riverValleyMode()) return;
     const rivers = (state.terrain && state.terrain.rivers) || [];
-    let cliffGeo = new THREE.DodecahedronGeometry(1, 0);
-    if (cliffGeo.index) cliffGeo = cliffGeo.toNonIndexed();
-    let reedGeo = new THREE.ConeGeometry(0.9, 15, 4);
-    if (reedGeo.index) reedGeo = reedGeo.toNonIndexed();
     const parts = [];
-    for (let r = 0; r < rivers.length; r++) {
-      const river = rivers[r];
-      const dx = river.x2 - river.x1;
-      const dy = river.y2 - river.y1;
+    const rockTemplates = [0, 1, 2].map(makeWeatheredRockGeometry);
+    rivers.forEach(function (river, r) {
+      const dx = river.x2 - river.x1, dy = river.y2 - river.y1;
       const length = Math.hypot(dx, dy);
-      const ux = dx / length;
-      const uy = dy / length;
-      const nx = -uy;
-      const ny = ux;
-      const count = Math.ceil(length / 30);
-      for (let k = 0; k <= count; k++) {
-        const t = k / count;
-        for (let side = -1; side <= 1; side += 2) {
-          const wave = Math.sin(k * 1.73 + r * 3.1 + side) * 18;
-          const offset = river.width * 0.5 + 42 + wave;
+      if (length < 1) return;
+      const nx = -dy / length, ny = dx / length;
+      const count = Math.ceil(length / 24);
+      for (const side of [-1, 1]) {
+        const positions = [], colors = [], uv = [], indices = [], valid = [];
+        for (let k = 0; k <= count; k++) {
+          const t = k / count, cx = river.x1 + dx * t, cy = river.y1 + dy * t;
+          const wave = (wildernessNoise(t * 18 + r * 7, side + 11) - 0.5) * 20;
+          const crest = rollingHeight(cx + nx * side * (river.width * 0.5 + 85),
+            cy + ny * side * (river.width * 0.5 + 85)) - 2;
+          let rowValid = true;
+          const offsets = [-52, -20, -4, 26, 66];
+          offsets.forEach(function (offset, row) {
+            const distance = river.width * 0.5 + offset + wave;
+            const x = cx + nx * side * distance, y = cy + ny * side * distance;
+            const strata = wildernessNoise(k * 0.46 + r * 9, row * 2.31 + side);
+            const gy = row === 0 ? -23 : row === 1 ? crest - 9 - strata * 5
+              : row === 2 ? crest + strata * 4 : baseGroundHeight(x, y) + (row === 3 ? 3 : 0.35);
+            positions.push(x, gy, y);
+            const shade = row === 0 ? 0.42 : row === 1 ? 0.65 : row === 2 ? 0.91 : 0.76;
+            colors.push(shade, shade * 0.94, shade * 0.82);
+            uv.push(t * length / 85, row * 0.25);
+            if (x < 1 || y < 1 || x > state.map.width - 1 || y > state.map.height - 1
+              || bridgeTrailAt(x, y) > 0.02) rowValid = false;
+          });
+          valid.push(rowValid);
+        }
+        for (let k = 0; k < count; k++) {
+          if (!valid[k] || !valid[k + 1]) continue;
+          for (let row = 0; row < 4; row++) {
+            const a = k * 5 + row, b = a + 5;
+            if (side > 0) indices.push(a, a + 1, b, a + 1, b + 1, b);
+            else indices.push(a, b, a + 1, a + 1, b, b + 1);
+          }
+          // Broken ledges occur in irregular clusters, not one identical stone
+          // every few metres. All upright rocks remain inside river blockers.
+          if (wildernessNoise(k * 0.3 + r * 5, side * 3) < 0.62 || k % 3) continue;
+          const t = (k + 0.4) / count;
+          const offset = river.width * 0.5 - 25;
           const x = river.x1 + dx * t + nx * side * offset;
           const y = river.y1 + dy * t + ny * side * offset;
-          if (x < 20 || y < 20 || x > state.map.width - 20 ||
-              y > state.map.height - 20 || bridgeTrailAt(x, y) > 0.03) continue;
-          const size = 15 + 11 * (0.5 + 0.5 * Math.sin(k * 2.31 + side));
-          const transform = new THREE.Matrix4().makeRotationY(k * 1.17);
-          transform.multiply(new THREE.Matrix4().makeRotationX((side + k % 3) * 0.12));
-          transform.scale(new THREE.Vector3(size * 1.25, size * 0.92, size));
-          transform.setPosition(x, baseGroundHeight(x, y) + size * 0.34, y);
-          const shade = 0.82 + (k % 4) * 0.055;
-          parts.push({ geo: cliffGeo, matrix: transform,
-            rgb: [0.48 * shade, 0.36 * shade, 0.25 * shade] });
-
-          // 第二层竖向岩板向河内下探，遮住地形网格的直切边，形成连续峭壁。
-          const lowerOffset = river.width * 0.5 + 20 + wave * 0.45;
-          const lx = river.x1 + dx * t + nx * side * lowerOffset;
-          const ly = river.y1 + dy * t + ny * side * lowerOffset;
-          const lower = new THREE.Matrix4().makeRotationY(k * 0.91 + side * 0.4);
-          lower.scale(new THREE.Vector3(size * 0.92, size * 1.45, size * 0.72));
-          lower.setPosition(lx, rollingHeight(x, y) - 23, ly);
-          parts.push({ geo: cliffGeo, matrix: lower,
-            rgb: [0.39 * shade, 0.30 * shade, 0.22 * shade] });
-
-          // 岸边芦苇是低面数锥体，成片并入同一网格，不额外产生绘制调用。
-          if (k % 3 === 0) {
-            for (let tuft = -1; tuft <= 1; tuft++) {
-              const reed = new THREE.Matrix4().makeRotationY(k * 1.37 + tuft);
-              const reedH = 0.72 + (tuft + 1) * 0.13;
-              reed.scale(new THREE.Vector3(1, reedH, 1));
-              reed.setPosition(
-                river.x1 + dx * t + nx * side * (river.width * 0.5 - 7) + ux * tuft * 4,
-                -6 + 7.5 * reedH,
-                river.y1 + dy * t + ny * side * (river.width * 0.5 - 7) + uy * tuft * 4);
-              parts.push({ geo: reedGeo, matrix: reed,
-                rgb: tuft === 0 ? [0.26, 0.34, 0.16] : [0.38, 0.39, 0.19] });
-            }
-          }
+          const size = 11 + wildernessNoise(k, r + side) * 20;
+          const transform = new THREE.Matrix4().makeRotationY(k * 0.83);
+          transform.scale(new THREE.Vector3(size * 1.6, size * 0.7, size));
+          transform.setPosition(x, -3, y);
+          parts.push({ geo: rockTemplates[k % 3], matrix: transform, rgb: [0.73, 0.71, 0.65] });
         }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+        geometry.setIndex(indices);
+        geometry.computeVertexNormals();
+        // Preserve the per-band sediment color when merging the bank geometry.
+        const mesh = new THREE.Mesh(geometry, applyWildernessRock(applyFogMask(new THREE.MeshLambertMaterial({
+          map: groundTexture, vertexColors: true, side: THREE.DoubleSide
+        }))));
+        mesh.name = 'river-stratified-bank-' + r + '-' + side;
+        mesh.userData.shadowCaster = true;
+        mesh.castShadow = state.shadows !== 'off';
+        mesh.receiveShadow = true;
+        geometry.computeBoundingSphere();
+        terrainGroup.add(mesh);
       }
+    });
+    if (parts.length) {
+      const mesh = new THREE.Mesh(mergeParts(parts),
+        applyWildernessRock(applyFogMask(new THREE.MeshLambertMaterial({
+          map: groundTexture, vertexColors: true
+        }))));
+      mesh.name = 'river-cliff-rocks';
+      mesh.userData.shadowCaster = true;
+      mesh.castShadow = state.shadows !== 'off';
+      mesh.receiveShadow = true;
+      terrainGroup.add(mesh);
     }
-    if (!parts.length) return;
-    const mesh = new THREE.Mesh(
-      mergeParts(parts),
-      applyFogMask(new THREE.MeshStandardMaterial({
-        vertexColors: true, roughness: 0.92, metalness: 0.01,
-        flatShading: true
-      })));
-    mesh.name = 'river-cliff-rocks';
-    mesh.castShadow = state.shadows !== 'off';
-    mesh.receiveShadow = true;
-    mesh.frustumCulled = false;
-    terrainGroup.add(mesh);
-    cliffGeo.dispose();
-    reedGeo.dispose();
+    rockTemplates.forEach(function (geometry) { geometry.dispose(); });
   }
 
   function buildTerrain() {
@@ -3878,10 +3915,9 @@ export function createRenderer(canvas) {
     heightField = null;
     _ghCache.clear();
     if (terrainGroup) {
-      worldRoot.remove(terrainGroup);
-      terrainGroup.traverse(function (o) {
-        if (o.geometry) o.geometry.dispose();
-      });
+      // Every mesh/material here belongs to this map. Textures live in the
+      // shared cache; building pads and unit geometries are outside this group.
+      disposeOwnedRenderGroup(terrainGroup);
     }
     terrainGroup = new THREE.Group();
     worldRoot.add(terrainGroup);
@@ -3896,11 +3932,13 @@ export function createRenderer(canvas) {
     const riverValley = riverValleyMode();
     const visualStyle = terrainVisualStyle();
     state.groundDetailParts = 0;
+    state.forestChunks = 0;
+    state.forestTrees = 0;
     applyWorldTheme(theme);
     if (!groundTexture || groundTexture.userData.themeId !== theme.id) {
       groundTexture = makeProceduralGroundTexture(theme.id);
     }
-    groundTexture.repeat.set(mw / 420, mh / 420);
+    // Atlas UVs are world-projected in the material, independent of map dimensions.
     // 网格密度按面积自适应：最细 26 世界单位一格（60 太粗，一条 120 宽的河
     // 只跨两格，河床边缘全是折线），但总面片数封顶约 5 万，免得大地图上顶点
     // 数失控。这是一次性构建的静态几何，一个 draw call。
@@ -3914,6 +3952,7 @@ export function createRenderer(canvas) {
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
     const heights = new Float32Array(pos.count);
+    const biomes = new Float32Array(pos.count * 4);
     for (let i = 0; i < pos.count; i++) {
       const wx = pos.getX(i) + mw / 2;
       const wz = pos.getZ(i) + mh / 2;
@@ -3923,93 +3962,25 @@ export function createRenderer(canvas) {
       heights[i] = height;
       pos.setY(i, height);
 
-      // 地表分层：主题底色 + 草木斑 + 出生点踩实土 + 山岩。
-      // 色值压在 0.7 以下，避免 Lambert×强阳光把草地晒成荧光网球场。
-      // 道路只留玩法加成，不再把路肩脏土画进顶点色。
-      const stone = Math.min(1, rock / 70);
-      const ravine = Math.min(1, depth * 1.4);
-      const bank = Math.max(0, 1 - Math.abs(depth - 0.10) / 0.14) * (depth > 0.005 ? 1 : 0);
-      const rawLush = clumpNoise(wx, wz);
-      const lush = THREE.MathUtils.clamp(
-        0.5 + (rawLush - 0.5) * detail.colorVariation, 0, 1);
-      const stripe = 0.5 + 0.5 * Math.sin(wx * 0.0022 + lush * 2.4);
-      const wear = spawnWearAt(wx, wz);
-      const topo = 1 + Math.max(-1, Math.min(1, height / 24)) * 0.10;
-
-      let r = theme.grass[0] + (theme.lush[0] - theme.grass[0]) * lush;
-      let g = theme.grass[1] + (theme.lush[1] - theme.grass[1]) * lush;
-      let b = theme.grass[2] + (theme.lush[2] - theme.grass[2]) * lush;
-      const dry = Math.max(0, 0.46 - lush) * 1.7;
-      r += (theme.dry[0] - r) * dry;
-      g += (theme.dry[1] - g) * dry;
-      b += (theme.dry[2] - b) * dry;
-      r += (theme.lush[0] - r) * stripe * 0.16;
-      g += (theme.lush[1] - g) * stripe * 0.16;
-      b += (theme.lush[2] - b) * stripe * 0.16;
-      if (visualStyle === 'open_wilderness') {
-        // 五车争霸保持开阔，但用断续的风压枯草带打破整片均匀绿地。
-        const wind = Math.max(0, Math.sin(wx * 0.0031 + wz * 0.0012 + rawLush * 4.2));
-        const windMix = wind * (0.035 + (1 - lush) * 0.10);
-        r += (theme.dry[0] - r) * windMix;
-        g += (theme.dry[1] - g) * windMix;
-        b += (theme.dry[2] - b) * windMix;
-      } else if (visualStyle === 'arid_wilderness') {
-        // 荒漠主题的浅色风蚀纹只提供地表色差，不产生额外模型或碰撞。
-        const erosion = Math.max(0, Math.sin(wx * 0.0044 - wz * 0.0022 + rawLush * 5.1));
-        const erosionMix = erosion * 0.10;
-        r += (theme.rock[0] - r) * erosionMix;
-        g += (theme.rock[1] - g) * erosionMix;
-        b += (theme.rock[2] - b) * erosionMix;
-      } else if (visualStyle === 'crater_wilderness') {
-        // 越靠近陨坑核，焦土和撞击尘越重；边缘用噪声打散，避免规则圆环。
-        const impactDistance = Math.hypot(wx - mw * 0.5, wz - mh * 0.5);
-        const impact = THREE.MathUtils.clamp(
-          1 - (impactDistance - 260 - rawLush * 150) / 1150, 0, 1);
-        const scorch = impact * impact * 0.42;
-        r += (theme.dirt[0] * 0.62 - r) * scorch;
-        g += (theme.dirt[1] * 0.58 - g) * scorch;
-        b += (theme.dirt[2] * 0.55 - b) * scorch;
+      const biome = wildernessBiome(wx, wz, {
+        depth, rock, trail: bridgeTrailAt(wx, wz), wear: spawnWearAt(wx, wz), style: visualStyle
+      });
+      biomes.set(biome, i * 4);
+      // Low-frequency variation is baked once. The albedo atlas, not a uniform
+      // green vertex tint, supplies the actual surface color.
+      const broad = wildernessNoise(wx * 0.0019 + 14, wz * 0.0019 - 5);
+      const patch = wildernessNoise(wx * 0.009, wz * 0.009);
+      let shade = 0.70 + broad * 0.40 + patch * 0.14;
+      if (visualStyle === 'crater_wilderness') {
+        const impact = Math.max(0, 1 - Math.hypot(wx - mw * 0.5, wz - mh * 0.5) / 1350);
+        shade *= 1 - impact * impact * 0.22;
       }
-      r = r * (1 - bank) + theme.dirt[0] * 1.15 * bank;
-      g = g * (1 - bank) + theme.dirt[1] * 1.05 * bank;
-      b = b * (1 - bank) + theme.dirt[2] * bank;
-      const packed = wear * 0.85;
-      r = r * (1 - packed) + theme.packed[0] * packed;
-      g = g * (1 - packed) + theme.packed[1] * packed;
-      b = b * (1 - packed) + theme.packed[2] * packed;
-      // 大山整片森林，小尺寸的巨石丘保留岩石本色——森林里嵌着石头，
-      // 森林巨石区压缩可发展空间的同时还有地形读感。
-      const forestMix = Math.min(1, rock / 150);
-      r = r * (1 - stone * 0.72)
-        + (theme.forest[0] * forestMix + theme.rock[0] * (1 - forestMix)) * stone;
-      g = g * (1 - stone * 0.72)
-        + (theme.forest[1] * forestMix + theme.rock[1] * (1 - forestMix)) * stone;
-      b = b * (1 - stone * 0.72)
-        + (theme.forest[2] * forestMix + theme.rock[2] * (1 - forestMix)) * stone;
-      // 林间小路：通道碰撞盒（含渲染过渡带）露出土路，树已避开这片区域
-      const trail = bridgeTrailAt(wx, wz);
-      if (trail > 0) {
-        r = r * (1 - trail) + theme.dirt[0] * trail;
-        g = g * (1 - trail) + theme.dirt[1] * trail;
-        b = b * (1 - trail) + theme.dirt[2] * trail;
-      }
-      if (riverValley) {
-        // 真河谷的水下是深色泥岩，河岸过渡到暖色砂砾；水面稍后单独铺设。
-        r = r * (1 - ravine) + 0.16 * ravine;
-        g = g * (1 - ravine) + 0.19 * ravine;
-        b = b * (1 - ravine) + 0.17 * ravine;
-      } else {
-        // 其余图的河数据仍表示深绿密林分界。
-        r = r * (1 - ravine) + 0.13 * ravine;
-        g = g * (1 - ravine) + 0.24 * ravine;
-        b = b * (1 - ravine) + 0.12 * ravine;
-      }
-      r *= topo; g *= topo; b *= topo;
-      colors[i * 3] = r;
-      colors[i * 3 + 1] = g;
-      colors[i * 3 + 2] = b;
+      colors[i * 3] = shade;
+      colors[i * 3 + 1] = shade * (visualStyle === 'crater_wilderness' ? 0.93 : 1);
+      colors[i * 3 + 2] = shade * (visualStyle === 'crater_wilderness' ? 0.84 : 0.97);
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.setAttribute('aBiome', new THREE.BufferAttribute(biomes, 4));
     geo.computeVertexNormals();
 
     const material = applyTerrainDetail(applyFogMask(new THREE.MeshLambertMaterial({
@@ -4036,112 +4007,60 @@ export function createRenderer(canvas) {
     buildBridgeNetwork();
     buildRiverCliffs();
 
-    // 树林：沿河道与山丘撒树，桥盒（含渲染加长段）两侧留出桥头空地。
-    // 所有树干 + 树冠合并进一个网格，一次绘制调用。
+    // 树林：沿既有阻挡区撒树，桥盒两侧留净空。按 640 单位分块合批，
+    // 不为每棵树创建对象；离开视野的树干/叶片整块剔除。
     const bridges = (state.terrain && state.terrain.bridges) || [];
     const rivers = (state.terrain && state.terrain.rivers) || [];
     const mountains = (state.terrain && state.terrain.mountains) || [];
     if (rivers.length || mountains.length) {
-      const forestParts = [];
-      const treeSlab = function (w, h, d, x, y, z, rgb) {
-        forestParts.push({
-          geo: new THREE.BoxGeometry(w, h, d),
-          matrix: new THREE.Matrix4().setPosition(x, y, z),
-          rgb: rgb
-        });
-      };
-      // 写实图不再用三块长方体充当树冠。五边形树干 + 不对称叶簇
-      // 仍合并为一个 draw call，轮廓圆润了，性能负担不随树的数量增加。
-      let organicTrunkGeo = null;
-      let organicCrownGeo = null;
-      const organicForest = riverValley || terrainVisualStyle() === 'crater_wilderness';
-      if (organicForest) {
-        organicTrunkGeo = new THREE.CylinderGeometry(0.72, 1, 1, 5);
-        // 密林图使用八面体叶簇：轮廓不再是方块，同时三层树冠总面数
-        // 低于旧版四个 Box，数千棵树仍能维持原来的性能预算。
-        organicCrownGeo = riverValley
-          ? new THREE.DodecahedronGeometry(1, 0)
-          : new THREE.OctahedronGeometry(1, 0);
-        if (organicTrunkGeo.index) organicTrunkGeo = organicTrunkGeo.toNonIndexed();
-        if (organicCrownGeo.index) organicCrownGeo = organicCrownGeo.toNonIndexed();
-      }
-      const organicPart = function (geo, sx, sy, sz, x, y, z, rotation, rgb) {
-        const transform = new THREE.Matrix4().makeRotationY(rotation || 0);
-        transform.scale(new THREE.Vector3(sx, sy, sz));
-        transform.setPosition(x, y, z);
-        forestParts.push({ geo: geo, matrix: transform, rgb: rgb });
-      };
-      // 确定性哈希：同一张图每次打开树的位置不变
+      const forestChunks = new Map();
+      const organicTrunkIndexed = new THREE.CylinderGeometry(0.65, 1, 1, 5);
+      const organicTrunkGeo = organicTrunkIndexed.toNonIndexed();
+      organicTrunkIndexed.dispose();
+      const leafIndexed = new THREE.PlaneGeometry(1, 1);
+      const leafGeo = leafIndexed.toNonIndexed();
+      leafIndexed.dispose();
       const treeRand = function (n) {
         const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
         return s - Math.floor(s);
       };
-      // 树冠色板：每张图从主题森林色派生三种色调，山与河道各自取用，
-      // 同图里不同位置也会出现深浅变化 ——「各种森林」而不是一种绿。
-      const baseForest = theme.forest;
-      const FOLIAGE_A = baseForest;
-      const FOLIAGE_B = [
-        Math.min(1, baseForest[0] * 1.35), Math.min(1, baseForest[1] * 1.3),
-        Math.min(1, baseForest[2] * 1.35)
-      ];
-      const FOLIAGE_DARK = [
-        baseForest[0] * 0.72, baseForest[1] * 0.82, baseForest[2] * 0.72
-      ];
       const placeTree = function (tx, ty, seed, groundOverride) {
         const forcedGround = Number.isFinite(groundOverride);
         const canGrow = forcedGround || (riverValley
           ? mountainHeightAt(tx, ty) > 0.05
           : (riverDepthAt(tx, ty) > 0.05 || mountainHeightAt(tx, ty) > 0.05));
-        if (canGrow) {
-          // 树底落在实际地面上（含山丘），避免树干悬空或埋进坡里
-          const gy = forcedGround ? groundOverride
-            : rollingHeight(tx, ty) + mountainHeightAt(tx, ty);
-          const big = treeRand(seed * 3.1 + 97) > 0.38;
-          // 最高的魔法主堡约 144 高；森林树顶提高到约 147–178，
-          // 保证每棵成树都越过建筑天际线，并在远处形成连续林冠。
-          const trunkH = 68 + treeRand(seed + 53) * 22;
-          const trunkW = big ? 3.8 : 3.1;
-          const crownR = big ? 22 : 17;
-          const crownH = big ? 64 : 58;
-          const trunkShade = 0.84 + treeRand(seed * 2.7 + 9) * 0.24;
-          const trunk = [0.30 * trunkShade, 0.20 * trunkShade, 0.10 * trunkShade];
-          const foliage = treeRand(seed * 5.7 + 41);
-          const rgb = foliage > 0.72 ? FOLIAGE_DARK
-            : (foliage > 0.3 ? FOLIAGE_A : FOLIAGE_B);
-          // 同一棵树的三层树冠分别压暗、保持、提亮，仍合并为原先的一个网格，
-          // 但远看能读出厚实林墙，近看也不会是一整块纯色方柱。
-          const shadeFoliage = function (amount) {
-            return [
-              Math.min(1, rgb[0] * amount),
-              Math.min(1, rgb[1] * amount),
-              Math.min(1, rgb[2] * amount)
-            ];
-          };
-          const crownLow = shadeFoliage(0.76);
-          const crownMid = shadeFoliage(0.96);
-          const crownTop = shadeFoliage(1.16);
-          if (organicForest) {
-            organicPart(organicTrunkGeo, trunkW, trunkH, trunkW,
-              tx, gy + trunkH * 0.5, ty, treeRand(seed + 3) * TAU, trunk);
-            organicPart(organicCrownGeo, crownR * 1.18, crownH * 0.40, crownR,
-              tx - crownR * 0.32, gy + trunkH + crownH * 0.30,
-              ty + crownR * 0.12, treeRand(seed + 11) * TAU, crownLow);
-            organicPart(organicCrownGeo, crownR, crownH * 0.46, crownR * 1.12,
-              tx + crownR * 0.34, gy + trunkH + crownH * 0.61,
-              ty - crownR * 0.18, treeRand(seed + 23) * TAU, crownMid);
-            organicPart(organicCrownGeo, crownR * 0.72, crownH * 0.38, crownR * 0.78,
-              tx - crownR * 0.06, gy + trunkH + crownH * 0.95,
-              ty + crownR * 0.20, treeRand(seed + 37) * TAU, crownTop);
-          } else {
-            treeSlab(trunkW, trunkH, trunkW, tx, gy + trunkH * 0.5, ty, trunk);
-            // 旧图保留低顶点的三层收尖树冠，避免密林面数突增。
-            treeSlab(crownR * 2.1, crownH * 0.72, crownR * 2.1,
-                     tx, gy + trunkH + crownH * 0.28, ty, crownLow);
-            treeSlab(crownR * 1.5, crownH * 0.68, crownR * 1.5,
-                     tx, gy + trunkH + crownH * 0.72, ty, crownMid);
-            treeSlab(crownR * 0.86, crownH * 0.5, crownR * 0.86,
-                     tx, gy + trunkH + crownH * 1.12, ty, crownTop);
-          }
+        if (!canGrow) return;
+        // Trunks stay on blocked terrain; crowns overhang it like real woodland.
+        const gy = forcedGround ? groundOverride : baseGroundHeight(tx, ty);
+        const key = forestChunkKey(tx, ty);
+        let chunk = forestChunks.get(key);
+        if (!chunk) { chunk = { trunks: [], leaves: [] }; forestChunks.set(key, chunk); }
+        const big = treeRand(seed * 3.1 + 97) > 0.38;
+        const trunkH = 81 + treeRand(seed + 53) * 20;
+        const trunkW = big ? 3.6 : 2.8;
+        const crownR = big ? 34 : 27;
+        const matrix = new THREE.Matrix4().makeRotationY(treeRand(seed + 3) * TAU);
+        matrix.scale(new THREE.Vector3(trunkW, trunkH, trunkW));
+        matrix.setPosition(tx, gy + trunkH * 0.5, ty);
+        chunk.trunks.push({ geo: organicTrunkGeo, matrix, rgb: [0.19, 0.145, 0.105] });
+        // Seven angled sprays describe a volume from above AND at low camera
+        // angles. Only 14 crown triangles/tree instead of 24–108 solid faces.
+        // Same-tree lower/middle/top layers darken, hold and brighten the leaves.
+        const tint = 0.70 + treeRand(seed * 5.7 + 41) * 0.32;
+        for (let leaf = 0; leaf < 7; leaf++) {
+          const angle = treeRand(seed + leaf * 7.13) * TAU;
+          const layer = leaf / 6;
+          const radius = crownR * (leaf === 6 ? 0.78 : 1.05);
+          const offset = leaf === 6 ? 0 : crownR * 0.36;
+          const transform = new THREE.Matrix4().makeRotationY(angle);
+          transform.multiply(new THREE.Matrix4().makeRotationX(
+            -Math.PI * (0.18 + treeRand(seed * 4.7 + leaf) * 0.32)));
+          transform.scale(new THREE.Vector3(radius * 2.15, radius * 1.8, 1));
+          transform.setPosition(tx + Math.cos(angle) * offset,
+            gy + trunkH * 0.70 + layer * 61, ty + Math.sin(angle) * offset);
+          const light = tint * (0.69 + layer * 0.37);
+          chunk.leaves.push({ geo: leafGeo, matrix: transform,
+            rgb: [light, light * (0.94 + treeRand(seed) * 0.10), light * 0.92] });
         }
       };
       const nearBridge = function (tx, ty) {
@@ -4243,20 +4162,34 @@ export function createRenderer(canvas) {
           placeTree(tx, ty, k + mi * 977 + 5000);
         }
       }
-      if (forestParts.length) {
-        const forestMesh = new THREE.Mesh(
-          mergeParts(forestParts),
-          applyForestRealism(applyFogMask(new THREE.MeshLambertMaterial({
-            vertexColors: true,
-            map: loadSharedTexture('/assets/textures/foliage-real.webp', true, 4)
-          }))));
-        forestMesh.castShadow = state.shadows !== 'off';
-        forestMesh.receiveShadow = true;
-        forestMesh.frustumCulled = false;
-        terrainGroup.add(forestMesh);
-      }
-      if (organicTrunkGeo) organicTrunkGeo.dispose();
-      if (organicCrownGeo) organicCrownGeo.dispose();
+      const trunkMaterial = applyFogMask(new THREE.MeshLambertMaterial({ vertexColors: true }));
+      const leafMaterial = applyForestRealism(applyFogMask(new THREE.MeshLambertMaterial({
+        vertexColors: true, side: THREE.DoubleSide, alphaTest: 0.42,
+        map: loadSharedTexture('/assets/textures/woodland-leaves-v2.webp', false, 4)
+      })));
+      state.forestChunks = forestChunks.size;
+      state.forestTrees = 0;
+      forestChunks.forEach(function (chunk, key) {
+        state.forestTrees += chunk.trunks.length;
+        for (const [parts, material, label] of [
+          [chunk.trunks, trunkMaterial, 'trunks'], [chunk.leaves, leafMaterial, 'leaves']
+        ]) {
+          if (!parts.length) continue;
+          const geometry = mergeParts(parts);
+          geometry.computeBoundingSphere();
+          const mesh = new THREE.Mesh(geometry, material);
+          mesh.name = 'woodland-' + label + '-' + key;
+          mesh.userData.shadowCaster = true;
+          mesh.castShadow = state.shadows !== 'off';
+          mesh.receiveShadow = true;
+          // Crucial on the dense five-way map: off-screen woodland is not drawn.
+          mesh.frustumCulled = true;
+          terrainGroup.add(mesh);
+        }
+      });
+      if (!forestChunks.size) { trunkMaterial.dispose(); leafMaterial.dispose(); }
+      organicTrunkGeo.dispose();
+      leafGeo.dispose();
     }
 
     // 地图边界：一圈向外倾斜下沉的裙边，颜色贴近雾色，让边缘融进远景而
@@ -4299,15 +4232,14 @@ export function createRenderer(canvas) {
   function buildRocks() {
     const mountains = (state.terrain && state.terrain.mountains) || [];
     if (!mountains.length) return;
-    const rockGeo = new THREE.DodecahedronGeometry(1, 0);
-    const material = applyFogMask(new THREE.MeshLambertMaterial({
-      vertexColors: true, flatShading: true
-    }));
-    // 按高度分层取色：山脚是带土的褐岩，中段灰岩，接近峰顶压向雪白。
-    // 一整座山都用同一个灰会很塑料。
-    const LOW = [[0.34, 0.28, 0.22], [0.29, 0.25, 0.20], [0.38, 0.32, 0.25]];
-    const MID = [[0.42, 0.41, 0.39], [0.31, 0.30, 0.29], [0.50, 0.48, 0.45]];
-    const HIGH = [[0.74, 0.76, 0.79], [0.62, 0.64, 0.68], [0.86, 0.88, 0.91]];
+    const rockTemplates = [0, 1, 2].map(makeWeatheredRockGeometry);
+    const material = applyWildernessRock(applyFogMask(new THREE.MeshLambertMaterial({
+      map: groundTexture, vertexColors: true
+    })));
+    // 土污由山脚向顶部减弱；低矮丘陵不再戴一顶不合气候的雪白石帽。
+    const LOW = [[0.63, 0.58, 0.49], [0.56, 0.54, 0.48], [0.70, 0.64, 0.53]];
+    const MID = [[0.76, 0.75, 0.69], [0.68, 0.68, 0.64], [0.84, 0.80, 0.73]];
+    const HIGH = [[0.82, 0.83, 0.80], [0.72, 0.75, 0.74], [0.87, 0.85, 0.78]];
     const bandFor = function (frac, pick) {
       if (frac > 0.66) return HIGH[pick];
       if (frac > 0.30) return MID[pick];
@@ -4326,8 +4258,8 @@ export function createRenderer(canvas) {
         const mat = new THREE.Matrix4().makeRotationY(rotY);
         mat.multiply(new THREE.Matrix4().makeRotationX(tilt));
         mat.scale(new THREE.Vector3(sx, sy, sz));
-        mat.setPosition(px, groundHeight(px, py) + sy * 0.35, py);
-        parts.push({ geo: rockGeo, matrix: mat, rgb: rgb });
+        mat.setPosition(px, groundHeight(px, py) - sy * 0.05, py);
+        parts.push({ geo: rockTemplates[parts.length % 3], matrix: mat, rgb: rgb });
       };
 
       const count = Math.max(9, Math.round(m.r / 15));
@@ -4360,10 +4292,12 @@ export function createRenderer(canvas) {
       }
 
       const mesh = new THREE.Mesh(mergeParts(parts), material);
+      mesh.userData.shadowCaster = true;
       mesh.castShadow = state.shadows !== 'off';
       mesh.receiveShadow = true;
       terrainGroup.add(mesh);
     });
+    rockTemplates.forEach(function (geometry) { geometry.dispose(); });
   }
 
   /**
@@ -4422,47 +4356,52 @@ export function createRenderer(canvas) {
       return true;
     };
 
-    // 三片交叉三角叶组成一簇草：比三棱锥更像叶片，每簇只有 3 个三角形。
-    const grassPositions = [];
-    const grassNormals = [];
-    const grassUvs = [];
-    for (let blade = 0; blade < 3; blade++) {
-      const angle = blade * Math.PI / 3;
-      const dx = Math.cos(angle) * 0.5;
-      const dz = Math.sin(angle) * 0.5;
-      const nx = -Math.sin(angle);
-      const nz = Math.cos(angle);
-      grassPositions.push(-dx, 0, -dz, dx, 0, dz, 0, 1, 0);
-      grassNormals.push(nx, 0, nz, nx, 0, nz, nx, 0, nz);
-      grassUvs.push(0, 0, 1, 0, 0.5, 1);
+    // Five bent grass blades: narrow bases, uneven tips, no pyramids or green
+    // confetti. Grass is rooted at y=0 so the placement never floats half a tuft.
+    const grassPositions = [], grassUvs = [];
+    for (let blade = 0; blade < 5; blade++) {
+      const angle = blade * 2.399, dx = Math.cos(angle), dz = Math.sin(angle);
+      const height = 0.65 + blade * 0.07;
+      const bend = 0.18 + blade * 0.03;
+      const vertices = [
+        [-dz * 0.075, 0, dx * 0.075], [dz * 0.075, 0, -dx * 0.075],
+        [dx * bend - dz * 0.055, height * 0.55, dz * bend + dx * 0.055],
+        [dx * bend + dz * 0.055, height * 0.55, dz * bend - dx * 0.055],
+        [dx * bend * 2, height, dz * bend * 2]
+      ];
+      for (const index of [0, 1, 2, 1, 3, 2, 2, 3, 4]) {
+        grassPositions.push(...vertices[index]); grassUvs.push(index % 2, vertices[index][1]);
+      }
     }
     const grassGeo = new THREE.BufferGeometry();
     grassGeo.setAttribute('position', new THREE.Float32BufferAttribute(grassPositions, 3));
-    grassGeo.setAttribute('normal', new THREE.Float32BufferAttribute(grassNormals, 3));
     grassGeo.setAttribute('uv', new THREE.Float32BufferAttribute(grassUvs, 2));
-    let pebbleGeo = new THREE.DodecahedronGeometry(1, 0);
-    if (pebbleGeo.index) {
-      const indexed = pebbleGeo;
-      pebbleGeo = indexed.toNonIndexed();
-      indexed.dispose();
-    }
-    let shrubGeo = null;
-    let logGeo = null;
+    grassGeo.computeVertexNormals();
+    const pebbleGeo = makeWeatheredRockGeometry(1);
+    let shrubGeo = null, logGeo = null;
     const wildernessProps = riverValleyMode() ||
-      visualStyle === 'open_wilderness' ||
-      visualStyle === 'arid_wilderness' ||
+      visualStyle === 'open_wilderness' || visualStyle === 'arid_wilderness' ||
       visualStyle === 'crater_wilderness';
     if (wildernessProps) {
-      shrubGeo = new THREE.DodecahedronGeometry(1, 0);
-      logGeo = new THREE.CylinderGeometry(1, 1.2, 1, 6);
+      const indexedLeaf = new THREE.PlaneGeometry(1, 1);
+      shrubGeo = indexedLeaf.toNonIndexed(); indexedLeaf.dispose();
+      const indexedLog = new THREE.CylinderGeometry(1, 1.2, 1, 6);
+      logGeo = indexedLog.toNonIndexed(); indexedLog.dispose();
     }
-    const parts = [];
+    const parts = [], rockParts = [], shrubParts = [];
     const addPart = function (geo, x, y, sx, sy, sz, rotation, tilt, rgb) {
       const matrix = new THREE.Matrix4().makeRotationY(rotation);
+      if (geo === shrubGeo) matrix.multiply(new THREE.Matrix4().makeRotationX(-Math.PI * 0.30));
       if (tilt) matrix.multiply(new THREE.Matrix4().makeRotationX(tilt));
-      matrix.scale(new THREE.Vector3(sx, sy, sz));
-      matrix.setPosition(x, groundHeight(x, y) + sy * 0.48, y);
-      parts.push({ geo: geo, matrix: matrix, rgb: rgb });
+      matrix.scale(new THREE.Vector3(sx * (geo === shrubGeo ? 2.8 : 1),
+        sy * (geo === shrubGeo ? 2.5 : 1), sz));
+      const lift = geo === grassGeo ? 0 : geo === logGeo ? Math.max(sx, sz) * 0.62
+        : geo === shrubGeo ? sy * 0.65 : -sy * 0.06;
+      matrix.setPosition(x, groundHeight(x, y) + lift, y);
+      const target = geo === pebbleGeo ? rockParts : geo === shrubGeo ? shrubParts : parts;
+      const paint = geo === shrubGeo ? [0.84, 0.87, 0.76]
+        : geo === pebbleGeo ? [0.70, 0.68, 0.61] : rgb;
+      target.push({ geo: geo, matrix: matrix, rgb: paint });
     };
 
     // 每个采样点长成 1–3 株小草，颜色在主题草色与深草色间变化。
@@ -4481,16 +4420,16 @@ export function createRenderer(canvas) {
         const distance = rand() * 8;
         const x = cx + Math.cos(angle) * distance;
         const y = cy + Math.sin(angle) * distance;
-        const height = 9 + rand() * 9;
-        const width = 3.0 + rand() * 2.2;
+        const height = 10 + rand() * 11;
+        const width = 5.0 + rand() * 3.2;
         const mix = rand();
         const shade = 0.90 + rand() * 0.30;
         const dried = visualStyle === 'arid_wilderness' ||
           (visualStyle === 'open_wilderness' && rand() < 0.34) ||
           (visualStyle === 'crater_wilderness' && rand() < 0.62);
-        const highColor = dried ? theme.dry : theme.lush;
+        const highColor = dried ? [0.25, 0.22, 0.12] : [0.14, 0.19, 0.07];
         const rgb = [0, 1, 2].map(function (channel) {
-          return Math.min(1, (theme.grass[channel] * (1 - mix) +
+          return Math.min(1, ([0.075, 0.12, 0.045][channel] * (1 - mix) +
             highColor[channel] * mix) * shade);
         });
         addPart(grassGeo, x, y, width, height, width * (0.72 + rand() * 0.35),
@@ -4528,7 +4467,7 @@ export function createRenderer(canvas) {
 
     if (wildernessProps) {
       // 各张旷野图在可通行地面增加自己的低矮植被、倒木与天然碎石。
-      // 仍与草叶/散石合并成同一个网格，所以场景变丰富不会带来额外 draw call。
+      // 按材质和空间块合批，根部贴地，不增加任何权威碰撞体。
       // 数量按生境单独封顶，中央混战图最稀疏，保持旷野尺度与选取清晰度。
       const shrubConfig = visualStyle === 'open_wilderness' ? [55, 260000]
         : (visualStyle === 'arid_wilderness' ? [38, 300000]
@@ -4598,18 +4537,38 @@ export function createRenderer(canvas) {
       }
     }
 
-    state.groundDetailParts = parts.length;
-    if (parts.length) {
-      const merged = mergeParts(parts);
-      const mesh = new THREE.Mesh(merged, applyFogMask(new THREE.MeshLambertMaterial({
-        vertexColors: true, flatShading: true, side: THREE.DoubleSide
-      })));
-      mesh.name = 'ground-detail';
-      mesh.castShadow = false;
-      mesh.receiveShadow = true;
-      mesh.frustumCulled = false;
-      terrainGroup.add(mesh);
+    state.groundDetailParts = parts.length + rockParts.length + shrubParts.length;
+    const groundDetail = new THREE.Group();
+    groundDetail.name = 'ground-detail';
+    for (const [source, kind] of [[parts, 'grass'], [rockParts, 'stone'], [shrubParts, 'shrub']]) {
+      if (!source.length) continue;
+      const chunks = new Map();
+      source.forEach(function (part) {
+        const e = part.matrix.elements;
+        const key = forestChunkKey(e[12], e[14]);
+        if (!chunks.has(key)) chunks.set(key, []);
+        chunks.get(key).push(part);
+      });
+      let material;
+      if (kind === 'stone') material = applyWildernessRock(applyFogMask(
+        new THREE.MeshLambertMaterial({ map: groundTexture, vertexColors: true })));
+      else if (kind === 'shrub') material = applyForestRealism(applyFogMask(
+        new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide,
+          alphaTest: 0.42, map: loadSharedTexture('/assets/textures/woodland-leaves-v2.webp', false, 4) })));
+      else material = applyFogMask(new THREE.MeshLambertMaterial({
+        vertexColors: true, side: THREE.DoubleSide }));
+      chunks.forEach(function (batch, key) {
+        const geometry = mergeParts(batch);
+        geometry.computeBoundingSphere();
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.name = 'ground-detail-' + kind + '-' + key;
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+        mesh.frustumCulled = true;
+        groundDetail.add(mesh);
+      });
     }
+    terrainGroup.add(groundDetail);
     grassGeo.dispose();
     pebbleGeo.dispose();
     if (shrubGeo) shrubGeo.dispose();
@@ -4619,6 +4578,7 @@ export function createRenderer(canvas) {
   /* -------------------- 矿脉 -------------------- */
 
   let oreGroup = null;
+  let oreOwnedResources = [];
   const oreMeshes = new Map();
   /** 石英、母岩与天然金脉的实拍式材质；矿簇网格数量保持不变。 */
   function makeOreVeinTexture() {
@@ -4626,27 +4586,30 @@ export function createRenderer(canvas) {
   }
 
   function buildOreField() {
-    if (oreGroup) worldRoot.remove(oreGroup);
+    if (oreGroup) disposeOwnedRenderGroup(oreGroup, oreOwnedResources);
+    oreOwnedResources = [];
     oreGroup = new THREE.Group();
     worldRoot.add(oreGroup);
     oreMeshes.clear();
     if (!state.resources) return;
 
-    // 真实石英/母岩材质只保留轻微内发光，矿区识别仍由地面辉光环承担。
+    // 风化矿体携带金脉，柔边矿床保留储量色，不再用整片发光圆盘。
     const crystalMat = new THREE.MeshStandardMaterial({
-      color: 0xd8cdb8, emissive: 0x8a5a18, emissiveIntensity: 0.62,
+      color: 0xe6d5a8, emissive: 0x8a5a18, emissiveIntensity: 0.18,
       roughness: 0.48, metalness: 0.18, vertexColors: false,
       map: makeOreVeinTexture()
     });
-    const crystalGeo = new THREE.ConeGeometry(1, 1, 5);
-    // 地面辉光环：让矿脉在绿色草皮上有一个「发光底座」，拉远也不会消失。
-    // 每处矿用自己的轻量材质实例，以便开采跨档时独立换色和缩小。
+    const crystalGeo = makeWeatheredRockGeometry(2);
+    // 每处矿床使用独立轻量材质，以便开采跨档时独立换色和缩小。
     const discGeo = new THREE.CircleGeometry(1, 18).rotateX(-Math.PI / 2);
     const guardRingGeo = new THREE.RingGeometry(0.82, 1.0, 32).rotateX(-Math.PI / 2);
     const guardRingMat = new THREE.MeshBasicMaterial({
       color: 0xff3f2f, transparent: true, opacity: 0.82,
       depthWrite: false, fog: false, side: THREE.DoubleSide
     });
+    // Include unused templates too (for example, a map without guarded mines).
+    // They are shared between this map's clusters, never between matches.
+    oreOwnedResources = [crystalMat, crystalGeo, discGeo, guardRingGeo, guardRingMat];
     state.resources.forEach(function (res) {
       const cluster = new THREE.Group();
       cluster.position.set(res.x, groundHeight(res.x, res.y), res.y);
@@ -4656,9 +4619,16 @@ export function createRenderer(canvas) {
 
       // 储量越高，辉光占地越大、颜色越亮；这和小地图图例使用同一档位。
       const disc = new THREE.Mesh(discGeo, new THREE.MeshBasicMaterial({
-        color: initialTier.color, transparent: true, opacity: 0.30,
+        color: initialTier.color, map: makeOreVeinTexture(), transparent: true, opacity: 0.30,
         depthWrite: false, fog: false, side: THREE.DoubleSide
       }));
+      disc.material.onBeforeCompile = function (shader) {
+        shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>',
+          '#include <map_fragment>\n' +
+          'float oreEdge = length(vMapUv - 0.5) * 2.0;\n' +
+          'diffuseColor.a *= (1.0 - smoothstep(0.42, 0.98, oreEdge)) * 0.72;');
+      };
+      disc.material.customProgramCacheKey = function () { return 'ore-weathered-bed2'; };
       const initialDiscRadius = res.radius * (0.62 + initialTier.level * 0.13);
       disc.scale.set(initialDiscRadius, 1, initialDiscRadius);
       disc.position.y = 2.6;
@@ -4697,9 +4667,9 @@ export function createRenderer(canvas) {
         // 会自然向中心收紧，而不是随机缺一块、视觉上仍占满原来面积。
         const spread = 0.38 + 0.62 * ((i + 1) / count);
         const rr = Math.sqrt(rand()) * res.radius * maxTier.footprint * spread;
-        const h = (11 + rand() * 22) * maxTier.height;
-        const w = (3.6 + rand() * 3.6) * (0.92 + maxTier.level * 0.035);
-        orePosition.set(Math.cos(a) * rr, h / 2 + 2, Math.sin(a) * rr);
+        const h = (9 + rand() * 15) * maxTier.height;
+        const w = (7 + rand() * 9) * (0.92 + maxTier.level * 0.035);
+        orePosition.set(Math.cos(a) * rr, h * 0.26, Math.sin(a) * rr);
         oreEuler.set((rand() - 0.5) * 0.16, rand() * TAU, (rand() - 0.5) * 0.16);
         oreRotation.setFromEuler(oreEuler);
         oreScale.set(w, h, w);
@@ -4973,8 +4943,8 @@ export function createRenderer(canvas) {
   let fogPlane = null;
   let fogRevealed = false;
   const fogMapSize = new THREE.Vector2(1, 1);
-  const fogMaskedShaders = [];
-  const waterShaders = [];
+  const fogMaskedShaders = new MaterialShaderRegistry();
+  const waterShaders = new MaterialShaderRegistry();
 
   // 探索覆盖度粗网格。探索黑幕是永久的（探开就不再变黑），所以一个视野圆
   // 只要整个落在「已经完全探开」的区域里，再画一遍连一个像素都不会变。
@@ -5036,13 +5006,12 @@ export function createRenderer(canvas) {
 
     if (fogTexture) fogTexture.dispose();
     fogTexture = new THREE.CanvasTexture(fogCanvas);
-    for (let i = 0; i < waterShaders.length; i++) {
-      waterShaders[i].uniforms.uFogMask.value = fogTexture;
-    }
     // 已经编译过的材质要换上新贴图，否则改黑幕精度后地形会停在旧遮罩上
-    for (let i = 0; i < fogMaskedShaders.length; i++) {
-      fogMaskedShaders[i].uniforms.uFogMask.value = fogTexture;
-    }
+    // Water is registered here too; persistent building pads keep their live
+    // shader entry, while disposed previous-map materials have been removed.
+    fogMaskedShaders.forEach(function (shader) {
+      shader.uniforms.uFogMask.value = fogTexture;
+    });
     fogTexture.minFilter = THREE.LinearFilter;
     fogTexture.magFilter = THREE.LinearFilter;
     fogTexture.generateMipmaps = false;
@@ -5255,13 +5224,13 @@ export function createRenderer(canvas) {
   // 车体走受光材质；发光件走不受光材质，顶点系数 > 1，因此会被后处理的
   // 亮度提取捕捉到，形成灯带与传感器的光晕。
   const unitMetalMaterial = applyEmissiveByVertexColor(
-    new THREE.MeshLambertMaterial({ vertexColors: true }), 'metal');
+    new THREE.MeshPhongMaterial({ vertexColors: true }), 'metal');
   const unitStoneMaterial = applyEmissiveByVertexColor(
-    new THREE.MeshLambertMaterial({ vertexColors: true }), 'stone');
+    new THREE.MeshPhongMaterial({ vertexColors: true }), 'stone');
   const unitClothMaterial = applyEmissiveByVertexColor(
-    new THREE.MeshLambertMaterial({ vertexColors: true }), 'cloth');
+    new THREE.MeshPhongMaterial({ vertexColors: true }), 'cloth');
   const unitHideMaterial = applyEmissiveByVertexColor(
-    new THREE.MeshLambertMaterial({ vertexColors: true }), 'hide');
+    new THREE.MeshPhongMaterial({ vertexColors: true }), 'hide');
   const unitPools = new Map();     // kind -> { mesh, glow, simple, capacity }
   const shadowGeo = new THREE.CircleGeometry(1, 12).rotateX(-Math.PI / 2);
 
@@ -5608,14 +5577,15 @@ export function createRenderer(canvas) {
     if (entry) return entry;
     const builder = UNIT_BUILDERS[kind] || UNIT_BUILDERS.rifle;
     const parts = builder();
-    // 烘焙遮蔽先只在试点兵种上打开，方便和没改过的兵种并排对照。方向确认后
-    // 把其余兵种加进来即可，管线本身不用再动。
-    const bake = OCCLUSION_BAKED_KINDS[kind] ? { occlusion: true } : null;
+    // 所有兵种近景在首次缓存时烘焙关节/甲片间的遮蔽；后续实例直接共享 aOcc，
+    // 不进入每帧渲染或服务端模拟。远景不支付烘焙成本。
+    // 肩轴为原点的天启手臂、巨龙核球等独立挂件仍在各自工厂中普通合并，
+    // 避免把挂件局部 y = 0 错当成地面而压黑整件模型。
     entry = {
       // 车体与发光件合并成一个几何体：发光件的顶点系数 > 1，着色器据此
       // 跳过光照，效果一样但少一半绘制调用
-      body: mergeParts(parts.body.concat(parts.glow || []), bake),
-      simple: mergeParts(simpleUnitParts(kind), bake)
+      body: mergeParts(parts.body.concat(parts.glow || []), { occlusion: true }),
+      simple: mergeParts(simpleUnitParts(kind))
     };
     UNIT_GEOMETRY_CACHE.set(kind, entry);
     return entry;
@@ -5652,7 +5622,7 @@ export function createRenderer(canvas) {
       const mesh = new THREE.InstancedMesh(geometry, material, capacity);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.castShadow = casts && state.shadows === 'all';
-      mesh.receiveShadow = false;
+      mesh.receiveShadow = state.shadows !== 'off';
       mesh.frustumCulled = false;
       mesh.count = 0;
       // 大部分 RTS 单位多数时间静止。缓存每个实例槽位的变换与颜色，只有
@@ -5941,7 +5911,7 @@ export function createRenderer(canvas) {
     // vertexColors 让合并后的几何体仍能按零件明暗分层
     // 单一材质：零件的固有色/团队色由顶点属性区分
     const teamMat = applyEmissiveByVertexColor(
-      new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true }),
+      new THREE.MeshPhongMaterial({ color: 0xffffff, vertexColors: true }),
       MAGIC_STRUCTURE_KINDS[structure.kind] ? 'stone' : 'metal');
     const group = structureGroup(structure.kind, structure.size, teamMat);
     if (!buildingPadMat) {
@@ -7092,12 +7062,12 @@ export function createRenderer(canvas) {
     scene.fog.near = dist * 2.2 + 600;
     scene.fog.far = dist * 6.5 + 3200;
 
-    // 阴影关闭时不更新一套完全不会参与渲染的投影矩阵。
+    // 主光方向与阴影档位无关。补光 target 也随焦点走，地图边缘不再变色。
+    sun.position.set(fx + 700, 1150, fz - 500);
+    sun.target.position.set(fx, 0, fz);
+    sun.target.updateMatrixWorld();
     if (state.shadows !== 'off') {
       const span = Math.min(1500, dist * 0.9 + 300);
-      sun.position.set(fx + 700, 1150, fz - 500);
-      sun.target.position.set(fx, 0, fz);
-      sun.target.updateMatrixWorld();
       const cam = sun.shadow.camera;
       cam.left = -span; cam.right = span;
       cam.top = span; cam.bottom = -span;
@@ -7106,6 +7076,8 @@ export function createRenderer(canvas) {
 
     // 补光从主光对面打，轮廓光从相机背后偏上打，勾出边缘
     fill.position.set(fx - 900, 620, fz + 800);
+    fill.target.position.set(fx, 0, fz);
+    rim.target.position.set(fx, 0, fz);
     rim.position.set(
       fx - Math.sin(yaw) * 1400,
       900,
@@ -7602,7 +7574,9 @@ export function createRenderer(canvas) {
 
     let shadowCount = 0;
     const doShadows = state.shadows === 'all';
-    const shadows = doShadows ? ensureShadowMesh(state.renderedUnits) : null;
+    const doContactShadows = state.shadows !== 'off';
+    const shadows = doContactShadows ? ensureShadowMesh(state.renderedUnits) : null;
+    if (shadowMesh) shadowMesh.visible = doContactShadows && state.renderedUnits > 0;
 
     // 每个兵种池都有近景/远景两张网格，同一帧必有一张用不上；离场的兵种
     // 两张都空着。只把 count 归零仅仅省掉 GL 绘制调用，three 仍会遍历它们、
@@ -7614,8 +7588,11 @@ export function createRenderer(canvas) {
     });
 
     byKind.forEach(function (list, kind) {
+      if (!list.length) return;
       const pool = ensurePool(kind, list.length);
-      const mesh = useSimple ? pool.simple : pool.mesh;
+      const hero = kind === 'dragon' || kind === 'overlord_v1' || kind === 'overlord_v2';
+      const simpleKind = state.lod && camDist > (hero ? HERO_LOD_DISTANCE : UNIT_LOD_DISTANCE);
+      const mesh = simpleKind ? pool.simple : pool.mesh;
       const scale = UNIT_VISUAL_SCALE[kind] || 1;
       vecScale.set(scale, scale, scale);
       const ids = mesh.userData.instanceIds;
@@ -7653,7 +7630,7 @@ export function createRenderer(canvas) {
           colorDirty = true;
         }
 
-        if (doShadows) {
+        if (doContactShadows) {
           const r = vis.unit.size * 1.15 * scale;
           matrix.compose(
             vecAux.set(vis.x, gy + 1.2, vis.y),
@@ -7667,7 +7644,8 @@ export function createRenderer(canvas) {
       mesh.visible = list.length > 0;
       if (matrixDirty) mesh.instanceMatrix.needsUpdate = true;
       if (colorDirty && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      mesh.castShadow = doShadows && !useSimple;
+      mesh.castShadow = doShadows && !simpleKind;
+      mesh.receiveShadow = doContactShadows && !simpleKind;
     });
 
     if (shadows) {
@@ -7678,7 +7656,7 @@ export function createRenderer(canvas) {
     /* --- 天启人形态：抬臂开炮 --- */
     // 远景 LOD 已经把垂放的手臂烘进主几何体，这层只在近景跑。
     apocArmVisuals.length = 0;
-    if (!useSimple) {
+    if (!state.lod || camDist <= HERO_LOD_DISTANCE) {
       const titans = byKind.get('overlord_v2');
       if (titans) {
         for (let i = 0; i < titans.length; i++) apocArmVisuals.push(titans[i]);
@@ -7726,7 +7704,7 @@ export function createRenderer(canvas) {
     /* --- 秘法巨龙：环绕核球 --- */
     // 远景 LOD 不跑这层：几十个像素上看不见三颗球，省下的是一次绘制调用。
     dragonOrbitVisuals.length = 0;
-    if (!useSimple) {
+    if (!state.lod || camDist <= HERO_LOD_DISTANCE) {
       const dragons = byKind.get('dragon');
       if (dragons) {
         for (let i = 0; i < dragons.length; i++) dragonOrbitVisuals.push(dragons[i]);
@@ -8080,9 +8058,9 @@ export function createRenderer(canvas) {
     if (waterMesh) {
       waterMesh.position.y = (waterMesh.userData.baseY == null
         ? -2 : waterMesh.userData.baseY) + Math.sin(payload.time * 0.0011) * 0.7;
-      for (let i = 0; i < waterShaders.length; i++) {
-        waterShaders[i].uniforms.uTime.value = payload.time * 0.001;
-      }
+      waterShaders.forEach(function (shader) {
+        shader.uniforms.uTime.value = payload.time * 0.001;
+      });
     }
 
     // 天空流云、地面云影、视空间太阳方向：共享 uniform，一帧只算一次
@@ -8119,6 +8097,10 @@ export function createRenderer(canvas) {
         const on = state.shadows !== 'off';
         renderer.shadowMap.enabled = on;
         sun.castShadow = on;
+        // 已生成的森林/桥梁也要即时恢复投影；不重建地图，不把草屑/水面变成投影物。
+        if (terrainGroup) terrainGroup.traverse(function (object) {
+          if (object.userData.shadowCaster) object.castShadow = on;
+        });
         appliedCamX = NaN;
       }
       if (options.lod != null) state.lod = !!options.lod;
@@ -8131,7 +8113,8 @@ export function createRenderer(canvas) {
       }
       if (options.bloom != null) {
         state.bloom = !!options.bloom;
-        postfx.setOptions({ enabled: state.bloom, fastBloom: !!options.fastBloom });
+        // 泛光关闭只跳过模糊，保留基础色调映射/FXAA，避免默认档位高光截白。
+        postfx.setOptions({ enabled: true, bloomEnabled: state.bloom, fastBloom: !!options.fastBloom });
       }
       if (options.showProjectiles != null) state.showProjectiles = !!options.showProjectiles;
       if (options.postfx) postfx.setOptions(options.postfx);
@@ -8206,15 +8189,21 @@ export function createRenderer(canvas) {
     stats: function () {
       const info = postfx.sceneStats;
       let instanced = 0;
+      let detailedUnits = 0;
+      let lodUnits = 0;
       unitPools.forEach(function (pool) {
-        if (pool.mesh) instanced += pool.mesh.count;
-        if (pool.simple) instanced += pool.simple.count;
+        if (pool.mesh) detailedUnits += pool.mesh.count;
+        if (pool.simple) lodUnits += pool.simple.count;
       });
+      instanced = detailedUnits + lodUnits;
       return {
         drawCalls: info.calls,
+        postPasses: postfx.passStats.total,
         triangles: info.triangles,
         programs: renderer.info.programs ? renderer.info.programs.length : 0,
         units: instanced,
+        detailedUnits: detailedUnits,
+        lodUnits: lodUnits,
         snapshotUnits: state.snapshotUnits,
         renderedUnits: state.renderedUnits,
         structures: structureNodes.size,
@@ -8222,8 +8211,14 @@ export function createRenderer(canvas) {
         particles: fireLayer.list.length + smokeLayer.list.length,
         buildTerrainMs: state.buildTerrainMs,
         groundDetailParts: state.groundDetailParts,
+        forestChunks: state.forestChunks,
+        forestTrees: state.forestTrees,
         geometries: renderer.info.memory.geometries,
-        textures: renderer.info.memory.textures
+        textures: renderer.info.memory.textures,
+        sharedTextures: sharedTextureCache.size,
+        fogMaterials: fogMaskedShaders.materialCount,
+        fogShaders: fogMaskedShaders.size,
+        waterShaders: waterShaders.size
       };
     },
 

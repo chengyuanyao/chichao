@@ -10,7 +10,8 @@ import random
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 import server
 
 
@@ -95,10 +96,81 @@ def check_harvester_drives_home():
                       harvester["y"] - refinery["y"]) <= refinery["size"] + 9
 
 
+def check_manual_stop_and_priority_mine():
+    room, players = make_room(5201, "gold_crater_small")
+    game = room["game"]
+    owner = players[0]
+    game["terrainCtx"] = server.FLAT_TERRAIN
+    game["units"] = []
+    game["structures"] = []
+    game["resources"] = []
+
+    refinery = server.make_structure("refinery", owner["id"], 500, 500, True)
+    harvester = server.make_unit("harvester", owner["id"], 900, 500)
+    tank = server.make_unit("tank", owner["id"], 850, 650)
+    near_ore = server.add_resource(game, 1050, 500, 9000)
+    chosen_ore = server.add_resource(game, 1600, 500, 9000)
+    game["structures"].append(refinery)
+    game["units"].extend((harvester, tank))
+
+    # H/stop 对所有单位立即撤销当前指令；矿车进入持久停采。
+    tank["destX"], tank["destY"], tank["order"] = 1400, 700, "move"
+    harvester["harvestTarget"] = near_ore["id"]
+    assert server.issue_stop(game, owner["id"], {tank["id"], harvester["id"]}) == 2
+    assert tank["destX"] is None and tank["order"] == "guard"
+    assert harvester["harvestPaused"] is True
+    assert harvester["harvestTarget"] is None
+    stopped_at = (harvester["x"], harvester["y"], harvester["cargo"])
+    for _ in range(20):
+        server.tick_harvester(room, harvester, 0.1)
+    assert (harvester["x"], harvester["y"], harvester["cargo"]) == stopped_at
+    assert server.public_unit(harvester)["harvestPaused"] is True
+
+    # 即使近处有矿，显式指定远矿后也必须优先驶向、采集远矿。
+    near_before = near_ore["amount"]
+    chosen_before = chosen_ore["amount"]
+    assert server.issue_harvest(
+        game, owner["id"], {harvester["id"]}, chosen_ore["id"]) == 1
+    assert harvester["harvestPaused"] is False
+    assert harvester["preferredResourceId"] == chosen_ore["id"]
+    for _ in range(300):
+        server.tick_harvester(room, harvester, 0.05)
+        if chosen_ore["amount"] < chosen_before:
+            break
+    assert chosen_ore["amount"] < chosen_before
+    assert near_ore["amount"] == near_before
+
+    # 满载回厂不会忘记指定矿，卸货后仍然返回同一矿。
+    harvester["cargo"] = harvester["capacity"]
+    harvester["returnTarget"] = "pending"
+    for _ in range(500):
+        server.tick_harvester(room, harvester, 0.05)
+        if harvester["cargo"] == 0:
+            break
+    assert harvester["cargo"] == 0
+    assert harvester["preferredResourceId"] == chosen_ore["id"]
+    server.tick_harvester(room, harvester, 0.05)
+    assert harvester["harvestTarget"] == chosen_ore["id"]
+
+    # 普通移动同样暂停自动采矿，必须再次右键矿脉才能恢复。
+    server.issue_move(game, owner["id"], {harvester["id"]}, 800, 800)
+    assert harvester["harvestPaused"] is True
+    assert harvester["preferredResourceId"] is None
+
+    with open(os.path.join(ROOT, "public", "index.html"), "r", encoding="utf-8") as handle:
+        index = handle.read()
+    with open(os.path.join(ROOT, "public", "app.js"), "r", encoding="utf-8") as handle:
+        app = handle.read()
+    assert 'title="停止当前命令 (H)"' in index
+    assert "event.code === 'KeyH'" in app
+    assert "command: 'harvest'" in app
+
+
 def main():
     check_random_resources()
     check_harvester_drives_home()
-    print("economy ok: public ore is random and harvesters physically drive home")
+    check_manual_stop_and_priority_mine()
+    print("economy ok: random ore, physical return, persistent H stop and priority mining")
 
 
 if __name__ == "__main__":

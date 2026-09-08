@@ -859,6 +859,7 @@ def public_unit(unit):
     if unit_role(unit["kind"]) == "harvester":
         result["cargo"] = round(unit["cargo"], 1)
         result["capacity"] = unit["capacity"]
+        result["harvestPaused"] = bool(unit.get("harvestPaused"))
     if unit.get("slowMult", 1.0) < 1.0:
         result["slow"] = True
     if unit.get("repairing"):
@@ -1741,6 +1742,9 @@ def make_unit(kind, owner, x, y):
         "cooldown": random.random() * 0.6, "scan": random.random() * 0.4,
         "cargo": 0.0, "capacity": definition.get("capacity", 0.0),
         "harvestTarget": None, "returnTarget": None,
+        # H / 普通移动会把矿车切到人工停采；右键指定矿脉后解除，并持续
+        # 记住该矿，卸货后仍优先返回同一处。
+        "harvestPaused": False, "preferredResourceId": None,
         "repairTargetId": None, "repairAngle": 0.0, "repairRing": 0,
         "repairing": False, "manualUntil": 0.0, "order": "guard",
         "slowMult": 1.0, "slowTimer": 0.0,
@@ -2797,7 +2801,74 @@ def issue_move(game, player_id, unit_ids, x, y, attack_move=False):
         unit["_routeRetry"] = 0.0
         unit["_stuck"] = 0.0
         if unit_role(unit["kind"]) == "harvester":
+            # 普通地面移动是人工调度，不应在抵达后立刻又自动掉头找矿。
+            # 只有显式 harvest 指令才恢复采集。
+            unit["harvestPaused"] = True
+            unit["harvestTarget"] = None
+            unit["preferredResourceId"] = None
+            unit["returnTarget"] = None
             unit["manualUntil"] = 0.0
+
+
+def issue_stop(game, player_id, unit_ids):
+    """Stop every selected unit; harvesters remain stopped until reassigned."""
+    stopped = 0
+    for unit in game["units"]:
+        if (unit["owner"] != player_id or unit["id"] not in unit_ids
+                or unit.get("hp", 0) <= 0):
+            continue
+        unit["destX"] = None
+        unit["destY"] = None
+        unit["targetId"] = None
+        clear_repair_order(unit)
+        unit["order"] = "guard"
+        unit["_path"] = None
+        unit["_pathDest"] = None
+        unit["_pathEnd"] = None
+        if unit_role(unit["kind"]) == "harvester":
+            unit["harvestPaused"] = True
+            unit["harvestTarget"] = None
+            unit["preferredResourceId"] = None
+            unit["returnTarget"] = None
+        stopped += 1
+    return stopped
+
+
+def issue_harvest(game, player_id, unit_ids, resource_id):
+    """Assign selected harvesters to one explicit, persistent priority mine."""
+    resource = next((item for item in game["resources"]
+                     if item["id"] == resource_id and item["amount"] > 0), None)
+    if not resource:
+        raise ValueError("矿脉已经枯竭")
+    if resource_is_guarded(game, resource):
+        raise ValueError("请先消灭矿区守军")
+    assigned = 0
+    for unit in game["units"]:
+        if (unit["owner"] != player_id or unit["id"] not in unit_ids
+                or unit.get("hp", 0) <= 0
+                or unit_role(unit.get("kind")) != "harvester"):
+            continue
+        unit["destX"] = None
+        unit["destY"] = None
+        unit["targetId"] = None
+        clear_repair_order(unit)
+        unit["harvestPaused"] = False
+        unit["preferredResourceId"] = resource["id"]
+        unit["harvestTarget"] = resource["id"]
+        # 满载车会先回厂；卸货后仍保留 preferredResourceId 并回到指定矿。
+        unit["returnTarget"] = ("pending"
+                                if unit["cargo"] >= unit["capacity"] - 0.1
+                                else None)
+        unit["order"] = "harvest"
+        unit["_path"] = None
+        unit["_pathDest"] = None
+        unit["_pathEnd"] = None
+        unit["_pathUnavailable"] = False
+        unit["_routeRetry"] = 0.0
+        assigned += 1
+    if not assigned:
+        raise ValueError("请选择采矿单位")
+    return assigned
 
 
 def unit_can_attack(kind):
@@ -3644,7 +3715,7 @@ def tick_orbital_rain(room):
 AGENT_ALLOWED_COMMANDS = frozenset((
     "move", "attackMove", "attack", "structureAttack", "repair",
     "structureRepair",
-    "deploy", "undeploy", "stop", "train", "prepareBuild", "placeBuild",
+    "deploy", "undeploy", "stop", "harvest", "train", "prepareBuild", "placeBuild",
     "cancelBuild", "cancelTrain", "sell", "setRally",
 ))
 
@@ -3688,13 +3759,11 @@ def handle_game_command(room, player, payload, role="commander"):
         unit_ids = command_unit_ids(payload)
         if not unit_ids:
             return
-        for unit in game["units"]:
-            if unit["owner"] == player["id"] and unit["id"] in unit_ids:
-                unit["destX"] = None
-                unit["destY"] = None
-                unit["targetId"] = None
-                clear_repair_order(unit)
-                unit["order"] = "guard"
+        issue_stop(game, player["id"], unit_ids)
+    elif command == "harvest":
+        issue_harvest(
+            game, player["id"], command_unit_ids(payload),
+            payload.get("resourceId"))
     elif command == "train":
         queue_unit(room, player["id"], str(payload.get("unitType", "")))
     elif command == "prepareBuild":
@@ -5081,6 +5150,10 @@ def tick_harvester(room, unit, dt, entity_index=None, terrain=None):
             unit["order"] = "guard"
         return
 
+    # H 停止是持久人工停采，不是清一次目标后下一帧又自动找矿。
+    if unit.get("harvestPaused"):
+        return
+
     if unit["cargo"] >= unit["capacity"] - 0.1 or unit.get("returnTarget"):
         refinery = find_entity(game, unit.get("returnTarget"), entity_index)
         if not refinery or refinery["owner"] != unit["owner"] or structure_role(refinery["kind"]) != "refinery" or not refinery["active"]:
@@ -5109,11 +5182,23 @@ def tick_harvester(room, unit, dt, entity_index=None, terrain=None):
                      and r["amount"] > 0
                      and not resource_is_guarded(game, r)), None)
     if not resource:
+        preferred_id = unit.get("preferredResourceId")
+        preferred = next((r for r in game["resources"]
+                          if r["id"] == preferred_id
+                          and r["amount"] > 0
+                          and not resource_is_guarded(game, r)), None)
+        if preferred:
+            resource = preferred
+        elif preferred_id:
+            # 指定矿采空或失效后才解除优先级，随后允许寻找其他可采矿。
+            unit["preferredResourceId"] = None
         # 公共矿的最后一名守军阵亡前都不会成为自动采集候选；即便玩家
         # 手动把采矿车开进矿圈，服务端也不会结算一分钱。
-        candidates = [r for r in game["resources"]
-                      if r["amount"] > 1 and not resource_is_guarded(game, r)]
-        resource = min(candidates, key=lambda r: math.hypot(r["x"] - unit["x"], r["y"] - unit["y"])) if candidates else None
+        if not resource:
+            candidates = [r for r in game["resources"]
+                          if r["amount"] > 1 and not resource_is_guarded(game, r)]
+            resource = min(candidates, key=lambda r: math.hypot(
+                r["x"] - unit["x"], r["y"] - unit["y"])) if candidates else None
         unit["harvestTarget"] = resource["id"] if resource else None
     if resource:
         reached = move_toward(terrain, unit, resource["x"], resource["y"], definition["speed"], dt, resource["radius"] + 5)
