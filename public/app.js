@@ -4,6 +4,7 @@ import {
   UNIT_VISUAL_PICK_SCALE,
   oreReserveTier
 } from './render3d.js';
+import { renderBattleReport, renderReportSummary, reportCsv } from './battle_report.js';
 
 (function () {
   'use strict';
@@ -1264,6 +1265,8 @@ import {
   var agentStopPending = false;
   var gameKey = null;
   var resultShown = false;
+  var completedBattleReport = null;
+  var reportRequestSerial = 0;
   var activeTab = 'buildings';
   var selectedUnits = new Set();
   var selectedStructureId = null;
@@ -2758,6 +2761,8 @@ import {
     roomState = null;
     gameKey = null;
     resultShown = false;
+    completedBattleReport = null;
+    reportRequestSerial++;
     selectedUnits.clear();
     selectedStructureId = null;
     selectedResourceId = null;
@@ -2780,6 +2785,8 @@ import {
     if (gameKey !== nextKey) {
       gameKey = nextKey;
       resultShown = false;
+      completedBattleReport = null;
+      reportRequestSerial++;
       $('#resultModal').classList.add('hidden');
       selectedUnits.clear();
       selectedStructureId = null;
@@ -5204,13 +5211,42 @@ import {
     var rewardStat = roomHasCombatRewards(roomState) ?
       '<div><span>战利资金</span><strong>$' + (me ? Math.floor(me.combatRewardsEarned || 0).toLocaleString('zh-CN') : 0) + '</strong></div>' : '';
     $('#resultStats').innerHTML =
-      '<div><span>击毁单位</span><strong>' + (me ? me.kills : 0) + '</strong></div>' +
+      '<div><span>击毁目标</span><strong>' + (me ? me.kills : 0) + '</strong></div>' +
       '<div><span>损失单位</span><strong>' + (me ? me.unitsLost : 0) + '</strong></div>' +
       '<div><span>采集资金</span><strong>$' + (me ? Math.floor(me.harvested).toLocaleString('zh-CN') : 0) + '</strong></div>' +
       rewardStat +
       '<div><span>作战时间</span><strong>' + $('#matchClock').textContent + '</strong></div>';
     $('#resultModal').classList.remove('hidden');
+    pressedKeys.clear();
+    $('#returnHomeBtn').focus();
+    loadBattleReport();
     sound(won ? 'complete' : 'error');
+  }
+
+  async function loadBattleReport() {
+    if (!session || !roomState || roomState.status !== 'finished' || !roomState.game) { return; }
+    var requestSession = session;
+    var matchId = roomState.game.matchId;
+    var serial = ++reportRequestSerial;
+    $('#exportReportBtn').disabled = true;
+    $('#retryReportBtn').classList.add('hidden');
+    $('#battleReport').textContent = '正在整理本局战报…';
+    try {
+      var data = await request('/api/report?roomId=' + encodeURIComponent(session.roomId) +
+        '&playerId=' + encodeURIComponent(session.playerId) + '&token=' + encodeURIComponent(session.token) +
+        '&matchId=' + encodeURIComponent(matchId || ''));
+      if (session !== requestSession || serial !== reportRequestSerial || !roomState ||
+          roomState.status !== 'finished' || roomState.game.matchId !== matchId) { return; }
+      if (!data.report || data.report.matchId !== matchId) { throw new Error('战报对局不匹配，请重试'); }
+      completedBattleReport = data.report;
+      $('#resultStats').innerHTML = renderReportSummary(data.report, session.playerId);
+      $('#battleReport').innerHTML = renderBattleReport(data.report, session.playerId);
+      $('#exportReportBtn').disabled = false;
+    } catch (error) {
+      if (session !== requestSession || serial !== reportRequestSerial) { return; }
+      $('#battleReport').textContent = '战报暂未加载：' + error.message;
+      $('#retryReportBtn').classList.remove('hidden');
+    }
   }
 
   function didPlayerWin(game, playerId) {
@@ -5398,7 +5434,7 @@ import {
     if (editing) {
       return;
     }
-    if (currentScreen !== 'game') {
+    if (currentScreen !== 'game' || (roomState && roomState.status === 'finished')) {
       return;
     }
     pressedKeys.add(event.code);
@@ -5815,6 +5851,40 @@ import {
   $('#returnHomeBtn').addEventListener('click', function () {
     $('#resultModal').classList.add('hidden');
     leaveRoom();
+  });
+  $('#retryReportBtn').addEventListener('click', loadBattleReport);
+  $('#resultModal').addEventListener('keydown', function (event) {
+    if (event.key !== 'Tab') { return; }
+    var focusable = Array.from(this.querySelectorAll('button:not(:disabled), [tabindex="0"]'))
+      .filter(function (element) { return element.getClientRects().length; });
+    var first = focusable[0], last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
+  });
+  $('#battleReport').addEventListener('click', function (event) {
+    var button = event.target.closest('[data-report-tab]');
+    if (!button || !this.contains(button)) { return; }
+    this.querySelectorAll('[data-report-tab]').forEach(function (tab) {
+      tab.setAttribute('aria-pressed', String(tab === button));
+    });
+    this.querySelectorAll('[data-report-panel]').forEach(function (panel) {
+      panel.classList.toggle('hidden', panel.dataset.reportPanel !== button.dataset.reportTab);
+    });
+  });
+  $('#exportReportBtn').addEventListener('click', function () {
+    if (!completedBattleReport || !roomState || roomState.status !== 'finished' ||
+        completedBattleReport.matchId !== roomState.game.matchId) { return; }
+    var url = URL.createObjectURL(new Blob([reportCsv(completedBattleReport)], {type: 'text/csv;charset=utf-8'}));
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = '赤潮战报-' + completedBattleReport.matchId.replace(/[^a-z0-9_-]/gi, '') + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   });
   document.addEventListener('pointerdown', ensureAudio, { once: true });
 

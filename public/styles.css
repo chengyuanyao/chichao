@@ -3639,6 +3639,70 @@ kbd {
   font-variant-numeric: tabular-nums;
 }
 
+/* 战报仅在结算时绘制；不增加战场的逐帧渲染工作。 */
+#resultModal { padding: 16px; }
+#resultModal .result-card {
+  width: min(1100px, 100%);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 24px;
+  text-align: left;
+  scrollbar-color: var(--brass-dark) #121309;
+}
+.result-heading { display: flex; align-items: center; gap: 18px; margin-bottom: 16px; flex-shrink: 0; }
+.result-heading .result-emblem { width: 64px; height: 64px; flex: 0 0 64px; margin: 0; font-size: 28px; }
+.result-heading h2 { margin: 5px 0; }
+.result-heading p { margin: 0; line-height: 1.6; }
+#resultModal .result-stats { grid-template-columns: repeat(4, 1fr); margin-bottom: 16px; text-align: center; flex-shrink: 0; }
+#resultModal .result-stats span { font-size: 11px; }
+#resultModal .result-stats strong { font-size: 20px; }
+.battle-report { min-height: 120px; overflow-y: auto; color: #ded4bb; font-size: 13px; padding-right: 3px; }
+.report-heading { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0 14px; flex-wrap: wrap; }
+.report-heading > span { color: var(--muted); letter-spacing: .08em; font-size: 11px; }
+.report-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--brass-dark); margin-bottom: 16px; }
+.report-tabs button { background: rgba(0,0,0,.22); color: #c9bd9d; border: 0; border-bottom: 2px solid transparent; padding: 12px 22px; cursor: pointer; font: inherit; }
+.report-tabs button[aria-pressed="true"] { border-bottom-color: var(--brass-bright); color: #ffe3a4; background: rgba(201,162,75,.10); }
+.report-tabs button:focus-visible { outline: 2px solid var(--brass-bright); outline-offset: -3px; }
+.report-table-wrap { overflow-x: auto; border: 1px solid rgba(201,162,75,.2); }
+.report-table { width: 100%; min-width: 900px; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 12px; }
+.report-table th, .report-table td { padding: 13px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid rgba(201,162,75,.12); }
+.report-table th:first-child { text-align: left; }
+.report-table thead th { color: #b8aa88; font-size: 11px; font-weight: 500; background: rgba(0,0,0,.28); }
+.report-table tbody tr:last-child > * { border-bottom: 0; }
+.report-table tbody tr:nth-child(even) { background: rgba(0,0,0,.12); }
+.report-table tbody tr.report-self { background: rgba(201,162,75,.08); }
+.report-table small { display: block; color: #a99d81; margin-top: 5px; font-size: 10px; font-weight: 400; }
+.report-player { display: flex; align-items: center; gap: 7px; max-width: 210px; white-space: normal; overflow-wrap: anywhere; }
+.report-player small { display: inline; }
+.report-player-dot { width: 7px; height: 14px; flex: 0 0 7px; border-radius: 1px; }
+#resultModal p.report-note { color: #ada186; font-size: 11px; line-height: 1.8; margin: 14px 0; }
+.report-legend { display: flex; flex-wrap: wrap; gap: 9px 18px; margin-bottom: 12px; }
+.report-legend > span { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow-wrap: anywhere; }
+.report-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.report-chart { border: 1px solid rgba(201,162,75,.2); padding: 14px 10px 2px; background: rgba(0,0,0,.2); }
+.report-chart h3, .battle-report h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+.battle-report > section > h3 { margin-top: 20px; }
+.report-chart p { font-size: 10px; min-height: 28px; line-height: 1.5; margin: 0 0 6px; }
+.report-chart > svg { display: block; width: 100%; height: auto; }
+.report-chart text { fill: #b8aa88; font: 12px Consolas, monospace; }
+.report-chart-grid { stroke: rgba(201,162,75,.14); stroke-width: 1; }
+.report-times { min-width: 430px; }
+.report-events { list-style: none; padding: 0; margin: 0; max-height: 280px; overflow-y: auto; }
+.report-events li { display: flex; gap: 18px; padding: 10px 8px; line-height: 1.6; border-bottom: 1px solid rgba(201,162,75,.10); }
+.report-events time { color: #e8c87a; font: 13px Consolas, monospace; flex: 0 0 55px; }
+.result-actions { display: flex; flex-shrink: 0; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(201,162,75,.2); }
+.result-actions > span { margin-right: auto; max-width: 100%; color: var(--muted); font-size: 10px; }
+@media (max-width: 760px) {
+  #resultModal { padding: 8px; }
+  #resultModal .result-card { padding: 16px; max-height: calc(100dvh - 16px); }
+  #resultModal .result-stats { grid-template-columns: repeat(2, 1fr); }
+  .report-tabs button { flex: 1; padding: 12px 6px; }
+  .report-charts { grid-template-columns: 1fr; }
+  .result-actions > span { width: 100%; }
+}
+
 /* ---------- 15. 响应式 ---------- */
 
 @media (max-height: 720px) {

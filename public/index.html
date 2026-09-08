@@ -499,13 +499,21 @@
       </div>
 
       <div id="resultModal" class="modal-backdrop hidden">
-        <div class="result-card">
-          <div id="resultEmblem" class="result-emblem">★</div>
-          <div id="resultKicker" class="panel-kicker">MISSION COMPLETE</div>
-          <h2 id="resultTitle">胜利</h2>
-          <p id="resultText">敌方指挥体系已经瓦解。</p>
+        <div class="result-card" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+          <header class="result-heading">
+            <div id="resultEmblem" class="result-emblem">★</div>
+            <div><div id="resultKicker" class="panel-kicker">MISSION COMPLETE</div>
+              <h2 id="resultTitle">胜利</h2>
+              <p id="resultText">敌方指挥体系已经瓦解。</p></div>
+          </header>
           <div id="resultStats" class="result-stats"></div>
-          <button id="returnHomeBtn" class="button primary">返回作战大厅</button>
+          <div id="battleReport" class="battle-report">正在整理本局战报…</div>
+          <footer class="result-actions">
+            <span>仅记录本局统计，无录像；离开前可导出留存。</span>
+            <button id="retryReportBtn" class="button secondary hidden">重试加载</button>
+            <button id="exportReportBtn" class="button secondary" disabled>导出战报 CSV</button>
+            <button id="returnHomeBtn" class="button primary">返回作战大厅</button>
+          </footer>
         </div>
       </div>
     </section>

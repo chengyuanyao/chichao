@@ -51,6 +51,7 @@ from catalog import (
     veteran_projectile,
 )
 import easter_eggs
+import battle_report
 
 
 VERSION = "2.1.0"
@@ -1199,6 +1200,7 @@ def public_game(game, viewer_id=None, full=True):
             patrols = [route for route in frame["patrols"]
                        if route["owner"] in friendly]
         dynamic = {
+            "matchId": game.get("uid"),
             "elapsed": frame["elapsed"],
             "units": visible_units,
             "structures": visible_structures,
@@ -2561,6 +2563,7 @@ def start_game(room):
         raise RuntimeError("开局指挥单位生成失败：%s" % "、".join(missing_commands))
     room["game"] = game
     room["status"] = "playing"
+    battle_report.start(room, room_map["name"])
     teams_used = set(p.get("team", 0) for p in players)
     if any(t > 0 for t in teams_used):
         team_lines = []
@@ -4912,6 +4915,7 @@ def trigger_death_explosion(room, source, game, combat_spatial=None):
     if not boom:
         return False
     source["_exploded"] = True
+    battle_report.loss(room, source, self_consumed=True)
     # 阵亡/贴脸路径已经 hp=0；测试直接引爆时还活着，这里补倒下。
     if source.get("hp", 0) > 0:
         owner_rec = room["players"].get(source.get("owner"))
@@ -5120,6 +5124,8 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
             if unit["id"] == source_id:
                 source_unit = unit
                 break
+    hostile = bool(game_state and not is_friendly(game_state, source_owner, target["owner"]))
+    battle_report.damage(room, target, min(target["hp"], applied), source_owner, hostile)
     target["hp"] -= applied
     if applied > 0.0:
         mark_unit_combat(target, game_state)
@@ -5129,6 +5135,7 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
         target["constructionDamage"] = target.get("constructionDamage", 0.0) + applied
     if target["hp"] <= 0:
         target["hp"] = 0
+        battle_report.loss(room, target, source_owner, hostile)
         owner = room["players"].get(target["owner"])
         source = room["players"].get(source_owner)
         if owner and target["id"].startswith("u"):
@@ -6782,6 +6789,7 @@ def check_elimination_and_victory(room, force=False):
             continue
         if not player_has_command(game, player["id"]):
             player["eliminated"] = True
+            battle_report.eliminate(room, player["id"])
             game["units"] = [u for u in game["units"] if u["owner"] != player["id"]]
             # Leftover producers stay as scenery (they do not keep the player
             # alive) but must not finish queues into new combatants.
@@ -6811,6 +6819,7 @@ def check_elimination_and_victory(room, force=False):
     # headless 副官打完不会自己退出，而它每 0.7 秒的心跳又会刷新 lastSeen，
     # 房间因此永远达不到过期阈值。分出胜负就地收掉，进程和房间才能回收。
     if room["status"] == "finished" and not was_finished:
+        battle_report.finish(room)
         stop_server_agents_for_room(room["id"])
 
 
@@ -6997,6 +7006,7 @@ def tick_game(room, dt):
     if game["victoryClock"] <= 0:
         check_elimination_and_victory(room)
         game["victoryClock"] = 0.45
+    battle_report.sample(room)
 
     # Expire alliance proposals after 45 seconds
     proposals = room.get("allianceProposals")
@@ -7142,7 +7152,7 @@ class GameHandler(BaseHTTPRequestHandler):
             with LOCK:
                 payload = {"rooms": room_list(), "serverTime": now()}
             self.send_json(200, payload)
-        elif path == "/api/state":
+        elif path in ("/api/state", "/api/report"):
             room_id = (query.get("roomId") or [""])[0]
             player_id = (query.get("playerId") or [""])[0]
             token = (query.get("token") or [""])[0]
@@ -7152,7 +7162,15 @@ class GameHandler(BaseHTTPRequestHandler):
                 self.send_json(403, {"ok": False, "error": "会话已失效"})
                 return
             with room_lock(room):
-                payload = {"ok": True, "room": public_room(room, viewer_id=player["id"])}
+                if path == "/api/report":
+                    try:
+                        report = battle_report.published(room, (query.get("matchId") or [""])[0])
+                    except ValueError as exc:
+                        self.send_json(409, {"ok": False, "error": str(exc)})
+                        return
+                    payload = {"ok": True, "report": report}
+                else:
+                    payload = {"ok": True, "room": public_room(room, viewer_id=player["id"])}
             self.send_json(200, payload)
         elif path == "/api/events":
             self.handle_events(query)
@@ -7518,6 +7536,7 @@ class GameHandler(BaseHTTPRequestHandler):
                     # 战斗中离开视为放弃：部队退出战区，剩余玩家立即获胜。
                     if room["status"] == "playing" and not player.get("eliminated"):
                         player["eliminated"] = True
+                        battle_report.eliminate(room, player["id"], "left")
                         game = room.get("game")
                         if game:
                             game["units"] = [u for u in game["units"] if u["owner"] != player["id"]]
