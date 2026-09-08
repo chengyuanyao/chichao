@@ -137,6 +137,8 @@ _STATIC_LOCK = threading.Lock()
 COLORS = ["#42d9ff", "#ff4f55", "#f6c84a", "#a77bff", "#3ddc84", "#ff8c42"]
 BOT_NAMES = ["北辰", "赤狐", "磐石", "夜枭", "雷霆", "灰熊"]
 ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+PATROL_MAX_POINTS = 32  # Includes the unit's initial position.
+PATROL_STALL_SECONDS = 3.0
 
 
 def central_wilderness_landscape():
@@ -1012,6 +1014,14 @@ def public_entity_frame(game):
         "stamp": stamp,
         "elapsed": round(elapsed, 2),
         "units": [(unit, public_unit(unit)) for unit in game["units"]],
+        "patrols": [{
+            "unitId": unit["id"], "owner": unit["owner"],
+            "points": [[round(x, 1), round(y, 1)]
+                       for x, y in unit["_patrolPoints"]],
+            "next": unit.get("_patrolIndex", 1),
+        } for unit in game["units"]
+            if unit["hp"] > 0 and unit.get("order") == "patrol"
+            and len(unit.get("_patrolPoints", [])) >= 2],
         "structures": [(structure, public_structure(structure))
                        for structure in game["structures"]],
         "projectiles": [(projectile, public_projectile(projectile))
@@ -1149,6 +1159,7 @@ def public_game(game, viewer_id=None, full=True):
             pings = [public for _raw, public in frame["pings"]]
             attack_alerts = list(frame["attackAlerts"])
             resource_intel = [public for _raw, public in frame["resources"]]
+            patrols = frame["patrols"]
         else:
             seen = field.visible
             friendly = friendly_owners(game, viewer_id)
@@ -1184,6 +1195,9 @@ def public_game(game, viewer_id=None, full=True):
                 public for resource, public in frame["resources"]
                 if seen(resource["x"], resource["y"])
             ]
+            # A visible enemy does not reveal its future scouting itinerary.
+            patrols = [route for route in frame["patrols"]
+                       if route["owner"] in friendly]
         dynamic = {
             "elapsed": frame["elapsed"],
             "units": visible_units,
@@ -1191,6 +1205,7 @@ def public_game(game, viewer_id=None, full=True):
             "ore": [[r["id"], r["amount"], 1 if r["guarded"] else 0]
                     for r in resource_intel],
             "resourceIntel": resource_intel,
+            "patrols": patrols,
             "projectiles": visible_projectiles,
             "effects": visible_effects,
             "pings": pings,
@@ -2799,6 +2814,68 @@ def clear_repair_order(unit):
     unit["repairing"] = False
 
 
+def clear_patrol_order(unit):
+    for key in ("_patrolPoints", "_patrolIndex", "_patrolStall"):
+        unit.pop(key, None)
+
+
+def set_patrol_leg(unit, index):
+    unit["_patrolIndex"] = index % len(unit["_patrolPoints"])
+    unit["destX"], unit["destY"] = unit["_patrolPoints"][unit["_patrolIndex"]]
+    unit["targetId"] = None
+    unit["_patrolStall"] = 0.0
+    clear_unit_path(unit)
+
+
+def issue_patrol(game, player_id, unit_ids, x, y):
+    """Shift+right-click appends a loop waypoint; first click records the start."""
+    selected = [u for u in game["units"]
+                if u["owner"] == player_id and u["id"] in unit_ids and u["hp"] > 0]
+    if not selected:
+        return
+    try:
+        target_x, target_y = float(x), float(y)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("无效巡逻坐标")
+    if not math.isfinite(target_x) or not math.isfinite(target_y):
+        raise ValueError("无效巡逻坐标")
+    # Validate the entire selection before changing any existing route.
+    if any(u.get("order") == "patrol"
+           and len(u.get("_patrolPoints", [])) >= PATROL_MAX_POINTS for u in selected):
+        raise ValueError("巡逻路线最多 32 个节点（含起点）；普通右键或 H 可重新设置")
+    terrain = game_terrain(game)
+    columns = max(1, int(math.ceil(math.sqrt(len(selected)))))
+    rows = int(math.ceil(len(selected) / float(columns)))
+    for index, unit in enumerate(selected):
+        margin = max(15, unit["size"])
+        dest_x = clamp(target_x + (index % columns - (columns - 1) / 2.0) * 52,
+                       margin, game["map"]["width"] - margin)
+        dest_y = clamp(target_y + (index // columns - (rows - 1) / 2.0) * 52,
+                       margin, game["map"]["height"] - margin)
+        clearance = max(8.0, unit["size"] * 0.5)
+        if terrain.blocked(unit["x"], unit["y"], clearance):
+            unit["x"], unit["y"] = terrain.nearest_open_point(
+                unit["x"], unit["y"], dest_x, dest_y, clearance)
+        if terrain.blocked(dest_x, dest_y, clearance):
+            dest_x, dest_y = terrain.nearest_open_point(
+                dest_x, dest_y, unit["x"], unit["y"], clearance)
+        continuing = unit.get("order") == "patrol" and unit.get("_patrolPoints")
+        points = unit["_patrolPoints"] if continuing else [(unit["x"], unit["y"])]
+        if math.hypot(dest_x - points[-1][0], dest_y - points[-1][1]) < 12:
+            continue  # Repeated clicks must not create zero-length legs.
+        points.append((dest_x, dest_y))
+        unit["_patrolPoints"] = points
+        clear_repair_order(unit)
+        if not continuing:
+            unit["order"] = "patrol"
+            set_patrol_leg(unit, 1)
+        if unit_role(unit["kind"]) == "harvester":
+            unit["harvestPaused"] = True
+            unit["harvestTarget"] = None
+            unit["preferredResourceId"] = None
+            unit["returnTarget"] = None
+
+
 def issue_move(game, player_id, unit_ids, x, y, attack_move=False):
     selected = [u for u in game["units"] if u["owner"] == player_id and u["id"] in unit_ids and u["hp"] > 0]
     if not selected:
@@ -2837,6 +2914,7 @@ def issue_move(game, player_id, unit_ids, x, y, attack_move=False):
         unit["destY"] = dest_y
         unit["targetId"] = None
         clear_repair_order(unit)
+        clear_patrol_order(unit)
         unit["order"] = "attackMove" if attack_move else "move"
         # A new command must never inherit the previous route merely because
         # both clicks happen to fall in the same navigation cell.
@@ -2868,6 +2946,7 @@ def issue_stop(game, player_id, unit_ids):
         unit["destY"] = None
         unit["targetId"] = None
         clear_repair_order(unit)
+        clear_patrol_order(unit)
         unit["order"] = "guard"
         unit["_path"] = None
         unit["_pathDest"] = None
@@ -2899,6 +2978,7 @@ def issue_harvest(game, player_id, unit_ids, resource_id):
         unit["destY"] = None
         unit["targetId"] = None
         clear_repair_order(unit)
+        clear_patrol_order(unit)
         unit["harvestPaused"] = False
         unit["preferredResourceId"] = resource["id"]
         unit["harvestTarget"] = resource["id"]
@@ -2935,6 +3015,7 @@ def issue_attack(game, player_id, unit_ids, target_id):
                 unit["destX"] = None
                 unit["destY"] = None
                 clear_repair_order(unit)
+                clear_patrol_order(unit)
                 unit["order"] = "attack"
 
 
@@ -2993,6 +3074,7 @@ def issue_repair(game, player_id, unit_ids, structure_id):
         unit["targetId"] = None
         unit["destX"] = None
         unit["destY"] = None
+        clear_patrol_order(unit)
         unit["order"] = "repair"
 
 
@@ -3760,7 +3842,7 @@ def tick_orbital_rain(room):
 
 
 AGENT_ALLOWED_COMMANDS = frozenset((
-    "move", "attackMove", "attack", "structureAttack", "repair",
+    "move", "attackMove", "patrol", "attack", "structureAttack", "repair",
     "structureRepair",
     "deploy", "undeploy", "stop", "harvest", "train", "prepareBuild", "placeBuild",
     "cancelBuild", "cancelTrain", "sell", "setRally",
@@ -3782,6 +3864,9 @@ def handle_game_command(room, player, payload, role="commander"):
     if command in ("move", "attackMove"):
         unit_ids = command_unit_ids(payload)
         issue_move(game, player["id"], unit_ids, payload.get("x", 0), payload.get("y", 0), command == "attackMove")
+    elif command == "patrol":
+        issue_patrol(game, player["id"], command_unit_ids(payload),
+                     payload.get("x"), payload.get("y"))
     elif command == "attack":
         issue_attack(game, player["id"], command_unit_ids(payload), payload.get("targetId"))
     elif command == "structureAttack":
@@ -5402,6 +5487,25 @@ def tick_neutral_guard(game, unit, definition, dt, entity_index, terrain, speed_
     return True
 
 
+def tick_patrol(unit, terrain, speed, dt):
+    points = unit.get("_patrolPoints", [])
+    if len(points) < 2:
+        clear_patrol_order(unit)
+        unit["order"] = "guard"
+        unit["destX"] = unit["destY"] = unit["targetId"] = None
+        return
+    unit["targetId"] = None  # Scouting takes priority over chasing enemies.
+    before_x, before_y = unit["x"], unit["y"]
+    reached = move_toward(terrain, unit, unit["destX"], unit["destY"], speed, dt)
+    progress = math.hypot(unit["x"] - before_x, unit["y"] - before_y)
+    unit["_patrolStall"] = (unit.get("_patrolStall", 0.0) + dt
+                            if progress < 0.01 and not reached else 0.0)
+    # An inaccessible waypoint must not pin a scouting dog forever. Skip only
+    # after a sustained stall, retaining the loop for its next circuit.
+    if reached or unit["_patrolStall"] >= PATROL_STALL_SECONDS:
+        set_patrol_leg(unit, unit.get("_patrolIndex", 1) + 1)
+
+
 def tick_units(room, dt, entity_index=None, combat_spatial=None):
     game = room["game"]
     terrain = game_terrain(game)
@@ -5443,6 +5547,9 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                 unit["slowMult"] = 1.0
         if unit.get("order") == "repair":
             tick_repair_unit(room, unit, dt, entity_index, repair_power_cache, terrain)
+            continue
+        if unit.get("order") == "patrol":
+            tick_patrol(unit, terrain, definition["speed"] * spd_mult, dt)
             continue
         if unit_role(unit["kind"]) == "harvester":
             tick_harvester(room, unit, dt, entity_index, terrain)

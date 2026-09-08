@@ -1309,6 +1309,8 @@ import {
   var audioContext = null;
   var renderStarted = false;
   var actionInFlight = false;
+  var unitCommandTail = Promise.resolve();
+  var pendingUnitCommands = [];
   // 房主改队伍时还会连带重排出生位。过去这些请求并发飞出去，房主紧接着
   // 点“开始”就可能让服务端在一半新配置、一半旧配置上开局。把大厅配置
   // 串成一条队列；开始按钮也排在同一条队列末尾。
@@ -1602,7 +1604,37 @@ import {
     return data;
   }
 
-  async function sendAction(action, payload, silent) {
+  function sendAction(action, payload, silent) {
+    var orderedCommands = ['move', 'attackMove', 'patrol', 'attack', 'stop', 'harvest', 'repair', 'deploy'];
+    if (action !== 'command' || !payload || orderedCommands.indexOf(payload.command) < 0) {
+      return performAction(action, payload, silent);
+    }
+    var ids = Array.isArray(payload.unitIds) ? payload.unitIds.slice() : [];
+    // Rapid Shift clicks must reach the server in click order. A later explicit
+    // move/stop discards unsent patrol additions for those units, so H cannot
+    // be undone by a stale route request finishing afterwards.
+    if (payload.command !== 'patrol') {
+      pendingUnitCommands.forEach(function (entry) {
+        if (entry.session === session && entry.payload.command === 'patrol') {
+          entry.payload.unitIds = entry.payload.unitIds.filter(function (id) { return ids.indexOf(id) < 0; });
+        }
+      });
+    }
+    var entry = { session: session, gameKey: gameKey,
+      payload: Object.assign({}, payload, { unitIds: ids }) };
+    pendingUnitCommands.push(entry);
+    var result = unitCommandTail.then(function () {
+      pendingUnitCommands.splice(pendingUnitCommands.indexOf(entry), 1);
+      if (entry.session !== session || entry.gameKey !== gameKey || !entry.payload.unitIds.length) {
+        return { cancelled: true };
+      }
+      return performAction(action, entry.payload, silent);
+    });
+    unitCommandTail = result.catch(function () {});
+    return result;
+  }
+
+  async function performAction(action, payload, silent) {
     if (!session) {
       throw new Error('会话已失效');
     }
@@ -3264,6 +3296,11 @@ import {
         (one.harvestPaused ? '已停止采矿 · ' : '') +
           '载矿 ' + Math.floor(one.cargo) + ' / ' + Math.floor(one.capacity) :
         (one ? '生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) + rankLabel : '混合编队'));
+      var patrols = (roomState.game.patrols || []).filter(function (route) { return selectedUnits.has(route.unitId); });
+      if (patrols.length) {
+        detail += one ? ' · 巡逻节点 ' + (patrols[0].next + 1) + '/' + patrols[0].points.length
+          : ' · ' + patrols.length + ' 个单位巡逻中';
+      }
       var veterancyHtml = '';
       if (one && (UNITS[one.kind] || {}).canVeteran) {
         var veteranDetail = veterancySummary(one.kills || 0);
@@ -3281,6 +3318,8 @@ import {
         return unit.id + ':' + Math.ceil(unit.hp) + ':' + Math.floor(unit.cargo || 0) + ':' +
           (unit.kills || 0) + ':' + (unit.repairing ? 1 : 0) + ':' +
           (unit.harvestPaused ? 1 : 0);
+      }).join(',') + '|patrol:' + patrols.map(function (route) {
+        return route.unitId + ':' + route.next + ':' + route.points.length;
       }).join(',');
       if (selectionInfo.dataset.key === unitInfoKey) { return; }
       selectionInfo.dataset.key = unitInfoKey;
@@ -3833,10 +3872,52 @@ import {
     return result;
   }
 
+  function drawPatrolRoutes(context, project, small) {
+    var shown = 0;
+    (roomState.game.patrols || []).forEach(function (route) {
+      if (!selectedUnits.has(route.unitId) || route.owner !== session.playerId ||
+          route.points.length < 2 || shown >= 8) { return; }
+      shown++;
+      var points = route.points.map(function (point) { return project(point[0], point[1]); });
+      context.save();
+      context.strokeStyle = 'rgba(105,230,240,.75)';
+      context.lineWidth = small ? 1 : 1.6;
+      context.setLineDash(small ? [3, 3] : [7, 5]);
+      context.beginPath();
+      points.forEach(function (point, index) {
+        var next = points[(index + 1) % points.length];
+        if (point.behind || next.behind) { return; }
+        context.moveTo(point.x, point.y);
+        context.lineTo(next.x, next.y);
+      });
+      context.stroke();
+      context.setLineDash([]);
+      context.font = (small ? '8' : '11') + 'px Consolas, monospace';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      points.forEach(function (point, index) {
+        if (point.behind) { return; }
+        context.fillStyle = 'rgba(8,25,30,.88)';
+        context.strokeStyle = index === route.next ? '#ffdc65' : '#75e5ee';
+        context.beginPath();
+        context.arc(point.x, point.y, small ? 5 : 10, 0, Math.PI * 2);
+        context.fill();
+        context.stroke();
+        context.fillStyle = context.strokeStyle;
+        context.fillText(String(index + 1), point.x, point.y);
+      });
+      context.restore();
+    });
+  }
+
   function drawHudOverlay(timestamp) {
     hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     hudCtx.clearRect(0, 0, viewWidth, viewHeight);
     var game = roomState.game;
+
+    drawPatrolRoutes(hudCtx, function (x, y) {
+      return view3d.worldToScreen(x, y, view3d.groundHeight(x, y) + 8);
+    }, false);
 
     // 血条已迁移到 GPU（render3d.js 的 updateBars），这里只画无法用实例化
     // 网格高效完成的少量图标：维修标记、老兵星标、地图信标。
@@ -4282,6 +4363,9 @@ import {
       paintTerrainFeatures(miniCtx, roomState.game.terrain, sx, sy);
       miniCtx.restore();
     }
+    if ((roomState.game.patrols || []).length) {
+      drawPatrolRoutes(miniCtx, function (x, y) { return { x: x * sx, y: y * sy }; }, true);
+    }
     var alertNow = performance.now();
     activeAttackAlerts().forEach(function (alert, index) {
       var px = alert.x * sx;
@@ -4638,6 +4722,17 @@ import {
     if (commandMode) {
       cancelModes();
     }
+  }
+
+  function issuePatrolCommand(x, y) {
+    var ids = selectedUnitIdList();
+    if (!ids.length) { return; }
+    sendAction('command', { command: 'patrol', unitIds: ids, x: x, y: y })
+      .then(function (result) {
+        if (result.cancelled) { return; }
+        toast('巡逻点已设置 · Shift+右键继续加点，普通右键改道或 H 停止', 'success');
+        sound('move');
+      }).catch(function () {});
   }
 
   function issueContextCommand(worldX, worldY) {
@@ -5159,6 +5254,8 @@ import {
       event.preventDefault();
       if (buildMode || commandMode) {
         cancelModes();
+      } else if (event.shiftKey && selectedUnits.size) {
+        issuePatrolCommand(pointer.worldX, pointer.worldY);
       } else {
         issueContextCommand(pointer.worldX, pointer.worldY);
       }
@@ -5249,14 +5346,11 @@ import {
     if (event.button === 2) {
       // 右键小地图：派遣选中单位
       if (selectedUnits.size) {
-        var cmd = commandMode === 'attackMove' ? 'attackMove' : 'move';
-        sendAction('command', {
-          command: cmd,
-          unitIds: selectedUnitIdList(),
-          x: world.x,
-          y: world.y
-        }).then(function () { sound('move'); }).catch(function () {});
-        if (commandMode) { cancelModes(); }
+        if (event.shiftKey && !buildMode && !commandMode) {
+          issuePatrolCommand(world.x, world.y);
+        } else {
+          issueGroundCommand(world.x, world.y);
+        }
       }
     } else if (event.button === 0 || event.pointerType === 'touch') {
       camera.x = world.x;
