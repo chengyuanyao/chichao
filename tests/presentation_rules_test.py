@@ -489,16 +489,15 @@ def main():
     assert "alphaTest: 0.42" in render
     assert "const helmet = new THREE.SphereGeometry(1, 8, 5" in render
     # 秘法会比例校正只变换已有零件，不能靠新增独立 Mesh/实例硬堆体量；
-    # 近景、远景和点选半径必须一起更新，玩法 size 则保持与钢铁对位一致。
+    # 近景、远景和模型拾取必须一起更新，玩法 size 则保持与钢铁对位一致。
     assert "function scalePartList(parts, sx, sy, sz)" in render
     assert "function scaleUnitModel(model, sx, sy, sz)" in render
     assert "}, 1.65, 1.25, 1.65);" in render
     assert "}, 1.65, 1.42, 1.65);" in render
     assert "scalePartList(wingBody, 1.0, 1.0, 0.82)" in render
     assert "scalePartList(wings, 1.0, 1.0, 0.82)" in render
-    assert "export const UNIT_VISUAL_PICK_SCALE" in render
-    assert "UNIT_VISUAL_PICK_SCALE" in app
-    assert "Math.max(unit.size + 8 / camera.zoom, visualTolerance)" in app
+    assert "UNIT_VISUAL_PICK_SCALE" not in app
+    assert "view3d.pickEntityAt(roomState.game, clickScreen.x, clickScreen.y)" in app
     assert server.UNIT_TYPES["mharvester"]["size"] == server.UNIT_TYPES["harvester"]["size"]
     assert server.UNIT_TYPES["mmcv"]["size"] == server.UNIT_TYPES["mcv"]["size"]
     assert server.UNIT_TYPES["golem"]["size"] == server.UNIT_TYPES["tank"]["size"]
@@ -508,7 +507,6 @@ def main():
     assert "天启级巨型持盾构装" in render
     assert "}, 1.18, 1.14, 1.18);" in render
     assert "warden: 1.55" in render
-    assert "warden: 1.75" in render
     assert "裂地晶兽：四足晶兽驮晶陨鞍塔" in render
     assert "裂地晶兽：四足晶兽 + 背上晶陨鞍塔" in app
     assert "坠星台：厚重发射底盘 + 竖直晶炮" in render
@@ -679,16 +677,18 @@ def main():
     assert "command: 'stop'" not in select_body
     assert "command: 'attackMove'" not in select_body
     # 3D 模型不能继续用 y=0 地面交点的小圆来点选，也不能把大模型投影成
-    # 含大量空白的屏幕矩形。鼠标射线与旋转后的 3D 包围盒求交并按深度消歧。
-    assert "function unitModelPickBox(kind)" in render
-    assert "entry.body.computeBoundingBox();" in render
-    assert "function unitPickScore(unit, sx, sy)" in render
-    assert "pickRay.copy(raycaster.ray).applyMatrix4(pickInverse)" in render
-    assert "pickRay.intersectBox(pickBox, pickLocalHit)" in render
-    assert "if (vis.inRenderRange === false) return null" in render
-    assert "unitPickScore: unitPickScore" in render
-    assert "view3d.unitPickScore(unit, clickScreen.x, clickScreen.y)" in app
-    assert "if (bestIsScreenUnit) { return; }" in app
+    # 含大量空白的屏幕矩形。统一读取正在显示的模型三角面与实例矩阵，
+    # 按真实交点深度消歧；部件和 LOD 同步，不允许单位包围盒抢走建筑点击。
+    picker = read("public/model_picker.js")
+    assert "function pickEntityAt(game, sx, sy)" in render
+    assert "pickEntityAt: pickEntityAt" in render
+    assert "mesh.getMatrixAt(i, instanceMatrix)" in picker
+    assert "probe.raycast(raycaster, intersections)" in picker
+    assert "modelPicker.addInstances(apocArmMesh" in render
+    assert "modelPicker.addInstances(dragonOrbitMesh" in render
+    assert "pad.userData.pickIgnore = true" in render
+    assert "bestIsScreenUnit" not in app
+    assert "if (exact) return exact.entity" in picker
     # 关闭旧对局后，迟到的 SSE/HTTP 快照必须按事件流代次和房间号双重丢弃。
     assert "var eventStreamGeneration = 0;" in app
     assert "eventSource !== source || eventStreamGeneration !== generation" in app

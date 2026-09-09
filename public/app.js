@@ -1,7 +1,6 @@
 import {
   createRenderer,
   MAP_DISPLAY_THEMES,
-  UNIT_VISUAL_PICK_SCALE,
   oreReserveTier
 } from './render3d.js';
 import { renderBattleReport, renderReportSummary, reportCsv } from './battle_report.js';
@@ -3040,7 +3039,10 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
     commandMode = null;
     canvas.classList.add('command-mode');
     buildCursorLabel.classList.remove('hidden');
-    buildCursorLabel.textContent = '部署：' + (BUILDINGS[kind] || {}).name + ' · 右键取消';
+    var definition = BUILDINGS[kind] || {};
+    var rangeHint = structureRole(kind) === 'defense' && definition.range > 0
+      ? ' · 基础射程 ' + definition.range + '（金圈；红色表示不可放置）' : '';
+    buildCursorLabel.textContent = '部署：' + definition.name + rangeHint + ' · 右键取消';
     if (!automatic) {
       toast('建筑已就绪，请在基地控制区内选择位置');
     }
@@ -3775,6 +3777,7 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
       x: pointer.worldX,
       y: pointer.worldY,
       valid: positionValidClient(buildMode, pointer.worldX, pointer.worldY),
+      attackRadius: structureRole(buildMode) === 'defense' ? definition.range || 0 : 0,
       anchorX: anchor ? anchor.x : 0,
       anchorY: anchor ? anchor.y : 0,
       anchorRadius: anchor ? anchor.radius : 0
@@ -4452,49 +4455,10 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
     if (!roomState || !roomState.game) {
       return null;
     }
-    var best = null;
-    var bestDistance = Infinity;
-    var bestScreenScore = Infinity;
-    var bestIsScreenUnit = false;
-    // worldX/worldY 是鼠标射线在地面的交点；重新投影可恢复原始 CSS 像素，
-    // 让渲染层用完整 3D 模型轮廓判定，而不是只认单位脚下的小圆。
+    // 输入坐标是鼠标在 y=0 平面的投影，反投影恢复同一条屏幕射线。
+    // 单位、建筑统一按当前可见模型拾取；未命中不再退回底座/大包围盒。
     var clickScreen = worldToScreen(worldX, worldY);
-    roomState.game.units.forEach(function (unit) {
-      var visual = view3d.visualPosition(unit.id) || unit;
-      var dist = Math.hypot(visual.x - worldX, visual.y - worldY);
-      var screenScore = view3d.unitPickScore ?
-        view3d.unitPickScore(unit, clickScreen.x, clickScreen.y) : null;
-      if (screenScore != null && screenScore < bestScreenScore) {
-        best = unit;
-        bestDistance = dist;
-        bestScreenScore = screenScore;
-        bestIsScreenUnit = true;
-        return;
-      }
-      if (bestIsScreenUnit) { return; }
-      // 玩法碰撞仍使用服务端 size；点选额外覆盖长法杖、龙翼等可见轮廓，
-      // 这条是旧浏览器/模型尚未建立时的地面兜底。
-      var visualTolerance = unit.size * (UNIT_VISUAL_PICK_SCALE[unit.kind] || 1);
-      var tolerance = Math.max(unit.size + 8 / camera.zoom, visualTolerance);
-      if (dist <= tolerance && dist < bestDistance) {
-        best = unit;
-        bestDistance = dist;
-      }
-    });
-    roomState.game.structures.forEach(function (structure) {
-      // 鼠标已经落在单位的可见模型上时，不能再被其脚下或背后的建筑抢走。
-      if (bestIsScreenUnit) { return; }
-      var dx = Math.abs(structure.x - worldX);
-      var dy = Math.abs(structure.y - worldY);
-      if (dx <= structure.size && dy <= structure.size) {
-        var dist = Math.hypot(dx, dy);
-        if (!best || dist < bestDistance * 1.3) {
-          best = structure;
-          bestDistance = dist;
-        }
-      }
-    });
-    return best;
+    return view3d.pickEntityAt(roomState.game, clickScreen.x, clickScreen.y);
   }
 
   function resourceAt(worldX, worldY) {

@@ -14,7 +14,7 @@ input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;
 </style>
 <canvas id="world"></canvas><div id="status">正在准备离线渲染场景…</div>
 <div id="controls">
-<select id="scenario"><option value="showcase">双阵营全图鉴</option><option value="army">大军团压力</option><option value="river">河谷光影</option><option value="map">地图全景</option></select>
+<select id="scenario"><option value="showcase">双阵营全图鉴</option><option value="army">大军团压力</option><option value="river">河谷光影</option><option value="map">地图全景</option><option value="placement">炮塔射程预览</option><option value="picking">模型点击验收</option></select>
 <select id="map"></select>
 <select id="shadows"><option value="structures">建筑阴影</option><option value="all">全部阴影</option><option value="off">关闭阴影</option></select>
 <select id="bloom"><option value="0">无泛光</option><option value="1">轻量泛光</option><option value="high">完整泛光</option></select>
@@ -50,7 +50,7 @@ let settings = {shadows:query.get('shadows') || 'structures', bloom:query.get('b
   fastBloom:query.get('bloom') !== 'high', lod:query.get('lod') !== 'off', fogScale:9, particleBudget:150};
 if (query.get('bloom') === 'high') settings.bloom = true;
 renderer.setQuality(settings);
-let game, map, scenario, camera, sceneTime = 18000, lastAt = 0, snapshotAt = -Infinity;
+let game, map, scenario, camera, buildPreview = null, pickedStructure = null, sceneTime = 18000, lastAt = 0, snapshotAt = -Infinity;
 let paused = query.get('paused') === '1', moving = query.get('moving') === '1';
 let frameObserver = null, runningBenchmark = false, frameError = null;
 let halted = false, framePending = false;
@@ -80,6 +80,8 @@ function loadScenario(options={}) {
   map = catalog.maps[options.map || query.get('map') || 'iron_river_duel'];
   if (!map) throw new Error('Unknown map');
   renderer.clearEntities();
+  buildPreview = null;
+  selected.clear(); pickedStructure = null;
   const focus = map.id === 'iron_river_duel' ? {x:1000,y:1600}
     : map.id === 'gold_crater_small' ? {x:3200,y:1000} : {x:2000,y:2000};
   // Move the same army fixture next to a forest for a worst-case vegetation test.
@@ -109,6 +111,21 @@ function loadScenario(options={}) {
       focus.y+(Math.floor(i/columns)-(Math.ceil(count/columns)-1)/2)*28,i%11===0?100:0));
     Object.keys(catalog.structures).forEach((kind,i)=>game.structures.push(structure(kind,i,
       focus.x-500+(i%8)*140,focus.y-430+Math.floor(i/8)*155)));
+  } else if (scenario === 'picking') {
+    game.structures.push(structure('hq',0,focus.x-240,focus.y),
+      structure('mtower',1,focus.x+260,focus.y-140));
+    game.units.push(unit('tank',0,focus.x-230,focus.y-60),
+      unit('dragon',1,focus.x+110,focus.y+130,100),
+      unit('overlord',2,focus.x-150,focus.y+200,100),
+      unit('rifle',3,focus.x+40,focus.y+15));
+  } else if (scenario === 'placement') {
+    const kind = query.get('building') || 'turret';
+    const definition = catalog.structures[kind];
+    if (!definition) throw new Error('Unknown preview building');
+    game.structures.push(structure('hq',0,focus.x-260,focus.y));
+    buildPreview = {kind,size:definition.size,x:focus.x,y:focus.y,
+      valid:query.get('valid')!=='0',attackRadius:definition.role==='defense'?definition.range:0,
+      anchorX:focus.x-260,anchorY:focus.y,anchorRadius:620};
   } else if (scenario !== 'river' && scenario !== 'map') throw new Error('Unknown scenario');
   renderer.setMatch({id:map.id,width:map.width,height:map.height,seed:fixtureSeed},
     terrainFromMap(map),resources,catalog.sight,map.spawnPoints);
@@ -135,8 +152,8 @@ function draw(at) {
   const start=performance.now();
   try {
     renderer.render({game,dt:Math.min(interval/1000,0.05),time:sceneTime,revealMap,
-      selectedUnitIds:selected,selectedStructureId:null,selectedResourceId:null,
-      newEffects:[],buildPreview:null});
+      selectedUnitIds:selected,selectedStructureId:pickedStructure,selectedResourceId:null,
+      newEffects:[],buildPreview});
   } catch(error) {
     frameError=String(error.stack||error); status.textContent=frameError;
     console.error(error); return;
@@ -150,6 +167,21 @@ function kick() {
     requestAnimationFrame(at=>{framePending=false;if(!halted) draw(at);});
   }
 }
+canvas.addEventListener('contextmenu', event => event.preventDefault());
+canvas.addEventListener('pointerdown', async event => {
+  if (scenario !== 'picking' || ![0,2].includes(event.button)) return;
+  event.preventDefault();
+  const bounds=canvas.getBoundingClientRect();
+  const target=renderer.pickEntityAt(game,event.clientX-bounds.left,event.clientY-bounds.top);
+  if(event.button===0) {
+    selected.clear();pickedStructure=null;
+    if(target?.id.startsWith('u')) selected.add(target.id);
+    else if(target) pickedStructure=target.id;
+  }
+  window.benchmark.resume();await waitFrames(2);halted=true;
+  status.textContent=`${event.button===2?'右键目标':'左键选中'}：${target?
+    (catalog.units[target.kind]||catalog.structures[target.kind]).name+' · '+target.id:'地面（未命中模型）'}\n只测试模型拾取，不发送游戏命令`;
+});
 function percentile(values,q) {
   const sorted=values.slice().sort((a,b)=>a-b);
   return +sorted[Math.min(sorted.length-1,Math.floor((sorted.length-1)*q))].toFixed(3);

@@ -11,6 +11,8 @@
 
 import * as THREE from './vendor/three.module.min.js';
 import { createPostFX } from './postfx.js';
+import { createAttackRangePreview } from './attack_range_preview.js';
+import { createModelPicker } from './model_picker.js';
 import { disposeOwnedRenderGroup, MaterialShaderRegistry } from './render_resources.js';
 import { wildernessNoise, wildernessBiome, applyWildernessGround, applyWildernessRock,
   applyWildernessTrail, applyBridgeWeathering, makeWeatheredRockGeometry,
@@ -2638,17 +2640,6 @@ const UNIT_VISUAL_SCALE = {
   warden: 1.55, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30
 };
-
-/**
- * 俯视点选半径相对服务端 size 的表现层校正。长法杖、龙翼和低矮兽身会伸出
- * 玩法碰撞圆；这里仅让可见轮廓能被点中，不参与碰撞、寻路或武器判定。
- */
-export const UNIT_VISUAL_PICK_SCALE = Object.freeze({
-  mage: 3.10, frost: 3.10, imp: 1.70, oracle: 3.25,
-  golem: 1.05, panther: 1.90, dragon: 1.90,
-  warden: 1.75, colossus: 1.45, comet: 1.20,
-  mharvester: 1.00, mmcv: 1.20, hexling: 1.10
-});
 
 /* 共享的哈希值噪声：天空的云、水面的泡沫、地形的细节法线都用同一套，
  * 免得每个着色器各带一份不同实现。 */
@@ -5629,20 +5620,6 @@ export function createRenderer(canvas) {
     return entry;
   }
 
-  /**
-   * 点选使用近景与远景几何体的并集。包围盒只在该兵种第一次被点击时计算，
-   * 之后直接复用；不进入 60FPS 渲染热路径。
-   */
-  function unitModelPickBox(kind) {
-    const entry = unitGeometry(kind);
-    if (entry.pickBox) return entry.pickBox;
-    entry.body.computeBoundingBox();
-    entry.simple.computeBoundingBox();
-    entry.pickBox = entry.body.boundingBox.clone();
-    entry.pickBox.union(entry.simple.boundingBox);
-    return entry.pickBox;
-  }
-
   function ensurePool(kind, needed) {
     let pool = unitPools.get(kind);
     if (!pool) pool = { capacity: 0, mesh: null, simple: null };
@@ -5960,6 +5937,7 @@ export function createRenderer(canvas) {
       }));
     }
     const pad = new THREE.Mesh(buildingPadGeo, buildingPadMat);
+    pad.userData.pickIgnore = true;
     // 尘土围裙略大于新地基，让建筑坐进 #7 的踩实土而不是压住一整块灰板。
     pad.scale.set(structure.size * 0.86, 1, structure.size * 0.86);
     pad.position.y = 0.42;
@@ -7014,7 +6992,11 @@ export function createRenderer(canvas) {
   rangeRing.renderOrder = 4;
   worldRoot.add(rangeRing);
 
+  const attackRangePreview = createAttackRangePreview(groundHeight);
+  worldRoot.add(attackRangePreview.mesh);
+
   function updatePreview(preview) {
+    attackRangePreview.update(preview, heightField || state.map);
     if (!preview) {
       if (previewGroup) previewGroup.visible = false;
       rangeRing.visible = false;
@@ -7143,59 +7125,27 @@ export function createRenderer(canvas) {
     };
   }
 
-  const pickRay = new THREE.Ray();
-  const pickMatrix = new THREE.Matrix4();
-  const pickInverse = new THREE.Matrix4();
-  const pickPosition = new THREE.Vector3();
-  const pickScale = new THREE.Vector3();
-  const pickQuaternion = new THREE.Quaternion();
-  const pickUp = new THREE.Vector3(0, 1, 0);
-  const pickBox = new THREE.Box3();
-  const pickLocalHit = new THREE.Vector3();
-  const pickWorldHit = new THREE.Vector3();
+  const modelPicker = createModelPicker();
 
-  /**
-   * 返回鼠标射线命中单位模型包围盒的深度；未命中返回 null。
-   *
-   * 旧实现把八个角投影成一个屏幕矩形。坦克长炮管、巨龙双翼会形成很大的
-   * 空心矩形，鼠标明明点在旁边地面也会被它们抢走；镜头背后的大单位甚至
-   * 可能反投影到屏幕内。现在把鼠标射线变换到单位本地坐标，直接与旋转后
-   * 的 3D 包围盒相交，并用交点深度处理重叠单位。仍只在鼠标操作时计算。
-   */
-  function unitPickScore(unit, sx, sy) {
-    if (!unit || !Number.isFinite(sx) || !Number.isFinite(sy)) return null;
-    const vis = visual.get(unit.id) || unit;
-    if (vis.inRenderRange === false) return null;
-    const kind = unitVisualKind(unit);
-    const modelBox = unitModelPickBox(kind);
-    const scale = UNIT_VISUAL_SCALE[kind] || 1;
-    const gameplayRadius = unit.size * (UNIT_VISUAL_PICK_SCALE[unit.kind] || 1);
-    const ground = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
-    projected.set(vis.x, ground + Math.max(unit.size, modelBox.max.y * scale) * 0.5,
-      vis.y).project(camera);
-    if (projected.z < -1 || projected.z > 1) return null;
-
-    ndc.x = (sx / state.width) * 2 - 1;
-    ndc.y = -(sy / state.height) * 2 + 1;
-    raycaster.setFromCamera(ndc, camera);
-    pickQuaternion.setFromAxisAngle(pickUp, -(vis.dir || 0));
-    pickMatrix.compose(
-      pickPosition.set(vis.x, ground, vis.y), pickQuaternion,
-      pickScale.set(scale, scale, scale));
-    pickInverse.copy(pickMatrix).invert();
-    pickRay.copy(raycaster.ray).applyMatrix4(pickInverse);
-
-    pickBox.copy(modelBox);
-    pickBox.min.x = Math.min(pickBox.min.x, -gameplayRadius / scale);
-    pickBox.max.x = Math.max(pickBox.max.x, gameplayRadius / scale);
-    pickBox.min.z = Math.min(pickBox.min.z, -gameplayRadius / scale);
-    pickBox.max.z = Math.max(pickBox.max.z, gameplayRadius / scale);
-    pickBox.min.y = Math.min(pickBox.min.y, 0);
-    pickBox.max.y = Math.max(pickBox.max.y, unit.size / scale);
-    pickBox.expandByScalar(5 / Math.max(0.3, state.zoom) / scale);
-    if (!pickRay.intersectBox(pickBox, pickLocalHit)) return null;
-    pickWorldHit.copy(pickLocalHit).applyMatrix4(pickMatrix);
-    return raycaster.ray.origin.distanceTo(pickWorldHit);
+  // One shared pick for left selection / double click / right attack. Read
+  // displayed instance matrices, including interpolation, LOD and attachments,
+  // rather than reconstructing a different collision model from the snapshot.
+  function pickEntityAt(game, sx, sy) {
+    if (!game || !state.map) return null;
+    modelPicker.begin();
+    const units = new Map(game.units.filter(u => u.hp > 0).map(u => [u.id, u]));
+    unitPools.forEach(pool => {
+      for (const mesh of [pool.mesh, pool.simple]) {
+        if (mesh) modelPicker.addInstances(mesh, i => units.get(mesh.userData.instanceIds[i]));
+      }
+    });
+    modelPicker.addInstances(apocArmMesh, i => units.get(apocArmVisuals[i]?.unit.id));
+    modelPicker.addInstances(dragonOrbitMesh, i => units.get(dragonOrbitVisuals[i]?.unit.id));
+    for (const structure of game.structures) {
+      if (structure.hp > 0) modelPicker.addObject(structureNodes.get(structure.id)?.group, structure);
+    }
+    return modelPicker.pick(camera, state.width, state.height, sx, sy, (entity, point) =>
+      entity.owner === state.viewerId || state.friendly(entity.owner) || isVisible(point.x, point.z));
   }
 
   /* -------------------- 逐帧渲染 -------------------- */
@@ -8230,7 +8180,7 @@ export function createRenderer(canvas) {
 
     screenToWorld: screenToWorld,
     worldToScreen: worldToScreen,
-    unitPickScore: unitPickScore,
+    pickEntityAt: pickEntityAt,
     isVisible: isVisible,
     render: render,
     setFogRevealed: setFogRevealed,
@@ -8304,6 +8254,7 @@ export function createRenderer(canvas) {
 
     /** 换局时清空所有单位/建筑，避免上一局的模型残留。 */
     clearEntities: function () {
+      modelPicker.clear();
       resetFogState();
       visual.clear();
       snapshotVisuals.length = 0;
