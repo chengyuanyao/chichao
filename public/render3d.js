@@ -13,6 +13,7 @@ import * as THREE from './vendor/three.module.min.js';
 import { createPostFX } from './postfx.js';
 import { createAttackRangePreview } from './attack_range_preview.js';
 import { createModelPicker } from './model_picker.js';
+import { prepareTerrainInput, intersectTerrainInput } from './terrain_input.js';
 import { disposeOwnedRenderGroup, MaterialShaderRegistry } from './render_resources.js';
 import { wildernessNoise, wildernessBiome, applyWildernessGround, applyWildernessRock,
   applyWildernessTrail, applyBridgeWeathering, makeWeatheredRockGeometry,
@@ -2830,6 +2831,7 @@ export function createRenderer(canvas) {
   // 地形建好后直接采样网格高度。过去每个可见单位每帧都重新遍历河流、山脉
   // 并执行多组三角函数，军团规模上来后 CPU 时间会线性爆炸。
   let heightField = null;
+  let terrainInput = null;
 
   function riverDepthAt(x, y) {
     // 返回 0..1：越靠近沟壑中心越深。用于压低地形顶点，形成真实的深沟。
@@ -3906,6 +3908,7 @@ export function createRenderer(canvas) {
   function buildTerrain() {
     const buildStarted = performance.now();
     heightField = null;
+    terrainInput = null;
     _ghCache.clear();
     if (terrainGroup) {
       // Every mesh/material here belongs to this map. Textures live in the
@@ -3994,6 +3997,7 @@ export function createRenderer(canvas) {
       values: heights, cols: segX + 1, segX: segX, segY: segY,
       width: mw, height: mh
     };
+    terrainInput = prepareTerrainInput(heightField, state.terrain);
     _ghCache.clear();
 
     // 新展示图使用真水面、岩质河岸、磨损道路和抬高桥梁；
@@ -7038,6 +7042,7 @@ export function createRenderer(canvas) {
   const hitPoint = new THREE.Vector3();
   const projected = new THREE.Vector3();
   let appliedCamX = NaN;
+  let viewportNeedsUpdate = true;
   let appliedCamY = NaN;
   let appliedZoom = NaN;
   let appliedYaw = NaN;
@@ -7053,6 +7058,7 @@ export function createRenderer(canvas) {
       return false;
     }
     appliedCamX = state.camX;
+    viewportNeedsUpdate = true;
     appliedCamY = state.camY;
     appliedZoom = state.zoom;
     appliedYaw = state.yaw;
@@ -7105,7 +7111,7 @@ export function createRenderer(canvas) {
     return true;
   }
 
-  function screenToWorld(sx, sy) {
+  function screenToFlatWorld(sx, sy) {
     ndc.x = (sx / state.width) * 2 - 1;
     ndc.y = -(sy / state.height) * 2 + 1;
     raycaster.setFromCamera(ndc, camera);
@@ -7113,6 +7119,15 @@ export function createRenderer(canvas) {
       return { x: state.camX, y: state.camY };
     }
     return { x: hitPoint.x, y: hitPoint.z };
+  }
+
+  function screenToWorld(sx, sy) {
+    applyCamera();
+    ndc.x = (sx / state.width) * 2 - 1;
+    ndc.y = -(sy / state.height) * 2 + 1;
+    raycaster.setFromCamera(ndc, camera);
+    return intersectTerrainInput(raycaster.ray, terrainInput, camera.near, camera.far) ||
+      screenToFlatWorld(sx, sy);
   }
 
   function worldToScreen(x, y, height) {
@@ -7130,10 +7145,10 @@ export function createRenderer(canvas) {
   // One shared pick for left selection / double click / right attack. Read
   // displayed instance matrices, including interpolation, LOD and attachments,
   // rather than reconstructing a different collision model from the snapshot.
-  function pickEntityAt(game, sx, sy) {
-    if (!game || !state.map) return null;
+  function collectPickModels(game, unitOwner) {
     modelPicker.begin();
-    const units = new Map(game.units.filter(u => u.hp > 0).map(u => [u.id, u]));
+    const units = new Map(game.units.filter(u => u.hp > 0 &&
+      (unitOwner == null || u.owner === unitOwner)).map(u => [u.id, u]));
     unitPools.forEach(pool => {
       for (const mesh of [pool.mesh, pool.simple]) {
         if (mesh) modelPicker.addInstances(mesh, i => units.get(mesh.userData.instanceIds[i]));
@@ -7141,11 +7156,23 @@ export function createRenderer(canvas) {
     });
     modelPicker.addInstances(apocArmMesh, i => units.get(apocArmVisuals[i]?.unit.id));
     modelPicker.addInstances(dragonOrbitMesh, i => units.get(dragonOrbitVisuals[i]?.unit.id));
+    if(unitOwner != null) return;
     for (const structure of game.structures) {
       if (structure.hp > 0) modelPicker.addObject(structureNodes.get(structure.id)?.group, structure);
     }
+  }
+
+  function pickEntityAt(game, sx, sy) {
+    if (!game || !state.map) return null;
+    collectPickModels(game);
     return modelPicker.pick(camera, state.width, state.height, sx, sy, (entity, point) =>
       entity.owner === state.viewerId || state.friendly(entity.owner) || isVisible(point.x, point.z));
+  }
+
+  function unitsInScreenBox(game, owner, left, top, right, bottom) {
+    if(!game || !state.map || owner == null) return [];
+    collectPickModels(game, owner);
+    return modelPicker.inScreenBox(camera,state.width,state.height,left,top,right,bottom);
   }
 
   /* -------------------- 逐帧渲染 -------------------- */
@@ -7181,10 +7208,12 @@ export function createRenderer(canvas) {
   // 为完全离屏的军团做插值、落地采样和实例矩阵上传。
   const viewportBounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   function updateViewportBounds(margin) {
-    const a = screenToWorld(0, 0);
-    const b = screenToWorld(state.width, 0);
-    const c = screenToWorld(0, state.height);
-    const d = screenToWorld(state.width, state.height);
+    // Culling needs a conservative footprint, not a foreground hill hit that
+    // could shrink the viewport and hide models standing behind that hill.
+    const a = screenToFlatWorld(0, 0);
+    const b = screenToFlatWorld(state.width, 0);
+    const c = screenToFlatWorld(0, state.height);
+    const d = screenToFlatWorld(state.width, state.height);
     viewportBounds.minX = Math.max(-margin,
       Math.min(a.x, b.x, c.x, d.x) - margin);
     viewportBounds.maxX = Math.min(state.map.width + margin,
@@ -7457,7 +7486,12 @@ export function createRenderer(canvas) {
     const cameraChanged = applyCamera();
     const camDist = camera.position.distanceTo(
       vecPos.set(state.camX, 0, state.camY));
-    if (cameraChanged) updateViewportBounds(190);
+    if (cameraChanged || viewportNeedsUpdate) {
+      const reliefMargin = terrainInput ? Math.max(Math.abs(terrainInput.minHeight),
+        Math.abs(terrainInput.maxHeight)) / Math.max(.2, Math.tan(state.pitch)) : 0;
+      updateViewportBounds(Math.max(190, reliefMargin + 50));
+      viewportNeedsUpdate = false;
+    }
     // 迷雾只依赖服务端快照中的位置。过去 60FPS 每帧都重画一张 Canvas、
     // 上传一次纹理；大军团时这是持续卡顿的主要来源之一。每个 8Hz 快照更新
     // 一次即可，单位本身仍然按 60FPS 插值。
@@ -8181,6 +8215,7 @@ export function createRenderer(canvas) {
     screenToWorld: screenToWorld,
     worldToScreen: worldToScreen,
     pickEntityAt: pickEntityAt,
+    unitsInScreenBox: unitsInScreenBox,
     isVisible: isVisible,
     render: render,
     setFogRevealed: setFogRevealed,

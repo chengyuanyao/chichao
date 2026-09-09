@@ -13,6 +13,9 @@ export function createModelPicker() {
   const probe = new THREE.Mesh(emptyGeometry, probeMaterial);
   const records = [];
   const intersections = [];
+  const screenCorner = new THREE.Vector3();
+  const screenMatrix = new THREE.Matrix4();
+  const clipCenter = new THREE.Vector3();
   let count = 0;
 
   function begin() {
@@ -103,6 +106,27 @@ export function createModelPicker() {
   }
 
   function clear() { begin(); records.length = 0; }
-  return {begin, add, addInstances, addObject, pick, clear,
+  function inScreenBox(camera, width, height, left, top, right, bottom) {
+    const result = new Set();
+    for (let i = 0; i < count; i++) {
+      const record = records[i];
+      if(result.has(record.entity)) continue;
+      const box = record.geometry.boundingBox;
+      screenMatrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse).multiply(record.matrix);
+      box.getCenter(clipCenter).applyMatrix4(screenMatrix);
+      if(clipCenter.z < -1 || clipCenter.z > 1) continue;
+      let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+      for(let corner=0;corner<8;corner++) {
+        screenCorner.set(corner&1?box.max.x:box.min.x,corner&2?box.max.y:box.min.y,
+          corner&4?box.max.z:box.min.z).applyMatrix4(screenMatrix);
+        const x=(screenCorner.x*.5+.5)*width, y=(.5-screenCorner.y*.5)*height;
+        minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);
+      }
+      if(maxX>=Math.max(0,left) && minX<=Math.min(width,right) &&
+          maxY>=Math.max(0,top) && minY<=Math.min(height,bottom)) result.add(record.entity);
+    }
+    return Array.from(result);
+  }
+  return {begin, add, addInstances, addObject, pick, inScreenBox, clear,
     dispose() { clear(); probeMaterial.dispose(); emptyGeometry.dispose(); }};
 }

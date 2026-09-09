@@ -11,8 +11,9 @@ canvas {display:block;width:100%;height:100%}
 #controls {position:fixed;bottom:12px;left:18px;display:flex;flex-wrap:wrap;max-width:calc(100vw - 56px);gap:8px;align-items:center;background:#111b22ed;padding:10px;border-radius:5px}
 button,select,input {font:inherit;background:#263b42;color:#edf5ee;border:1px solid #729385;border-radius:3px;padding:6px}
 input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;overflow:auto;background:#111b22e8;padding:12px;max-width:430px;font-size:11px;white-space:pre-wrap}
+#dragBox {position:fixed;border:1px solid #a6ffd2;background:#62dfaa22;pointer-events:none}
 </style>
-<canvas id="world"></canvas><div id="status">正在准备离线渲染场景…</div>
+<canvas id="world"></canvas><div id="status">正在准备离线渲染场景…</div><div id="dragBox" hidden></div>
 <div id="controls">
 <select id="scenario"><option value="showcase">双阵营全图鉴</option><option value="army">大军团压力</option><option value="river">河谷光影</option><option value="map">地图全景</option><option value="placement">炮塔射程预览</option><option value="picking">模型点击验收</option></select>
 <select id="map"></select>
@@ -168,19 +169,48 @@ function kick() {
   }
 }
 canvas.addEventListener('contextmenu', event => event.preventDefault());
+let inputDrag=null;
 canvas.addEventListener('pointerdown', async event => {
   if (scenario !== 'picking' || ![0,2].includes(event.button)) return;
   event.preventDefault();
   const bounds=canvas.getBoundingClientRect();
-  const target=renderer.pickEntityAt(game,event.clientX-bounds.left,event.clientY-bounds.top);
-  if(event.button===0) {
-    selected.clear();pickedStructure=null;
-    if(target?.id.startsWith('u')) selected.add(target.id);
-    else if(target) pickedStructure=target.id;
+  const sx=event.clientX-bounds.left,sy=event.clientY-bounds.top;
+  if(event.button===0) {inputDrag={x:sx,y:sy};canvas.setPointerCapture(event.pointerId);return;}
+  const target=renderer.pickEntityAt(game,sx,sy);
+  if(query.get('terrainInput')==='1') {
+    const point=renderer.screenToWorld(sx,sy);
+    buildPreview={kind:'turret',size:catalog.structures.turret.size,x:point.x,y:point.y,valid:true};
+    const height=renderer.groundHeight(point.x,point.y);
+    const projected=renderer.worldToScreen(point.x,point.y,height);
+    window.benchmark.resume();await waitFrames(2);halted=true;
+    status.textContent=`地形落点 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) · 高度 ${height.toFixed(2)}\n屏幕回投误差 ${Math.hypot(projected.x-sx,projected.y-sy).toFixed(3)} px · 预览仅核对位置，不执行建造`;
+    return;
   }
   window.benchmark.resume();await waitFrames(2);halted=true;
   status.textContent=`${event.button===2?'右键目标':'左键选中'}：${target?
     (catalog.units[target.kind]||catalog.structures[target.kind]).name+' · '+target.id:'地面（未命中模型）'}\n只测试模型拾取，不发送游戏命令`;
+});
+canvas.addEventListener('pointermove',event=>{
+  if(!inputDrag) return;
+  const box=document.querySelector('#dragBox');box.hidden=false;
+  Object.assign(box.style,{left:Math.min(inputDrag.x,event.clientX)+'px',top:Math.min(inputDrag.y,event.clientY)+'px',
+    width:Math.abs(inputDrag.x-event.clientX)+'px',height:Math.abs(inputDrag.y-event.clientY)+'px'});
+});
+canvas.addEventListener('pointerup',async event=>{
+  if(event.button!==0 || !inputDrag) return;
+  const start=inputDrag;inputDrag=null;document.querySelector('#dragBox').hidden=true;
+  selected.clear();pickedStructure=null;
+  let label;
+  if(Math.hypot(event.clientX-start.x,event.clientY-start.y)>=6) {
+    const units=renderer.unitsInScreenBox(game,'steel',Math.min(start.x,event.clientX),Math.min(start.y,event.clientY),
+      Math.max(start.x,event.clientX),Math.max(start.y,event.clientY));
+    units.forEach(u=>selected.add(u.id));label=`框选 ${units.length} 个己方单位：${units.map(u=>u.id).join(', ')}`;
+  } else {
+    const target=renderer.pickEntityAt(game,event.clientX,event.clientY);
+    if(target?.id.startsWith('u')) selected.add(target.id);else if(target) pickedStructure=target.id;
+    label=`左键选中：${target?(catalog.units[target.kind]||catalog.structures[target.kind]).name+' · '+target.id:'地面（未命中模型）'}`;
+  }
+  window.benchmark.resume();await waitFrames(2);halted=true;status.textContent=label+'\n只测试模型拾取，不发送游戏命令';
 });
 function percentile(values,q) {
   const sorted=values.slice().sort((a,b)=>a-b);

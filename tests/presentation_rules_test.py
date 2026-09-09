@@ -127,7 +127,8 @@ def main():
     # follow interpolated units every frame, and adaptive quality changes pixel
     # density rather than swapping every unit for one box mesh.
     assert "if (game !== lastEntityGame)" in render
-    assert "updateViewportBounds(190);" in render
+    assert "updateViewportBounds(Math.max(190, reliefMargin + 50));" in render
+    assert "cameraChanged || viewportNeedsUpdate" in render
     assert "let movingVisibleBar = false;" in render
     assert "if (movingVisibleBar || payload.time - lastBarsAt >= 50)" in render
     assert "selected.forEach(function (id)" in render
@@ -497,7 +498,7 @@ def main():
     assert "scalePartList(wingBody, 1.0, 1.0, 0.82)" in render
     assert "scalePartList(wings, 1.0, 1.0, 0.82)" in render
     assert "UNIT_VISUAL_PICK_SCALE" not in app
-    assert "view3d.pickEntityAt(roomState.game, clickScreen.x, clickScreen.y)" in app
+    assert "view3d.pickEntityAt(roomState.game, pointer.x, pointer.y)" in app
     assert server.UNIT_TYPES["mharvester"]["size"] == server.UNIT_TYPES["harvester"]["size"]
     assert server.UNIT_TYPES["mmcv"]["size"] == server.UNIT_TYPES["mcv"]["size"]
     assert server.UNIT_TYPES["golem"]["size"] == server.UNIT_TYPES["tank"]["size"]

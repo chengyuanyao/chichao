@@ -3586,7 +3586,7 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
   // 3D 下这两个换算不再是简单的线性变换：屏幕坐标要投射到地面平面上，
   // 世界坐标要经过投影矩阵。统一交给渲染层。
   function worldToScreen(x, y) {
-    return view3d.worldToScreen(x, y, 0);
+    return view3d.worldToScreen(x, y, view3d.groundHeight(x, y));
   }
 
   function screenToWorld(x, y) {
@@ -3743,7 +3743,7 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
    * ------------------------------------------------------------------ */
 
   function visibleAt(x, y, padding) {
-    var point = view3d.worldToScreen(x, y, 0);
+    var point = worldToScreen(x, y);
     if (point.behind) { return false; }
     var pad = (padding || 0) * camera.zoom + 90;
     return point.x > -pad && point.x < viewWidth + pad &&
@@ -4455,10 +4455,9 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
     if (!roomState || !roomState.game) {
       return null;
     }
-    // 输入坐标是鼠标在 y=0 平面的投影，反投影恢复同一条屏幕射线。
-    // 单位、建筑统一按当前可见模型拾取；未命中不再退回底座/大包围盒。
-    var clickScreen = worldToScreen(worldX, worldY);
-    return view3d.pickEntityAt(roomState.game, clickScreen.x, clickScreen.y);
+    // 地形交点用于移动/放置，模型拾取直接使用原始屏幕射线。
+    // 不能把高地/桥面落点再当作 y=0 反投影，否则模型点选会再次偏移。
+    return view3d.pickEntityAt(roomState.game, pointer.x, pointer.y);
   }
 
   function resourceAt(worldX, worldY) {
@@ -4594,15 +4593,8 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
     var right = Math.max(startX, endX);
     var top = Math.min(startY, endY);
     var bottom = Math.max(startY, endY);
-    roomState.game.units.forEach(function (unit) {
-      if (unit.owner !== session.playerId) {
-        return;
-      }
-      var visual = view3d.visualPosition(unit.id) || unit;
-      var screen = worldToScreen(visual.x, visual.y);
-      if (screen.x >= left && screen.x <= right && screen.y >= top && screen.y <= bottom) {
-        selectedUnits.add(unit.id);
-      }
+    view3d.unitsInScreenBox(roomState.game, session.playerId, left, top, right, bottom).forEach(function (unit) {
+      selectedUnits.add(unit.id);
     });
     if (selectedUnits.size) {
       sound('select');
