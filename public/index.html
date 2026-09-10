@@ -74,6 +74,7 @@
             <strong>当前战场</strong>
           </div>
           <span class="operations-line"></span>
+          <button id="historyHomeBtn" class="button secondary">战报档案</button>
           <button id="refreshRoomsBtn" class="icon-button" title="刷新房间">↻</button>
         </div>
         <div id="roomList" class="room-list" aria-live="polite">
@@ -99,6 +100,7 @@
     <section id="lobbyScreen" class="screen lobby-screen hidden">
       <header class="lobby-header">
         <button id="leaveLobbyBtn" class="back-button">← 返回大厅</button>
+        <button id="historyLobbyBtn" class="button secondary">战报档案</button>
         <div class="lobby-title">
           <span>战前部署 / PRE-BATTLE DEPLOYMENT</span>
           <h2 id="lobbyRoomName">战场</h2>
@@ -323,11 +325,14 @@
             </div>
           </div>
 
+          <div id="selectionKinds" class="selection-kinds hidden" aria-label="混编兵种筛选"></div>
           <div class="orders-row">
             <button id="attackMoveBtn" class="order-button" title="攻击移动 (Q)"><span>⌁</span>攻击移动</button>
             <button id="repairBtn" class="order-button" title="前往最近维修厂 (R)"><span>✚</span>维修载具</button>
             <button id="deployBtn" class="order-button hidden" title="展开为新基地"><span>⬢</span>展开</button>
             <button id="stopBtn" class="order-button" title="停止当前命令 (H)"><span>■</span>停止 H</button>
+            <button id="scatterBtn" class="order-button" title="作战单位就近拉开间距，到位后原地警戒"><span>⤢</span>散开</button>
+            <button id="holdBtn" class="order-button" title="只攻击射程内敌人，不自动追击；新命令解除"><span>⌖</span>原地警戒</button>
             <button id="pingBtn" class="order-button" title="地图信标 (G)"><span>◉</span>信标</button>
             <button id="strikeBtn" class="order-button strike-button hidden" title="轨道打击 (X)"><span>☢</span>轨道打击</button>
           </div>
@@ -498,6 +503,15 @@
         </div>
       </div>
 
+    </section>
+      <div id="reportHistoryModal" class="modal-backdrop hidden">
+        <div class="modal-card history-card" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+          <h2 id="historyTitle">战报档案</h2>
+          <p>同一浏览器、同一游戏地址自动保留最多 20 场；空间不足时优先保留新场次。清除网站数据会删除档案，不跨设备同步。仅存已加载的终局战报。</p>
+          <div id="reportHistoryList"></div>
+          <button id="closeHistoryBtn" class="button primary">关闭档案</button>
+        </div>
+      </div>
       <div id="resultModal" class="modal-backdrop hidden">
         <div class="result-card" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
           <header class="result-heading">
@@ -509,14 +523,13 @@
           <div id="resultStats" class="result-stats"></div>
           <div id="battleReport" class="battle-report">正在整理本局战报…</div>
           <footer class="result-actions">
-            <span>仅记录本局统计，无录像；离开前可导出留存。</span>
+            <span id="reportSaveStatus">终局战报加载后自动保存，无录像。</span>
             <button id="retryReportBtn" class="button secondary hidden">重试加载</button>
             <button id="exportReportBtn" class="button secondary" disabled>导出战报 CSV</button>
             <button id="returnHomeBtn" class="button primary">返回作战大厅</button>
           </footer>
         </div>
       </div>
-    </section>
   </main>
 
   <template id="roomItemTemplate">

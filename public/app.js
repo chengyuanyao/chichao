@@ -4,6 +4,9 @@ import {
   oreReserveTier
 } from './render3d.js';
 import { renderBattleReport, renderReportSummary, reportCsv } from './battle_report.js';
+import { createTacticalSelection } from './tactical_selection.js';
+import { readReportHistory, saveReportHistory } from './report_history.js';
+import { createBattleAudio } from './battle_audio.js';
 
 (function () {
   'use strict';
@@ -1266,8 +1269,10 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
   var resultShown = false;
   var completedBattleReport = null;
   var reportRequestSerial = 0;
+  var viewingArchivedReport = false;
   var activeTab = 'buildings';
   var selectedUnits = new Set();
+  var tacticalSelection = createTacticalSelection();
   var selectedStructureId = null;
   var selectedResourceId = null;
   var buildMode = null;
@@ -1309,6 +1314,7 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
   var fpsElement = null;
   var seenEffects = new Set();
   var audioContext = null;
+  var battleAudio = null;
   var renderStarted = false;
   var actionInFlight = false;
   var unitCommandTail = Promise.resolve();
@@ -1607,7 +1613,7 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
   }
 
   function sendAction(action, payload, silent) {
-    var orderedCommands = ['move', 'attackMove', 'patrol', 'attack', 'stop', 'harvest', 'repair', 'deploy'];
+    var orderedCommands = ['move', 'attackMove', 'patrol', 'attack', 'stop', 'hold', 'scatter', 'harvest', 'repair', 'deploy'];
     if (action !== 'command' || !payload || orderedCommands.indexOf(payload.command) < 0) {
       return performAction(action, payload, silent);
     }
@@ -2749,6 +2755,8 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
     // 先使事件流失效再发离开请求；否则服务端处理“放弃本局”时产生的最后
     // 一帧战败快照，可能在下一房间建立后才进入浏览器事件队列。
     closeEvents();
+    if (battleAudio) battleAudio.clear();
+    pendingEffects.length = 0;
     if (session) {
       try {
         await sendAction('leave', {}, true);
@@ -2786,6 +2794,9 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
       resultShown = false;
       completedBattleReport = null;
       reportRequestSerial++;
+      viewingArchivedReport = false;
+      tacticalSelection = createTacticalSelection();
+      $('#reportHistoryModal').classList.add('hidden');
       $('#resultModal').classList.add('hidden');
       selectedUnits.clear();
       selectedStructureId = null;
@@ -2796,6 +2807,8 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
       buildMode = null;
       commandMode = null;
       view3d.clearEntities();
+      if (battleAudio) battleAudio.clear();
+      pendingEffects.length = 0;
       seenEffects.clear();
       lastReadyBuildId = null;
       commandGrid.dataset.key = '';
@@ -3281,6 +3294,7 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
     if (!roomState || !roomState.game) {
       return;
     }
+    renderTacticalSelection();
     if (!force && selectionInfo.matches(':hover')) {
       return;
     }
@@ -3294,7 +3308,8 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
       var totalHp = units.reduce(function (sum, unit) { return sum + unit.hp; }, 0);
       var totalMax = units.reduce(function (sum, unit) { return sum + unit.maxHp; }, 0);
       var one = units.length === 1 ? units[0] : null;
-      var label = one ? ((UNITS[one.kind] || {}).name || one.kind) : units.length + ' 个作战单位';
+      var sameKind = units.every(function (u) { return u.kind === units[0].kind; });
+      var label = sameKind ? ((UNITS[units[0].kind] || {}).name || units[0].kind) + (one ? '' : ' × ' + units.length) : units.length + ' 个作战单位';
       var rankInfo = one ? veteranRankForKills(one.kills || 0) : VETERANCY.ranks[0];
       var rank = Number(rankInfo.level) || 0;
       var rankStars = ['', '★', '★★', '★★★'];
@@ -3304,12 +3319,16 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
         (one && unitRole(one.kind) === 'harvester' ?
         (one.harvestPaused ? '已停止采矿 · ' : '') +
           '载矿 ' + Math.floor(one.cargo) + ' / ' + Math.floor(one.capacity) :
-        (one ? '生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) + rankLabel : '混合编队'));
+        (one ? '生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) + rankLabel : sameKind ? '同型编队' : '混合编队'));
       var patrols = (roomState.game.patrols || []).filter(function (route) { return selectedUnits.has(route.unitId); });
       if (patrols.length) {
         detail += one ? ' · 巡逻节点 ' + (patrols[0].next + 1) + '/' + patrols[0].points.length
           : ' · ' + patrols.length + ' 个单位巡逻中';
       }
+      var heldCount = units.filter(function (unit) { return unit.tacticalOrder === 'hold'; }).length;
+      var scatterCount = units.filter(function (unit) { return unit.tacticalOrder === 'scatter'; }).length;
+      if (heldCount) { detail += ' · 原地警戒 ' + heldCount; }
+      if (scatterCount) { detail += ' · 散开中 ' + scatterCount; }
       var veterancyHtml = '';
       if (one && (UNITS[one.kind] || {}).canVeteran) {
         var veteranDetail = veterancySummary(one.kills || 0);
@@ -3326,7 +3345,7 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
       var unitInfoKey = 'u|' + units.map(function (unit) {
         return unit.id + ':' + Math.ceil(unit.hp) + ':' + Math.floor(unit.cargo || 0) + ':' +
           (unit.kills || 0) + ':' + (unit.repairing ? 1 : 0) + ':' +
-          (unit.harvestPaused ? 1 : 0);
+          (unit.harvestPaused ? 1 : 0) + ':' + (unit.tacticalOrder || '');
       }).join(',') + '|patrol:' + patrols.map(function (route) {
         return route.unitId + ':' + route.next + ':' + route.points.length;
       }).join(',');
@@ -3518,7 +3537,7 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
     if (!roomState || !roomState.game) {
       return;
     }
-    var playExplosion = false;
+    var audibleEffects = [];
     var playComplete = false;
     var playPromote = false;
     var playSalute = false;
@@ -3529,9 +3548,8 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
       seenEffects.add(effect.id);
       // 粒子交给 3D 层生成，这里只负责去重和音效
       pendingEffects.push(effect);
-      if (effect.type === 'explosion') {
-        playExplosion = true;
-      } else if (effect.type === 'complete') {
+      audibleEffects.push(effect);
+      if (effect.type === 'complete') {
         playComplete = true;
       } else if (effect.type === 'promote') {
         playPromote = true;
@@ -3540,8 +3558,9 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
         hqSalute = { x: effect.x, y: effect.y, until: performance.now() + 2400 };
       }
     });
-    if (playExplosion) {
-      sound('explosion');
+    if (battleAudio && !document.hidden) {
+      battleAudio.events(audibleEffects,{x:camera.x,y:camera.y,yaw:camera.yaw,zoom:camera.zoom,width:viewWidth},
+        (settings.masterVolume/100)*(settings.sfxVolume/100));
     }
     if (playComplete) {
       sound('complete');
@@ -4871,6 +4890,58 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
     }).catch(function () {});
   }
 
+  function renderTacticalSelection() {
+    var state = tacticalSelection.sync(roomState.game.units, selectedUnits, session.playerId);
+    var panel = $('#selectionKinds');
+    var key = JSON.stringify(state);
+    if (panel.dataset.key === key) { return; }
+    panel.dataset.key = key;
+    panel.classList.toggle('hidden', state.groups.length < 2);
+    panel.replaceChildren();
+    [{kind:'',count:state.total}].concat(state.groups).forEach(function (group) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.selectKind = group.kind;
+      button.setAttribute('aria-pressed', String((state.activeKind || '') === group.kind));
+      var name = group.kind ? ((UNITS[group.kind] || {}).name || group.kind) : '全部';
+      button.title = '仅选择：' + name + '（不改变部队命令）';
+      if (group.kind) { button.appendChild(makePortraitCanvas(group.kind, false)); }
+      var label = document.createElement('span');
+      label.textContent = name + ' ' + group.count;
+      button.appendChild(label);
+      panel.appendChild(button);
+    });
+  }
+
+  function filterSelectedKind(kind) {
+    if (!roomState || !roomState.game || !session) { return; }
+    tacticalSelection.sync(roomState.game.units, selectedUnits, session.playerId);
+    var ids = tacticalSelection.filter(kind);
+    selectedUnits.clear();
+    ids.forEach(function (id) { selectedUnits.add(id); });
+    selectedStructureId = null;
+    selectedResourceId = null;
+    renderSelectionInfo(true);
+    sound('select');
+  }
+
+  function tacticalSelected(command) {
+    if (!session || !roomState || roomState.status !== 'playing') { return; }
+    var ids = roomState.game.units.filter(function (u) {
+      return selectedUnits.has(u.id) && u.owner === session.playerId && u.hp > 0 &&
+        unitRole(u.kind) !== 'harvester' && unitRole(u.kind) !== 'mcv';
+    }).map(function (u) { return u.id; });
+    if (!ids.length) { toast('请选择作战单位（不含矿车和基地车）', 'info'); return; }
+    cancelModes();
+    var requestSession = session, requestKey = gameKey;
+    sendAction('command', {command:command,unitIds:ids}).then(function (result) {
+      if (result.cancelled || session !== requestSession || gameKey !== requestKey) { return; }
+      toast(command === 'hold' ? '原地警戒：只攻击射程内目标，不追击' :
+        '就近散开，到位后原地警戒；狭窄地形会限制展开', 'success');
+      sound('select');
+    }).catch(function () {});
+  }
+
   function resetAttackAlertState() {
     seenAttackAlertIds.clear();
     seenAttackAlertOrder.length = 0;
@@ -5011,144 +5082,17 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
       var AudioCtor = window.AudioContext || window.webkitAudioContext;
       if (AudioCtor) {
         audioContext = new AudioCtor();
+        battleAudio = createBattleAudio(audioContext);
       }
     }
     if (audioContext && audioContext.state === 'suspended') {
-      audioContext.resume();
+      audioContext.resume().catch(function () {});
     }
   }
 
   function sound(type) {
-    if (!audioContext || audioContext.state !== 'running') return;
-    var volMul = (settings.masterVolume / 100) * (settings.sfxVolume / 100);
-    if (volMul < 0.001) return;
-    var now = audioContext.currentTime;
-
-    function out(gainNode) {
-      if (Math.abs(volMul - 1) < 0.001) { gainNode.connect(audioContext.destination); return; }
-      var mg = audioContext.createGain();
-      mg.gain.setValueAtTime(volMul, now);
-      gainNode.connect(mg);
-      mg.connect(audioContext.destination);
-    }
-
-    if (type === 'explosion') {
-      var noiseLen = 0.28;
-      var noiseBuffer = audioContext.createBuffer(1, noiseLen * audioContext.sampleRate, audioContext.sampleRate);
-      var noiseData = noiseBuffer.getChannelData(0);
-      for (var i = 0; i < noiseData.length; i++) { noiseData[i] = (Math.random() * 2 - 1); }
-      var noiseSrc = audioContext.createBufferSource();
-      noiseSrc.buffer = noiseBuffer;
-      var noiseGain = audioContext.createGain();
-      noiseGain.gain.setValueAtTime(0.22, now);
-      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + noiseLen);
-      var noiseFilter = audioContext.createBiquadFilter();
-      noiseFilter.type = 'lowpass';
-      noiseFilter.frequency.setValueAtTime(800, now);
-      noiseFilter.frequency.exponentialRampToValueAtTime(60, now + noiseLen);
-      noiseSrc.connect(noiseFilter);
-      noiseFilter.connect(noiseGain);
-      out(noiseGain);
-      noiseSrc.start(now);
-      noiseSrc.stop(now + noiseLen + 0.05);
-      var boom = audioContext.createOscillator();
-      var boomGain = audioContext.createGain();
-      boom.type = 'sine';
-      boom.frequency.setValueAtTime(110, now);
-      boom.frequency.exponentialRampToValueAtTime(24, now + 0.22);
-      boomGain.gain.setValueAtTime(0.18, now);
-      boomGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
-      boom.connect(boomGain);
-      out(boomGain);
-      boom.start(now);
-      boom.stop(now + 0.26);
-      return;
-    }
-    if (type === 'start') {
-      var sOsc = audioContext.createOscillator();
-      var sGain = audioContext.createGain();
-      sOsc.type = 'triangle';
-      sOsc.frequency.setValueAtTime(380, now);
-      sOsc.frequency.setValueAtTime(580, now + 0.08);
-      sOsc.frequency.setValueAtTime(660, now + 0.16);
-      sGain.gain.setValueAtTime(0.08, now);
-      sGain.gain.setValueAtTime(0.08, now + 0.18);
-      sGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-      sOsc.connect(sGain);
-      out(sGain);
-      sOsc.start(now);
-      sOsc.stop(now + 0.37);
-      return;
-    }
-    if (type === 'complete') {
-      var c1 = audioContext.createOscillator();
-      var c1g = audioContext.createGain();
-      c1.type = 'sine';
-      c1.frequency.setValueAtTime(600, now);
-      c1.frequency.setValueAtTime(880, now + 0.06);
-      c1g.gain.setValueAtTime(0.06, now);
-      c1g.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-      c1.connect(c1g);
-      out(c1g);
-      c1.start(now);
-      c1.stop(now + 0.24);
-      var c2 = audioContext.createOscillator();
-      var c2g = audioContext.createGain();
-      c2.type = 'sine';
-      c2.frequency.setValueAtTime(900, now + 0.04);
-      c2.frequency.setValueAtTime(1200, now + 0.1);
-      c2g.gain.setValueAtTime(0, now);
-      c2g.gain.setValueAtTime(0.05, now + 0.04);
-      c2g.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
-      c2.connect(c2g);
-      out(c2g);
-      c2.start(now + 0.04);
-      c2.stop(now + 0.28);
-      return;
-    }
-    if (type === 'promote') {
-      // 晋升：上扬的大调琶音（do-mi-sol-do），短促明亮，与爆炸/完工的音色区分开
-      var notes = [523.25, 659.25, 783.99, 1046.5];
-      for (var ni = 0; ni < notes.length; ni++) {
-        var pOsc = audioContext.createOscillator();
-        var pGain = audioContext.createGain();
-        var t0 = now + ni * 0.06;
-        pOsc.type = 'triangle';
-        pOsc.frequency.setValueAtTime(notes[ni], t0);
-        pGain.gain.setValueAtTime(0, t0);
-        pGain.gain.linearRampToValueAtTime(0.07, t0 + 0.015);
-        pGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
-        pOsc.connect(pGain);
-        out(pGain);
-        pOsc.start(t0);
-        pOsc.stop(t0 + 0.24);
-      }
-      return;
-    }
-    var config = {
-      select: [520, 0.04, 0.035, 'square'],
-      move: [260, 0.05, 0.06, 'sine'],
-      attack: [160, 0.07, 0.09, 'sawtooth'],
-      confirm: [680, 0.06, 0.07, 'triangle'],
-      repair: [740, 0.045, 0.12, 'triangle'],
-      cancel: [330, 0.055, 0.11, 'square'],
-      error: [110, 0.05, 0.14, 'square']
-    }[type];
-    if (!config) return;
-    var osc = audioContext.createOscillator();
-    var gain = audioContext.createGain();
-    osc.type = config[3];
-    osc.frequency.setValueAtTime(config[0], now);
-    if (type === 'attack') { osc.frequency.exponentialRampToValueAtTime(42, now + config[2]); }
-    if (type === 'error') { osc.frequency.setValueAtTime(config[0], now); osc.frequency.setValueAtTime(88, now + 0.06); }
-    // 撤销：下滑音，和确认的上扬音形成对照
-    if (type === 'cancel') { osc.frequency.exponentialRampToValueAtTime(150, now + config[2]); }
-    gain.gain.setValueAtTime(config[1], now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + config[2]);
-    osc.connect(gain);
-    out(gain);
-    osc.start(now);
-    osc.stop(now + config[2] + 0.02);
+    if (!battleAudio || document.hidden) return;
+    battleAudio.ui(type,(settings.masterVolume/100)*(settings.sfxVolume/100));
   }
 
   function renderResult() {
@@ -5156,6 +5100,8 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
       return;
     }
     resultShown = true;
+    viewingArchivedReport = false;
+    $('#returnHomeBtn').textContent = '返回作战大厅';
     var me = ownPlayer();
     var won = didPlayerWin(roomState.game, session.playerId);
     var card = $('#resultModal .result-card');
@@ -5187,6 +5133,7 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
     $('#exportReportBtn').disabled = true;
     $('#retryReportBtn').classList.add('hidden');
     $('#battleReport').textContent = '正在整理本局战报…';
+    $('#reportSaveStatus').textContent = '终局战报加载后自动保存，无录像。';
     try {
       var data = await request('/api/report?roomId=' + encodeURIComponent(session.roomId) +
         '&playerId=' + encodeURIComponent(session.playerId) + '&token=' + encodeURIComponent(session.token) +
@@ -5198,11 +5145,62 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
       $('#resultStats').innerHTML = renderReportSummary(data.report, session.playerId);
       $('#battleReport').innerHTML = renderBattleReport(data.report, session.playerId);
       $('#exportReportBtn').disabled = false;
+      try {
+        $('#reportSaveStatus').textContent = saveReportHistory(localStorage, data.report, session.playerId) ?
+          '已自动存入本机战报档案（最多 20 场）' : '本机空间不足或存储不可用，请导出留存';
+      } catch (_) { $('#reportSaveStatus').textContent = '浏览器禁止本地保存，请导出留存'; }
     } catch (error) {
       if (session !== requestSession || serial !== reportRequestSerial) { return; }
       $('#battleReport').textContent = '战报暂未加载：' + error.message;
       $('#retryReportBtn').classList.remove('hidden');
     }
+  }
+
+  function openReportHistory() {
+    if (roomState && roomState.status === 'playing') { return; }
+    var rows;
+    try { rows = readReportHistory(localStorage); } catch (_) { rows = []; }
+    var list = $('#reportHistoryList');
+    list.replaceChildren();
+    if (!rows.length) { list.textContent = '暂无已保存战报。整局结束并加载战报后会自动保存。'; }
+    rows.forEach(function (entry) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'history-entry';
+      var me = entry.report.players.find(function (p) { return p.id === entry.viewerId; });
+      button.textContent = new Date(entry.savedAt).toLocaleString('zh-CN') + ' · ' + entry.report.mapName + ' · ' +
+        me.name + ' · ' + (me.won ? '胜利' : '未获胜');
+      button.addEventListener('click', function () { openArchivedReport(entry); });
+      list.appendChild(button);
+    });
+    $('#reportHistoryModal').classList.remove('hidden');
+    $('#closeHistoryBtn').focus();
+  }
+
+  function closeReportHistory() {
+    $('#reportHistoryModal').classList.add('hidden');
+    $(currentScreen === 'lobby' ? '#historyLobbyBtn' : '#historyHomeBtn').focus();
+  }
+
+  function openArchivedReport(entry) {
+    reportRequestSerial++;
+    viewingArchivedReport = true;
+    completedBattleReport = entry.report;
+    var me = entry.report.players.find(function (p) { return p.id === entry.viewerId; });
+    $('#reportHistoryModal').classList.add('hidden');
+    $('#resultModal .result-card').classList.toggle('defeat', !me.won);
+    $('#resultEmblem').textContent = me.won ? '★' : '◇';
+    $('#resultKicker').textContent = 'LOCAL BATTLE ARCHIVE';
+    $('#resultTitle').textContent = '历史战报';
+    $('#resultText').textContent = new Date(entry.savedAt).toLocaleString('zh-CN') + ' · ' + me.name;
+    $('#resultStats').innerHTML = renderReportSummary(entry.report,entry.viewerId);
+    $('#battleReport').innerHTML = renderBattleReport(entry.report,entry.viewerId);
+    $('#retryReportBtn').classList.add('hidden');
+    $('#exportReportBtn').disabled = false;
+    $('#returnHomeBtn').textContent = '返回战报档案';
+    $('#reportSaveStatus').textContent = '本机浏览器存档 · 不包含录像';
+    $('#resultModal').classList.remove('hidden');
+    $('#returnHomeBtn').focus();
   }
 
   function didPlayerWin(game, playerId) {
@@ -5358,6 +5356,10 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
 
   window.addEventListener('resize', resizeCanvas);
   window.addEventListener('keydown', function (event) {
+    if (!$('#reportHistoryModal').classList.contains('hidden')) {
+      if (event.code === 'Escape') { event.preventDefault(); closeReportHistory(); }
+      return;
+    }
     if (event.code === 'Escape' && currentScreen === 'game') {
       event.preventDefault();
       // The result dialog is intentionally not dismissible: the player must
@@ -5737,6 +5739,12 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
   $('#attackMoveBtn').addEventListener('click', function () { setCommandMode('attackMove'); });
   $('#repairBtn').addEventListener('click', repairSelectedAtNearestBay);
   $('#stopBtn').addEventListener('click', stopSelected);
+  $('#scatterBtn').addEventListener('click', function () { tacticalSelected('scatter'); });
+  $('#holdBtn').addEventListener('click', function () { tacticalSelected('hold'); });
+  $('#selectionKinds').addEventListener('click', function (event) {
+    var button = event.target.closest('[data-select-kind]');
+    if (button && this.contains(button)) { filterSelectedKind(button.dataset.selectKind); }
+  });
   $('#pingBtn').addEventListener('click', function () { setCommandMode('ping'); });
   $('#strikeBtn').addEventListener('click', function () { setCommandMode('strike'); });
   $('#deployBtn').addEventListener('click', function () {
@@ -5806,12 +5814,16 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
   });
   $('#returnHomeBtn').addEventListener('click', function () {
     $('#resultModal').classList.add('hidden');
+    if (viewingArchivedReport) { viewingArchivedReport = false; completedBattleReport = null; openReportHistory(); return; }
     leaveRoom();
   });
+  $('#historyHomeBtn').addEventListener('click', openReportHistory);
+  $('#historyLobbyBtn').addEventListener('click', openReportHistory);
+  $('#closeHistoryBtn').addEventListener('click', closeReportHistory);
   $('#retryReportBtn').addEventListener('click', loadBattleReport);
-  $('#resultModal').addEventListener('keydown', function (event) {
+  function trapReportFocus(event) {
     if (event.key !== 'Tab') { return; }
-    var focusable = Array.from(this.querySelectorAll('button:not(:disabled), [tabindex="0"]'))
+    var focusable = Array.from(this.querySelectorAll('button:not(:disabled), summary, [tabindex="0"]'))
       .filter(function (element) { return element.getClientRects().length; });
     var first = focusable[0], last = focusable[focusable.length - 1];
     if (event.shiftKey && document.activeElement === first) {
@@ -5819,7 +5831,9 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
     } else if (!event.shiftKey && document.activeElement === last) {
       event.preventDefault(); first.focus();
     }
-  });
+  }
+  $('#resultModal').addEventListener('keydown', trapReportFocus);
+  $('#reportHistoryModal').addEventListener('keydown', trapReportFocus);
   $('#battleReport').addEventListener('click', function (event) {
     var button = event.target.closest('[data-report-tab]');
     if (!button || !this.contains(button)) { return; }
@@ -5831,8 +5845,8 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
     });
   });
   $('#exportReportBtn').addEventListener('click', function () {
-    if (!completedBattleReport || !roomState || roomState.status !== 'finished' ||
-        completedBattleReport.matchId !== roomState.game.matchId) { return; }
+    if (!completedBattleReport || (!viewingArchivedReport && (!roomState || roomState.status !== 'finished' ||
+        completedBattleReport.matchId !== roomState.game.matchId))) { return; }
     var url = URL.createObjectURL(new Blob([reportCsv(completedBattleReport)], {type: 'text/csv;charset=utf-8'}));
     var link = document.createElement('a');
     link.href = url;

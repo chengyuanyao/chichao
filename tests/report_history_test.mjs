@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {REPORT_HISTORY_KEY,readReportHistory,saveReportHistory} from '../public/report_history.js';
+const values=new Map();let quota=Infinity;
+const storage={getItem:k=>values.get(k),setItem:(k,v)=>{if(v.length>quota)throw Error('quota');values.set(k,v);}};
+const report=i=>({version:2,matchId:'g'+i,players:[{id:'me'}],duration:50});
+for(let i=0;i<25;i++) assert.equal(saveReportHistory(storage,report(i),'me',i),true);
+assert.equal(readReportHistory(storage).length,20);
+assert.equal(readReportHistory(storage)[0].report.matchId,'g24');
+assert.equal(saveReportHistory(storage,report(24),'me',99),true);
+assert.equal(readReportHistory(storage).length,20);
+assert.equal(saveReportHistory(storage,report(1),'intruder'),false);
+quota=500;assert.equal(saveReportHistory(storage,report(26),'me'),true);
+assert.ok(readReportHistory(storage).length<20);assert.equal(readReportHistory(storage)[0].report.matchId,'g26');
+const previous=values.get(REPORT_HISTORY_KEY);quota=0;
+assert.equal(saveReportHistory(storage,report(27),'me'),false);assert.equal(values.get(REPORT_HISTORY_KEY),previous);
+values.set(REPORT_HISTORY_KEY,'malformed');assert.deepEqual(readReportHistory(storage),[]);
+assert.deepEqual(readReportHistory({getItem(){throw Error('blocked');}}),[]);
+console.log('Report history passed: automatic bounded archive, deduplication, ownership, quota eviction, blocked/corrupt storage and preservation on failure.');

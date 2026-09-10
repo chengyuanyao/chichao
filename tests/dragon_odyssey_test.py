@@ -122,7 +122,7 @@ def test_surface_and_faction():
     assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1 };" in render
     assert re.search(r"MAGIC_UNIT_KINDS = \{[^}]*dragon: 1", render, re.S)
     # 近景 AO 已推广到全部兵种，巨龙继续受益；远景不再付烘焙成本。
-    assert "body: mergeParts(parts.body.concat(parts.glow || []), { occlusion: true })" in render
+    assert "body: mergeParts(allParts.filter(p => !p.recoil), { occlusion: true })" in render
     assert "simple: mergeParts(simpleUnitParts(kind))" in render
     # 秘法会的金饰必须留住，否则黑铬会读成钢铁军团的涂装
     assert "MAT.odyGold" in render

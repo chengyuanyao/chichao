@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../public/vendor/three.module.min.js';
 import { createPostFX } from '../public/postfx.js';
+import { applyBattleMaterial } from '../public/battle_feedback.js';
 
 const source = readFileSync(new URL('../public/render3d.js', import.meta.url), 'utf8')
   .replace(/\r\n/g, '\n');
@@ -31,6 +32,7 @@ function expandChunks(shader) {
 
 const sharedAtlas = new THREE.Texture();
 const uniformContext = {
+  applyBattleMaterial,
   sunDirViewUniform: { value: new THREE.Vector3(0.4, 0.8, 0.4) },
   armyTimeUniform: { value: 0 },
   makeArmySurfaceTexture: () => sharedAtlas

@@ -438,7 +438,8 @@ def main():
         r"function unitGeometry\(kind\) \{([\s\S]*?)\n  \}", render)
     assert unit_geometry
     assert "if (entry) return entry;" in unit_geometry.group(1)
-    assert "body: mergeParts(parts.body.concat(parts.glow || []), { occlusion: true })" in unit_geometry.group(1)
+    assert "body: mergeParts(allParts.filter(p => !p.recoil), { occlusion: true })" in unit_geometry.group(1)
+    assert "entry.barrel = mergeParts(barrels, { occlusion: true })" in unit_geometry.group(1)
     assert "simple: mergeParts(simpleUnitParts(kind))" in unit_geometry.group(1)
     assert "OCCLUSION_BAKED_KINDS" not in render
     # 写实升级必须保持合批边界：军械共享压缩贴图；自然草簇和碎石允许整张
@@ -482,7 +483,7 @@ def main():
     assert "运行时仍是一个 InstancedMesh，不增加 draw call" in render
     # 车体与发光件仍旧合并成同一份几何体；烘焙开关只是多传一个参数，
     # 不能演化成「发光件单独一个 Mesh」那种额外 draw call。
-    assert "body: mergeParts(parts.body.concat(parts.glow || []), { occlusion: true })" in render
+    assert "body: mergeParts(allParts.filter(p => !p.recoil), { occlusion: true })" in render
     assert "function trackBelt(length, depth, x, y, z)" in render
     assert "applyWildernessGround(material)" in render
     assert "Same-tree lower/middle/top layers darken, hold and brighten the leaves." in render

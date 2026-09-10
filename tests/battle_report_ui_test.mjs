@@ -18,7 +18,7 @@ assert.equal(exchangeLabel({destroyedValue:100,lostValue:0}),'无损');
 assert.equal(exchangeLabel({destroyedValue:0,lostValue:0}),'—');
 assert.equal(exchangeLabel(me),'2.00 : 1');
 const html = renderBattleReport(report,'p1');
-assert.equal((html.match(/data-report-panel=/g)||[]).length,3);
+assert.equal((html.match(/data-report-panel=/g)||[]).length,4);
 assert.equal((html.match(/class="report-chart"/g)||[]).length,2);
 assert.equal((html.match(/<polyline /g)||[]).length,4);
 assert.ok(html.includes('report-self') && html.includes('初始每 5 秒'));
@@ -28,6 +28,15 @@ assert.ok(renderReportSummary(report,'p1').includes('2.00 : 1'));
 assert.ok(reportCsv(report).startsWith('\ufeff'));
 assert.ok(reportCsv(report).includes('"\'=HYPERLINK'));
 assert.ok(reportCsv(report).includes('采样数据'));
+const extended={...report,version:2,players:[{...me,harvestersLost:2,incomeGapCount:1,incomeGapSeconds:45,longestIncomeGap:45,
+  byKind:{tank:{kind:'tank',name:'先锋坦克',category:'unit',produced:4,initial:1,gifted:0,lost:1,lostValue:780,destroyed:2,destroyedValue:1500}},
+  techTimes:{factory:{name:'重装工厂',time:64,initial:false}}}],events:[{type:'incomeGap',time:100,startedAt:55,duration:45,playerId:'p1'},
+    {type:'techCompleted',time:64,name:'重装工厂',playerId:'p1'},{type:'harvesterLost',time:70,name:'采矿车',playerId:'p1'}]};
+const operations=renderBattleReport(extended,'p1'),operationsCsv=reportCsv(extended);
+assert.ok(operations.includes('矿车损失 2') && operations.includes('生产完成') && operations.includes('1:04'));
+assert.ok(operations.includes('最后一击') && operations.includes('连续 30 秒'));
+assert.ok(operationsCsv.includes('先锋坦克') && operationsCsv.includes('首次科技建筑落成') && operationsCsv.includes('到账中断'));
+assert.ok(html.includes('旧版战报未记录'));
 for (const samples of [[],[{time:0,players:{p1:[0,0,0],p2:[0,0,0]}}]]) {
   const empty = renderBattleReport({...report,duration:0,firstCombatAt:null,events:[],samples},'p1');
   assert.ok(!/NaN|Infinity/.test(empty));
@@ -45,7 +54,8 @@ function element(id) {
 let complete;
 const context={session:{roomId:'test',playerId:'p1',token:'test-only'},roomState:{status:'finished',game:{matchId:'g-test'}},
   completedBattleReport:null,reportRequestSerial:0,$:element,
-  request:()=>new Promise(resolve=>{complete=resolve;}),renderBattleReport,renderReportSummary,encodeURIComponent};
+  request:()=>new Promise(resolve=>{complete=resolve;}),renderBattleReport,renderReportSummary,encodeURIComponent,
+  localStorage:{},saveReportHistory:()=>true};
 vm.createContext(context);vm.runInContext(loader,context);
 const pending=context.loadBattleReport();complete({report});await pending;
 assert.equal(context.completedBattleReport.matchId,'g-test');assert.equal(element('#exportReportBtn').disabled,false);

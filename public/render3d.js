@@ -15,6 +15,8 @@ import { createAttackRangePreview } from './attack_range_preview.js';
 import { createModelPicker } from './model_picker.js';
 import { prepareTerrainInput, intersectTerrainInput } from './terrain_input.js';
 import { disposeOwnedRenderGroup, MaterialShaderRegistry } from './render_resources.js';
+import { FEEDBACK_LIMITS, MUZZLE_POINTS, advanceTracks, recoilDistance, conditionFromHealth,
+  effectDensity, applyBattleMaterial } from './battle_feedback.js';
 import { wildernessNoise, wildernessBiome, applyWildernessGround, applyWildernessRock,
   applyWildernessTrail, applyBridgeWeathering, makeWeatheredRockGeometry,
   forestChunkKey, prepareWildernessLandforms, wildernessLandformAt,
@@ -198,6 +200,7 @@ function mergeParts(parts, options) {
       shade: shade,
       rgb: rgb,
       surf: part.surf == null ? -1 : part.surf,
+      tread: geo.attributes.aTread ? geo.attributes.aTread.array : null,
       // 发光件（色值分量 > 1）当光源看待：既不投遮蔽也不接收遮蔽
       emissive: rgb ? Math.max(rgb[0], rgb[1], rgb[2]) > 1.05 : shade > 1.05,
       uv: geo.attributes.uv ? geo.attributes.uv.array : null
@@ -215,6 +218,7 @@ function mergeParts(parts, options) {
   // 拿到的仍是「全亮 + 跟随材质」，但属性一定存在——着色器声明了就不能缺。
   const occlusion = new Float32Array(total);
   const surfChan = new Float32Array(total);
+  const treadChan = new Float32Array(total * 2);
   occlusion.fill(1);
   surfChan.fill(-1);
   const nm = new THREE.Matrix3();
@@ -270,6 +274,10 @@ function mergeParts(parts, options) {
         uv[ui + 1] = item.uv[i * 2 + 1];
       }
       surfChan[offset + i] = surf;
+      if (item.tread) {
+        treadChan[ui] = item.tread[i * 2];
+        treadChan[ui + 1] = item.tread[i * 2 + 1];
+      }
       const wx = position[di], wy = position[di + 1], wz = position[di + 2];
       if (wx < bMinX) bMinX = wx;
       if (wy < bMinY) bMinY = wy;
@@ -294,6 +302,7 @@ function mergeParts(parts, options) {
   merged.setAttribute('aTeam', new THREE.BufferAttribute(teamFlag, 1));
   merged.setAttribute('aOcc', new THREE.BufferAttribute(occlusion, 1));
   merged.setAttribute('aSurf', new THREE.BufferAttribute(surfChan, 1));
+  merged.setAttribute('aTread', new THREE.BufferAttribute(treadChan, 2));
   merged.computeBoundingSphere();
   return merged;
 }
@@ -566,6 +575,8 @@ const ROT_X90 = new THREE.Matrix4().makeRotationX(Math.PI / 2);
 const ROT_Y90 = new THREE.Matrix4().makeRotationY(Math.PI / 2);
 const ROT_Z90 = new THREE.Matrix4().makeRotationZ(Math.PI / 2);
 
+function recoiling(part) { part.recoil = true; return part; }
+
 /**
  * 方形棱台：顶面和底面可以是不同尺寸的矩形。
  *
@@ -717,14 +728,21 @@ function trackBelt(length, depth, x, y, z) {
     }
   }
   const positions = [];
+  const tread = [], distances = [0];
   const loop = contour.length;
+  for (let i = 0; i < loop; i++) {
+    const a = contour[i], b = contour[(i+1)%loop];
+    distances.push(distances[i]+Math.hypot(b[0]+b[1]*radius-a[0]-a[1]*radius,
+      (b[2]-a[2])*radius));
+  }
   const ringPoint = function (i, inner, side) {
     const c = contour[i % loop], r = inner ? 1.93 : radius;
-    return [c[0] + c[1] * r, c[2] * r, side * depth / 2];
+    return [c[0] + c[1] * r, c[2] * r, side * depth / 2, distances[i]];
   };
   const quad = function (a, b, c, d) {
     [a, b, c, a, c, d].forEach(function (p) {
       positions.push(p[0], p[1], p[2]);
+      tread.push(z > 0 ? 1 : -1, p[3]);
     });
   };
   for (let i = 0; i < loop; i++) {
@@ -740,6 +758,7 @@ function trackBelt(length, depth, x, y, z) {
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('aTread', new THREE.Float32BufferAttribute(tread, 2));
   geo.computeVertexNormals();
   return { geo: geo, matrix: new THREE.Matrix4().makeTranslation(x, y, z),
     rgb: MAT.track, surf: SURF.hide };
@@ -845,11 +864,11 @@ function apocalypseTankParts(skin) {
     // 招牌双联主炮：驻退护套 + 长管 + 制退器 + 炮口联动梁
     cyl(2.7, 3.0, 9.0, 10, 11.5, 17.6, 4.0, dark, ROT_Z90),
     cyl(2.7, 3.0, 9.0, 10, 11.5, 17.6, -4.0, dark, ROT_Z90),
-    cyl(1.5, 1.8, 22, 10, 18.0, 17.6, 4.0, MAT.gunmetal, ROT_Z90),
-    cyl(1.5, 1.8, 22, 10, 18.0, 17.6, -4.0, MAT.gunmetal, ROT_Z90),
-    cyl(2.4, 2.4, 3.8, 10, 27.0, 17.6, 4.0, joint, ROT_Z90),
-    cyl(2.4, 2.4, 3.8, 10, 27.0, 17.6, -4.0, joint, ROT_Z90),
-    box(1.6, 1.6, 9.8, 23.4, 17.6, 0, joint),                        // 炮口联动梁
+    recoiling(cyl(1.5, 1.8, 22, 10, 18.0, 17.6, 4.0, MAT.gunmetal, ROT_Z90)),
+    recoiling(cyl(1.5, 1.8, 22, 10, 18.0, 17.6, -4.0, MAT.gunmetal, ROT_Z90)),
+    recoiling(cyl(2.4, 2.4, 3.8, 10, 27.0, 17.6, 4.0, joint, ROT_Z90)),
+    recoiling(cyl(2.4, 2.4, 3.8, 10, 27.0, 17.6, -4.0, joint, ROT_Z90)),
+    recoiling(box(1.6, 1.6, 9.8, 23.4, 17.6, 0, joint)),             // 炮口联动梁
     cyl(0.6, 0.6, 11.0, 6, 15.0, 21.0, 4.0, MAT.gunmetal, ROT_Z90),  // 驻退液压杆
     cyl(0.6, 0.6, 11.0, 6, 15.0, 21.0, -4.0, MAT.gunmetal, ROT_Z90),
     // 折叠肩甲：贴在车体两侧的厚甲块 + 肩轴销，二星展开成手臂
@@ -1649,8 +1668,8 @@ const UNIT_BUILDERS = {
       body: trackedHull(32, 20, 8, 0.85).concat([
         taperedBox(16, 14, 12, 10, 7.5, -0.5, 15.6, 0, 1.0),      // 炮塔
         taperedBox(5, 11, 3.4, 8, 4.6, 7.4, 15.2, 0, 0.75),       // 防盾
-        cyl(1.5, 1.8, 21, 10, 14, 15.4, 0, MAT.gunmetal, ROT_Z90),   // 主炮
-        cyl(2.3, 2.3, 3.2, 10, 25, 15.4, 0, MAT.darkSteel, ROT_Z90), // 炮口制退器
+        recoiling(cyl(1.5, 1.8, 21, 10, 14, 15.4, 0, MAT.gunmetal, ROT_Z90)),
+        recoiling(cyl(2.3, 2.3, 3.2, 10, 25, 15.4, 0, MAT.darkSteel, ROT_Z90)),
         box(4.4, 1.8, 1.8, 3.4, 20.2, 3.6, MAT.gunmetal),            // 并列机枪
         box(3.0, 2.6, 3.0, -5.4, 20.4, -3.2, MAT.steel),             // 指挥塔
         box(9, 0.9, 1.2, -1, 19.4, 6.6, MAT.warnYellow),             // 警示条
@@ -1669,7 +1688,7 @@ const UNIT_BUILDERS = {
     const body = [
       taperedBox(28, 15, 22, 12, 7.5, 0, 8.4, 0, 0.95),
       taperedBox(11, 11, 8.4, 8.4, 5.4, -1, 14.6, 0, 1.05),       // 小炮塔
-      cyl(1.0, 1.2, 13, 8, 9, 15.0, 0, MAT.gunmetal, ROT_Z90),
+      recoiling(cyl(1.0, 1.2, 13, 8, 9, 15.0, 0, MAT.gunmetal, ROT_Z90)),
       box(6, 3.2, 13, 11.0, 7.6, 0, MAT.steel),                   // 前装甲斜板
       box(3.0, 1.6, 2.4, -11, 10.4, 0, MAT.gunmetal),             // 尾部设备箱
       box(0.9, 1.0, 1.6, -12.6, 10.4, 0, MAT.exhaust)
@@ -1721,10 +1740,10 @@ const UNIT_BUILDERS = {
     return {
       body: trackedHull(34, 22, 9, 0.8).concat([
         taperedBox(15, 16, 12, 13, 7, -5, 16, 0, 0.95),           // 炮座
-        cyl(2.2, 2.6, 32, 10, 13, 22, 0,
-          MAT.gunmetal, new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.34)),
-        cyl(3.0, 3.0, 3.6, 10, 27.5, 27.0, 0,
-          MAT.darkSteel, new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.34)),
+        recoiling(cyl(2.2, 2.6, 32, 10, 13, 22, 0,
+          MAT.gunmetal, new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.34))),
+        recoiling(cyl(3.0, 3.0, 3.6, 10, 27.5, 27.0, 0,
+          MAT.darkSteel, new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.34))),
         box(7, 6, 18, -13, 14, 0, MAT.steel),                     // 驻锄
         box(4, 7, 3, -16, 8, 8, MAT.darkSteel),
         box(4, 7, 3, -16, 8, -8, MAT.darkSteel),
@@ -1765,8 +1784,8 @@ const UNIT_BUILDERS = {
         // 低矮固定战斗室：前脸大倾角
         taperedBox(22, 15, 15, 11, 8, -2, 13.4, 0, 1.0),
         box(9, 5.5, 12, 9.5, 12.6, 0, 0.7),
-        cyl(1.3, 1.6, 29, 10, 17, 14.2, 0, MAT.gunmetal, ROT_Z90),
-        cyl(2.2, 2.2, 3.8, 10, 30, 14.2, 0, MAT.darkSteel, ROT_Z90),
+        recoiling(cyl(1.3, 1.6, 29, 10, 17, 14.2, 0, MAT.gunmetal, ROT_Z90)),
+        recoiling(cyl(2.2, 2.2, 3.8, 10, 30, 14.2, 0, MAT.darkSteel, ROT_Z90)),
         box(3.0, 2.2, 2.6, -8, 18.4, -3.0, MAT.steel),
         box(14, 0.9, 1.2, -2, 17.2, 7.4, MAT.warnYellow)
       ]),
@@ -3010,7 +3029,7 @@ export function createRenderer(canvas) {
             '  }\n#include <opaque_fragment>');
     };
     material.customProgramCacheKey = function () { return 'teamOrOwn9-local-lit-' + surfaceMode; };
-    return material;
+    return applyBattleMaterial(material);
   }
 
   /**
@@ -5614,12 +5633,15 @@ export function createRenderer(canvas) {
     // 不进入每帧渲染或服务端模拟。远景不支付烘焙成本。
     // 肩轴为原点的天启手臂、巨龙核球等独立挂件仍在各自工厂中普通合并，
     // 避免把挂件局部 y = 0 错当成地面而压黑整件模型。
+    const allParts = parts.body.concat(parts.glow || []);
+    const barrels = allParts.filter(p => p.recoil);
     entry = {
       // 车体与发光件合并成一个几何体：发光件的顶点系数 > 1，着色器据此
       // 跳过光照，效果一样但少一半绘制调用
-      body: mergeParts(parts.body.concat(parts.glow || []), { occlusion: true }),
+      body: mergeParts(allParts.filter(p => !p.recoil), { occlusion: true }),
       simple: mergeParts(simpleUnitParts(kind))
     };
+    if (barrels.length) entry.barrel = mergeParts(barrels, { occlusion: true });
     UNIT_GEOMETRY_CACHE.set(kind, entry);
     return entry;
   }
@@ -5634,10 +5656,15 @@ export function createRenderer(canvas) {
     const build = function (key, geometry, material, casts) {
       if (pool[key]) {
         worldRoot.remove(pool[key]);
+        pool[key].geometry.dispose(); // per-pool feedback attributes, not the cached template
         pool[key].dispose();
         pool[key] = null;
       }
       if (!geometry) return;
+      geometry = geometry.clone();
+      const feedback = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
+      feedback.setUsage(THREE.DynamicDrawUsage);
+      geometry.setAttribute('aFeedback', feedback);
       const mesh = new THREE.InstancedMesh(geometry, material, capacity);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.castShadow = casts && state.shadows === 'all';
@@ -5663,6 +5690,7 @@ export function createRenderer(canvas) {
         (MAGIC_UNIT_KINDS[kind] ? unitStoneMaterial : unitMetalMaterial));
     build('mesh', geo.body, unitMaterial, true);
     build('simple', geo.simple, unitMaterial, false);
+    build('barrel', geo.barrel, unitMaterial, true);
     pool.capacity = capacity;
     unitPools.set(kind, pool);
     return pool;
@@ -6062,7 +6090,7 @@ export function createRenderer(canvas) {
    * 加色模式下深色等于不可见，烟会整个消失。
    */
 
-  const EFFECT_MAX = 400;
+  const EFFECT_MAX = FEEDBACK_LIMITS.particles;
 
   function createParticleLayer(blending, hot) {
     const geo = new THREE.BufferGeometry();
@@ -6127,17 +6155,19 @@ export function createRenderer(canvas) {
   const smokeLayer = createParticleLayer(THREE.NormalBlending, 0);
 
   function emit(layer, options) {
-    if (layer.list.length >= state.particleBudget) return;
+    const cap = Math.min(EFFECT_MAX, state.particleBudget);
+    if (fireLayer.list.length + smokeLayer.list.length >= cap) return;
+    if (layer === smokeLayer && layer.list.length >= Math.floor(cap * .28)) return;
+    if (options.floor == null) options.floor = groundHeight(options.x, options.z) + 1.5;
     if (options.seed == null) options.seed = Math.random() * 100;
     layer.list.push(options);
   }
 
   function burst(layer, count, make) {
     for (let i = 0; i < count; i++) {
-      if (layer.list.length >= state.particleBudget) return;
+      if (fireLayer.list.length + smokeLayer.list.length >= Math.min(EFFECT_MAX, state.particleBudget)) return;
       const p = make(i);
-      if (p.seed == null) p.seed = Math.random() * 100;
-      layer.list.push(p);
+      emit(layer, p);
     }
   }
 
@@ -6160,7 +6190,8 @@ export function createRenderer(canvas) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.z += p.vz * dt;
-      if (p.y < 1.5) { p.y = 1.5; p.vy *= -0.25; p.vx *= 0.55; p.vz *= 0.55; }
+      if (p.vy < 0 && p.y < p.floor + 20) p.floor = groundHeight(p.x, p.z) + 1.5;
+      if (p.y < p.floor) { p.y = p.floor; p.vy *= -0.25; p.vx *= 0.55; p.vz *= 0.55; }
       const t = p.life / p.maxLife;
       pos.array[live * 3] = p.x;
       pos.array[live * 3 + 1] = p.y;
@@ -6169,7 +6200,7 @@ export function createRenderer(canvas) {
       col.array[live * 3 + 1] = p.g;
       col.array[live * 3 + 2] = p.b;
       size.array[live] = p.size * (p.grow ? (2 - t) : (0.4 + t * 0.6));
-      alpha.array[live] = p.fade === 'in' ? Math.min(1, (1 - t) * 4) * t : t;
+      alpha.array[live] = (p.fade === 'in' ? Math.min(1, (1 - t) * 4) * t : t) * (p.opacity == null ? 1 : p.opacity);
       seed.array[live] = p.seed || 0;
       list[live] = p;
       live++;
@@ -6204,18 +6235,21 @@ export function createRenderer(canvas) {
         'attribute vec3 instanceColorAttr;',
         'varying float vAlpha;',
         'varying vec3 vColor;',
+        'varying float vRelief;',
         'void main() {',
         '  vAlpha = aAlpha;',
         '  vColor = instanceColorAttr;',
+        '  vRelief = 0.62 + 0.38 * abs(normal.y);',
         '  gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);',
         '}'
       ].join('\n'),
       fragmentShader: [
         'varying float vAlpha;',
         'varying vec3 vColor;',
+        'varying float vRelief;',
         'void main() {',
         '  if (vAlpha <= 0.004) discard;',
-        '  gl_FragColor = vec4(vColor, vAlpha);',
+        '  gl_FragColor = vec4(vColor * vRelief, vAlpha);',
         '}'
       ].join('\n')
     });
@@ -6244,6 +6278,13 @@ export function createRenderer(canvas) {
   const scorchLayer = createDecalLayer(
     new THREE.CircleGeometry(1, 18).rotateX(-Math.PI / 2), 64,
     THREE.NormalBlending);
+  // One shared debris batch. It is never submitted to picking or navigation.
+  const wreckLayer = createDecalLayer(mergeParts([
+    taperedBox(1.45,.95,1.1,.64,3.0,0,2,0,1),
+    boxOrient(.9,2.0,.22,.38,3.0,.44,.7,.13,.8,.2),
+    boxOrient(.72,1.2,.3,-.64,1.8,-.22,.6,-.2,-.5,-.12),
+    boxOrient(.95,1.0,.08,.4,1.0,-.48,.9,.07,.35,0)
+  ]), FEEDBACK_LIMITS.wrecks, THREE.NormalBlending);
 
   function updateDecalLayer(layer, dt, groundY) {
     const list = layer.list;
@@ -6254,22 +6295,29 @@ export function createRenderer(canvas) {
       const d = list[i];
       d.life -= dt;
       if (d.life <= 0) continue;
-      const t = d.life / d.maxLife;
-      const radius = d.radius + (d.growth || 0) * (1 - t);
-      matrix.compose(
-        vecAux.set(d.x, groundHeight(d.x, d.y) + groundY, d.y),
-        quatIdentity,
-        vecScale.set(radius, 1, radius));
-      layer.mesh.setMatrixAt(live, matrix);
-      alphas.array[live] = d.alpha * (d.hold ? Math.min(1, t / 0.35) : t);
-      colors.array[live * 3] = d.r;
-      colors.array[live * 3 + 1] = d.g;
-      colors.array[live * 3 + 2] = d.b;
       list[live] = d;
       live++;
     }
     list.length = live;
-    layer.mesh.count = live;
+    let shown = 0;
+    for (let i = 0; i < list.length; i++) {
+      const d = list[i];
+      if (!inViewportBounds(d.x,d.y) || (layer === wreckLayer && !isVisible(d.x,d.y))) continue;
+      const t = d.life / d.maxLife;
+      const radius = d.radius + (d.growth || 0) * (1 - t);
+      matrix.compose(
+        vecAux.set(d.x, groundHeight(d.x, d.y) + groundY, d.y),
+        d.dir == null ? quatIdentity : quat.setFromAxisAngle(upAxis,-d.dir),
+        vecScale.set(radius, 1, radius));
+      layer.mesh.setMatrixAt(shown, matrix);
+      alphas.array[shown] = d.alpha * (d.hold ? Math.min(1, t / 0.35) : t);
+      colors.array[shown * 3] = d.r;
+      colors.array[shown * 3 + 1] = d.g;
+      colors.array[shown * 3 + 2] = d.b;
+      shown++;
+    }
+    layer.mesh.count = shown;
+    layer.mesh.visible = shown > 0;
     layer.mesh.instanceMatrix.needsUpdate = true;
     alphas.needsUpdate = true;
     colors.needsUpdate = true;
@@ -6313,7 +6361,39 @@ export function createRenderer(canvas) {
     }
   }
 
-  function spawnEffect(type, x, y, kind) {
+  const emitAbsoluteParticle = emit;
+  function spawnEffect(type, x, y, kind, metadata) {
+    if (!inViewportBounds(x,y)) return;
+    if (type==='muzzle' && (kind==='bite'||kind==='claw')) return;
+    const baseY = groundHeight(x,y), density = state.feedbackDensity || 1;
+    // Existing effects are authored in relative heights. Translate once here.
+    function emit(layer, p) {
+      const relativeHeight=p.y;
+      p.y += baseY;
+      p.floor = baseY + 1.5;
+      if (metadata && metadata.height != null && type === 'muzzle' && relativeHeight>=9) {
+        const authored=kind==='plasmalance'?30:kind==='plasma'?20:kind==='fireball'?18:
+          kind==='comet'?22:['meteor','arcane','frost','crystal','iris','boulder'].includes(kind)?16:11;
+        p.y += metadata.height-authored;
+      }
+      if (layer === smokeLayer) p.opacity = .48;
+      emitAbsoluteParticle(layer,p);
+    }
+    function burst(layer, count, make) {
+      if (count <= 0) return;
+      count = Math.max(1,Math.ceil(count*density));
+      for (let i=0;i<count;i++) {
+        if (fireLayer.list.length + smokeLayer.list.length >= Math.min(EFFECT_MAX,state.particleBudget)) break;
+        emit(layer,make(i));
+      }
+    }
+    if (metadata && metadata.wreck) {
+      const flesh = ['rifle','rocket','sniper','tesla','dog','mage','frost','oracle','panther','hexling'];
+      if (!flesh.includes(metadata.entityKind)) wreckLayer.spawn({x,y,dir:metadata.dir || 0,
+        radius:Math.min(48,Math.max(9,(metadata.size||18)*.8)),
+        life:FEEDBACK_LIMITS.wreckSeconds,maxLife:FEEDBACK_LIMITS.wreckSeconds,
+        alpha:.86,hold:true,r:metadata.faction==='magic'?.19:.16,g:.15,b:metadata.faction==='magic'?.23:.12});
+    }
     const rand = Math.random;
     if (type === 'explosion') {
       // 火球：颜色写成 >1 的线性值，核心经辉光放大成光斑
@@ -6682,18 +6762,20 @@ export function createRenderer(canvas) {
           life: 0.14, maxLife: 0.14, r: 0.7, g: 1.15, b: 1.25
         });
       } else {
-        burst(fireLayer, 9, function () {
+        const heavy=kind==='siege'||kind==='missile'||kind==='boulder';
+        const light=kind==='bullet'||kind==='sniper'||kind==='bite'||kind==='claw';
+        burst(fireLayer, heavy?10:(light?3:6), function () {
           const a = rand() * TAU;
           const sp = 90 + rand() * 150;
           return {
             x: x, y: 5, z: y,
             vx: Math.cos(a) * sp, vy: 60 + rand() * 110, vz: Math.sin(a) * sp,
             life: 0.2 + rand() * 0.22, maxLife: 0.42,
-            size: 4 + rand() * 4,
-            r: 1.0, g: 0.8, b: 0.4
+            size: (heavy?5:2.5) + rand() * 2,
+            r: 1.25, g: kind==='ap'?1.2:.8, b: kind==='ap'?1.05:.4
           };
         });
-        burst(smokeLayer, 4, function () {
+        burst(smokeLayer, light?0:(heavy?3:1), function () {
           const a = rand() * TAU;
           const grey = 0.2 + rand() * 0.1;
           return {
@@ -6705,7 +6787,7 @@ export function createRenderer(canvas) {
           };
         });
         shockLayer.spawn({
-          x: x, y: y, radius: 6, growth: 34, alpha: 0.4,
+          x: x, y: y, radius: 6, growth: heavy?64:24, alpha: light?.15:.32,
           life: 0.22, maxLife: 0.22, r: 1.0, g: 0.85, b: 0.5
         });
       }
@@ -6808,14 +6890,21 @@ export function createRenderer(canvas) {
           life: 0.24, maxLife: 0.24, r: 0.78, g: 0.42, b: 1.20
         });
         flashAt(x, y, 0xc79dff);
+      } else if (['arcane','frost','crystal','iris','boulder'].includes(kind)) {
+        const cold=kind==='frost',earth=kind==='boulder';
+        burst(fireLayer,3,function(){return {x:x,y:16,z:y,
+          vx:(rand()-.5)*20,vy:18,vz:(rand()-.5)*20,
+          life:.16,maxLife:.16,size:earth?5:4,
+          r:cold?.6:(earth?.8:1.4),g:cold?1.3:(earth?.7:.65),b:earth?.5:1.8};});
       } else {
-        burst(fireLayer, 5, function () {
+        const light=kind==='bullet'||kind==='sniper';
+        burst(fireLayer, light?2:4, function () {
           const a = rand() * TAU;
           return {
             x: x, y: 11, z: y,
             vx: Math.cos(a) * 40, vy: 14, vz: Math.sin(a) * 40,
             life: 0.09 + rand() * 0.06, maxLife: 0.15,
-            size: 9 + rand() * 6,
+            size: (light?3:6) + rand() * 3,
             r: 1.0, g: 0.94, b: 0.68
           };
         });
@@ -6896,10 +6985,16 @@ export function createRenderer(canvas) {
   }
 
   function updateEffects(dt) {
+    // Quality changes take effect immediately, including already-live particles.
+    const cap=Math.min(EFFECT_MAX,state.particleBudget);
+    smokeLayer.list.length=Math.min(smokeLayer.list.length,Math.floor(cap*.28));
+    fireLayer.list.length=Math.min(fireLayer.list.length,cap);
+    smokeLayer.list.length=Math.min(smokeLayer.list.length,Math.max(0,cap-fireLayer.list.length));
     updateParticleLayer(fireLayer, dt, 0.90, 190);
     updateParticleLayer(smokeLayer, dt, 0.955, 190);
     updateDecalLayer(shockLayer, dt, 3.5);
     updateDecalLayer(scorchLayer, dt, 2.2);
+    updateDecalLayer(wreckLayer, dt, 1.2);
     updateFlashes(dt);
   }
 
@@ -6961,6 +7056,50 @@ export function createRenderer(canvas) {
   });
   let rankRingMesh = null;
   const rankRingVisuals = [];
+
+  const ownerMarkGeo=mergeParts([0,Math.PI].map(angle=>({
+    geo:new THREE.RingGeometry(.90,1.0,10,1,angle+.25,1.1).rotateX(-Math.PI/2),shade:1})));
+  const dangerMarkGeo=mergeParts([0,1,2].map(i=>({
+    geo:new THREE.RingGeometry(.80,1.0,2,1,i*TAU/3,.95).rotateX(-Math.PI/2),shade:1})));
+  const markerMaterial=new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,opacity:.65,
+    depthWrite:false,side:THREE.DoubleSide,toneMapped:false});
+  let ownerMarks=null,dangerMarks=null;
+  function markerMesh(existing,geo,needed) {
+    if(existing && existing.instanceMatrix.count>=needed) return existing;
+    if(existing) {worldRoot.remove(existing);existing.dispose();}
+    const mesh=new THREE.InstancedMesh(geo,markerMaterial,Math.max(32,Math.ceil(needed*1.4)));
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.count=0;
+    worldRoot.add(mesh);return mesh;
+  }
+  function updateReadability(game,time) {
+    ownerMarks=markerMesh(ownerMarks,ownerMarkGeo,state.renderedUnits+state.renderedStructures);
+    dangerMarks=markerMesh(dangerMarks,dangerMarkGeo,Math.min(128,state.renderedUnits));
+    let count=0,dangers=0;
+    function mark(x,y,height,r,color) {
+      matrix.compose(vecPos.set(x,height+2,y),quatIdentity,vecScale.set(r,1,r));
+      ownerMarks.setMatrixAt(count,matrix);tmpColor.set(color);ownerMarks.setColorAt(count++,tmpColor);
+    }
+    for(const vis of snapshotVisuals) {
+      if(!vis.inRenderRange) continue;
+      const u=vis.unit,r=u.size*1.1+2,gy=vis.groundY??groundHeight(vis.x,vis.y);
+      mark(vis.x,vis.y,gy,r,colorOf(u.owner));
+      // Amber broken triangles signify explosive cargo, not an attack radius.
+      if((u.kind==='bomb_truck'||u.kind==='hexling')&&dangers<128) {
+        const size=r*(1.45+.08*Math.sin(time*.007));
+        matrix.compose(vecPos.set(vis.x,gy+2.4,vis.y),quatIdentity,vecScale.set(size,1,size));
+        dangerMarks.setMatrixAt(dangers,matrix);tmpColor.set(1,.48,.08);
+        dangerMarks.setColorAt(dangers++,tmpColor);
+      }
+    }
+    for(const s of game.structures) {
+      const node=structureNodes.get(s.id);
+      if(node?.group.visible) mark(s.x,s.y,node.groundY||0,s.size*1.58,colorOf(s.owner));
+    }
+    for(const [mesh,n] of [[ownerMarks,count],[dangerMarks,dangers]]) {
+      mesh.count=n;mesh.visible=n>0;
+      if(n) {mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;}
+    }
+  }
 
   function ensureRankRingMesh(needed) {
     if (rankRingMesh && rankRingMesh.instanceMatrix.count >= needed) {
@@ -7150,7 +7289,7 @@ export function createRenderer(canvas) {
     const units = new Map(game.units.filter(u => u.hp > 0 &&
       (unitOwner == null || u.owner === unitOwner)).map(u => [u.id, u]));
     unitPools.forEach(pool => {
-      for (const mesh of [pool.mesh, pool.simple]) {
+      for (const mesh of [pool.mesh, pool.simple, pool.barrel]) {
         if (mesh) modelPicker.addInstances(mesh, i => units.get(mesh.userData.instanceIds[i]));
       }
     });
@@ -7486,6 +7625,7 @@ export function createRenderer(canvas) {
     const cameraChanged = applyCamera();
     const camDist = camera.position.distanceTo(
       vecPos.set(state.camX, 0, state.camY));
+    state.feedbackDensity = effectDensity(camDist);
     if (cameraChanged || viewportNeedsUpdate) {
       const reliefMargin = terrainInput ? Math.max(Math.abs(terrainInput.minHeight),
         Math.abs(terrainInput.maxHeight)) / Math.max(.2, Math.tan(state.pitch)) : 0;
@@ -7517,13 +7657,16 @@ export function createRenderer(canvas) {
           vis = { x: u.x, y: u.y, dir: u.dir };
           visual.set(u.id, vis);
         }
+        if (vis.previousHp != null && u.hp < vis.previousHp) vis.hitAt = payload.time;
+        vis.previousHp = u.hp;
+        vis.condition = conditionFromHealth(u.hp,u.maxHp);
         vis.unit = u;
         vis.seen = renderGeneration;
         snapshotVisuals[i] = vis;
       }
       visual.forEach(function (vis, id) {
         if (vis.seen !== renderGeneration) {
-          if (isVisible(vis.x, vis.y)) spawnEffect('explosion', vis.x, vis.y);
+          // Leaving vision, folding or withdrawing is not a confirmed death.
           visual.delete(id);
         }
       });
@@ -7536,12 +7679,21 @@ export function createRenderer(canvas) {
       }
       structureNodes.forEach(function (node, id) {
         if (node.seen === renderGeneration) return;
-        if (node.group.visible) {
-          spawnEffect('explosion', node.group.position.x, node.group.position.z);
-        }
         disposeStructure(id);
       });
       lastEntityGame = game;
+    }
+
+    const fresh = payload.newEffects || [];
+    for (const fx of fresh) {
+      if (fx.type !== 'muzzle') continue;
+      const vis = fx.entityId && visual.get(fx.entityId);
+      if (vis) {
+        vis.firedAt = payload.time;
+        if (fx.kind === 'plasmalance') vis.apocFire = 1;
+      }
+      const node = fx.entityId && structureNodes.get(fx.entityId);
+      if (node) node.firedAt = payload.time;
     }
 
     byKindCache.forEach(function (list) { list.length = 0; });
@@ -7568,7 +7720,8 @@ export function createRenderer(canvas) {
       let dd = u.dir - vis.dir;
       while (dd > Math.PI) dd -= TAU;
       while (dd < -Math.PI) dd += TAU;
-      vis.dir += dd * Math.min(1, dt * 11);
+      const turn = dd * Math.min(1, dt * 11);
+      vis.dir += turn;
       vis.inRenderRange = inViewportBounds(vis.x, vis.y);
       if (!vis.inRenderRange) continue;
       state.renderedUnits++;
@@ -7588,6 +7741,25 @@ export function createRenderer(canvas) {
 
       // 天启坦克按军衔分到不同的形态池，其余兵种就是自己的 kind
       const vkind = unitVisualKind(u);
+      vis.visualKind = vkind;
+      advanceTracks(vis,vis.x-oldX,vis.y-oldY,turn,UNIT_VISUAL_SCALE[vkind]||1);
+      vis.hitFlash = Math.max(0,1-(payload.time-(vis.hitAt??-Infinity))/180);
+      // Small, sparse exhaust/damage cues. Far views omit decorative emitters.
+      if (state.feedbackDensity > .5 && payload.time >= (vis.nextAmbient || 0)) {
+        const moved = Math.hypot(vis.x-oldX,vis.y-oldY);
+        const damaged = vis.condition > .45;
+        if (((vis.trackLeft != null && moved > .18) || damaged) &&
+          fireLayer.list.length+smokeLayer.list.length<state.particleBudget*.45) {
+          const gy = vis.groundY ?? groundHeight(vis.x,vis.y);
+          const magic = MAGIC_UNIT_KINDS[vkind];
+          const tx = vis.x-Math.cos(vis.dir)*u.size*.6, ty = vis.y-Math.sin(vis.dir)*u.size*.6;
+          emit(damaged && magic ? fireLayer : smokeLayer,{x:tx,y:gy+(damaged?u.size*.8:3),z:ty,
+            vx:-5,vy:damaged?18:6,vz:3,life:damaged?.85:.45,maxLife:damaged?.85:.45,
+            size:damaged?9:7,grow:true,buoyancy:-.06,opacity:damaged?.5:.26,
+            r:magic?.6:(damaged?.20:.44),g:magic?.8:(damaged?.19:.37),b:magic?1.5:(damaged?.18:.27)});
+        }
+        vis.nextAmbient = payload.time + (damaged?650:210) + Math.random()*150;
+      }
       let bucket = byKind.get(vkind);
       if (!bucket) { bucket = []; byKind.set(vkind, bucket); }
       bucket.push(vis);
@@ -7608,6 +7780,7 @@ export function createRenderer(canvas) {
     unitPools.forEach(function (pool) {
       if (pool.mesh) { pool.mesh.count = 0; pool.mesh.visible = false; }
       if (pool.simple) { pool.simple.count = 0; pool.simple.visible = false; }
+      if (pool.barrel) { pool.barrel.count = 0; pool.barrel.visible = false; }
     });
 
     byKind.forEach(function (list, kind) {
@@ -7625,6 +7798,8 @@ export function createRenderer(canvas) {
       const colors = mesh.userData.instanceColors;
       let matrixDirty = false;
       let colorDirty = false;
+      let feedbackDirty = false;
+      const feedback = mesh.geometry.attributes.aFeedback;
       for (let i = 0; i < list.length; i++) {
         const vis = list[i];
         let gy = vis.groundY;
@@ -7652,6 +7827,12 @@ export function createRenderer(canvas) {
           colors[i] = color;
           colorDirty = true;
         }
+        const a=feedback.array,o=i*4;
+        const left=simpleKind?0:(vis.trackLeft||0),right=simpleKind?0:(vis.trackRight||0);
+        if(Math.abs(a[o]-left)>.0001||Math.abs(a[o+1]-right)>.0001||
+          Math.abs(a[o+2]-vis.hitFlash)>.0001||Math.abs(a[o+3]-vis.condition)>.0001) {
+          feedback.setXYZW(i,left,right,vis.hitFlash,vis.condition);feedbackDirty=true;
+        }
 
         if (doContactShadows) {
           const r = vis.unit.size * 1.15 * scale;
@@ -7667,8 +7848,28 @@ export function createRenderer(canvas) {
       mesh.visible = list.length > 0;
       if (matrixDirty) mesh.instanceMatrix.needsUpdate = true;
       if (colorDirty && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      if (feedbackDirty) feedback.needsUpdate = true;
       mesh.castShadow = doShadows && !simpleKind;
       mesh.receiveShadow = doContactShadows && !simpleKind;
+      // Barrels remain instanced by kind, and their real matrices are pickable.
+      if (!simpleKind && pool.barrel) {
+        const barrels=pool.barrel;
+        for(let i=0;i<list.length;i++) {
+          const vis=list[i],kick=recoilDistance(kind,(payload.time-(vis.firedAt??-Infinity))/1000);
+          const tilt=kind==='artillery'?.34:0;
+          const offset=kick*scale*Math.cos(tilt);
+          quat.setFromAxisAngle(upAxis,-vis.dir);
+          matrix.compose(vecPos.set(vis.x-Math.cos(vis.dir)*offset,
+            vis.groundY-kick*scale*Math.sin(tilt),vis.y-Math.sin(vis.dir)*offset),
+            quat,vecScale.set(scale,scale,scale));
+          barrels.setMatrixAt(i,matrix);barrels.userData.instanceIds[i]=vis.unit.id;
+          tmpColor.set(colorOf(vis.unit.owner));barrels.setColorAt(i,tmpColor);
+          barrels.geometry.attributes.aFeedback.setXYZW(i,0,0,vis.hitFlash,vis.condition);
+        }
+        barrels.count=list.length;barrels.visible=true;barrels.castShadow=doShadows;
+        barrels.instanceMatrix.needsUpdate=true;barrels.instanceColor.needsUpdate=true;
+        barrels.geometry.attributes.aFeedback.needsUpdate=true;
+      }
     });
 
     if (shadows) {
@@ -7809,6 +8010,15 @@ export function createRenderer(canvas) {
         node.dir = s.dir;
         node.head.rotation.y = -s.dir;
       }
+      if (node.previousHp != null && s.hp < node.previousHp) node.hitAt=payload.time;
+      node.previousHp=s.hp;
+      node.teamMat.userData.battleCondition.value[0]=Math.max(0,1-(payload.time-(node.hitAt??-Infinity))/180);
+      node.teamMat.userData.battleCondition.value[1]=conditionFromHealth(s.hp,s.maxHp);
+      if (node.head && s.kind==='turret') {
+        const kick=recoilDistance('tank',(payload.time-(node.firedAt??-Infinity))/1000)*.5;
+        node.head.position.x=-Math.cos(s.dir||0)*kick;
+        node.head.position.z=-Math.sin(s.dir||0)*kick;
+      }
       if (node.spinner) {
         let spinMul = 1;
         const salute = payload.hqSalute;
@@ -7820,7 +8030,7 @@ export function createRenderer(canvas) {
       }
       // 残血建筑冒烟
       const wounded = s.hp / s.maxHp;
-      if (s.active && wounded < 0.55 && Math.random() < dt * (1.6 - wounded)) {
+      if (s.active && wounded < 0.55 && state.feedbackDensity > .5 && Math.random() < dt * (1.6 - wounded)) {
         spawnEffect('smoke', s.x + (Math.random() - 0.5) * s.size,
           s.y + (Math.random() - 0.5) * s.size);
       }
@@ -7853,8 +8063,8 @@ export function createRenderer(canvas) {
     let shardCount = 0;
     if (state.showProjectiles && projectiles.length) {
       const tracers = ensureTracerMesh(projectiles.length * 4);
-      const orbs = ensureTracerOrbMesh(projectiles.length);
-      const shards = ensureTracerShardMesh(Math.max(8, projectiles.length));
+      const orbs = ensureTracerOrbMesh(projectiles.length * 2);
+      const shards = ensureTracerShardMesh(Math.max(8, projectiles.length * 2));
       for (let i = 0; i < projectiles.length; i++) {
         const p = projectiles[i];
         // 近战（军犬扑咬 / 影豹爪击）不画弹道，命中反馈交给服务端的 impact 特效
@@ -7865,7 +8075,7 @@ export function createRenderer(canvas) {
         if (!inViewportBounds(p.x, p.y)) continue;
         const style = PROJECTILE_STYLE[p.kind] || PROJECTILE_STYLE.bullet;
         const t = p.t == null ? 0.5 : p.t;
-        const height = 14 + style.arc * Math.sin(Math.PI * t);
+        const height = groundHeight(p.x,p.y) + 14 + style.arc * Math.sin(Math.PI * t);
         const dx = p.targetX - p.x;
         const dy = p.targetY - p.y;
         const yaw = Math.atan2(dy, dx);
@@ -7955,18 +8165,26 @@ export function createRenderer(canvas) {
 
     /* --- 特效 --- */
     // app.js 已经按 id 去重过，这里收到的都是本帧新出现的
-    const fresh = payload.newEffects || [];
     for (let i = 0; i < fresh.length; i++) {
       const fx = fresh[i];
-      const fxKind = fx.type === 'impact'
+      const fxKind = fx.kind || (fx.type === 'impact'
         ? guessImpactKind(fx.x, fx.y, projectileHintPrev)
-        : (fx.kind || (fx.type === 'muzzle'
-          ? guessMuzzleKind(fx.x, fx.y, projectileHints) : null));
+        : (fx.type === 'muzzle' ? guessMuzzleKind(fx.x, fx.y, projectileHints) : null));
       // 双臂炮的炮口闪光同时驱动人形态的抬臂动画
-      if (fx.type === 'muzzle' && fxKind === 'plasmalance') {
+      if (fx.type === 'muzzle' && fxKind === 'plasmalance' && !fx.entityId) {
         triggerApocFire(fx.x, fx.y);
       }
-      spawnEffect(fx.type, fx.x, fx.y, fxKind);
+      const vis=fx.entityId && visual.get(fx.entityId);
+      if (fx.type==='muzzle' && vis) {
+        const pool=unitPools.get(vis.visualKind);
+        if (pool?.barrel && !pool.barrel.geometry.boundingBox) pool.barrel.geometry.computeBoundingBox();
+        const bounds=pool?.barrel?.geometry.boundingBox;
+        const scale=UNIT_VISUAL_SCALE[vis.visualKind]||1;
+        const point=MUZZLE_POINTS[vis.visualKind];
+        const tip=(bounds?bounds.max.x:(point?point[0]:vis.unit.size*.7))*scale;
+        const height=(bounds?(bounds.max.y+bounds.min.y)*.5:(point?point[1]:vis.unit.size))*scale;
+        spawnEffect(fx.type,vis.x+Math.cos(vis.dir)*tip,vis.y+Math.sin(vis.dir)*tip,fxKind,{...fx,height});
+      } else spawnEffect(fx.type, fx.x, fx.y, fxKind,fx);
     }
     projectileHintPrev = projectileHints;
     if (!useSimple) {
@@ -7976,6 +8194,7 @@ export function createRenderer(canvas) {
       }
     }
     updateEffects(dt);
+    updateReadability(game,payload.time);
 
     /* --- 选中环 --- */
     const selected = payload.selectedUnitIds;
@@ -8249,6 +8468,10 @@ export function createRenderer(canvas) {
         structures: structureNodes.size,
         renderedStructures: state.renderedStructures,
         particles: fireLayer.list.length + smokeLayer.list.length,
+        smokeParticles:smokeLayer.list.length,
+        wrecks:wreckLayer.list.length,
+        feedbackDensity:state.feedbackDensity,
+        barrelBatches:[...unitPools.values()].filter(p=>p.barrel?.visible).length,
         buildTerrainMs: state.buildTerrainMs,
         groundDetailParts: state.groundDetailParts,
         forestChunks: state.forestChunks,
@@ -8303,6 +8526,11 @@ export function createRenderer(canvas) {
       smokeLayer.list.length = 0;
       shockLayer.list.length = 0;
       scorchLayer.list.length = 0;
+      wreckLayer.list.length = 0;
+      wreckLayer.mesh.count=0;wreckLayer.mesh.visible=false;
+      if(ownerMarks) {ownerMarks.count=0;ownerMarks.visible=false;}
+      if(dangerMarks) {dangerMarks.count=0;dangerMarks.visible=false;}
+      for(const flash of flashPool) {flash.life=0;flash.light.visible=false;flash.light.intensity=0;}
       projectileHintPrev = [];
       if (tracerMesh) tracerMesh.count = 0;
       if (tracerOrbMesh) tracerOrbMesh.count = 0;
@@ -8313,6 +8541,7 @@ export function createRenderer(canvas) {
       unitPools.forEach(function (pool) {
         if (pool.mesh) pool.mesh.count = 0;
         if (pool.simple) pool.simple.count = 0;
+        if (pool.barrel) {pool.barrel.count=0;pool.barrel.visible=false;}
       });
       apocArmVisuals.length = 0;
       if (apocArmMesh) {

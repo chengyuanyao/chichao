@@ -15,15 +15,17 @@ input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;
 </style>
 <canvas id="world"></canvas><div id="status">正在准备离线渲染场景…</div><div id="dragBox" hidden></div>
 <div id="controls">
-<select id="scenario"><option value="showcase">双阵营全图鉴</option><option value="army">大军团压力</option><option value="river">河谷光影</option><option value="map">地图全景</option><option value="placement">炮塔射程预览</option><option value="picking">模型点击验收</option></select>
+<select id="scenario"><option value="showcase">双阵营全图鉴</option><option value="army">大军团压力</option><option value="feedback">战场反馈验收</option><option value="river">河谷光影</option><option value="map">地图全景</option><option value="placement">炮塔射程预览</option><option value="picking">模型点击验收</option></select>
 <select id="map"></select>
 <select id="shadows"><option value="structures">建筑阴影</option><option value="all">全部阴影</option><option value="off">关闭阴影</option></select>
 <select id="bloom"><option value="0">无泛光</option><option value="1">轻量泛光</option><option value="high">完整泛光</option></select>
 <select id="lod"><option value="auto">自动 LOD</option><option value="off">禁用 LOD</option></select>
+<select id="particles" aria-label="粒子上限"><option value="60">粒子 60</option><option value="150" selected>粒子 150</option><option value="400">粒子 400</option></select>
 <input id="count" type="number" value="400" min="1" max="2000" aria-label="单位数">
 <button id="apply">应用场景</button><button id="quality">即时应用画质</button><button id="run">运行基准</button>
 <button id="cycles">连续换图检查</button>
 <button id="freeze">固定时间截图</button><button id="resume">继续动画</button><button id="hide">隐藏面板</button>
+<button id="audio">试听战场音效</button><button id="healed">修复全部</button><button id="fxBurst">密集爆炸测试</button>
 <span id="fogControls" hidden><button id="scout">侦察首个矿区</button><button id="retreat">撤走侦察单位</button><button id="observe">淘汰观战</button><button id="restart">重开本图</button></span>
 </div>
 <pre id="results" hidden></pre>
@@ -38,6 +40,8 @@ if (moduleUrl.origin !== location.origin) throw new Error('Renderer must be same
 const [{createRenderer}, catalog] = await Promise.all([
   import(moduleUrl.href), fetch('/benchmark-data.json').then(r => r.json())
 ]);
+const {createBattleAudio}=await import('/public/battle_audio.js');
+let battleAudio=null,syntheticEffects=[],nextShotAt=0,healthy=false;
 const renderer = createRenderer(document.querySelector('canvas'));
 const canvas = document.querySelector('canvas');
 const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
@@ -48,7 +52,7 @@ const players = [{id:'steel',color:'#de6451'}, {id:'arcane',color:'#5caddc'}];
 renderer.setPalette(players, 'steel', () => true);
 const selected = new Set();
 let settings = {shadows:query.get('shadows') || 'structures', bloom:query.get('bloom') === '1',
-  fastBloom:query.get('bloom') !== 'high', lod:query.get('lod') !== 'off', fogScale:9, particleBudget:150};
+  fastBloom:query.get('bloom') !== 'high', lod:query.get('lod') !== 'off', fogScale:9, particleBudget:Number(query.get('particles'))||150};
 if (query.get('bloom') === 'high') settings.bloom = true;
 renderer.setQuality(settings);
 let game, map, scenario, camera, buildPreview = null, pickedStructure = null, sceneTime = 18000, lastAt = 0, snapshotAt = -Infinity;
@@ -92,7 +96,16 @@ function loadScenario(options={}) {
   game = {elapsed:0,units:[],structures:[],ore:resources.map(r=>[r.id,r.amount,false]),
     projectiles:[],effects:[],crates:[],strikes:[],pings:[]};
   const keys = Object.keys(catalog.units);
-  if (scenario === 'showcase') {
+  if (scenario === 'feedback') {
+    const kinds=['tank','artillery','tank_destroyer','overlord','scout','bomb_truck',
+      'mage','frost','dragon','colossus','comet','hexling'];
+    kinds.forEach((kind,i)=>game.units.push(unit(kind,i,focus.x+(i%6-2.5)*100,
+      focus.y+(i<6?-90:95),kind==='overlord'?3:0)));
+    game.units.push(unit('overlord',20,focus.x-95,focus.y+240,16));
+    game.structures.push(structure('factory',0,focus.x-350,focus.y-300),
+      structure('mtower',1,focus.x+350,focus.y-230));
+    moving=true;
+  } else if (scenario === 'showcase') {
     const tech = keys.filter(k=>catalog.units[k].faction!=='magic');
     const magic = keys.filter(k=>catalog.units[k].faction==='magic');
     for (const [faction,kinds] of [tech,magic].entries()) {
@@ -149,12 +162,26 @@ function draw(at) {
       u.x=u.originX+Math.sin(sceneTime*0.00042+i*0.17)*12;
       u.y=u.originY+Math.cos(sceneTime*0.00042+i*0.17)*12;
     });
+    if((scenario==='feedback'||query.get('combat')==='1')&&sceneTime>=nextShotAt&&!paused) {
+      nextShotAt=sceneTime+480;
+      const beat=Math.floor(sceneTime/480);
+      game.units.forEach((u,i)=>{
+        const def=catalog.units[u.kind];
+        if(!healthy) u.hp=u.maxHp*(i%3===0?.25:i%3===1?.62:1);
+        if(!def.projectile||i%3!==beat%3) return;
+        const kind=u.kind==='overlord'?(u.kills>=8?'plasmalance':u.kills>=3?'plasma':def.projectile):def.projectile;
+        syntheticEffects.push({type:'muzzle',x:u.x,y:u.y,kind,entityId:u.id,entityKind:u.kind,dir:u.dir});
+        syntheticEffects.push({type:'impact',x:u.x+48,y:u.y+25,kind});
+      });
+      if(battleAudio) battleAudio.events(syntheticEffects,{...camera,width:innerWidth},.75);
+    }
   }
   const start=performance.now();
   try {
     renderer.render({game,dt:Math.min(interval/1000,0.05),time:sceneTime,revealMap,
       selectedUnitIds:selected,selectedStructureId:pickedStructure,selectedResourceId:null,
-      newEffects:[],buildPreview});
+      newEffects:syntheticEffects,buildPreview});
+    syntheticEffects=[];
   } catch(error) {
     frameError=String(error.stack||error); status.textContent=frameError;
     console.error(error); return;
@@ -287,17 +314,18 @@ for(const [key,value] of Object.entries(catalog.maps)) {
   const option=document.createElement('option');option.value=key;option.textContent=value.name;
   document.querySelector('#map').append(option);
 }
-for(const [id,value] of Object.entries({scenario,map:map.id,shadows:settings.shadows,bloom:query.get('bloom')||'0',lod:settings.lod?'auto':'off',count:query.get('count')||400})) document.getElementById(id).value=value;
+for(const [id,value] of Object.entries({scenario,map:map.id,shadows:settings.shadows,bloom:query.get('bloom')||'0',lod:settings.lod?'auto':'off',particles:settings.particleBudget,count:query.get('count')||400})) document.getElementById(id).value=value;
 document.querySelector('#apply').onclick=()=>{
   const next=new URL(location.href);
-  for(const id of ['scenario','map','shadows','bloom','lod','count']) next.searchParams.set(id,document.getElementById(id).value);
+  for(const id of ['scenario','map','shadows','bloom','lod','particles','count']) next.searchParams.set(id,document.getElementById(id).value);
   location.href=next.href;
 };
 document.querySelector('#quality').onclick=async()=>{
   if(runningBenchmark) {status.textContent='采样进行中，请完成后再切换画质';return;}
   const bloom=document.querySelector('#bloom').value;
   window.benchmark.setQuality({shadows:document.querySelector('#shadows').value,
-    bloom:bloom!=='0',fastBloom:bloom!=='high',lod:document.querySelector('#lod').value!=='off'});
+    bloom:bloom!=='0',fastBloom:bloom!=='high',lod:document.querySelector('#lod').value!=='off',
+    particleBudget:Number(document.querySelector('#particles').value)});
   window.benchmark.resume();
   await waitFrames(5);
   const result={type:'live-quality',...window.benchmark.state(),rendererModule:moduleUrl.pathname,
@@ -311,6 +339,23 @@ document.querySelector('#run').onclick=()=>window.benchmark.run().catch(error=>{
 document.querySelector('#cycles').onclick=()=>window.benchmark.cycleMaps().catch(error=>{status.textContent=String(error.stack||error);});
 document.querySelector('#freeze').onclick=()=>window.benchmark.freeze();
 document.querySelector('#resume').onclick=()=>window.benchmark.resume();
+document.querySelector('#audio').onclick=async()=>{
+  if(!battleAudio) {const context=new AudioContext();await context.resume();battleAudio=createBattleAudio(context);}
+  battleAudio.ui('confirm',.6);window.benchmark.resume();
+  status.textContent='受控演示 · 已启用战场声音（仅此测试页面）';
+};
+document.querySelector('#healed').onclick=()=>{
+  healthy=true;game={...game,units:game.units.map(u=>({...u,hp:u.maxHp}))};window.benchmark.resume();
+  status.textContent='受控演示 · 已修复全部单位，核对受损旧化与烟雾恢复';
+};
+document.querySelector('#fxBurst').onclick=async()=>{
+  syntheticEffects=Array.from({length:180},(_,i)=>({type:'explosion',x:camera.x+(i%12-6)*40,
+    y:camera.y+(Math.floor(i/12)-7)*40,entityKind:'tank',size:22,dir:.3,wreck:true}));
+  window.benchmark.resume();await waitFrames(3);halted=true;
+  const result={type:'feedback-budget',stats:renderer.stats(),audio:battleAudio?.stats()};
+  document.querySelector('#results').textContent=JSON.stringify(result,null,2);
+  document.querySelector('#results').hidden=false;status.textContent='受控密集爆炸 · 检查粒子与残骸上限（不是真实对局）';
+};
 document.querySelector('#hide').onclick=()=>{for(const id of ['controls','status','results']) document.getElementById(id).hidden=true;};
 if(query.get('fog')==='1') {
   document.querySelector('#fogControls').hidden=false;

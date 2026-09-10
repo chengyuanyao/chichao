@@ -38,15 +38,24 @@ def start_fixture(room):
         game["elapsed"] = step * 10
         for index, player in enumerate(players):
             player["harvested"] += 450 + index * 90
+            if not 8 <= step <= 14:
+                battle_report.income(room, player["id"], 450 + index * 90)
             player["cash"] = 1000 + (step * (390 + index * 43)) % 7000
             if step % 2 == 0:
                 kind = "golem" if player["faction"] == "magic" else "tank"
-                game["units"].append(server.make_unit(kind, player["id"], 600 + index * 520, 1100 + step * 10))
+                produced = server.make_unit(kind, player["id"], 600 + index * 520, 1100 + step * 10)
+                game["units"].append(produced)
+                battle_report.unit_created(room, produced)
+            if step == 5:
+                tech = server.make_structure("mcircle" if player["faction"] == "magic" else "factory", player["id"],600+index*520,1200,True)
+                game["structures"].append(tech)
+                battle_report.structure_completed(room, tech)
             if step % (3 + index % 3) == 0:
                 victim = next((u for u in game["units"] if u["owner"] == player["id"] and u["hp"] > 0), None)
                 if victim:
                     attacker = players[(index + 1) % len(players)]
-                    server.apply_damage(room, victim, 99999, attacker["id"], game=game)
+                    server.apply_damage(room, victim, 99999, attacker["id"], game=game,
+                                        source_kind="golem" if attacker["faction"] == "magic" else "tank")
         if step in (10, 17, 24):
             victim = next((s for s in game["structures"] if s["owner"] != players[0]["id"]
                            and s["hp"] > 0 and server.structure_role(s["kind"]) != "hq"), None)

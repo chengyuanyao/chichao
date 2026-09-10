@@ -52,6 +52,7 @@ from catalog import (
 )
 import easter_eggs
 import battle_report
+from tactical_orders import scatter_destinations
 
 
 VERSION = "2.1.0"
@@ -901,6 +902,8 @@ def public_unit(unit):
         result["slow"] = True
     if unit.get("repairing"):
         result["repairing"] = True
+    if unit.get("order") in ("hold", "scatter"):
+        result["tacticalOrder"] = unit["order"]
     return result
 
 
@@ -953,6 +956,13 @@ def public_effect(effect):
     }
     if effect.get("kind"):
         result["kind"] = effect["kind"]
+    # Cosmetic metadata belongs to this visible event, never to a hidden shooter.
+    for key in ("entityId", "entityKind", "faction", "wreck"):
+        if key in effect:
+            result[key] = effect[key]
+    for key in ("dir", "size"):
+        if key in effect:
+            result[key] = round(effect[key], 2)
     return result
 
 
@@ -3001,6 +3011,57 @@ def issue_harvest(game, player_id, unit_ids, resource_id):
     return assigned
 
 
+def issue_tactical_order(game, player_id, unit_ids, command):
+    selected = [u for u in game["units"] if u["owner"] == player_id
+                and u["id"] in unit_ids and u["hp"] > 0 and unit_can_attack(u["kind"])]
+    if not selected:
+        raise ValueError("请选择作战单位（不含矿车和基地车）")
+    destinations = (scatter_destinations(selected, game_terrain(game), game["structures"])
+                    if command == "scatter" else {})
+    issue_stop(game, player_id, {u["id"] for u in selected})
+    moved = 0
+    for unit in selected:
+        clear_unit_path(unit)
+        unit["order"] = "hold"
+        unit["scan"] = 0.0
+        if unit["id"] in destinations:
+            x, y = destinations[unit["id"]]
+            if math.hypot(x-unit["x"], y-unit["y"]) > 1:
+                unit["destX"], unit["destY"] = x, y
+                unit["order"] = "scatter"
+                moved += 1
+    return moved
+
+
+HOLD_TARGET_PADDING = max(d["size"] for d in list(UNIT_TYPES.values()) + list(STRUCTURE_TYPES.values())) * .35
+
+
+def hold_target_valid(game, unit, target):
+    if not target or target["hp"] <= 0 or is_friendly(game, unit["owner"], target["owner"]):
+        return False
+    definition = UNIT_TYPES[unit["kind"]]
+    if math.hypot(target["x"]-unit["x"], target["y"]-unit["y"]) > definition["range"]+target["size"]*.35:
+        return False
+    if unit["kind"] == "dog":
+        target_def = UNIT_TYPES.get(target["kind"], STRUCTURE_TYPES.get(target["kind"], {}))
+        if target["kind"] in VEHICLE_KINDS or damage_armor_multiplier("bite", target_def.get("armor", "structure")) <= 0:
+            return False
+    return True
+
+
+def nearest_hold_target(game, unit, spatial_index=None):
+    radius = UNIT_TYPES[unit["kind"]]["range"] + HOLD_TARGET_PADDING
+    candidates = (spatial_candidates(spatial_index, unit["x"], unit["y"], radius)
+                  if spatial_index else game["units"] + game["structures"])
+    best, distance_sq = None, float("inf")
+    for target in candidates:
+        if hold_target_valid(game, unit, target):
+            dist = (target["x"]-unit["x"])**2 + (target["y"]-unit["y"])**2
+            if dist < distance_sq:
+                best, distance_sq = target, dist
+    return best
+
+
 def unit_can_attack(kind):
     """普通火力，或靠死亡/贴脸爆炸输出的自爆单位，都能接攻击指令。"""
     definition = UNIT_TYPES.get(kind) or {}
@@ -3130,6 +3191,8 @@ def issue_deploy(game, player_id, unit_ids):
         new_hq = make_structure(hq_kind, player_id, unit["x"], unit["y"], True)
         new_hq["packable"] = True
         game["structures"].append(new_hq)
+        battle_report.structure_completed({"game": game}, new_hq)
+        unit["_silentRemoval"] = True
         unit["hp"] = 0
         game["effects"].append({
             "id": new_id("e"), "type": "complete",
@@ -3167,6 +3230,7 @@ def issue_undeploy(game, player_id, structure_id):
     mcv = make_unit(pack_kind, player_id, x, y)
     mcv["hp"] = min(hq["hp"], mcv["maxHp"])
     game["units"].append(mcv)
+    hq["_silentRemoval"] = True
     hq["hp"] = 0
     game["effects"].append({
         "id": new_id("e"), "type": "complete",
@@ -3847,7 +3911,7 @@ def tick_orbital_rain(room):
 AGENT_ALLOWED_COMMANDS = frozenset((
     "move", "attackMove", "patrol", "attack", "structureAttack", "repair",
     "structureRepair",
-    "deploy", "undeploy", "stop", "harvest", "train", "prepareBuild", "placeBuild",
+    "deploy", "undeploy", "stop", "hold", "scatter", "harvest", "train", "prepareBuild", "placeBuild",
     "cancelBuild", "cancelTrain", "sell", "setRally",
 ))
 
@@ -3870,6 +3934,8 @@ def handle_game_command(room, player, payload, role="commander"):
     elif command == "patrol":
         issue_patrol(game, player["id"], command_unit_ids(payload),
                      payload.get("x"), payload.get("y"))
+    elif command in ("hold", "scatter"):
+        issue_tactical_order(game, player["id"], command_unit_ids(payload), command)
     elif command == "attack":
         issue_attack(game, player["id"], command_unit_ids(payload), payload.get("targetId"))
     elif command == "structureAttack":
@@ -4982,6 +5048,7 @@ def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
     game["projectiles"].append({
         "id": new_id("q"), "owner": attacker["owner"],
         "sourceId": attacker["id"],
+        "sourceKind": attacker["kind"],
         "x": attacker["x"], "y": attacker["y"],
         "span": max(1.0, span),
         "targetId": target["id"], "targetX": target["x"], "targetY": target["y"],
@@ -4994,11 +5061,11 @@ def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
     })
     muzzle = {
         "id": new_id("e"), "type": "muzzle", "x": attacker["x"], "y": attacker["y"], "ttl": 0.16,
+        "kind": kind, "entityId": attacker["id"], "entityKind": attacker["kind"],
+        "dir": attacker.get("dir", 0),
     }
-    if kind != base_kind:
-        # 换过装的才标注弹种。客户端平时按「最近的弹丸」猜炮口种类就够了，但
-        # 天启人形态要靠它驱动抬臂动画，玩家把弹道特效关掉时也不能失灵。
-        muzzle["kind"] = kind
+    # Explicit identity keeps recoil and audio correct in dense mixed armies,
+    # even when projectile rendering is disabled.
     game["effects"].append(muzzle)
 
 
@@ -5099,7 +5166,7 @@ def register_attack_alert(room, target):
 
 
 def apply_damage(room, target, damage, source_owner, damage_type=None, game=None,
-                 source_id=None, source_unit=None):
+                 source_id=None, source_unit=None, source_kind=None):
     if target["hp"] <= 0:
         return
     applied = max(0.0, damage)
@@ -5135,7 +5202,9 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
         target["constructionDamage"] = target.get("constructionDamage", 0.0) + applied
     if target["hp"] <= 0:
         target["hp"] = 0
-        battle_report.loss(room, target, source_owner, hostile)
+        target["_combatDestroyed"] = True
+        battle_report.loss(room, target, source_owner, hostile,
+                           source_kind=source_kind or (source_unit or {}).get("kind"))
         owner = room["players"].get(target["owner"])
         source = room["players"].get(source_owner)
         if owner and target["id"].startswith("u"):
@@ -5186,7 +5255,7 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
             if target:
                 apply_damage(room, target, projectile["damage"], projectile["owner"],
                              projectile.get("damageType"), game,
-                             source_id, source_unit)
+                             source_id, source_unit, projectile.get("sourceKind"))
                 apply_slow(projectile, target)
             splash = projectile.get("splash", 0)
             if splash > 0:
@@ -5205,10 +5274,11 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
                         radius = math.sqrt(radius_sq)
                         apply_damage(room, entity, projectile["damage"] * 0.45 * (1.0 - radius / splash), projectile["owner"],
                                      projectile.get("damageType"), game,
-                                     source_id, source_unit)
+                                     source_id, source_unit, projectile.get("sourceKind"))
                         apply_slow(projectile, entity)
             game["effects"].append({
                 "id": new_id("e"), "type": "impact", "x": impact_x, "y": impact_y,
+                "kind": projectile["kind"],
                 "ttl": 0.65 if projectile["kind"] != "bullet" else 0.22,
             })
         else:
@@ -5312,6 +5382,7 @@ def tick_harvester(room, unit, dt, entity_index=None, terrain=None):
                     delivered = int(unit["cargo"])
                     player["cash"] += delivered
                     player["harvested"] += delivered
+                    battle_report.income(room, player["id"], delivered)
                 unit["cargo"] = 0.0
                 unit["returnTarget"] = None
                 unit["harvestTarget"] = None
@@ -5568,18 +5639,23 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
 
         # A plain move is an explicit player order. It always interrupts
         # combat and remains authoritative until the destination is reached.
-        if unit.get("order") == "move":
+        if unit.get("order") in ("move", "scatter"):
             unit["targetId"] = None
+            arrived_order = "hold" if unit["order"] == "scatter" else "guard"
             if unit["destX"] is not None:
                 if move_toward(terrain, unit, unit["destX"], unit["destY"], definition["speed"] * spd_mult, dt):
                     unit["destX"] = None
                     unit["destY"] = None
-                    unit["order"] = "guard"
+                    unit["order"] = arrived_order
             else:
-                unit["order"] = "guard"
+                unit["order"] = arrived_order
             continue
 
         target = find_entity(game, unit.get("targetId"), entity_index)
+        holding = unit.get("order") == "hold"
+        if holding and not hold_target_valid(game, unit, target):
+            target = None
+            unit["targetId"] = None
         if target and is_friendly(game, target["owner"], unit["owner"]):
             target = None
             unit["targetId"] = None
@@ -5588,6 +5664,11 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                 # Retry on a nearby tick with jitter so the deferred tail does
                 # not become another synchronized spike.
                 unit["scan"] = 0.035 + random.random() * 0.035
+            elif holding:
+                scans_used += 1
+                target = nearest_hold_target(game, unit, combat_spatial)
+                unit["targetId"] = target["id"] if target else None
+                unit["scan"] = 0.28 + random.random() * 0.22
             else:
                 scans_used += 1
                 if unit.get("owner") == NEUTRAL_OWNER:
@@ -5637,7 +5718,7 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                 elif definition.get("damage", 0) > 0 and unit["cooldown"] <= 0:
                     launch_projectile(game, unit, target, definition, dam_mult)
                     unit["cooldown"] = definition["cooldown"]
-            else:
+            elif not holding:
                 move_toward(terrain, unit, target["x"], target["y"], definition["speed"] * spd_mult, dt, max(8, desired - 12))
         elif unit["destX"] is not None:
             if move_toward(terrain, unit, unit["destX"], unit["destY"], definition["speed"] * spd_mult, dt):
@@ -5739,6 +5820,7 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
                 continue
             if structure["buildRemaining"] <= 0:
                 structure["active"] = True
+                battle_report.structure_completed(room, structure)
                 structure["hp"] = max(1.0, structure["maxHp"] - structure.get("constructionDamage", 0.0))
                 game["effects"].append({"id": new_id("e"), "type": "complete", "x": structure["x"], "y": structure["y"], "ttl": 1.2})
                 # 新精炼厂按所属玩家阵营赠送对应采集单位（采矿车/浮游晶簇）
@@ -5750,6 +5832,7 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
                     gift = make_unit(
                         gift_kind, structure["owner"], spawn_x, spawn_y)
                     game["units"].append(gift)
+                    battle_report.unit_created(room, gift, "gifted")
             continue
 
         if structure["queue"]:
@@ -5766,6 +5849,7 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
                     unit = make_unit(
                         item["kind"], structure["owner"], spawn_x, spawn_y)
                     game["units"].append(unit)
+                    battle_report.unit_created(room, unit)
                     structure["queue"].pop(0)
                     game["effects"].append({"id": new_id("e"), "type": "complete", "x": unit["x"], "y": unit["y"], "ttl": 0.8})
                     if structure.get("rally"):
@@ -6714,6 +6798,8 @@ def remove_destroyed(room):
     if not destroyed_units and not destroyed_structures:
         return
     for entity in destroyed_units + destroyed_structures:
+        if entity.get("_silentRemoval"):
+            continue
         boom = (entity in destroyed_units
                 and UNIT_TYPES.get(entity.get("kind"), {}).get("deathExplosion"))
         effect = {
@@ -6721,6 +6807,9 @@ def remove_destroyed(room):
             "type": "blast" if boom else "explosion",
             "x": entity["x"], "y": entity["y"],
             "ttl": 1.35 if boom else (1.15 if entity in destroyed_structures else 0.75),
+            "entityKind": entity["kind"], "dir": entity.get("dir", 0), "size": entity["size"],
+            "faction": (UNIT_TYPES.get(entity["kind"]) or STRUCTURE_TYPES.get(entity["kind"], {})).get("faction", "tech"),
+            "wreck": bool(entity.get("_combatDestroyed") or entity.get("_exploded")),
         }
         if boom:
             effect["kind"] = entity["kind"]

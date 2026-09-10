@@ -71,8 +71,27 @@ function eventText(event, players) {
   const source = players[event.sourceId];
   if (event.type === 'firstCombat') return (source ? source.name : '敌军') + ' 与 ' + owner.name + ' 首次交战';
   if (event.type === 'eliminated') return owner.name + (event.reason === 'left' ? ' 主动离开本局' : ' 失去全部指挥实体，退出战区');
+  if (event.type === 'techCompleted') return owner.name + ' 首次完成 ' + event.name;
+  if (event.type === 'harvesterLost') return owner.name + ' 损失 ' + event.name + (source ? ' · 进攻方：' + source.name : '');
+  if (event.type === 'incomeGap') return owner.name + ' 到账中断 ' + battleTime(event.duration) + '（' + battleTime(event.startedAt) + ' 起）';
   return owner.name + ' 的' + (event.name || event.kind) + '被摧毁' +
     (source ? ' · ' + (event.cause === 'enemy' ? '进攻方：' : '伤害来源：') + source.name : ' · 中立或环境伤害');
+}
+
+function operationsPanel(report, playerId) {
+  if (number(report.version) < 2) return '<p class="report-note">旧版战报未记录分兵种和运营数据。</p>';
+  return report.players.map(p => '<details class="report-operations"' + (p.id === playerId ? ' open' : '') + '><summary>' +
+    esc(p.name) + ' · 矿车损失 ' + count(p.harvestersLost) + ' · 到账中断 ' + count(p.incomeGapCount) + ' 次 / ' + battleTime(p.incomeGapSeconds) +
+    ' · 最长 ' + battleTime(p.longestIncomeGap) + '</summary><div class="report-table-wrap"><table class="report-table">' +
+    '<thead><tr><th>兵种 / 火力来源</th><th>生产完成</th><th>初始 / 赠送</th><th>损失数量</th><th>损失价值</th><th>击毁数量</th><th>击毁价值</th></tr></thead><tbody>' +
+    Object.values(p.byKind || {}).map(k => '<tr><th>' + esc(k.name) + '</th><td>' + (k.category === 'unit' ? count(k.produced) : '—') +
+      '</td><td>' + (k.category === 'unit' ? count(k.initial) + ' / ' + count(k.gifted) : '—') + '</td><td>' + count(k.lost) +
+      '</td><td>' + money(k.lostValue) + '</td><td>' + count(k.destroyed) + '</td><td>' + money(k.destroyedValue) + '</td></tr>').join('') +
+    '</tbody></table></div><h3>首次科技建筑落成</h3><div class="report-tech-times">' +
+    Object.values(p.techTimes || {}).map(t => '<span>' + esc(t.name) + ' <strong>' + battleTime(t.time) +
+      (t.initial ? ' · 初始' : '') + '</strong></span>').join('') + '</div></details>').join('') +
+    '<p class="report-note">生产仅计实际出厂，不含排队、撤单、初始和精炼厂赠车；折叠 / 展开不重复计产量。击毁价值按完成最后一击的兵种归属，弹丸发射者阵亡后仍可追溯；炮塔与轨道等来源单列，不等于总伤害贡献。</p>' +
+    '<p class="report-note">到账中断：首次卸矿后，连续 30 秒无卸矿到账才开始计时，到账、退场或终局结束计时。不含开局找矿时间，正常采矿往返、主动停采也可能触发，不自动判定为敌方骚扰。科技时间计第一次建筑落成，而非开始排队。</p>';
 }
 
 export function renderBattleReport(report, playerId) {
@@ -93,7 +112,8 @@ export function renderBattleReport(report, playerId) {
     color(row.color) + '" stroke-width="2" stroke-dasharray="' + ['', '8 3', '3 3', '10 3 2 3', '2 2'][index % 5] + '"/></svg>' + esc(row.name) + '</span>').join('');
   return '<div class="report-heading"><span>战区档案 / AFTER ACTION REPORT</span><strong>' + esc(report.mapName) + '</strong></div>' +
     '<nav class="report-tabs" aria-label="战报栏目"><button type="button" data-report-tab="overview" aria-pressed="true">全员总览</button>' +
-    '<button type="button" data-report-tab="curves" aria-pressed="false">经济与军力</button><button type="button" data-report-tab="events" aria-pressed="false">关键时间线</button></nav>' +
+    '<button type="button" data-report-tab="curves" aria-pressed="false">经济与军力</button><button type="button" data-report-tab="events" aria-pressed="false">关键时间线</button>' +
+    '<button type="button" data-report-tab="operations" aria-pressed="false">兵种与运营</button></nav>' +
     '<section data-report-panel="overview"><div class="report-table-wrap" tabindex="0" aria-label="全员战报，可横向滚动"><table class="report-table">' +
     '<thead><tr><th>指挥官</th><th>采集收入</th><th>击毁<br>兵 / 建筑</th><th>损失<br>兵 / 建筑</th><th>摧毁价值</th><th>损失价值</th><th>交换比</th><th>采样军力峰值</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '<p class="report-note">价值按目录原价计算，包含初始赠送单位。击毁只计敌方玩家；损失含主动自爆、中立和环境伤害，不含出售、基地折叠 / 展开、淘汰撤军及退场后的遗留建筑。交换比＝摧毁价值 ÷ 损失价值。</p></section>' +
@@ -104,7 +124,8 @@ export function renderBattleReport(report, playerId) {
     ' 秒。峰值为采样峰值，可能略过短暂变化；淘汰后的军力归零是部队退场，不代表全部被击毁。</p></section>' +
     '<section data-report-panel="events" class="hidden"><div class="report-table-wrap"><table class="report-table report-times"><thead><tr><th>指挥官</th><th>首次交战</th><th>退场时间</th><th>最终结果</th></tr></thead><tbody>' + opening +
     '</tbody></table></div><h3>战局节点</h3><ol class="report-events">' + (events || '<li>本局未发生玩家交战或关键建筑损失。</li>') + '</ol>' +
-    (report.droppedEvents ? '<p class="report-note">长局已省略 ' + count(report.droppedEvents) + ' 条较早的建筑事件，汇总数值不受影响。</p>' : '') + '</section>';
+    (report.droppedEvents ? '<p class="report-note">长局已省略 ' + count(report.droppedEvents) + ' 条事件，汇总数值不受影响。</p>' : '') + '</section>' +
+    '<section data-report-panel="operations" class="hidden">' + operationsPanel(report,playerId) + '</section>';
 }
 
 export function reportCsv(report) {
@@ -123,6 +144,14 @@ export function reportCsv(report) {
     p.harvested, p.combatRewardsEarned, p.unitsDestroyed, p.structuresDestroyed, p.unitsLost, p.structuresLost,
     p.destroyedValue, p.lostValue, p.selfConsumedValue, exchangeLabel(p), p.peakArmyValue, p.endingArmyValue,
     battleTime(p.firstCombatAt), p.eliminatedAt == null ? '存活至终局' : battleTime(p.eliminatedAt)]));
+  rows.push([], ['分兵种统计'], ['玩家','兵种 / 来源','生产完成','初始','赠送','损失数量','损失价值','击毁数量','击毁价值']);
+  report.players.forEach(p => Object.values(p.byKind || {}).forEach(k => rows.push([
+    p.name,k.name,k.produced,k.initial,k.gifted,k.lost,k.lostValue,k.destroyed,k.destroyedValue])));
+  rows.push([], ['运营统计'], ['玩家','矿车损失','到账中断次数','中断秒数','最长中断秒数']);
+  report.players.forEach(p => rows.push([p.name,p.harvestersLost,p.incomeGapCount,p.incomeGapSeconds,p.longestIncomeGap]));
+  rows.push([], ['首次科技建筑落成'], ['玩家','建筑','时间','初始建筑']);
+  report.players.forEach(p => Object.values(p.techTimes || {}).forEach(t => rows.push([p.name,t.name,battleTime(t.time),t.initial ? '是' : '否'])));
+  rows.push([], ['运营口径','首次卸矿后，连续 30 秒无卸矿到账才开始计中断；正常往返和主动停采也可能触发，不自动归因为骚扰。击毁按最后一击归属，不是伤害贡献。']);
   rows.push([], ['关键时间线'], ['时间', '事件']);
   (report.events || []).forEach(event => rows.push([battleTime(event.time), eventText(event, players)]));
   rows.push([], ['采样数据'], ['时间（秒）', '玩家', '累计采集', '持有资金', '作战部队价值']);

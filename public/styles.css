@@ -1842,7 +1842,7 @@ kbd {
   /* 单列必须允许收缩；部分浏览器缩放 / 高 DPI 组合会按卡片的
      intrinsic width 撑大隐式列，随后被 overflow-x 裁掉。 */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto;
+  grid-template-rows: auto auto minmax(150px, 1fr) repeat(5, auto);
   width: var(--sidebar-w);
   border-left: 1px solid var(--brass-dark);
   background:
@@ -2777,11 +2777,20 @@ kbd {
 /* --- 命令按钮行 --- */
 
 .orders-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 5px;
   padding: 7px 10px;
   background: rgba(10, 10, 6, 0.4);
 }
+
+.selection-kinds { display: flex; gap: 4px; padding: 6px 10px; overflow-x: auto; }
+.selection-kinds button { flex: 0 0 68px; min-width: 0; padding: 3px; border: 1px solid #64583b; color: #cbbb93; background: #17180f; cursor: pointer; }
+.selection-kinds button[aria-pressed="true"] { border-color: #f1ca68; background: #473b20; color: #ffe6a3; }
+.selection-kinds button:focus-visible { outline: 2px solid #f1ca68; }
+.selection-kinds canvas { display: block; width: 100%; height: 34px; object-fit: contain; }
+.selection-kinds span { display: block; font-size: 10px; overflow-wrap: anywhere; }
+.game-screen.commander-play .selection-kinds { display: none; }
 
 .order-button {
   position: relative;
@@ -3662,6 +3671,16 @@ kbd {
 .report-heading { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0 14px; flex-wrap: wrap; }
 .report-heading > span { color: var(--muted); letter-spacing: .08em; font-size: 11px; }
 .report-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--brass-dark); margin-bottom: 16px; }
+.report-tabs { flex-wrap: wrap; }
+.report-operations { margin-bottom: 12px; border: 1px solid #64583b; padding: 10px; }
+.report-operations summary { padding: 8px 0; cursor: pointer; color: #e8c87a; line-height: 1.8; }
+.report-operations h3 { margin-top: 16px; }
+.report-tech-times { display: flex; flex-wrap: wrap; gap: 10px; }
+.report-tech-times span { padding: 8px; background: #272719; }
+.report-tech-times strong { display: block; color: #e8c87a; }
+.history-card { width: min(800px,95vw); max-height: 85dvh; overflow-y: auto; }
+#reportHistoryList { display: grid; gap: 8px; margin: 16px 0; }
+.history-entry { text-align: left; padding: 14px; background: #202116; color: #e8d3a0; border: 1px solid #64583b; cursor: pointer; line-height: 1.6; overflow-wrap: anywhere; }
 .report-tabs button { background: rgba(0,0,0,.22); color: #c9bd9d; border: 0; border-bottom: 2px solid transparent; padding: 12px 22px; cursor: pointer; font: inherit; }
 .report-tabs button[aria-pressed="true"] { border-bottom-color: var(--brass-bright); color: #ffe3a4; background: rgba(201,162,75,.10); }
 .report-tabs button:focus-visible { outline: 2px solid var(--brass-bright); outline-offset: -3px; }

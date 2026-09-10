@@ -94,9 +94,9 @@ def main():
     # 公开负载把 kind 带给客户端，客户端才能换弹道表现
     assert server.public_projectile(shots[8])["kind"] == "plasmalance"
 
-    # 炮口闪光：换过装的才标注弹种，人形态靠它驱动抬臂动画（弹道特效关掉也有效）；
-    # 没换装的仍旧不带 kind，客户端照原路按最近弹丸去猜，其他兵种表现不变。
-    for kills, want in ((0, None), (3, "plasma"), (8, "plasmalance"), (16, "plasmalance")):
+    # Every shot now identifies its actual projectile and firing entity. Dense
+    # mixed armies and hidden projectile graphics must not confuse recoil/audio.
+    for kills, want in ((0, "shell"), (3, "plasma"), (8, "plasmalance"), (16, "plasmalance")):
         attacker = server.make_unit("overlord", a["id"], 800, 900)
         attacker["kills"] = kills
         fire(game, attacker, target, definition)
@@ -105,7 +105,8 @@ def main():
     rifle = server.make_unit("rifle", a["id"], 850, 900)
     rifle["kills"] = 30
     fire(game, rifle, target, server.UNIT_TYPES["rifle"])
-    assert "kind" not in muzzle(game), muzzle(game)
+    assert muzzle(game)["kind"] == "bullet", muzzle(game)
+    assert muzzle(game)["entityId"] == rifle["id"]
     print("  0/3/8/16 → shell/plasma/plasmalance/plasmalance，"
           "同一军衔倍率入参下伤害 %.0f、速度 %.0f、溅射 %.0f、类型 %s 不额外变化: PASS" % (
               definition["damage"], definition["projectileSpeed"],
