@@ -1,4 +1,5 @@
 import { FEEDBACK_LIMITS, weaponFamily } from './battle_feedback.js';
+import { warmAssetTasks } from './asset_warmup.js';
 
 // Cached, locally synthesized samples: no downloads, microphone or audio assets.
 const PROFILES={
@@ -13,6 +14,7 @@ const PROFILES={
 
 export function createBattleAudio(context) {
   const cache=new Map(),voices=[],cooldowns=new Map();
+  let disposed=false,warmPromise=null;
   const master=context.createGain(),limiter=context.createDynamicsCompressor();
   master.gain.value=.26;
   limiter.threshold.value=-14;limiter.knee.value=12;limiter.ratio.value=5;
@@ -65,6 +67,11 @@ export function createBattleAudio(context) {
     source.onended=()=>stopVoice(voice);cooldowns.set(key,now);source.start(now);return true;
   }
   return {
+    prewarm() {
+      if(disposed) return Promise.resolve(false);
+      if(!warmPromise) warmPromise=warmAssetTasks(Object.keys(PROFILES).map(key=>()=>sample(key)),()=>disposed);
+      return warmPromise;
+    },
     ui(type,volume=1) {return PROFILES[type]?play(type,volume,0,5,false):false;},
     events(events,view,volume=1) {
       const radius=Math.max(600,(view.width||1280)/Math.max(.2,view.zoom||1)*.9);
@@ -89,6 +96,6 @@ export function createBattleAudio(context) {
     },
     clear() {for(const voice of [...voices]) stopVoice(voice);cooldowns.clear();},
     stats() {return {voices:voices.length,combatVoices:voices.filter(v=>v.combat).length,cachedSamples:cache.size};},
-    dispose() {this.clear();master.disconnect();limiter.disconnect();cache.clear();}
+    dispose() {disposed=true;this.clear();master.disconnect();limiter.disconnect();cache.clear();}
   };
 }

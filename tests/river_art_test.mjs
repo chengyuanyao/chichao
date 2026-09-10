@@ -60,8 +60,9 @@ assert.equal(maps.normal.colorSpace,THREE.NoColorSpace);
 assert.equal(maps.orm.colorSpace,THREE.NoColorSpace);
 assert.equal(maps.normal.image.width,512);
 for(const data of [maps.normal.image.data,maps.orm.image.data]) assert.ok(data.every(Number.isFinite));
-const decorate=new Function('sunDirViewUniform','armyTimeUniform','makeArmySurfaceTexture','applyBattleMaterial',
- `${factory('applyEmissiveByVertexColor')};return applyEmissiveByVertexColor;`)({}, {},()=>new THREE.Texture(),applyBattleMaterial);
+const {solidSurface}=await import('../public/asset_warmup.js');
+const decorate=new Function('sunDirViewUniform','armyTimeUniform','makeArmySurfaceTexture','applyBattleMaterial','solidSurface',
+ `${factory('applyEmissiveByVertexColor')};return applyEmissiveByVertexColor;`)({}, {},()=>new THREE.Texture(),applyBattleMaterial,solidSurface);
 const material=applyRiverPBR(decorate(new THREE.MeshStandardMaterial(),'metal'),maps);
 const shader={uniforms:{},vertexShader:THREE.ShaderLib.standard.vertexShader,fragmentShader:THREE.ShaderLib.standard.fragmentShader};
 material.onBeforeCompile(shader);

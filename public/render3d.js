@@ -10,6 +10,7 @@
  */
 
 import * as THREE from './vendor/three.module.min.js';
+import { warmAssetTasks, solidSurface } from './asset_warmup.js';
 import { createPostFX } from './postfx.js';
 import { riverUnitModel, riverStructureDetails, artJointAngle } from './river_art_models.js';
 import { createRiverSurfaceMaps, createRiverEnvironment, applyRiverPBR, applyRiverGround } from './river_art_materials.js';
@@ -2908,6 +2909,7 @@ export function createRenderer(canvas) {
   }
 
   function applyEmissiveByVertexColor(material, surfaceKind) {
+    solidSurface(material);
     const surfaceMode = surfaceKind === 'stone' ? 1 :
       (surfaceKind === 'cloth' ? 2 : (surfaceKind === 'hide' ? 3 : 0));
     material.onBeforeCompile = function (shader) {
@@ -3024,7 +3026,7 @@ export function createRenderer(canvas) {
             '    vec3 gN = normalize(normal);\n' +
             '    vec3 gV = normalize(vViewPosition);\n' +
             '    float gRim = pow(1.0 - clamp(dot(gN, gV), 0.0, 1.0), 3.0);\n' +
-            '    float gRimGain = gMode > 3.5 ? 0.26 : 0.08;\n' +
+            '    float gRimGain = gMode > 3.5 ? 0.18 : 0.025;\n' +
             '    outgoingLight += vec3(0.34, 0.42, 0.46) * gRim * gRimGain\n' +
             '      * (1.0 - gEmissive) * vOcc;\n' +
             '    float gPulse = 0.86 + 0.14 * sin(uArmyTime * 2.1 + vArmyWorld.x * 0.03);\n' +
@@ -5324,7 +5326,7 @@ export function createRenderer(canvas) {
       loadSharedTexture('/assets/textures/river-material-atlas-v1.png',false,4));
     if(!riverEnvironment) riverEnvironment=createRiverEnvironment(renderer);
     return applyRiverPBR(applyEmissiveByVertexColor(new THREE.MeshStandardMaterial({
-      vertexColors:true,roughness:.72,metalness:.1,envMap:riverEnvironment.texture,envMapIntensity:.65
+      vertexColors:true,roughness:.72,metalness:.1,envMap:riverEnvironment.texture,envMapIntensity:.32
     }),surfaceKind),riverSurfaceMaps);
   }
   const unitPools = new Map();     // kind -> { mesh, glow, simple, capacity }
@@ -8091,18 +8093,14 @@ export function createRenderer(canvas) {
         node.teamColor = teamColor;
         node.teamMat.color.set(teamColor);
       }
-      // 建造中：从地里升起，并整体透出全息感
+      // Construction rises from the ground, but the structure itself is solid.
       if (!s.active && s.buildTotal) {
         const progress = 1 - (s.buildRemaining / s.buildTotal);
         if (node.buildProgress !== progress) {
           node.buildProgress = progress;
           node.group.scale.set(1, Math.max(0.08, progress), 1);
         }
-        // 未完工时整体半透，像是在通电自检；透明度还带一点脉动
-        const alpha = (0.45 + progress * 0.45) *
-          (0.82 + 0.18 * Math.abs(Math.sin(payload.time * 0.006)));
-        node.teamMat.opacity = alpha;
-        node.teamMat.transparent = true;
+        solidSurface(node.teamMat);
       } else {
         if (node.buildProgress !== 1) {
           if (node.buildProgress != null && node.buildProgress < 0.999) {
@@ -8428,8 +8426,118 @@ export function createRenderer(canvas) {
 
   /* -------------------- 对外接口 -------------------- */
 
+  // Prepare both visual families while in the lobby. No game entities are
+  // created: these bounded, retained roots exist only for shader compilation.
+  // Keeping materials alive keeps their compiled programs cached for real units.
+  const warmRoots = [], warmMaterials = new Map(), warmAssetKeys = new Set();
+  const assetWarmup = { pending: false, ready: false, error: null, assets: 0 };
+  let assetQueue = Promise.resolve(), shaderWarmup = null, shadersDirty = true;
+  function warmMaterial(family, sample) {
+    const key = family + ':' + sample;
+    if (!warmMaterials.has(key)) warmMaterials.set(key, sample ? makeRiverMaterial(family) :
+      applyEmissiveByVertexColor(new THREE.MeshPhongMaterial({vertexColors:true}),family));
+    return warmMaterials.get(key);
+  }
+  function warmMesh(root, geometry, material, instanced) {
+    if (!geometry) return;
+    const mesh = instanced ? new THREE.InstancedMesh(geometry,material,1) : new THREE.Mesh(geometry,material);
+    if (instanced) mesh.setColorAt(0,new THREE.Color(0xffffff));
+    mesh.receiveShadow = true;
+    root.add(mesh);
+  }
+  function compileWarmAssets() {
+    if (shaderWarmup || !warmRoots.length || !shadersDirty) return shaderWarmup;
+    shadersDirty = false;
+    const compile=(root,lightCount)=>{
+      // Program keys include output color space. The game renders into the
+      // linear HDR target, NOT the sRGB browser canvas. Restore before yielding.
+      const previous=renderer.getRenderTarget();
+      const visibility=flashPool.map(f=>f.light.visible);
+      try {
+        // 0/1/2 point lights produce different NUM_POINT_LIGHTS programs for
+        // terrain AND armies. Compile all counts without lighting up the game.
+        flashPool.forEach((f,i)=>{f.light.visible=i<lightCount;});
+        renderer.setRenderTarget(postfx.enabled?postfx.sceneTarget:null);
+        return renderer.compileAsync(root,camera,scene);
+      } finally {
+        flashPool.forEach((f,i)=>{f.light.visible=visibility[i];});
+        renderer.setRenderTarget(previous);
+      }
+    };
+    // compileAsync uses KHR_parallel_shader_compile when supported. Never do a
+    // synchronous compile of every army material in the first combat frame.
+    const tasks=[];
+    for(let lightCount=0;lightCount<=flashPool.length;lightCount++) {
+      for(const root of [...warmRoots,scene]) tasks.push(()=>{
+        root.fog=scene.fog;
+        return compile(root,lightCount);
+      });
+    }
+    shaderWarmup = warmAssetTasks(tasks).catch(error=>{
+      assetWarmup.error=String(error);console.warn('Shader warmup:',error);
+    }).finally(()=>{
+      shaderWarmup=null;
+      if(shadersDirty) compileWarmAssets();
+    });
+    return shaderWarmup;
+  }
+  function prepareAssets(catalog) {
+    const tasks=[];
+    for(const sample of [false,true]) {
+      let root=warmRoots[Number(sample)];
+      if(!root) root=warmRoots[Number(sample)]=new THREE.Scene();
+      const kinds=new Set([...Object.keys(catalog.units||{}),'overlord_v1','overlord_v2']);
+      for(const kind of kinds) {
+        const key='unit:'+kind+':'+sample;
+        if(warmAssetKeys.has(key)) continue;
+        warmAssetKeys.add(key);
+        tasks.push(()=>{
+          const geo=unitGeometry(kind,sample);
+          const family=CLOTH_UNIT_KINDS[kind]?'cloth':HIDE_UNIT_KINDS[kind]?'hide':MAGIC_UNIT_KINDS[kind]?'stone':'metal';
+          const material=warmMaterial(family,sample);
+          warmMesh(root,geo.body,material,true);
+          warmMesh(root,geo.simple,warmMaterial(family,false),true);
+          warmMesh(root,geo.barrel,material,true);
+          for(const rig of geo.rigs||[]) warmMesh(root,rig.geometry,material,true);
+          assetWarmup.assets++;
+        });
+      }
+      for(const [kind,def] of Object.entries(catalog.buildings||{})) {
+        if(!Number.isFinite(def.size)||def.size<=0) continue;
+        const key='building:'+kind+':'+def.size+':'+sample;
+        if(warmAssetKeys.has(key)) continue;
+        warmAssetKeys.add(key);
+        tasks.push(()=>{
+          const geo=structureGeometries(kind,def.size,sample);
+          const material=warmMaterial(MAGIC_STRUCTURE_KINDS[kind]?'stone':'metal',sample);
+          const visit=entry=>{for(const value of Object.values(entry)) {
+            if(value?.isBufferGeometry) warmMesh(root,value,material,false);
+            else if(value && typeof value==='object') visit(value);
+          }};
+          visit(geo);
+          assetWarmup.assets++;
+        });
+      }
+    }
+    if(!tasks.length) return assetQueue;
+    assetWarmup.pending=true;assetWarmup.ready=false;assetWarmup.error=null;
+    assetQueue=assetQueue.then(async()=>{
+      await warmAssetTasks(tasks);
+      for(const mesh of [ensureTracerMesh(64),ensureTracerOrbMesh(64),ensureTracerShardMesh(64),
+        ensureApocArmMesh(16),ensureDragonOrbitMesh(16)]) {
+        warmMesh(warmRoots[0],mesh.geometry,mesh.material,true);
+      }
+      shadersDirty=true;
+      await compileWarmAssets();
+      assetWarmup.ready=!assetWarmup.error;
+    }).catch(error=>{assetWarmup.error=String(error);console.warn('Asset warmup:',error);})
+      .finally(()=>{assetWarmup.pending=false;});
+    return assetQueue;
+  }
+
   return {
     get camera() { return camera; },
+    prepareAssets,
 
     resize: function (width, height, dpr) {
       state.width = Math.max(1, width);
@@ -8443,6 +8551,8 @@ export function createRenderer(canvas) {
     },
 
     setQuality: function (options) {
+      shadersDirty=true;
+      if(assetWarmup.ready) compileWarmAssets();
       if(options.artSample != null) {
         state.artSampleOption=!!options.artSample;
         const next=state.map?.id==='iron_river_duel'&&state.artSampleOption;
@@ -8530,6 +8640,8 @@ export function createRenderer(canvas) {
       groundTexture = makeProceduralGroundTexture(themeId);
       groundTexture.repeat.set(map.width / 420, map.height / 420);
       buildTerrain();
+      shadersDirty=true;
+      if(assetWarmup.ready) compileWarmAssets();
       return true;
     },
 
@@ -8568,6 +8680,7 @@ export function createRenderer(canvas) {
 
     /** 渲染统计：调优与冒烟测试用。 */
     stats: function () {
+      // Copy only primitive progress values; no renderer internals escape.
       const info = postfx.sceneStats;
       let instanced = 0;
       let detailedUnits = 0;
@@ -8580,6 +8693,7 @@ export function createRenderer(canvas) {
       });
       instanced = detailedUnits + lodUnits;
       return {
+        assetWarmup: {...assetWarmup, shadersPending:!!shaderWarmup},
         drawCalls: info.calls,
         postPasses: postfx.passStats.total,
         triangles: info.triangles,

@@ -83,6 +83,7 @@ import { createBattleAudio } from './battle_audio.js';
 
   function applyCatalog(catalog) {
     if (!catalog || !catalog.buildings || !catalog.units) { return; }
+    if (view3d) view3d.prepareAssets(catalog);
     if (catalog.veterancy && Array.isArray(catalog.veterancy.ranks) && catalog.veterancy.ranks.length) {
       VETERANCY = {
         regenDelay: Number(catalog.veterancy.regenDelay) || 6,
@@ -5083,6 +5084,7 @@ import { createBattleAudio } from './battle_audio.js';
       if (AudioCtor) {
         audioContext = new AudioCtor();
         battleAudio = createBattleAudio(audioContext);
+        battleAudio.prewarm().catch(function (error) { console.warn('Audio warmup:', error); });
       }
     }
     if (audioContext && audioContext.state === 'suspended') {

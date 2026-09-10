@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import * as THREE from '../public/vendor/three.module.min.js';
 import { createPostFX } from '../public/postfx.js';
 import { applyBattleMaterial } from '../public/battle_feedback.js';
+import { solidSurface } from '../public/asset_warmup.js';
 
 const source = readFileSync(new URL('../public/render3d.js', import.meta.url), 'utf8')
   .replace(/\r\n/g, '\n');
@@ -32,6 +33,7 @@ function expandChunks(shader) {
 
 const sharedAtlas = new THREE.Texture();
 const uniformContext = {
+  solidSurface,
   applyBattleMaterial,
   sunDirViewUniform: { value: new THREE.Vector3(0.4, 0.8, 0.4) },
   armyTimeUniform: { value: 0 },
@@ -101,8 +103,8 @@ for (const [surface, mode] of [['metal', 0], ['stone', 1], ['cloth', 2], ['hide'
   material.dispose();
 }
 assert.equal(programKeys.size, 4, 'different default surface modes have distinct program keys');
-assert.equal((source.match(/applyEmissiveByVertexColor\(\s*new THREE\.MeshPhongMaterial/g) || []).length, 5,
-  'four army pools and the building material use the tested Phong hook');
+assert.equal((source.match(/applyEmissiveByVertexColor\(\s*new THREE\.MeshPhongMaterial/g) || []).length, 6,
+  'four army pools, building and warmup materials use the tested Phong hook');
 sharedAtlas.dispose();
 
 // Execute the same contact-shadow conditions and placement used by updateUnits.
@@ -176,6 +178,7 @@ for (const [kind, caster] of [
   terrainObjects.set(kind, object);
 }
 const qualityContext = { state: { shadows: 'off' }, renderer, sun: {}, postfx, terrainGroup,
+  shadersDirty:false,assetWarmup:{ready:false},compileWarmAssets(){},
   EFFECT_MAX: 500, appliedCamX: 0 };
 const setQualitySource = extract(/    setQuality: function \(options\) \{[\s\S]*?\n    },/, 'quality setter')
   .replace(/^\s*setQuality:\s*/, '').replace(/,$/, '');

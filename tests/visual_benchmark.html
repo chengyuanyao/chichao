@@ -24,6 +24,7 @@ input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;
 <input id="count" type="number" value="400" min="1" max="2000" aria-label="单位数">
 <button id="apply">应用场景</button><button id="quality">即时应用画质</button><button id="run">运行基准</button>
 <button id="cycles">连续换图检查</button>
+<button id="warmAssets">预热接敌资源</button>
 <button id="artToggle">切换样板美术</button>
 <button id="freeze">固定时间截图</button><button id="resume">继续动画</button><button id="hide">隐藏面板</button>
 <button id="capture">保存实际渲染 PNG</button>
@@ -112,6 +113,9 @@ function loadScenario(options={}) {
       unit('dragon',4,2740,1630),unit('mage',5,2780,1760),unit('mage',6,2820,1770));
     for(let i=0;i<6;i++) game.units.push(unit('rifle',10+i,2040+i%3*28,1730+Math.floor(i/3)*32));
     game.structures.push(structure('hq',0,1950,1430),structure('mhq',1,2820,1450));
+    if(query.get('construction')==='1') for(const s of game.structures) {
+      s.active=false;s.buildTotal=100;s.buildRemaining=35;
+    }
   } else if (scenario === 'feedback') {
     const kinds=['tank','artillery','tank_destroyer','overlord','scout','bomb_truck',
       'mage','frost','dragon','colossus','comet','hexling'];
@@ -331,6 +335,13 @@ window.benchmark = {
   }
 };
 const initial=loadScenario();
+document.querySelector('#warmAssets').onclick=async()=>{
+  status.textContent='正在分批预热两阵营模型、建筑和着色器…';
+  await renderer.prepareAssets({units:catalog.units,buildings:catalog.structures});
+  document.querySelector('#results').textContent=JSON.stringify(renderer.stats(),null,2);
+  document.querySelector('#results').hidden=false;
+  status.textContent=renderer.stats().assetWarmup.ready?'接敌资源预热完成':'预热失败，请查看结果';
+};
 for(const [key,value] of Object.entries(catalog.maps)) {
   const option=document.createElement('option');option.value=key;option.textContent=value.name;
   document.querySelector('#map').append(option);
@@ -391,10 +402,18 @@ document.querySelector('#healed').onclick=()=>{
   status.textContent='受控演示 · 已修复全部单位，核对受损旧化与烟雾恢复';
 };
 document.querySelector('#fxBurst').onclick=async()=>{
-  syntheticEffects=Array.from({length:180},(_,i)=>({type:'explosion',x:camera.x+(i%12-6)*40,
+  if(runningBenchmark) return;
+  const beforePrograms=renderer.stats().programs,frames=[];
+  syntheticEffects=Array.from({length:Math.max(1,Math.min(180,Number(query.get('fxCount'))||180))},(_,i)=>({type:'explosion',x:camera.x+(i%12-6)*40,
     y:camera.y+(Math.floor(i/12)-7)*40,entityKind:'tank',size:22,dir:.3,wreck:true}));
-  window.benchmark.resume();await waitFrames(3);halted=true;
-  const result={type:'feedback-budget',stats:renderer.stats(),audio:battleAudio?.stats()};
+  runningBenchmark=true;
+  try {
+    window.benchmark.resume();
+    await new Promise(resolve=>{frameObserver=sample=>{
+      frames.push(sample);if(frames.length===3) resolve();
+    };});
+  } finally {frameObserver=null;halted=true;runningBenchmark=false;}
+  const result={type:'feedback-budget',beforePrograms,firstFrames:frames,stats:renderer.stats(),audio:battleAudio?.stats()};
   document.querySelector('#results').textContent=JSON.stringify(result,null,2);
   document.querySelector('#results').hidden=false;status.textContent='受控密集爆炸 · 检查粒子与残骸上限（不是真实对局）';
 };

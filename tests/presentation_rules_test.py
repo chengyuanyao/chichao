@@ -430,7 +430,7 @@ def main():
     # 晶体是新增的第五种表面：粗糙度最低、边缘光最强
     assert "const SURF = Object.freeze({" in render
     assert "gRoughness = 0.24; gBumpScale = 0.10" in render
-    assert "float gRimGain = gMode > 3.5 ? 0.26 : 0.08;" in render
+    assert "float gRimGain = gMode > 3.5 ? 0.18 : 0.025;" in render
     assert "material.specularColor = gF0" in render
     assert "varying vec3 vArmyLocal;" in render
     # 所有兵种近景只在首次缓存时烘焙；远景与独立挂件不支付这项成本。
