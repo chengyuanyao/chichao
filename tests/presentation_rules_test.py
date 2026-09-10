@@ -435,7 +435,7 @@ def main():
     assert "varying vec3 vArmyLocal;" in render
     # 所有兵种近景只在首次缓存时烘焙；远景与独立挂件不支付这项成本。
     unit_geometry = re.search(
-        r"function unitGeometry\(kind\) \{([\s\S]*?)\n  \}", render)
+        r"function unitGeometry\(kind, artSample = false\) \{([\s\S]*?)\n  \}", render)
     assert unit_geometry
     assert "if (entry) return entry;" in unit_geometry.group(1)
     assert "body: mergeParts(allParts.filter(p => !p.recoil), { occlusion: true })" in unit_geometry.group(1)

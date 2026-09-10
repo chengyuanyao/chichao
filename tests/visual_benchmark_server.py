@@ -11,6 +11,7 @@ Use &renderer=/baseline/render3d.js to compare an archived public directory.
 import argparse
 import json
 import sys
+import uuid
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from socketserver import ThreadingMixIn
@@ -52,6 +53,37 @@ def fixture_catalog():
 
 class FixtureHandler(SimpleHTTPRequestHandler):
     baseline_public = None
+
+    def do_POST(self):
+        # Local fixture-only screenshot export. No caller-supplied filesystem path,
+        # no overwrite, and no cross-origin requests from other websites.
+        expected_origin = "http://127.0.0.1:%d" % self.server.server_port
+        if (urlsplit(self.path).path != "/capture" or
+                self.headers.get("Origin") != expected_origin or
+                self.headers.get("Content-Type") != "image/png"):
+            self.send_error(403)
+            return
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            size = 0
+        if not 8 <= size <= 16 * 1024 * 1024:
+            self.send_error(413)
+            return
+        png = self.rfile.read(size)
+        if len(png) != size or not png.startswith(b"\x89PNG\r\n\x1a\n"):
+            self.send_error(400)
+            return
+        folder = ROOT / "artifacts" / "river-art-captures"
+        folder.mkdir(parents=True, exist_ok=True)
+        target = folder / ("render-" + uuid.uuid4().hex + ".png")
+        target.write_bytes(png)
+        result = json.dumps({"path": str(target)}, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(result)))
+        self.end_headers()
+        self.wfile.write(result)
 
     extensions_map = dict(SimpleHTTPRequestHandler.extensions_map,
                           **{".js": "text/javascript", ".mjs": "text/javascript",
