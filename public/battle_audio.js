@@ -1,7 +1,7 @@
 import { FEEDBACK_LIMITS, weaponFamily } from './battle_feedback.js';
 import { warmAssetTasks } from './asset_warmup.js';
 
-// Cached, locally synthesized samples: no downloads, microphone or audio assets.
+// Cached synthesis with optional bundled CC0 impact foley; no microphone or remote requests.
 const PROFILES={
   rifle:[.13,150,.82,42],cannon:[.32,92,.68,29],heavy:[.60,63,.78,22],
   electric:[.26,710,.19,140],arcane:[.38,440,.10,880],ice:[.30,1680,.33,940],
@@ -15,6 +15,19 @@ const PROFILES={
 export function createBattleAudio(context) {
   const cache=new Map(),voices=[],cooldowns=new Map();
   let disposed=false,warmPromise=null;
+  const recorded=new Map();
+  async function loadRecorded() {
+    if(typeof context.decodeAudioData!=='function') return;
+    for(const name of ['metal','rubble','crystal']) {
+      if(disposed) return;
+      try {
+        const response=await fetch('/assets/audio/'+name+'-impact.ogg');
+        if(!response.ok) continue;
+        const buffer=await context.decodeAudioData(await response.arrayBuffer());
+        if(!disposed) recorded.set(name,buffer);
+      } catch(error) {console.warn('Optional impact sample:',name,error);}
+    }
+  }
   const master=context.createGain(),limiter=context.createDynamicsCompressor();
   master.gain.value=.26;
   limiter.threshold.value=-14;limiter.knee.value=12;limiter.ratio.value=5;
@@ -36,6 +49,18 @@ export function createBattleAudio(context) {
       const attack=Math.min(1,t/.003),envelope=Math.exp(-p*(noise>.5?7:5))*(1-p);
       const texture=key==='ice'?white-low:low*2.8+white*.12;
       values[i]=Math.tanh(((1-noise)*harmonic+noise*texture)*attack*envelope)*.72;
+      if(['rifle','cannon','heavy','explosion','melee'].includes(key)) {
+        const thump=Math.sin(2*Math.PI*(start*.65*t-18*t*t))*Math.exp(-t*19);
+        const crack=white*Math.exp(-t*110),body=low*3*Math.exp(-t*8);
+        values[i]=Math.tanh((crack*.8+body*.9+thump*.45)*attack*(1-p))*.72;
+      }
+    }
+    const family=['ice','arcaneHeavy','magicExplosion'].includes(key)?'crystal':
+      ['heavy','explosion'].includes(key)?'rubble':['cannon','electric'].includes(key)?'metal':null;
+    const recordedBuffer=recorded.get(family);
+    if(recordedBuffer) {
+      const foley=recordedBuffer.getChannelData(0);
+      for(let i=0;i<Math.min(values.length,foley.length);i++) values[i]=Math.tanh(values[i]+foley[i]*.38);
     }
     cache.set(key,buffer);return buffer;
   }
@@ -69,7 +94,12 @@ export function createBattleAudio(context) {
   return {
     prewarm() {
       if(disposed) return Promise.resolve(false);
-      if(!warmPromise) warmPromise=warmAssetTasks(Object.keys(PROFILES).map(key=>()=>sample(key)),()=>disposed);
+      if(!warmPromise) warmPromise=loadRecorded().then(()=>{
+        if(disposed) return false;
+        // Replace any early fallback samples only after optional audio is ready.
+        if(recorded.size) cache.clear();
+        return warmAssetTasks(Object.keys(PROFILES).map(key=>()=>sample(key)),()=>disposed);
+      });
       return warmPromise;
     },
     ui(type,volume=1) {return PROFILES[type]?play(type,volume,0,5,false):false;},
@@ -95,7 +125,7 @@ export function createBattleAudio(context) {
       return count;
     },
     clear() {for(const voice of [...voices]) stopVoice(voice);cooldowns.clear();},
-    stats() {return {voices:voices.length,combatVoices:voices.filter(v=>v.combat).length,cachedSamples:cache.size};},
-    dispose() {disposed=true;this.clear();master.disconnect();limiter.disconnect();cache.clear();}
+    stats() {return {voices:voices.length,combatVoices:voices.filter(v=>v.combat).length,cachedSamples:cache.size,recordedSamples:recorded.size};},
+    dispose() {disposed=true;this.clear();master.disconnect();limiter.disconnect();cache.clear();recorded.clear();}
   };
 }

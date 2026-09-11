@@ -103,8 +103,8 @@ for (const [surface, mode] of [['metal', 0], ['stone', 1], ['cloth', 2], ['hide'
   material.dispose();
 }
 assert.equal(programKeys.size, 4, 'different default surface modes have distinct program keys');
-assert.equal((source.match(/applyEmissiveByVertexColor\(\s*new THREE\.MeshPhongMaterial/g) || []).length, 6,
-  'four army pools, building and warmup materials use the tested Phong hook');
+assert.equal((source.match(/applyEmissiveByVertexColor\(\s*new THREE\.MeshPhongMaterial/g) || []).length, 7,
+  'army pools, intact/death building and warmup materials use the tested Phong hook');
 sharedAtlas.dispose();
 
 // Execute the same contact-shadow conditions and placement used by updateUnits.
@@ -218,5 +218,14 @@ for (const shadows of ['off', 'structures', 'all', 'off']) {
 qualityContext.terrainGroup = null;
 assert.doesNotThrow(() => setQuality({ shadows: 'all' }));
 postfx.dispose();
+const themeBlock=extract(/export const MAP_DISPLAY_THEMES = \{[\s\S]*?\n\};/,'display themes');
+const themes=vm.runInNewContext(themeBlock.replace('export const','const')+';MAP_DISPLAY_THEMES');
+for(const id of ['arid','temperate','crater']) {
+  const theme=themes[id],sky=new THREE.Color(theme.hemiSky),fill=new THREE.Color(theme.fill);
+  const sunColor=new THREE.Color(theme.sun);
+  assert.ok(sky.b>sky.r&&fill.b>fill.r,id+' uses cool sky/fill, not a second orange tint');
+  assert.ok(sunColor.b/sunColor.r>.5,id+' sunlight preserves blue faction/material information');
+  assert.ok(theme.dirt[0]>theme.dirt[2],id+' warm geology remains a material property');
+}
 console.log('render quality tests ok: real Phong shader injection, local atlas, lit specular, ' +
   'unit contact/cast/receive shadows, live off/structures/all terrain switching, all postfx tiers');

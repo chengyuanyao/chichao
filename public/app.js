@@ -81,9 +81,34 @@ import { createBattleAudio } from './battle_audio.js';
     ]
   };
 
+  var battleAssetsPromise=null,assetProgressTimer=null;
+  function watchBattleAssets(promise) {
+    battleAssetsPromise=promise;
+    if(assetProgressTimer) clearInterval(assetProgressTimer);
+    function update() {
+      var info=view3d.stats().assetWarmup,box=$('#assetPreparation');
+      if(!box) return;
+      box.hidden=info.ready;
+      $('#assetProgress').value=info.ready?100:Math.min(90,Math.round(90*info.assets/Math.max(1,info.total||90)));
+      $('#assetProgressLabel').textContent=info.error?'资源预加载失败，请刷新后重试':
+        info.assets<info.total?'正在准备模型 '+info.assets+' / '+info.total:'正在编译光影并上传特效资源…';
+      if(!info.pending) {clearInterval(assetProgressTimer);assetProgressTimer=null;}
+      updateLobbyStartAvailability();
+    }
+    assetProgressTimer=setInterval(update,150);update();
+    promise.finally(update);
+  }
+  async function awaitBattleAssets() {
+    var origin=session && {roomId:session.roomId,playerId:session.playerId,token:session.token};
+    await catalogPromise;
+    if(battleAssetsPromise) await battleAssetsPromise;
+    if(!origin || !session || origin.roomId!==session.roomId || origin.playerId!==session.playerId ||
+      origin.token!==session.token || !roomState || roomState.status!=='lobby') throw new Error('房间已变化，请重新操作');
+    if(!view3d.stats().assetWarmup.ready) throw new Error('战场资源尚未加载完成，请稍候或刷新重试');
+  }
   function applyCatalog(catalog) {
     if (!catalog || !catalog.buildings || !catalog.units) { return; }
-    if (view3d) view3d.prepareAssets(catalog);
+    if (view3d) watchBattleAssets(view3d.prepareAssets(catalog));
     if (catalog.veterancy && Array.isArray(catalog.veterancy.ranks) && catalog.veterancy.ranks.length) {
       VETERANCY = {
         regenDelay: Number(catalog.veterancy.regenDelay) || 6,
@@ -2038,7 +2063,7 @@ import { createBattleAudio } from './battle_audio.js';
     }).every(function (p) { return p.ready; });
     if (startGameBtn) {
       startGameBtn.disabled = roomState.players.length < 2 || !guestsReady ||
-        lobbyMutationsPending > 0;
+        lobbyMutationsPending > 0 || !view3d.stats().assetWarmup.ready;
     }
     if (me.isHost) {
       if (lobbyMutationsPending > 0) {
@@ -5533,7 +5558,8 @@ import { createBattleAudio } from './battle_audio.js';
   readyBtn.addEventListener('click', function () {
     var me = ownPlayer();
     if (me) {
-      queueLobbyMutation(function () {
+      queueLobbyMutation(async function () {
+        if(!me.ready) await awaitBattleAssets();
         return sendAction('ready', { ready: !me.ready });
       }).then(function () { sound('confirm'); }).catch(function () {});
     }
@@ -5586,7 +5612,8 @@ import { createBattleAudio } from './battle_audio.js';
     }
   });
   startGameBtn.addEventListener('click', function () {
-    queueLobbyMutation(function () {
+    queueLobbyMutation(async function () {
+      await awaitBattleAssets();
       return sendAction('start');
     }).then(function () { sound('start'); }).catch(function () {});
   });

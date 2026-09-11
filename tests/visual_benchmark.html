@@ -25,6 +25,7 @@ input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;
 <button id="apply">应用场景</button><button id="quality">即时应用画质</button><button id="run">运行基准</button>
 <button id="cycles">连续换图检查</button>
 <button id="warmAssets">预热接敌资源</button>
+<button id="collapseTest">建筑坍塌检查</button>
 <button id="artToggle">切换样板美术</button>
 <button id="freeze">固定时间截图</button><button id="resume">继续动画</button><button id="hide">隐藏面板</button>
 <button id="capture">保存实际渲染 PNG</button>
@@ -48,6 +49,8 @@ let battleAudio=null,syntheticEffects=[],nextShotAt=0,healthy=false;
 const renderer = createRenderer(document.querySelector('canvas'));
 const canvas = document.querySelector('canvas');
 const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+const gpuTimer=query.get('gpuTiming')==='1'?gl.getExtension('EXT_disjoint_timer_query_webgl2'):null;
+const gpuPending=[];let gpuTimes=[];
 const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
 const gpu = {renderer:gl.getParameter(debugInfo ? debugInfo.UNMASKED_RENDERER_WEBGL : gl.RENDERER),
   vendor:gl.getParameter(debugInfo ? debugInfo.UNMASKED_VENDOR_WEBGL : gl.VENDOR),version:gl.getParameter(gl.VERSION)};
@@ -62,6 +65,12 @@ renderer.setQuality(settings);
 let game, map, scenario, camera, buildPreview = null, pickedStructure = null, sceneTime = 18000, lastAt = 0, snapshotAt = -Infinity;
 let paused = query.get('paused') === '1', moving = query.get('moving') === '1';
 let frameObserver = null, runningBenchmark = false, frameError = null;
+// Opt-in deterministic workload; wall-clock frame/CPU/GPU measurements remain
+// real. A slower renderer must not get fewer shots or different particle ages.
+let fixedSimulation = false, fixedFrame = 0;
+const destructionWave=query.get('fixedSimulation')==='1'?Math.max(0,Math.min(15,Math.floor(Number(query.get('destructionWave'))||0))):0;
+let destructionChecks=[];
+const fixedStepMs = 1000 / 60;
 let halted = false, framePending = false;
 let dpr = Number(query.get('dpr')) || 1;
 let revealMap = query.get('fog') !== '1', fixtureSeed = 90241;
@@ -172,12 +181,22 @@ function loadScenario(options={}) {
   snapshotAt = -Infinity; sceneTime = 18000;
   return {scenario,map:map.id,units:game.units.length,structures:game.structures.length,camera:{...camera}};
 }
+function destroyFixtureStructures(count,kind) {
+  if(!game.structures.length)return;
+  const first=game.structures.find(s=>s.kind===kind)||game.structures[0];
+  const victims=[first,...game.structures.filter(s=>s!==first)].slice(0,count);
+  for(const s of victims) syntheticEffects.push({type:'explosion',entityId:s.id,entityKind:s.kind,owner:s.owner,
+    x:s.x,y:s.y,size:s.size,dir:0,wreck:true});
+  const ids=new Set(victims.map(s=>s.id));
+  game={...game,structures:game.structures.filter(b=>!ids.has(b.id))};
+}
 function draw(at) {
   const interval = lastAt ? at-lastAt : 0;
   lastAt = at;
-  if(!paused) sceneTime += Math.min(interval,100);
-  if(at-snapshotAt>=125) {
-    snapshotAt=at;
+  const simulationStep = fixedSimulation ? fixedStepMs : Math.min(interval,100);
+  if(!paused) sceneTime += simulationStep;
+  if(sceneTime-snapshotAt>=125) {
+    snapshotAt=sceneTime;
     game={...game,elapsed:sceneTime/1000};
     if(moving) game.units.forEach((u,i)=> {
       u.x=u.originX+Math.sin(sceneTime*0.00042+i*0.17)*12;
@@ -197,17 +216,39 @@ function draw(at) {
       if(battleAudio) battleAudio.events(syntheticEffects,{...camera,width:innerWidth},.75);
     }
   }
+  const realRandom=Math.random;
+  if(fixedSimulation&&destructionWave&&fixedFrame===120) destroyFixtureStructures(destructionWave);
+  if(fixedSimulation) {
+    let seed=(90241+fixedFrame++*104729)>>>0;
+    Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  }
   const start=performance.now();
+  const gpuQuery=gpuTimer&&runningBenchmark&&gpuPending.length<8?gl.createQuery():null;
+  if(gpuQuery) gl.beginQuery(gpuTimer.TIME_ELAPSED_EXT,gpuQuery);
   try {
-    renderer.render({game,dt:Math.min(interval/1000,0.05),time:sceneTime,revealMap,
+    renderer.render({game,dt:Math.min(simulationStep/1000,0.05),time:sceneTime,revealMap,
       selectedUnitIds:selected,selectedStructureId:pickedStructure,selectedResourceId:null,
       newEffects:syntheticEffects,buildPreview});
     syntheticEffects=[];
   } catch(error) {
     frameError=String(error.stack||error); status.textContent=frameError;
     console.error(error); return;
+  } finally {
+    Math.random=realRandom;
+    if(gpuQuery) {gl.endQuery(gpuTimer.TIME_ELAPSED_EXT);gpuPending.push(gpuQuery);}
   }
   if(frameObserver) frameObserver({interval,cpu:performance.now()-start});
+  if(fixedSimulation&&destructionWave&&[121,150,180,300].includes(fixedFrame)) {
+    destructionChecks.push({frame:fixedFrame,stats:renderer.stats()});
+  }
+  if(gpuTimer) {
+    const disjoint=gl.getParameter(gpuTimer.GPU_DISJOINT_EXT);
+    while(gpuPending.length&&gl.getQueryParameter(gpuPending[0],gl.QUERY_RESULT_AVAILABLE)) {
+      const q=gpuPending.shift(),ns=gl.getQueryParameter(q,gl.QUERY_RESULT);
+      if(!disjoint) gpuTimes.push(ns/1e6);
+      gl.deleteQuery(q);
+    }
+  }
   kick();
 }
 function kick() {
@@ -289,14 +330,26 @@ window.benchmark = {
     if(runningBenchmark) throw new Error('Benchmark already running');
     runningBenchmark=true;
     const samples=[];
+    const qualityMatrix=query.get('qualityMatrix')==='1';
+    const tiers=qualityMatrix?[
+      {name:'low',shadows:'off',bloom:false,fastBloom:true,lod:true,particleBudget:60},
+      {name:'medium',shadows:'structures',bloom:true,fastBloom:true,lod:true,particleBudget:150},
+      {name:'high',shadows:'all',bloom:true,fastBloom:false,lod:true,particleBudget:400}
+    ]:[{name:'current',...settings}];
     try {
       halted=false;lastAt=0;kick();
       for(let round=0;round<rounds;round++) {
         for(const mapId of Object.keys(catalog.maps)) {
           loadScenario({scenario:'showcase',map:mapId});
-          status.textContent=`连续换图检查 · 第 ${round+1}/${rounds} 轮 · ${map.name}`;
-          await waitFrames(30);
-          samples.push({round,map:mapId,stats:renderer.stats()});
+          for(const tier of tiers) {
+            const {name,...patch}=tier;
+            if(qualityMatrix) this.setQuality(patch);
+            status.textContent=`连续换图检查 · 第 ${round+1}/${rounds} 轮 · ${map.name} · ${name}`;
+            await waitFrames(30);
+            for(let attempt=0;attempt<12&&renderer.stats().assetWarmup.shadersPending;attempt++) await waitFrames(10);
+            if(frameError) throw new Error(frameError);
+            samples.push({round,map:mapId,tier:name,stats:renderer.stats()});
+          }
         }
       }
       const result={type:'map-lifecycle',rendererModule:moduleUrl.pathname,gpu,samples};
@@ -312,29 +365,48 @@ window.benchmark = {
     if(frameError) throw new Error(frameError);
     runningBenchmark=true;
     try {
+      fixedSimulation=query.get('fixedSimulation')==='1';
+      if(fixedSimulation) {
+        fixedFrame=0;syntheticEffects=[];nextShotAt=0;destructionChecks=[];
+        loadScenario({scenario,map:map.id});
+      }
       halted=false;lastAt=0;kick();
       status.textContent='预热与采样中，请保持当前页面可见…';
       await waitFrames(Math.max(1,options.warmupFrames ?? 90));
-      const values=[];const cpus=[];const count=Math.max(2,options.frames || 300);
+      gpuTimes=[];
+      const values=[];const cpus=[];const deathFrames=[],deathCpus=[];const count=Math.max(2,options.frames || 300);
       await new Promise(resolve=>{frameObserver=sample=>{
         values.push(sample.interval);cpus.push(sample.cpu);
+        if(destructionWave&&fixedFrame>=121&&fixedFrame<=180){deathFrames.push(sample.interval);deathCpus.push(sample.cpu);}
         if(values.length>=count){frameObserver=null;resolve();}
       };});
       const avg=values.reduce((a,b)=>a+b,0)/values.length;
       const result={...this.state(),rendererModule:moduleUrl.pathname,gpu,
+        fixedSimulationStepMs:fixedSimulation?fixedStepMs:null,
+        destruction:destructionWave?{count:destructionWave,checks:destructionChecks,
+          windowFrames:deathFrames.length,frameP95:percentile(deathFrames,.95),cpuP95:percentile(deathCpus,.95)}:null,
         viewport:{width:innerWidth,height:innerHeight,pixelWidth:canvas.width,pixelHeight:canvas.height},
         samples:values.length,frameMs:{mean:+avg.toFixed(3),p50:percentile(values,0.5),p95:percentile(values,0.95),p99:percentile(values,0.99)},
         cpuRenderMs:{p50:percentile(cpus,0.5),p95:percentile(cpus,0.95)},fps:+(1000/avg).toFixed(2),
+        gpuRenderMs:gpuTimes.length?{samples:gpuTimes.length,p50:percentile(gpuTimes,.5),p95:percentile(gpuTimes,.95)}:null,
         stats:renderer.stats(),visibility:document.visibilityState};
       window.benchmarkResult=result;
       document.querySelector('#results').textContent=JSON.stringify(result,null,2);
       document.querySelector('#results').hidden=false;
       status.textContent=`采样完成 · ${result.fps} FPS · p95 ${result.frameMs.p95} ms\n渲染已暂停，结果见右侧`;
       return result;
-    } finally {frameObserver=null;runningBenchmark=false;halted=true;}
+    } finally {frameObserver=null;runningBenchmark=false;fixedSimulation=false;halted=true;}
   }
 };
 const initial=loadScenario();
+document.querySelector('#collapseTest').onclick=async()=>{
+  if(runningBenchmark||!game.structures.length) return;
+  const count=Math.max(1,Math.min(15,Number(query.get('collapseCount'))||1));
+  destroyFixtureStructures(count,query.get('collapseKind'));
+  window.benchmark.resume();await waitFrames(Math.max(1,Math.min(90,Number(query.get('collapseFrames'))||10)));halted=true;
+  document.querySelector('#results').textContent=JSON.stringify(renderer.stats(),null,2);
+  document.querySelector('#results').hidden=false;status.textContent='建筑坍塌中 · 继续动画可检查清理';
+};
 document.querySelector('#warmAssets').onclick=async()=>{
   status.textContent='正在分批预热两阵营模型、建筑和着色器…';
   await renderer.prepareAssets({units:catalog.units,buildings:catalog.structures});
@@ -393,9 +465,11 @@ document.querySelector('#capture').onclick=()=>{
 };
 document.querySelector('#resume').onclick=()=>window.benchmark.resume();
 document.querySelector('#audio').onclick=async()=>{
-  if(!battleAudio) {const context=new AudioContext();await context.resume();battleAudio=createBattleAudio(context);}
+  if(!battleAudio) {const context=new AudioContext();await context.resume();battleAudio=createBattleAudio(context);await battleAudio.prewarm();}
   battleAudio.ui('confirm',.6);window.benchmark.resume();
   status.textContent='受控演示 · 已启用战场声音（仅此测试页面）';
+  document.querySelector('#results').textContent=JSON.stringify(battleAudio.stats(),null,2);
+  document.querySelector('#results').hidden=false;
 };
 document.querySelector('#healed').onclick=()=>{
   healthy=true;game={...game,units:game.units.map(u=>({...u,hp:u.maxHp}))};window.benchmark.resume();
@@ -405,12 +479,19 @@ document.querySelector('#fxBurst').onclick=async()=>{
   if(runningBenchmark) return;
   const beforePrograms=renderer.stats().programs,frames=[];
   syntheticEffects=Array.from({length:Math.max(1,Math.min(180,Number(query.get('fxCount'))||180))},(_,i)=>({type:'explosion',x:camera.x+(i%12-6)*40,
-    y:camera.y+(Math.floor(i/12)-7)*40,entityKind:'tank',size:22,dir:.3,wreck:true}));
+    y:camera.y+(Math.floor(i/12)-7)*40,entityKind:query.get('fxFamilies')==='1'?['tank','factory','dragon'][i%3]:'tank',size:22,dir:.3,wreck:true}));
+  if(query.get('fxFamilies')==='1') syntheticEffects.forEach(fx=>{
+    const def=catalog.units[fx.entityKind]||catalog.structures[fx.entityKind];
+    fx.size=def.size;fx.faction=def.faction;
+  });
+  if(query.get('fxLayout')==='hero') syntheticEffects.forEach((fx,i)=>{
+    fx.x=camera.x+(i-(syntheticEffects.length-1)/2)*130;fx.y=camera.y+60;
+  });
   runningBenchmark=true;
   try {
     window.benchmark.resume();
     await new Promise(resolve=>{frameObserver=sample=>{
-      frames.push(sample);if(frames.length===3) resolve();
+      frames.push(sample);if(frames.length===Math.max(3,Math.min(90,Number(query.get('fxFrames'))||3))) resolve();
     };});
   } finally {frameObserver=null;halted=true;runningBenchmark=false;}
   const result={type:'feedback-budget',beforePrograms,firstFrames:frames,stats:renderer.stats(),audio:battleAudio?.stats()};

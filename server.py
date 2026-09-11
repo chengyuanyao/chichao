@@ -6808,6 +6808,7 @@ def remove_destroyed(room):
             "x": entity["x"], "y": entity["y"],
             "ttl": 1.35 if boom else (1.15 if entity in destroyed_structures else 0.75),
             "entityKind": entity["kind"], "dir": entity.get("dir", 0), "size": entity["size"],
+            "entityId": entity["id"],
             "faction": (UNIT_TYPES.get(entity["kind"]) or STRUCTURE_TYPES.get(entity["kind"], {})).get("faction", "tech"),
             "wreck": bool(entity.get("_combatDestroyed") or entity.get("_exploded")),
         }

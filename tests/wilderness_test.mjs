@@ -122,6 +122,20 @@ for (const [apply, marker, mapSamples] of [
   assert.ok(parentRan, 'fog hook is chained, not overwritten');
   assert.ok(shader.fragmentShader.includes(marker));
   assert.equal((shader.fragmentShader.match(/texture2D\(map,/g)||[]).length,mapSamples);
+  if (apply === applyWildernessGround) {
+    assert.ok(shader.fragmentShader.includes('float tdBoundary = 4.0 * vBiome.x * (1.0 - vBiome.x)'));
+    assert.ok(!shader.fragmentShader.includes('fmNoise(tdWorld'), 'no extra per-pixel noise for terrain borders');
+    assert.ok(shader.fragmentShader.includes('tdGradient * 1.25 * tdFade'), 'avoid exaggerated albedo-derived craters');
+    for (const grain of [0, .12, .3, .8, 1]) {
+      const blend = (soil) => {
+        const v=soil+(.12-grain)*1.2*4*soil*(1-soil);
+        const t=Math.max(0,Math.min(1,(v-.22)/(.78-.22)));
+        return t*t*(3-2*t);
+      };
+      assert.equal(blend(0),0,'pure grass cannot acquire dirt pinholes');
+      assert.equal(blend(1),1,'pure soil cannot acquire grass freckles');
+    }
+  }
   for (const chunk of ['color_fragment','alphatest_fragment','lights_fragment_begin','fog_fragment','dithering_fragment']) {
     assert.ok(shader.fragmentShader.includes('#include <'+chunk+'>'), 'preserve '+chunk);
   }

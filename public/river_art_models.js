@@ -51,6 +51,39 @@ function cable(points,r,paint,surf=0) {
   return part(new THREE.TubeGeometry(curve,Math.max(8,points.length*3),r,6,false),0,0,0,paint,surf);
 }
 
+// Continuous low-poly anatomical volume. Stations are [x,width,centerY,height,z?].
+// Smooth side normals and separate caps avoid the old intersecting tube/egg body.
+export function organicShell(stations,paint,surf=3) {
+  const segments=10,pos=[],uv=[],indices=[];
+  stations.forEach(([x,w,y,h,z=0],s)=>{
+    for(let j=0;j<=segments;j++) {
+      const a=j/segments*Math.PI*2;
+      pos.push(x,y+Math.sin(a)*h,z+Math.cos(a)*w);uv.push(s/(stations.length-1),j/segments);
+    }
+  });
+  for(let s=0;s<stations.length-1;s++) for(let j=0;j<segments;j++) {
+    const a=s*(segments+1)+j,b=a+segments+1;indices.push(a,b,a+1,a+1,b,b+1);
+  }
+  for(const s of [0,stations.length-1]) {
+    const [x,w,y,h,z=0]=stations[s],c=pos.length/3;
+    pos.push(x,y,z);uv.push(.5,.5);
+    for(let j=0;j<=segments;j++) {
+      const a=j/segments*Math.PI*2;
+      pos.push(x,y+Math.sin(a)*h,z+Math.cos(a)*w);uv.push(.5+Math.cos(a)*.5,.5+Math.sin(a)*.5);
+    }
+    for(let j=0;j<segments;j++) indices.push(c,c+j+(s===0?1:2),c+j+(s===0?2:1));
+  }
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();
+  const normals=geo.attributes.normal;
+  for(let s=0;s<stations.length;s++) {
+    const a=s*(segments+1),b=a+segments,n=new THREE.Vector3().fromBufferAttribute(normals,a)
+      .add(new THREE.Vector3().fromBufferAttribute(normals,b)).normalize();
+    normals.setXYZ(a,n.x,n.y,n.z);normals.setXYZ(b,n.x,n.y,n.z);
+  }
+  return part(geo,0,0,0,paint,surf);
+}
+
 function wingPoint(a,b,side) {
   const leading=5-a*16;
   const chord=Math.max(.35,14*(1-a)+2.8*Math.sin(a*Math.PI)*(.5+.5*Math.sin(a*Math.PI*8)));
@@ -60,7 +93,7 @@ function wingPoint(a,b,side) {
 }
 
 function membrane(side) {
-  const pos=[],uv=[],idx=[],rows=9,cols=7;
+  const pos=[],uv=[],idx=[],rows=8,cols=6;
   for(let u=0;u<=rows;u++) for(let v=0;v<=cols;v++) {
     const a=u/rows,b=v/cols;
     pos.push(...wingPoint(a,b,side));
@@ -88,6 +121,12 @@ export function riverUnitModel(kind, base, k) {
   if(!RIVER_ART_KINDS.has(kind)) return base;
   const {box,cyl,sph,ellipsoid,limb,trackedHull,recoiling,MAT,ROT_Z90,ROT_X90}=k;
   const steel=[.24,.27,.29],dark=[.075,.092,.10],edge=[.43,.44,.40];
+  const finish=model=>{
+    for(const p of [...model.body,...(model.rigs||[]).flatMap(r=>r.parts)]) {
+      if((p.rgb===steel||p.rgb===edge)&&(p.surf==null||p.surf===0)) p.surf=.25;
+    }
+    return model;
+  };
   if(kind==='tank') {
     const body=trackedHull(34,20,7.5,.60).concat([
       armorShell([[-15,7.5,7,11],[-10,9,7,13],[7,8.8,7,12],[17,7,7.2,9]],[.34,.38,.34]),
@@ -107,19 +146,23 @@ export function riverUnitModel(kind, base, k) {
       for(let i=0;i<6;i++) body.push(cyl(.18,.18,.16,6,-8+i*2.2,18.15,side*4.6,[.56,.58,.54]));
       body.push(cyl(.3,.3,5.8,6,-6,21.2,side*3.9,steel));
     }
-    return {body,glow:[box(.55,.55,2.6,3.5,19,-2,[1.05,1.22,1.25])]};
+    return finish({body,glow:[box(.55,.55,2.6,3.5,19,-2,[1.05,1.22,1.25])]});
   }
   if(kind==='dragon') {
     const body=[
-      cable([[-21,5,0],[-14,7,0],[-5,10,0],[5,13,0],[10,22,0],[21,27,0]],2.5,steel,3),
-      ellipsoid(10,4.5,5.2,-2,9,0,.72),
-      armorShell([[17,2.3,24,28],[21,3,25,30],[26,2.0,25,28],[30,1.6,25,27]],.65),
-      armorShell([[22,2.2,23.1,24.1],[29,1.5,23.9,25.0]],dark),
-      cable([[-12,7,0],[-20,6,0],[-28,4,2],[-34,3,3]],.85,edge),
+      organicShell([[-20,.65,5,.8],[-13,2.4,7,2.8],[-6,4.8,9,4.5],[1,4.5,10.5,4.1],
+        [6,3.2,13,3.6],[9,2.2,18,3],[13,2.1,23,2.8],[20,2,26,2]], [.26,.29,.28]),
+      // Brow, cheek and muzzle form one continuous volume rather than a box
+      // floating above a rectangular jaw. The open mouth remains real geometry.
+      organicShell([[16,1.8,26,1.7],[20,2.9,27.2,2.6],[23,2.5,27,2.0],
+        [27,1.75,26.4,1.25],[30,1.35,26.1,.85]],.65),
+      organicShell([[21,1.8,24,.7],[24,2.0,23.7,.65],[28,1.45,24.2,.55],[30,1.15,24.8,.3]],dark),
+      organicShell([[-34,.10,3,.15,3],[-28,.38,4,.45,2],[-20,.80,6,1,0],[-12,1.15,7,1.4,0]],[.22,.25,.24]),
     ];
     const rigs=[];
     for(const side of [-1,1]) {
-      body.push(cable([[20,29,side*1.8],[17,34,side*3],[12,35,side*4]],.50,edge));
+      body.push(organicShell([[12,.05,35,.07,side*4],[15,.24,34.8,.35,side*3.6],
+        [18,.45,32.6,.65,side*2.7],[20,.65,29.2,.8,side*1.8]],edge,.25));
       body.push(ellipsoid(1.25,.72,.32,23.5,27.7,side*2.45,dark));
       for(let i=0;i<3;i++) body.push(cyl(.08,.25,1.25,5,25+i*1.25,24.6,side*1.65,edge));
       for(const x of [-8,6]) {
@@ -137,7 +180,7 @@ export function riverUnitModel(kind, base, k) {
       rigs.push({parts:wing,pivot,axis:'x',side,mode:'wing'});
     }
     for(let i=0;i<5;i++) body.push(armorShell([[-10+i*3,3.8,11.5,13],[-8+i*3,3.3,12,14]],.70));
-    return {body,rigs,glow:[box(.6,.45,.10,23.8,27.7,2.72,[1.1,1.35,1.5]),box(.6,.45,.10,23.8,27.7,-2.72,[1.1,1.35,1.5])]};
+    return finish({body,rigs,glow:[box(.6,.45,.10,23.8,27.7,2.72,[1.1,1.35,1.5]),box(.6,.45,.10,23.8,27.7,-2.72,[1.1,1.35,1.5])]});
   }
   if(kind==='rifle'||kind==='mage') {
     const cloth=kind==='mage'?[.22,.24,.31]:[.22,.25,.20];
@@ -173,7 +216,7 @@ export function riverUnitModel(kind, base, k) {
     }
     if(kind==='rifle') body.push(box(4.8,1.2,1.0,5.8,10.5,.7,dark),cyl(.27,.33,5.5,8,10,10.5,.7,steel,ROT_Z90));
     else body.push(cable([[8,1,.7],[8,8,.7],[9,17,.7]],.32,edge),sph(1.25,10,9,17,.7,[.45,.64,.78]));
-    return {body,rigs,glow:kind==='mage'?[sph(.70,8,9,17,.7,[1.05,1.4,1.6])]:[]};
+    return finish({body,rigs,glow:kind==='mage'?[sph(.70,8,9,17,.7,[1.05,1.4,1.6])]:[]});
   }
   if(kind==='overlord'||kind==='overlord_v1') {
     const veteran=kind==='overlord_v1',plate=veteran?[.25,.27,.29]:[.38,.40,.38];
@@ -201,11 +244,14 @@ export function riverUnitModel(kind, base, k) {
       }
       glow.push(box(.6,.4,1.7,17,14.4,side*8.7,[1.10,1.04,.78]));
     }
-    return {body,glow};
+    return finish({body,glow});
   }
   // The titan retains shoulder pivots so its transform animation and real
   // cannon picking remain compatible; torso panels and hydraulics are rebuilt below.
-  const body=base.body.filter(p=>p.matrix.elements[13]<28||p.matrix.elements[13]>39),glow=base.glow.slice();
+  // Replace only the central torso. The former height-only filter also deleted
+  // both shoulder armor housings, leaving exposed pivots and disconnected arms.
+  const body=base.body.filter(p=>p.matrix.elements[13]<28||p.matrix.elements[13]>39
+    ||Math.abs(p.matrix.elements[14])>=12),glow=base.glow.slice();
   if(kind==='overlord_v2') {
     body.push(cyl(3.1,3.6,9.0,16,-1,30.5,0,dark));
     body.push(armorShell([[-8,7.4,29,36],[-3,9.2,28.5,39],[2,9,29,39],[8.2,5,31,35]],.57));
@@ -220,15 +266,15 @@ export function riverUnitModel(kind, base, k) {
       body.push(cyl(2.0,2.0,.7,12,.4,14.4,side*9.1,edge,ROT_X90));
     }
   }
-  return {body,glow};
+  return finish({body,glow});
 }
 
 export function riverStructureDetails(kind,s,k) {
   const {box,cyl}=k,parts=[];
-  if(!['hq','mhq'].includes(kind)) return parts;
+  if(!['hq','mhq','factory'].includes(kind)) return parts;
   const stone=[.48,.46,.40],metal=[.30,.34,.34],dark=[.11,.14,.14],trim=[.57,.59,.55];
-  const block=(w,h,d,x,y,z,color,surf=1)=>{const p=box(w*s,h*s,d*s,x*s,y*s,z*s,color);p.surf=surf;parts.push(p);};
-  const column=(rt,rb,h,x,y,z,color,surf=1)=>{const p=cyl(rt*s,rb*s,h*s,16,x*s,y*s,z*s,color);p.surf=surf;parts.push(p);};
+  const block=(w,h,d,x,y,z,color,surf=1)=>{const p=box(w*s,h*s,d*s,x*s,y*s,z*s,color);p.surf=surf===0&&color===trim?.25:surf;parts.push(p);};
+  const column=(rt,rb,h,x,y,z,color,surf=1)=>{const p=cyl(rt*s,rb*s,h*s,16,x*s,y*s,z*s,color);p.surf=surf===0&&color===trim?.25:surf;parts.push(p);};
   const arch=(w,h,d,x,y,z,color,surf=1)=>{
     const shape=new THREE.Shape(),r=w*s*.5,ry=h*s,thick=s*.035;
     shape.moveTo(-r,0);
@@ -236,8 +282,27 @@ export function riverStructureDetails(kind,s,k) {
     for(let i=16;i>=0;i--){const a=Math.PI-i*Math.PI/16;shape.lineTo(Math.cos(a)*(r-thick),Math.sin(a)*(ry-thick));}
     shape.closePath();
     const geo=new THREE.ExtrudeGeometry(shape,{depth:d*s,bevelEnabled:false,steps:1});
-    geo.translate(0,0,-d*s*.5);parts.push(part(geo,x*s,y*s,z*s,color,surf));
+    geo.translate(0,0,-d*s*.5);parts.push(part(geo,x*s,y*s,z*s,color,surf===0&&color===trim?.25:surf));
   };
+  if(kind==='factory') {
+    // Assembly hall with a recessed bay, ribbed roof and attached service wing.
+    block(1.85,.09,1.65,0,.045,0,stone);
+    block(.12,.72,1.30,-.72,.45,0,metal,0);
+    block(.12,.72,1.30,.72,.45,0,metal,0);
+    block(1.45,.68,.10,0,.43,-.60,metal,0);
+    block(1.32,.49,.06,0,.31,.54,dark,0);
+    for(let i=0;i<7;i++) block(1.30,.035,.07,0,.12+i*.068,.58,trim,0);
+    arch(1.55,.48,1.38,0,.78,0,.72,0);
+    for(let i=0;i<7;i++) arch(1.57,.49,.027,0,.78,-.66+i*.22,trim,0);
+    block(.40,.42,.98,.96,.28,-.13,metal,0);
+    block(.44,.04,1.03,.96,.51,-.13,trim,0);
+    for(let i=0;i<4;i++) block(.035,.15,.12,1.17,.37,-.42+i*.20,[.15,.25,.29],4);
+    column(.065,.08,.88,-.94,.55,-.46,metal,0);
+    column(.09,.09,.06,-.94,1.02,-.46,trim,0);
+    block(.05,.05,.08,-.63,.72,.70,[1.4,1.0,.5],4);
+    block(.05,.05,.08,.63,.72,.70,[1.4,1.0,.5],4);
+    return parts;
+  }
   if(kind==='hq') {
     // Military command complex: service hangars, recessed gates, observation
     // deck, roof equipment and a slender communications spine, not a silo.

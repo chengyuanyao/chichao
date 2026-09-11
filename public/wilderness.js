@@ -140,8 +140,11 @@ export function applyWildernessGround(material) {
         // Height-modulated blend breaks the coarse splat triangles into grass
         // islands and gritty edges, instead of painting blurred green/brown bands.
         float tdGrain = dot(tdGrass, vec3(0.30, 0.50, 0.20));
-        float tdEdgeNoise = fmNoise(tdWorld * 0.048 + vec2(3.1, 7.2)) - 0.5;
-        float tdDirt = smoothstep(0.23, 0.70, vBiome.x + tdEdgeNoise * 0.38 + (0.10 - tdGrain) * 4.2);
+        // Ecology owns the large patches. Texture relief only breaks their
+        // boundary; it must not punch dirt pinholes through every grassy area.
+        // Reuse the fetched grass instead of another procedural-noise lookup.
+        float tdBoundary = 4.0 * vBiome.x * (1.0 - vBiome.x);
+        float tdDirt = smoothstep(0.22, 0.78, vBiome.x + (0.12 - tdGrain) * 1.2 * tdBoundary);
         float tdStone = smoothstep(0.08, 0.92, vBiome.y);
         vec3 tdSurface = mix(tdGrass, tdSoil, tdDirt);
         tdSurface = mix(tdSurface, tdRock, tdStone);
@@ -157,10 +160,12 @@ export function applyWildernessGround(material) {
         float tdDet = dot(tdDx, tdR1);
         float tdFade = 1.0 - smoothstep(650.0, 1900.0, length(vViewPosition));
         vec3 tdGradient = sign(tdDet) * (dFdx(tdLum) * tdR1 + dFdy(tdLum) * tdR2);
-        normal = normalize(max(abs(tdDet), 0.00001) * normal - tdGradient * 2.8 * tdFade);
+        // Albedo contains shadows as well as relief: keep this deliberately
+        // subtle so photographic dark grains do not become deep craters.
+        normal = normalize(max(abs(tdDet), 0.00001) * normal - tdGradient * 1.25 * tdFade);
       `);
   };
-  extendKey(material, '+wilderness-ground2');
+  extendKey(material, '+wilderness-ground3');
   return material;
 }
 

@@ -130,6 +130,10 @@
             <button id="startGameBtn" class="button primary hidden">开始战斗</button>
           </div>
           <div id="lobbyHint" class="lobby-hint">等待其他指挥官加入…</div>
+          <div id="assetPreparation" class="lobby-hint" hidden aria-live="polite">
+            <label for="assetProgress" id="assetProgressLabel">正在预加载战场资源…</label>
+            <progress id="assetProgress" max="100" value="0" style="display:block;width:100%;margin-top:8px;accent-color:#dfb865"></progress>
+          </div>
         </section>
 
         <aside class="lobby-side">

@@ -23,6 +23,7 @@ def main():
     server.remove_destroyed(room)
     wreck = next(e for e in game['effects'] if e.get('wreck'))
     assert wreck['entityKind'] == 'tank' and wreck['size'] == victim['size']
+    assert server.public_effect(wreck)['entityId'] == victim['id']
     # Removal for deploy/fold is cosmetic completion, not a violent casualty.
     shooter['_silentRemoval'] = True
     shooter['hp'] = 0

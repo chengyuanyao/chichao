@@ -4,7 +4,18 @@ import * as THREE from './vendor/three.module.min.js';
 // brightness-to-normal conversion of the albedo photograph. Baked once per renderer.
 export function surfaceHeight(kind,u,v) {
   const wave=(x)=>Math.sin(x*Math.PI*2);
-  if(kind===0) return .018*wave(u*31)*wave(v*27)+.035*Math.exp(-Math.pow(wave(v*5+u*.1)*18,2));
+  if(kind===0) {
+    // Panel joints and countersunk fasteners are baked, not little draw calls.
+    // Four panels fit the existing physical-scale atlas; no new runtime sample.
+    const x=((u*4)%1+1)%1,y=((v*4)%1+1)%1;
+    const seam=Math.max(0,1-Math.min(x,1-x,y,1-y)/.035);
+    const bx=Math.min(Math.abs(x-.13),Math.abs(x-.87));
+    const by=Math.min(Math.abs(y-.13),Math.abs(y-.87));
+    const radius=Math.hypot(bx,by),bolt=Math.max(0,1-radius/.046);
+    const seat=Math.max(0,1-Math.abs(radius-.057)/.012);
+    const brushed=.016*wave(u*119+v*.5)+.009*wave(v*93+u*2);
+    return brushed-.52*seam+.40*bolt-.15*seat;
+  }
   if(kind===1) return .10*wave(u*7)*wave(v*9)+.025*wave(u*29+v*23);
   if(kind===2) return .065*wave(u*36)+.065*wave(v*36)+.018*wave(u*18)*wave(v*18);
   const row=Math.floor(v*15),x=((u*18+(row%2)*.5)%1)-.5,y=(v*15)%1-.5;
@@ -19,8 +30,9 @@ export function bakeRiverSurfaceData(tile=256) {
     const dy=(surfaceHeight(kind,u,wrap(v+d))-surfaceHeight(kind,u,wrap(v-d)))*1.2;
     const len=Math.hypot(dx,dy,1),i=((y+Math.floor(kind/2)*tile)*size+x+(kind%2)*tile)*4;
     normal.set([Math.round((-dx/len*.5+.5)*255),Math.round((-dy/len*.5+.5)*255),Math.round((1/len*.5+.5)*255),255],i);
-    const rough=[.49,.88,.93,.66][kind]+h*.22;
-    orm.set([Math.round((.91+Math.min(.09,Math.max(-.1,h)*.3))*255),Math.round(Math.min(1,rough)*255),kind===0?220:0,255],i);
+    const rough=kind===0?.54+Math.max(0,-h)*.48-Math.max(0,h)*.24:[.49,.88,.93,.66][kind]+h*.22;
+    const ao=kind===0?Math.max(.60,.94+Math.min(0,h)*.60):.91+Math.min(.09,Math.max(-.1,h)*.3);
+    orm.set([Math.round(ao*255),Math.round(Math.min(1,rough)*255),kind===0?220:0,255],i);
   }
   return {size,normal,orm};
 }
@@ -76,8 +88,10 @@ export function applyRiverPBR(material,maps) {
         vec4 riverORM=texture2D(uRiverORM,vec2(riverUV.x,1.0-riverUV.y));`)
       .replace('vec2 gAtlasUv = vec2(mix(0.01, 0.51, gAtlasSide) + gMirror.x * 0.48, 0.01 + gMirror.y * 0.98);','vec2 gAtlasUv = riverUV;')
       .replace('float gRelief = mix(0.62, 1.42, smoothstep(0.17, 0.60, gSurfaceLum));','float gRelief = mix(0.48, 1.24, smoothstep(0.22, 0.78, gSurfaceLum));')
-      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=gMode>3.5?0.26:clamp(riverORM.g,0.24,0.96);')
-      .replace('#include <metalnessmap_fragment>','#include <metalnessmap_fragment>\nmetalnessFactor=gMode<0.5?riverORM.b*smoothstep(0.30,0.62,max(max(vOwnColor.r,vOwnColor.g),vOwnColor.b))*(1.0-vTeamMix*0.96):0.0;')
+      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=gMode>3.5?0.26:clamp(riverORM.g,0.24,0.96);\nif(gMode>0.2&&gMode<0.3) roughnessFactor=max(0.28,roughnessFactor-0.18);')
+      // 0.25 explicitly marks bare hardware. Dark steel must not become plastic
+      // just because its albedo is dark; ordinary paint retains the old mask.
+      .replace('#include <metalnessmap_fragment>','#include <metalnessmap_fragment>\nmetalnessFactor=gMode<0.5?riverORM.b*(gMode>0.2?1.0:smoothstep(0.30,0.62,max(max(vOwnColor.r,vOwnColor.g),vOwnColor.b)))*(1.0-vTeamMix*0.96):0.0;')
       // Disable the previous albedo-derived micro-normal for sample PBR only.
       .replace('gBumpScale * gDetailFade * gGrad','0.0 * gDetailFade * gGrad')
       .replace('#include <normal_fragment_maps>',`vec3 riverN=texture2D(normalMap,vec2(riverUV.x,1.0-riverUV.y)).xyz*2.0-1.0;
@@ -87,7 +101,7 @@ export function applyRiverPBR(material,maps) {
         float riverDirt=(1.0-smoothstep(1.0,12.0,vArmyLocal.y))*(0.10+0.08*sin(vArmyLocal.x*0.47+vArmyLocal.z*0.73));
         diffuseColor.rgb*=riverORM.r*mix(vec3(1.0),vec3(0.46,0.38,0.28),riverDirt);`);
   };
-  material.customProgramCacheKey=()=>key()+'-river-pbr-v2';return material;
+  material.customProgramCacheKey=()=>key()+'-river-pbr-v3';return material;
 }
 
 export function applyRiverGround(material) {

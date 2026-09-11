@@ -10,6 +10,8 @@
  */
 
 import * as THREE from './vendor/three.module.min.js';
+import {wreckFamily,collapsePose,COLLAPSE_LIMIT,suspensionSlope,applyBuildingCollapse} from './battlefield_finish.js';
+import { createBlastSurface, BLAST_FRAGMENT } from './blast_surface.js';
 import { warmAssetTasks, solidSurface } from './asset_warmup.js';
 import { createPostFX } from './postfx.js';
 import { riverUnitModel, riverStructureDetails, artJointAngle } from './river_art_models.js';
@@ -18,7 +20,7 @@ import { createAttackRangePreview } from './attack_range_preview.js';
 import { createModelPicker } from './model_picker.js';
 import { prepareTerrainInput, intersectTerrainInput } from './terrain_input.js';
 import { disposeOwnedRenderGroup, MaterialShaderRegistry } from './render_resources.js';
-import { FEEDBACK_LIMITS, MUZZLE_POINTS, advanceTracks, recoilDistance, conditionFromHealth,
+import { FEEDBACK_LIMITS, MUZZLE_POINTS, TRACK_SPANS, advanceTracks, recoilDistance, conditionFromHealth,
   effectDensity, applyBattleMaterial } from './battle_feedback.js';
 import { wildernessNoise, wildernessBiome, applyWildernessGround, applyWildernessRock,
   applyWildernessTrail, applyBridgeWeathering, makeWeatheredRockGeometry,
@@ -306,6 +308,21 @@ function mergeParts(parts, options) {
   merged.setAttribute('aOcc', new THREE.BufferAttribute(occlusion, 1));
   merged.setAttribute('aSurf', new THREE.BufferAttribute(surfChan, 1));
   merged.setAttribute('aTread', new THREE.BufferAttribute(treadChan, 2));
+  if(options && options.fracture) {
+    const breaks=new Float32Array(total*4);
+    for(const item of prepared) {
+      if(!item.box) continue;
+      const b=item.box,cx=(b[0]+b[3])*.5,cy=(b[1]+b[4])*.5,cz=(b[2]+b[5])*.5;
+      const radius=Math.hypot(b[3]-b[0],b[4]-b[1],b[5]-b[2])*.5;
+      // Thin ground-level foundations stay anchored; a whole concrete apron
+      // must not flip into the air like a loose wall panel.
+      const breakRadius=b[1]<1&&(b[4]-b[1])<radius*.25?-radius:radius;
+      for(let i=item.start;i<item.end;i++) {
+        const at=i*4;breaks[at]=cx;breaks[at+1]=cy;breaks[at+2]=cz;breaks[at+3]=breakRadius;
+      }
+    }
+    merged.setAttribute('aBreak',new THREE.BufferAttribute(breaks,4));
+  }
   merged.computeBoundingSphere();
   return merged;
 }
@@ -324,10 +341,17 @@ function tint(value) {
  * 俯视时车辆、建筑和装备不再像一组积木；8 边截面又比高模圆角便宜得多。
  */
 function chamferedBoxGeometry(w, h, d) {
-  const radius = 0.5 / Math.cos(Math.PI / 8);
-  const geo = new THREE.CylinderGeometry(radius, radius, h, 8, 1, false);
-  geo.rotateY(Math.PI / 8);
-  geo.scale(w, 1, d);
+  // A rectangular plate with narrow corner bevels, not a stretched octagonal
+  // cylinder. Broad faces stay flat; the corner width follows the thinner axis.
+  // Eight profile vertices yield 28 triangles instead of the old 32.
+  const x=w*.5,z=d*.5,b=Math.min(w,d)*.08,shape=new THREE.Shape();
+  const points=[[-x+b,-z],[x-b,-z],[x,-z+b],[x,z-b],
+    [x-b,z],[-x+b,z],[-x,z-b],[-x,-z+b]];
+  shape.moveTo(...points[0]);
+  for(let i=1;i<points.length;i++) shape.lineTo(...points[i]);
+  shape.closePath();
+  const geo=new THREE.ExtrudeGeometry(shape,{depth:h,bevelEnabled:false,steps:1,curveSegments:1});
+  geo.rotateX(-Math.PI/2);geo.translate(0,-h*.5,0);
   return geo;
 }
 
@@ -2386,7 +2410,7 @@ function structureGeometries(kind, size, artSample = false) {
   entry = {
     // 主体以地基为原点，首次缓存时烘焙墙角与屋檐的体积阴影；各实例共享。
     // 炮塔/旋转件使用局部轴，仍保持下面的普通合并，避免错误地面遮蔽。
-    team: parts.length ? mergeParts(parts, { occlusion: true }) : null,
+    team: parts.length ? mergeParts(parts, { occlusion: true, fracture: true }) : null,
     hull: null,
     head: null,
     spin: null
@@ -2394,7 +2418,7 @@ function structureGeometries(kind, size, artSample = false) {
   if (kind === 'turret') {
     const head = turretHeadParts(size);
     entry.head = {
-      team: head.length ? mergeParts(head) : null,
+      team: head.length ? mergeParts(head,{fracture:true}) : null,
       hull: null,
       y: size * 0.78
     };
@@ -2402,7 +2426,7 @@ function structureGeometries(kind, size, artSample = false) {
   if (kind === 'missile') {
     const head = missileHeadParts(size);
     entry.head = {
-      team: head.length ? mergeParts(head) : null,
+      team: head.length ? mergeParts(head,{fracture:true}) : null,
       hull: null,
       y: size * 0.82
     };
@@ -2410,7 +2434,7 @@ function structureGeometries(kind, size, artSample = false) {
   if (kind === 'mtower') {
     const head = arcaneHeadParts(size);
     entry.head = {
-      team: head.length ? mergeParts(head) : null,
+      team: head.length ? mergeParts(head,{fracture:true}) : null,
       hull: null,
       y: size * 1.72 + 3.4
     };
@@ -2418,7 +2442,7 @@ function structureGeometries(kind, size, artSample = false) {
   const spin = spinnerParts(kind, size);
   if (spin) {
     entry.spin = {
-      team: spin.parts.length ? mergeParts(spin.parts) : null,
+      team: spin.parts.length ? mergeParts(spin.parts,{fracture:true}) : null,
       hull: null,
       x: spin.x || 0,
       y: spin.y,
@@ -2520,9 +2544,9 @@ export const MAP_DISPLAY_THEMES = {
     skyGround: 0xb8a078,
     hemiSky: 0xc8d8e8,
     hemiGround: 0x6a5a38,
-    sun: 0xffe0a8,
-    fill: 0xc4b090,
-    rim: 0xe8d4a0,
+    sun: 0xffedcc,
+    fill: 0xa4b5c2,
+    rim: 0xd4deea,
     tex: [1.00, 0.90, 0.68],
     minimap: { base: '#6a5a38', dry: 'rgba(220,180,90,.16)', light: 'rgba(236,212,150,', dark: 'rgba(28,18,8,', mountain: '#7a8a3c' }
   },
@@ -2544,7 +2568,7 @@ export const MAP_DISPLAY_THEMES = {
     skyGround: 0x829a91,
     hemiSky: 0xc1d9e0,
     hemiGround: 0x4a5333,
-    sun: 0xffdfad,
+    sun: 0xffe8c4,
     fill: 0x91aeb7,
     rim: 0xc3d9dc,
     tex: [0.95, 0.94, 0.72],
@@ -2590,11 +2614,13 @@ export const MAP_DISPLAY_THEMES = {
     mid: 0xc89068,
     zenith: 0x4a6088,
     skyGround: 0xa07058,
-    hemiSky: 0xd8b090,
+    // Red geology is carried by the terrain, not multiplied into every light.
+    // Cooler skylight keeps steel, concrete and player colors distinguishable.
+    hemiSky: 0xb8cadc,
     hemiGround: 0x5a3828,
-    sun: 0xffd090,
-    fill: 0xc09070,
-    rim: 0xf0b080,
+    sun: 0xfff0d5,
+    fill: 0xa6b4c1,
+    rim: 0xd4deea,
     tex: [1.00, 0.78, 0.62],
     minimap: { base: '#5a3a28', dry: 'rgba(220,140,70,.16)', light: 'rgba(236,180,120,', dark: 'rgba(24,10,6,', mountain: '#3c5c2c' }
   }
@@ -3101,7 +3127,7 @@ export function createRenderer(canvas) {
    */
   function applyTerrainDetail(material) {
     const surface=applyWildernessGround(material);
-    return state.artSample?applyRiverGround(surface):surface;
+    return state.artSample && state.terrain?.rivers?.length?applyRiverGround(surface):surface;
   }
 
   /** Alpha-tested leaf cards: real cutout silhouettes, opaque depth and shadows. */
@@ -6011,6 +6037,32 @@ export function createRenderer(canvas) {
   /* -------------------- 建筑 -------------------- */
 
   const structureNodes = new Map();  // id -> {group, teamMat, kind}
+  const collapsingStructures=[];
+  function retireCollapse(item) {
+    worldRoot.remove(item.node.group);item.node.teamMat.dispose();item.node.breakMat.dispose();
+  }
+  function startCollapse(node) {
+    if(collapsingStructures.length>=COLLAPSE_LIMIT) retireCollapse(collapsingStructures.shift());
+    node.breakMat.color.copy(node.teamMat.color);
+    node.group.traverse(child=>{if(child.isMesh) {
+      child.castShadow=false;
+      // Shader-driven debris can move outside the intact mesh's bounds. Only
+      // the at-most-six dying groups skip that stale frustum test.
+      child.frustumCulled=false;
+      if(child.material===node.teamMat) child.material=node.breakMat;
+    }});
+    const attachments=[node.head,node.spinner].filter(Boolean).map(object=>({object,y:object.position.y}));
+    collapsingStructures.push({node,age:0,attachments});
+  }
+  function updateCollapses(dt) {
+    for(let i=collapsingStructures.length-1;i>=0;i--) {
+      const c=collapsingStructures[i];c.age+=dt;const pose=collapsePose(c.age);
+      if(pose.done){retireCollapse(c);collapsingStructures.splice(i,1);continue;}
+      c.node.breakMat.userData.collapseProgress.value=pose.progress;
+      for(const a of c.attachments) a.object.position.y=Math.max(0,a.y-180*pose.progress*pose.progress);
+      c.node.group.visible=isVisible(c.node.structure.x,c.node.structure.y);
+    }
+  }
 
   function ensureStructure(structure) {
     let node = structureNodes.get(structure.id);
@@ -6022,6 +6074,11 @@ export function createRenderer(canvas) {
       new THREE.MeshPhongMaterial({ color: 0xffffff, vertexColors: true }),
       MAGIC_STRUCTURE_KINDS[structure.kind] ? 'stone' : 'metal');
     const group = structureGroup(structure.kind, structure.size, teamMat,!!state.artSample);
+    // Separate death program: intact buildings keep the original vertex path.
+    // Both are created with the building, and both programs are prewarmed.
+    const breakMat=applyBuildingCollapse(state.artSample ? makeRiverMaterial(MAGIC_STRUCTURE_KINDS[structure.kind]?'stone':'metal') :
+      applyEmissiveByVertexColor(new THREE.MeshPhongMaterial({color:0xffffff,vertexColors:true}),
+        MAGIC_STRUCTURE_KINDS[structure.kind]?'stone':'metal'));
     if (!buildingPadMat) {
       buildingPadMat = applyFogMask(new THREE.MeshLambertMaterial({
         color: displayTheme(state.terrain && state.terrain.theme).pad,
@@ -6040,7 +6097,7 @@ export function createRenderer(canvas) {
     group.position.set(structure.x, 0, structure.y);
     worldRoot.add(group);
     node = {
-      group: group, teamMat: teamMat, artSample:!!state.artSample,
+      group: group, teamMat: teamMat, breakMat, artSample:!!state.artSample,
       kind: structure.kind,
       head: group.getObjectByName('turretHead'),
       spinner: group.getObjectByName('spinner')
@@ -6055,6 +6112,7 @@ export function createRenderer(canvas) {
     worldRoot.remove(node.group);
     // 几何体来自 STRUCTURE_GEOMETRY_CACHE，由所有同类建筑共享，不能释放
     node.teamMat.dispose();
+    node.breakMat.dispose();
     structureNodes.delete(id);
   }
 
@@ -6152,6 +6210,7 @@ export function createRenderer(canvas) {
    */
 
   const EFFECT_MAX = FEEDBACK_LIMITS.particles;
+  const blastSurface = createBlastSurface();
 
   function createParticleLayer(blending, hot) {
     const geo = new THREE.BufferGeometry();
@@ -6160,63 +6219,65 @@ export function createRenderer(canvas) {
     geo.setAttribute('size', new THREE.BufferAttribute(new Float32Array(EFFECT_MAX), 1));
     geo.setAttribute('alpha', new THREE.BufferAttribute(new Float32Array(EFFECT_MAX), 1));
     geo.setAttribute('seed', new THREE.BufferAttribute(new Float32Array(EFFECT_MAX), 1));
+    geo.setAttribute('age', new THREE.BufferAttribute(new Float32Array(EFFECT_MAX), 1));
     const material = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
       blending: blending,
       vertexColors: true,
-      uniforms: { uScale: { value: 1 }, uHot: { value: hot ? 1 : 0 } },
+      uniforms: { uScale: { value: 1 }, uHot: { value: hot ? 1 : 0 }, uBlastSurface:{value:blastSurface} },
       vertexShader: [
         'attribute float size;',
         'attribute float alpha;',
         'attribute float seed;',
+        'attribute float age;',
+        'varying float vAge;',
+        'varying float vSize;',
         'varying vec3 vColor;',
         'varying float vAlpha;',
         'varying float vSeed;',
+        'varying vec4 vFlowRotation;',
+        'varying vec2 vTileOffset;',
         'uniform float uScale;',
         'void main() {',
         '  vColor = color;',
         '  vAlpha = alpha;',
         '  vSeed = seed;',
+        '  vAge = age; vSize = size;',
+        '  float angle=seed*6.28318,tile=mod(floor(seed),4.0);',
+        '  vFlowRotation=vec4(cos(angle),sin(angle),sin(age*3.0+angle)*.035,cos(age*2.0+angle)*.035);',
+        '  vTileOffset=vec2(mod(tile,2.0),floor(tile/2.0));',
         '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
         '  gl_PointSize = size * uScale / max(1.0, -mv.z) * 300.0;',
         '  gl_Position = projectionMatrix * mv;',
         '}'
       ].join('\n'),
-      fragmentShader: [
-        'varying vec3 vColor;',
-        'varying float vAlpha;',
-        'varying float vSeed;',
-        'uniform float uHot;',
-        NOISE_GLSL,
-        'void main() {',
-        '  vec2 pc = gl_PointCoord - vec2(0.5);',
-        '  float r = length(pc) * 2.0;',
-        // 噪声撕裂边缘：光滑圆点像肥皂泡，被噪声咬出缺口才像火团/烟团。
-        // 噪声随粒子年龄（1-vAlpha）滚动，火焰边缘会持续翻卷。
-        '  float n = vnoise(pc * 5.0 + vec2(vSeed, vSeed * 1.7) + (1.0 - vAlpha) * 3.0);',
-        '  float edge = 1.0 - smoothstep(0.30, 1.0, r + (n - 0.5) * 0.7);',
-        '  float a = edge * vAlpha;',
-        '  if (a <= 0.01) discard;',
-        // 火焰层带 HDR 核心：中心 >1 的亮度交给辉光变成光斑
-        '  float core = exp(-r * r * 6.0);',
-        '  vec3 col = vColor * (1.0 + uHot * core * 1.6);',
-        '  gl_FragColor = vec4(col, a);',
-        '}'
-      ].join('\n')
+      fragmentShader: BLAST_FRAGMENT
     });
+    // Retain the proven shader for dense armies; never pay the art upgrade's
+    // fill-rate cost in the same frame as hundreds of visible units.
+    const performanceMaterial=material.clone();
+    performanceMaterial.fragmentShader=[
+      'varying vec3 vColor; varying float vAlpha; varying float vSeed; uniform float uHot;',
+      NOISE_GLSL,
+      'void main(){ vec2 pc=gl_PointCoord-vec2(.5);float r=length(pc)*2.0;',
+      'float n=vnoise(pc*5.0+vec2(vSeed,vSeed*1.7)+(1.0-vAlpha)*3.0);',
+      'float edge=1.0-smoothstep(.30,1.0,r+(n-.5)*.7);float a=edge*vAlpha;',
+      'if(a<=.01) discard;float core=exp(-r*r*6.0);',
+      'gl_FragColor=vec4(vColor*(1.0+uHot*core*1.6),a);}'
+    ].join('\n');
     const points = new THREE.Points(geo, material);
     points.frustumCulled = false;
     points.renderOrder = blending === THREE.AdditiveBlending ? 16 : 15;
     scene.add(points);
-    return { geo: geo, points: points, list: [] };
+    return { geo: geo, points: points, material, performanceMaterial, list: [] };
   }
 
   const fireLayer = createParticleLayer(THREE.AdditiveBlending, 1);
   const smokeLayer = createParticleLayer(THREE.NormalBlending, 0);
 
   function emit(layer, options) {
-    const cap = Math.min(EFFECT_MAX, state.particleBudget);
+    const cap = Math.min(EFFECT_MAX, state.activeParticleBudget ?? state.particleBudget);
     if (fireLayer.list.length + smokeLayer.list.length >= cap) return;
     if (layer === smokeLayer && layer.list.length >= Math.floor(cap * .28)) return;
     if (options.floor == null) options.floor = groundHeight(options.x, options.z) + 1.5;
@@ -6239,6 +6300,7 @@ export function createRenderer(canvas) {
     const size = layer.geo.attributes.size;
     const alpha = layer.geo.attributes.alpha;
     const seed = layer.geo.attributes.seed;
+    const age = layer.geo.attributes.age;
     let live = 0;
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
@@ -6263,6 +6325,7 @@ export function createRenderer(canvas) {
       size.array[live] = p.size * (p.grow ? (2 - t) : (0.4 + t * 0.6));
       alpha.array[live] = (p.fade === 'in' ? Math.min(1, (1 - t) * 4) * t : t) * (p.opacity == null ? 1 : p.opacity);
       seed.array[live] = p.seed || 0;
+      if(age) age.array[live] = Math.max(0,Math.min(1,1-t));
       list[live] = p;
       live++;
     }
@@ -6273,6 +6336,7 @@ export function createRenderer(canvas) {
     size.needsUpdate = true;
     alpha.needsUpdate = true;
     seed.needsUpdate = true;
+    if(age) age.needsUpdate = true;
   }
 
   /* -------------------- 地面贴花（冲击波 / 焦痕） -------------------- *
@@ -6281,7 +6345,7 @@ export function createRenderer(canvas) {
    * 自带一条 alpha 通道，配一个最小的着色器。
    */
 
-  function createDecalLayer(geometry, capacity, blending) {
+  function createDecalLayer(geometry, capacity, blending, irregular=false) {
     const alphas = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
     geometry = geometry.clone();
     geometry.setAttribute('aAlpha', alphas);
@@ -6290,17 +6354,19 @@ export function createRenderer(canvas) {
       depthWrite: false,
       blending: blending,
       side: THREE.DoubleSide,
-      uniforms: {},
+      uniforms: {uIrregular:{value:irregular?1:0},uBlastSurface:{value:blastSurface}},
       vertexShader: [
         'attribute float aAlpha;',
         'attribute vec3 instanceColorAttr;',
         'varying float vAlpha;',
         'varying vec3 vColor;',
         'varying float vRelief;',
+        'varying vec2 vDecalUv;',
         'void main() {',
         '  vAlpha = aAlpha;',
         '  vColor = instanceColorAttr;',
         '  vRelief = 0.62 + 0.38 * abs(normal.y);',
+        '  vDecalUv = position.xz * 0.5 + 0.5;',
         '  gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);',
         '}'
       ].join('\n'),
@@ -6308,9 +6374,14 @@ export function createRenderer(canvas) {
         'varying float vAlpha;',
         'varying vec3 vColor;',
         'varying float vRelief;',
+        'varying vec2 vDecalUv;',
+        'uniform float uIrregular;',
+        'uniform sampler2D uBlastSurface;',
         'void main() {',
-        '  if (vAlpha <= 0.004) discard;',
-        '  gl_FragColor = vec4(vColor * vRelief, vAlpha);',
+        '  float a = vAlpha;',
+        '  if(uIrregular > 0.5) a *= smoothstep(0.02,0.36,texture2D(uBlastSurface,vDecalUv*0.5).r);',
+        '  if (a <= 0.004) discard;',
+        '  gl_FragColor = vec4(vColor * vRelief, a);',
         '}'
       ].join('\n')
     });
@@ -6338,14 +6409,48 @@ export function createRenderer(canvas) {
     THREE.AdditiveBlending);
   const scorchLayer = createDecalLayer(
     new THREE.CircleGeometry(1, 18).rotateX(-Math.PI / 2), 64,
-    THREE.NormalBlending);
-  // One shared debris batch. It is never submitted to picking or navigation.
-  const wreckLayer = createDecalLayer(mergeParts([
-    taperedBox(1.45,.95,1.1,.64,3.0,0,2,0,1),
-    boxOrient(.9,2.0,.22,.38,3.0,.44,.7,.13,.8,.2),
-    boxOrient(.72,1.2,.3,-.64,1.8,-.22,.6,-.2,-.5,-.12),
-    boxOrient(.95,1.0,.08,.4,1.0,-.48,.9,.07,.35,0)
-  ]), FEEDBACK_LIMITS.wrecks, THREE.NormalBlending);
+    THREE.NormalBlending,true);
+  // Bounded shared geometry per debris family, never gameplay obstacles.
+  const wreckLayer=createDecalLayer(mergeParts([
+    taperedBox(1.35,.88,1.1,.70,.26,0,.22,0,1),
+    box(1.5,.24,.18,0,.13,.48,1),box(1.5,.24,.18,0,.13,-.48,1),
+    taperedBox(.64,.60,.42,.40,.22,-.1,.45,0,1),
+    cyl(.045,.07,.7,6,.6,.44,0,1,ROT_Z90)
+  ]),FEEDBACK_LIMITS.wrecks,THREE.NormalBlending);
+  const rubbleLayer=createDecalLayer(mergeParts([
+    plainBox(.55,.12,.35,-.36,.09,-.32,1,.35),
+    plainBox(.4,.17,.6,.28,.12,.15,1,-.45),
+    boxOrient(.7,.38,.16,-.25,.22,-.18,1,.45,.3,.3),
+    boxOrient(.22,.28,.7,.36,.17,-.1,1,.1,-.4,.5),
+    boxOrient(.48,.16,.38,-.22,.14,.3,1,.35,.7,-.2),
+    taperedBox(.3,.28,.08,.12,.3,.02,.2,.03,1),
+    plainBox(.2,.08,.25,.63,.06,.35,1,.7),
+    plainBox(.18,.1,.18,-.58,.07,.1,1,-.3),
+    cyl(.06,.08,.4,6,.28,.15,-.43,1,ROT_Z90)
+  ]),FEEDBACK_LIMITS.wrecks,THREE.NormalBlending);
+  const arcaneWreckLayer=createDecalLayer(mergeParts([
+    ellipsoid(.65,.17,.4,0,.17,0,1),
+    cyl(0,.23,.7,5,.25,.26,.14,1,new THREE.Matrix4().makeRotationZ(.9)),
+    cyl(0,.18,.5,5,-.36,.16,-.15,1,new THREE.Matrix4().makeRotationZ(-1.2))
+  ]),FEEDBACK_LIMITS.wrecks,THREE.NormalBlending);
+  const wreckLayers=[wreckLayer,rubbleLayer,arcaneWreckLayer];
+  const trackLayer=createDecalLayer(mergeParts([-1,1].map(side=>({
+    geo:new THREE.PlaneGeometry(1.5,.16).rotateX(-Math.PI/2).translate(0,0,side*.42),shade:1
+  }))),160,THREE.NormalBlending);
+  trackLayer.isTrack=true;
+  let trackUpdateAge=0;
+  for(const layer of wreckLayers) {
+    layer.isWreck=true;layer.mesh.material.depthWrite=true;
+  }
+  let wreckSequence=0;
+  function spawnWreck(item,kind) {
+    while(wreckLayers.reduce((n,l)=>n+l.list.length,0)>=FEEDBACK_LIMITS.wrecks) {
+      const oldest=wreckLayers.filter(l=>l.list.length).sort((a,b)=>a.list[0].sequence-b.list[0].sequence)[0];
+      oldest.list.shift();
+    }
+    const family=wreckFamily(kind),layer=family==='rubble'?rubbleLayer:family==='arcane'?arcaneWreckLayer:wreckLayer;
+    layer.spawn({...item,sequence:wreckSequence++});
+  }
 
   function updateDecalLayer(layer, dt, groundY) {
     const list = layer.list;
@@ -6363,13 +6468,13 @@ export function createRenderer(canvas) {
     let shown = 0;
     for (let i = 0; i < list.length; i++) {
       const d = list[i];
-      if (!inViewportBounds(d.x,d.y) || (layer === wreckLayer && !isVisible(d.x,d.y))) continue;
+      if (!inViewportBounds(d.x,d.y) || ((layer.isWreck||layer.isTrack) && !isVisible(d.x,d.y))) continue;
       const t = d.life / d.maxLife;
       const radius = d.radius + (d.growth || 0) * (1 - t);
       matrix.compose(
         vecAux.set(d.x, groundHeight(d.x, d.y) + groundY, d.y),
         d.dir == null ? quatIdentity : quat.setFromAxisAngle(upAxis,-d.dir),
-        vecScale.set(radius, 1, radius));
+        vecScale.set(radius, layer.isWreck?radius:1, radius));
       layer.mesh.setMatrixAt(shown, matrix);
       alphas.array[shown] = d.alpha * (d.hold ? Math.min(1, t / 0.35) : t);
       colors.array[shown * 3] = d.r;
@@ -6427,8 +6532,17 @@ export function createRenderer(canvas) {
     if (!inViewportBounds(x,y)) return;
     if (type==='muzzle' && (kind==='bite'||kind==='claw')) return;
     const baseY = groundHeight(x,y), density = state.feedbackDensity || 1;
+    const destructionScale=(type==='explosion'||type==='blast') && Number.isFinite(metadata?.size) && metadata.size>0
+      ? Math.max(.65,Math.min(2.2,Math.sqrt(metadata.size/22))) : 1;
     // Existing effects are authored in relative heights. Translate once here.
     function emit(layer, p) {
+      // Randomized lifetimes must start at age zero, not halfway through cooling.
+      p.maxLife=p.life;
+      if(destructionScale!==1) {
+        p.x=x+(p.x-x)*destructionScale;p.z=y+(p.z-y)*destructionScale;
+        p.y*=destructionScale;p.size*=destructionScale;
+        p.vx*=Math.sqrt(destructionScale);p.vz*=Math.sqrt(destructionScale);
+      }
       const relativeHeight=p.y;
       p.y += baseY;
       p.floor = baseY + 1.5;
@@ -6437,7 +6551,7 @@ export function createRenderer(canvas) {
           kind==='comet'?22:['meteor','arcane','frost','crystal','iris','boulder'].includes(kind)?16:11;
         p.y += metadata.height-authored;
       }
-      if (layer === smokeLayer) p.opacity = .48;
+      if (layer === smokeLayer && p.opacity == null) p.opacity = .48;
       emitAbsoluteParticle(layer,p);
     }
     function burst(layer, count, make) {
@@ -6450,23 +6564,30 @@ export function createRenderer(canvas) {
     }
     if (metadata && metadata.wreck) {
       const flesh = ['rifle','rocket','sniper','tesla','dog','mage','frost','oracle','panther','hexling'];
-      if (!flesh.includes(metadata.entityKind)) wreckLayer.spawn({x,y,dir:metadata.dir || 0,
+      if (!flesh.includes(metadata.entityKind)) spawnWreck({x,y,dir:metadata.dir || 0,
         radius:Math.min(48,Math.max(9,(metadata.size||18)*.8)),
         life:FEEDBACK_LIMITS.wreckSeconds,maxLife:FEEDBACK_LIMITS.wreckSeconds,
-        alpha:.86,hold:true,r:metadata.faction==='magic'?.19:.16,g:.15,b:metadata.faction==='magic'?.23:.12});
+        alpha:1,hold:true,r:metadata.faction==='magic'?.19:.16,g:.15,b:metadata.faction==='magic'?.23:.12},metadata.entityKind);
     }
     const rand = Math.random;
+    if(type==='explosion' && metadata &&
+      ['rifle','rocket','sniper','tesla','dog','mage','frost','oracle','panther'].includes(metadata.entityKind)) {
+      burst(smokeLayer,3,()=>({x,y:3,z:y,vx:(rand()-.5)*35,vy:12,vz:(rand()-.5)*35,
+        life:.5,maxLife:.5,size:10,grow:true,opacity:.3,r:.42,g:.34,b:.24}));
+      return; // Ordinary infantry do not detonate like fuel-filled vehicles.
+    }
     if (type === 'explosion') {
+      const arcane=metadata?.faction==='magic';
       // 火球：颜色写成 >1 的线性值，核心经辉光放大成光斑
-      burst(fireLayer, 8, function () {
+      burst(fireLayer, 5, function () {
         const a = rand() * TAU;
-        const sp = 60 + rand() * 110;
+        const sp = 22 + rand() * 48;
         return {
           x: x, y: 8 + rand() * 10, z: y,
           vx: Math.cos(a) * sp, vy: 40 + rand() * 90, vz: Math.sin(a) * sp,
-          life: 0.5 + rand() * 0.35, maxLife: 0.85,
-          size: 16 + rand() * 14, grow: true,
-          r: 2.2, g: 0.9 + rand() * 0.5, b: 0.22
+          life: 0.28 + rand() * 0.20, maxLife: 0.48,
+          size: 30 + rand() * 22, grow: true,
+          r: arcane?.55:2.2, g: arcane?1.25:0.9 + rand() * 0.5, b: arcane?2.2:.22
         };
       });
       // 溅射火花
@@ -6481,23 +6602,26 @@ export function createRenderer(canvas) {
           r: 2.4, g: 1.9, b: 1.0
         };
       });
-      flashAt(x, y);
+      flashAt(x, y,arcane?0x8dbdff:undefined);
       // 上升烟柱
-      burst(smokeLayer, 6, function () {
+      burst(smokeLayer, arcane?3:6, function () {
         const a = rand() * TAU;
         const sp = 25 + rand() * 55;
         const grey = 0.16 + rand() * 0.12;
         return {
           x: x, y: 10 + rand() * 14, z: y,
           vx: Math.cos(a) * sp, vy: 40 + rand() * 40, vz: Math.sin(a) * sp,
-          life: 1.1 + rand() * 0.9, maxLife: 2.0,
-          size: 22 + rand() * 20, grow: true, buoyancy: -0.12,
+          life: 2.0 + rand() * 1.2, maxLife: 3.2, fade:'in', opacity:.72,
+          size: 32 + rand() * 24, grow: true, buoyancy: -0.12,
           r: grey, g: grey * 0.95, b: grey * 0.9
         };
       });
-      shockLayer.spawn({
-        x: x, y: y, radius: 12, growth: 105, alpha: 0.75,
-        life: 0.42, maxLife: 0.42, r: 1.0, g: 0.72, b: 0.36
+      // Low, asymmetric dust replaces the artificial luminous shock ring.
+      burst(smokeLayer,7,function(){
+        const a=rand()*TAU,sp=55+rand()*100;
+        return {x:x,y:3,z:y,vx:Math.cos(a)*sp,vy:5+rand()*12,vz:Math.sin(a)*sp,
+          life:.6+rand()*.6,maxLife:1.2,size:16+rand()*16,grow:true,
+          opacity:.38,r:.46,g:.36,b:.23};
       });
       scorchLayer.spawn({
         x: x, y: y, radius: 26 + rand() * 10, growth: 0, alpha: 0.5,
@@ -6541,8 +6665,8 @@ export function createRenderer(canvas) {
           r: magic ? grey * 0.7 : grey, g: grey * 0.9, b: magic ? grey * 1.2 : grey * 0.85
         };
       });
-      shockLayer.spawn({
-        x: x, y: y, radius: 18, growth: 150, alpha: 0.85,
+      if(magic) shockLayer.spawn({
+        x: x, y: y, radius: 18, growth: 150, alpha: 0.55,
         life: 0.5, maxLife: 0.5,
         r: magic ? 0.82 : 1.0, g: magic ? 0.42 : 0.72, b: magic ? 1.0 : 0.36
       });
@@ -6847,9 +6971,11 @@ export function createRenderer(canvas) {
             r: grey, g: grey, b: grey * 0.94
           };
         });
-        shockLayer.spawn({
-          x: x, y: y, radius: 6, growth: heavy?64:24, alpha: light?.15:.32,
-          life: 0.22, maxLife: 0.22, r: 1.0, g: 0.85, b: 0.5
+        if(!light && kind!=='ap') burst(smokeLayer,heavy?5:3,function(){
+          const a=rand()*TAU,sp=35+rand()*(heavy?95:45);
+          return {x:x,y:2,z:y,vx:Math.cos(a)*sp,vy:8+rand()*20,vz:Math.sin(a)*sp,
+            life:.45+rand()*.5,maxLife:.95,size:(heavy?20:12)+rand()*9,grow:true,
+            opacity:.4,r:.43,g:.33,b:.21};
         });
       }
     } else if (type === 'muzzle') {
@@ -7047,15 +7173,24 @@ export function createRenderer(canvas) {
 
   function updateEffects(dt) {
     // Quality changes take effect immediately, including already-live particles.
-    const cap=Math.min(EFFECT_MAX,state.particleBudget);
+    state.activeParticleBudget=Math.max(1,Math.floor(state.particleBudget*(snapshotVisuals.length>120?.6:1)));
+    const cap=Math.min(EFFECT_MAX,state.activeParticleBudget);
     smokeLayer.list.length=Math.min(smokeLayer.list.length,Math.floor(cap*.28));
     fireLayer.list.length=Math.min(fireLayer.list.length,cap);
     smokeLayer.list.length=Math.min(smokeLayer.list.length,Math.max(0,cap-fireLayer.list.length));
+    for(const layer of [fireLayer,smokeLayer]) {
+      layer.points.material=snapshotVisuals.length>120?layer.performanceMaterial:layer.material;
+    }
     updateParticleLayer(fireLayer, dt, 0.90, 190);
     updateParticleLayer(smokeLayer, dt, 0.955, 190);
     updateDecalLayer(shockLayer, dt, 3.5);
     updateDecalLayer(scorchLayer, dt, 2.2);
-    updateDecalLayer(wreckLayer, dt, 1.2);
+    for(const layer of wreckLayers) updateDecalLayer(layer, dt, 1.2);
+    trackUpdateAge+=dt;
+    if(trackUpdateAge>=.1) {
+      if(trackLayer.list.length||trackLayer.mesh.count) updateDecalLayer(trackLayer,trackUpdateAge,.65);
+      trackUpdateAge=0;
+    }
     updateFlashes(dt);
   }
 
@@ -7136,7 +7271,7 @@ export function createRenderer(canvas) {
     worldRoot.add(mesh);return mesh;
   }
   function updateReadability(game,time) {
-    ownerMarks=markerMesh(ownerMarks,ownerMarkGeo,state.renderedUnits+state.renderedStructures);
+    ownerMarks=markerMesh(ownerMarks,ownerMarkGeo,state.renderedUnits);
     ownerMarks.material=state.artSample?riverOwnerMaterial:markerMaterial;
     dangerMarks=markerMesh(dangerMarks,dangerMarkGeo,Math.min(128,state.renderedUnits));
     let count=0,dangers=0;
@@ -7156,10 +7291,8 @@ export function createRenderer(canvas) {
         dangerMarks.setColorAt(dangers++,tmpColor);
       }
     }
-    for(const s of game.structures) {
-      const node=structureNodes.get(s.id);
-      if(node?.group.visible) mark(s.x,s.y,node.groundY||0,s.size*(state.artSample?1.28:1.58),colorOf(s.owner));
-    }
+    // Buildings retain owner paint on their models, not permanent ground arcs.
+    // The selectedStructureId path below draws the sole building selection ring.
     for(const [mesh,n] of [[ownerMarks,count],[dangerMarks,dangers]]) {
       mesh.count=n;mesh.visible=n>0;
       if(n) {mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;}
@@ -7745,12 +7878,16 @@ export function createRenderer(canvas) {
       }
       structureNodes.forEach(function (node, id) {
         if (node.seen === renderGeneration) return;
+        const destroyed=(payload.newEffects||[]).some(fx=>fx.entityId===id && fx.wreck &&
+          (fx.type==='explosion'||fx.type==='blast'));
+        if(destroyed && node.group.visible) {structureNodes.delete(id);startCollapse(node);return;}
         disposeStructure(id);
       });
       lastEntityGame = game;
     }
 
     const fresh = payload.newEffects || [];
+    updateCollapses(dt);
     for (const fx of fresh) {
       if (fx.type !== 'muzzle') continue;
       const vis = fx.entityId && visual.get(fx.entityId);
@@ -7815,8 +7952,21 @@ export function createRenderer(canvas) {
       const motionTarget=Math.min(1,distanceMoved/Math.max(.001,dt)/35);
       const previousMotion=vis.artMotion||0;
       vis.artMotion=(vis.artMotion||0)+(motionTarget-(vis.artMotion||0))*Math.min(1,dt*8);
-      const pitchTarget=Math.max(-.032,Math.min(.032,(previousMotion-vis.artMotion)*.6));
+      if(snapshotVisuals.length<=120 && vis.trackLeft!=null && payload.time>=(vis.nextSlopeAt||0) &&
+        (vis.slopeX==null || Math.hypot(vis.x-vis.slopeX,vis.y-vis.slopeY)>2 || Math.abs(vis.dir-vis.slopeDir)>.02)) {
+        const dx=Math.cos(vis.dir)*u.size*.5,dy=Math.sin(vis.dir)*u.size*.5;
+        vis.terrainPitch=suspensionSlope(groundHeight(vis.x+dx,vis.y+dy),groundHeight(vis.x-dx,vis.y-dy),u.size);
+        vis.nextSlopeAt=payload.time+100;vis.slopeX=vis.x;vis.slopeY=vis.y;vis.slopeDir=vis.dir;
+      }
+      const terrainPitch=snapshotVisuals.length<=120?(vis.terrainPitch||0):0;
+      const pitchTarget=terrainPitch+Math.max(-.032,Math.min(.032,(previousMotion-vis.artMotion)*.6));
       vis.artPitch=(vis.artPitch||0)+(pitchTarget-(vis.artPitch||0))*Math.min(1,dt*5);
+      if(snapshotVisuals.length<=120 && vis.trackLeft!=null && distanceMoved>.12 && state.feedbackDensity>.5 &&
+        payload.time>=(vis.nextTrackAt||0)) {
+        trackLayer.spawn({x:vis.x,y:vis.y,dir:vis.dir,radius:u.size*.75,life:8,maxLife:8,
+          alpha:.16,hold:true,r:.14,g:.115,b:.075});
+        vis.nextTrackAt=payload.time+240;
+      }
       }
       vis.hitFlash = Math.max(0,1-(payload.time-(vis.hitAt??-Infinity))/180);
       // Small, sparse exhaust/damage cues. Far views omit decorative emitters.
@@ -7879,8 +8029,9 @@ export function createRenderer(canvas) {
       for (let i = 0; i < list.length; i++) {
         const vis = list[i];
         let gy = vis.groundY;
-        const artVehicle=state.artSample&&!simpleKind&&['tank','overlord','overlord_v1'].includes(kind);
-        const transformDirty = artVehicle || ids[i] !== vis.unit.id ||
+        const artVehicle=state.artSample&&!simpleKind&&TRACK_SPANS[kind]!=null &&
+          (snapshotVisuals.length<=120 || kind==='tank' || kind==='overlord');
+        const transformDirty = (artVehicle && Math.abs((vis.lastRenderPitch??Infinity)-(vis.artPitch||0))>.0001) || ids[i] !== vis.unit.id ||
           Math.abs(xs[i] - vis.x) > 0.005 ||
           Math.abs(ys[i] - vis.y) > 0.005 ||
           Math.abs(dirs[i] - vis.dir) > 0.0001;
@@ -7894,6 +8045,7 @@ export function createRenderer(canvas) {
             artLocal.makeTranslation(0,9,0);matrix.multiply(artLocal);
             artLocal.makeRotationZ(vis.artPitch||0);matrix.multiply(artLocal);
             artLocal.makeTranslation(0,-9,0);matrix.multiply(artLocal);
+            vis.lastRenderPitch=vis.artPitch||0;
           }
           mesh.setMatrixAt(i, matrix);
           ids[i] = vis.unit.id;
@@ -8430,12 +8582,43 @@ export function createRenderer(canvas) {
   // created: these bounded, retained roots exist only for shader compilation.
   // Keeping materials alive keeps their compiled programs cached for real units.
   const warmRoots = [], warmMaterials = new Map(), warmAssetKeys = new Set();
-  const assetWarmup = { pending: false, ready: false, error: null, assets: 0 };
+  const assetWarmup = { pending: false, ready: false, error: null, assets: 0, total:0 };
+  let effectGpuReady=false;
+  function warmEffectGpu() {
+    if(effectGpuReady) return;
+    const root=new THREE.Scene(),target=new THREE.WebGLRenderTarget(1,1,{type:THREE.HalfFloatType});
+    const objects=[fireLayer.points,smokeLayer.points,...[shockLayer,scorchLayer,trackLayer,...wreckLayers].map(l=>l.mesh)];
+    const saved=objects.map(mesh=>({mesh,parent:mesh.parent,visible:mesh.visible,count:mesh.count,material:mesh.material,
+      range:{...mesh.geometry.drawRange}}));
+    const previous=renderer.getRenderTarget();
+    try {
+      renderer.initTexture(blastSurface);
+      for(const {mesh} of saved) {
+        root.add(mesh);mesh.visible=true;
+        if(mesh.isInstancedMesh) mesh.count=1;
+        else mesh.geometry.setDrawRange(0,1);
+      }
+      // Upload the actual retained buffers, not clones which would upload again.
+      renderer.setRenderTarget(target);renderer.render(root,camera);
+      for(const layer of [fireLayer,smokeLayer]) if(layer.performanceMaterial) layer.points.material=layer.performanceMaterial;
+      renderer.render(root,camera);effectGpuReady=true;
+    } finally {
+      for(const s of saved) {
+        s.parent.add(s.mesh);s.mesh.visible=s.visible;s.mesh.material=s.material;
+        if(s.mesh.isInstancedMesh) s.mesh.count=s.count;
+        s.mesh.geometry.setDrawRange(s.range.start,s.range.count);
+      }
+      renderer.setRenderTarget(previous);target.dispose();
+    }
+  }
   let assetQueue = Promise.resolve(), shaderWarmup = null, shadersDirty = true;
-  function warmMaterial(family, sample) {
-    const key = family + ':' + sample;
-    if (!warmMaterials.has(key)) warmMaterials.set(key, sample ? makeRiverMaterial(family) :
-      applyEmissiveByVertexColor(new THREE.MeshPhongMaterial({vertexColors:true}),family));
+  function warmMaterial(family, sample, building=false) {
+    const key = family + ':' + sample+':'+building;
+    if (!warmMaterials.has(key)) {
+      const material=sample ? makeRiverMaterial(family) :
+        applyEmissiveByVertexColor(new THREE.MeshPhongMaterial({vertexColors:true}),family);
+      warmMaterials.set(key,building?applyBuildingCollapse(material):material);
+    }
     return warmMaterials.get(key);
   }
   function warmMesh(root, geometry, material, instanced) {
@@ -8509,9 +8692,12 @@ export function createRenderer(canvas) {
         warmAssetKeys.add(key);
         tasks.push(()=>{
           const geo=structureGeometries(kind,def.size,sample);
-          const material=warmMaterial(MAGIC_STRUCTURE_KINDS[kind]?'stone':'metal',sample);
+          const material=warmMaterial(MAGIC_STRUCTURE_KINDS[kind]?'stone':'metal',sample,true);
+          const intactMaterial=warmMaterial(MAGIC_STRUCTURE_KINDS[kind]?'stone':'metal',sample);
           const visit=entry=>{for(const value of Object.values(entry)) {
-            if(value?.isBufferGeometry) warmMesh(root,value,material,false);
+            if(value?.isBufferGeometry) {
+              warmMesh(root,value,material,false);warmMesh(root,value,intactMaterial,false);
+            }
             else if(value && typeof value==='object') visit(value);
           }};
           visit(geo);
@@ -8520,6 +8706,7 @@ export function createRenderer(canvas) {
       }
     }
     if(!tasks.length) return assetQueue;
+    assetWarmup.total+=tasks.length;
     assetWarmup.pending=true;assetWarmup.ready=false;assetWarmup.error=null;
     assetQueue=assetQueue.then(async()=>{
       await warmAssetTasks(tasks);
@@ -8529,6 +8716,7 @@ export function createRenderer(canvas) {
       }
       shadersDirty=true;
       await compileWarmAssets();
+      await warmAssetTasks([warmEffectGpu]);
       assetWarmup.ready=!assetWarmup.error;
     }).catch(error=>{assetWarmup.error=String(error);console.warn('Asset warmup:',error);})
       .finally(()=>{assetWarmup.pending=false;});
@@ -8555,7 +8743,7 @@ export function createRenderer(canvas) {
       if(assetWarmup.ready) compileWarmAssets();
       if(options.artSample != null) {
         state.artSampleOption=!!options.artSample;
-        const next=state.map?.id==='iron_river_duel'&&state.artSampleOption;
+        const next=!!state.map&&state.artSampleOption;
         if(next!==state.artSample) {
           state.artSample=next;lastEntityGame=null;
           hemi.intensity=next?.40:.62;fill.intensity=next?.15:.22;rim.intensity=next?.10:.26;
@@ -8599,7 +8787,7 @@ export function createRenderer(canvas) {
      * 收到 full 帧只更新引用，不碰几何体。返回是否真的重建了世界。
      */
     setMatch: function (map, terrain, resources, sight, spawnPoints) {
-      state.artSample = map.id === 'iron_river_duel' && state.artSampleOption !== false;
+      state.artSample = state.artSampleOption !== false;
       hemi.intensity=state.artSample?.40:.62;
       fill.intensity=state.artSample?.15:.22;
       rim.intensity=state.artSample?.10:.26;
@@ -8707,7 +8895,8 @@ export function createRenderer(canvas) {
         renderedStructures: state.renderedStructures,
         particles: fireLayer.list.length + smokeLayer.list.length,
         smokeParticles:smokeLayer.list.length,
-        wrecks:wreckLayer.list.length,
+        wrecks:wreckLayers.reduce((n,l)=>n+l.list.length,0),
+        collapsingStructures:collapsingStructures.length,
         feedbackDensity:state.feedbackDensity,
         barrelBatches:[...unitPools.values()].filter(p=>p.barrel?.visible).length,
         artSample:!!state.artSample,
@@ -8754,6 +8943,8 @@ export function createRenderer(canvas) {
     /** 换局时清空所有单位/建筑，避免上一局的模型残留。 */
     clearEntities: function () {
       modelPicker.clear();
+      for(const item of collapsingStructures) retireCollapse(item);
+      collapsingStructures.length=0;
       resetFogState();
       visual.clear();
       snapshotVisuals.length = 0;
@@ -8769,6 +8960,9 @@ export function createRenderer(canvas) {
       scorchLayer.list.length = 0;
       wreckLayer.list.length = 0;
       wreckLayer.mesh.count=0;wreckLayer.mesh.visible=false;
+      for(const layer of wreckLayers){layer.list.length=0;layer.mesh.count=0;layer.mesh.visible=false;}
+      trackLayer.list.length=0;trackLayer.mesh.count=0;trackLayer.mesh.visible=false;
+      trackUpdateAge=0;
       if(ownerMarks) {ownerMarks.count=0;ownerMarks.visible=false;}
       if(dangerMarks) {dangerMarks.count=0;dangerMarks.visible=false;}
       for(const flash of flashPool) {flash.life=0;flash.light.visible=false;flash.light.intensity=0;}

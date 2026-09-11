@@ -30,6 +30,7 @@ const ctx={Math,TAU:Math.PI*2,FEEDBACK_LIMITS,EFFECT_MAX:400,state:{particleBudg
   groundHeight:()=>84,inViewportBounds:()=>true,flashAt(){},shockLayer:{spawn(){}},scorchLayer:{spawn(){}},
   wreckLayer:{list:[],spawn(item){if(this.list.length>=28)this.list.shift();this.list.push(item);}}};
 vm.createContext(ctx);vm.runInContext(fn('emit')+'\nconst emitAbsoluteParticle=emit;\n'+fn('spawnEffect')+'\n'+fn('updateParticleLayer'),ctx);
+ctx.spawnWreck=(item)=>ctx.wreckLayer.spawn(item);
 ctx.spawnEffect('impact',100,200,'shell');
 assert.ok(fireLayer.list.every(p=>p.y>=84),'high-ground sparks start above ground');
 for(let i=0;i<200;i++)ctx.spawnEffect('explosion',100,200,null,{wreck:true,entityKind:'tank'});
@@ -37,6 +38,22 @@ assert.ok(fireLayer.list.length+smokeLayer.list.length<=150);
 assert.ok(smokeLayer.list.length<=42);assert.equal(ctx.wreckLayer.list.length,28);
 for(let i=0;i<80;i++) {ctx.updateParticleLayer(fireLayer,.05,.90,190);ctx.updateParticleLayer(smokeLayer,.05,.955,190);}
 assert.equal(fireLayer.list.length+smokeLayer.list.length,0,'all particles expire');
+ctx.spawnEffect('explosion',100,200,null,{entityKind:'rifle',size:12});
+assert.equal(fireLayer.list.length,0,'ordinary infantry death does not emit fuel fireballs');
+assert.ok(smokeLayer.list.length>0);
+smokeLayer.list.length=0;
+ctx.spawnEffect('explosion',100,200,null,{entityKind:'tank',size:88});
+assert.ok(fireLayer.list.length>0);
+assert.ok([...fireLayer.list,...smokeLayer.list].every(p=>p.maxLife===p.life),'random lifetimes start at age zero');
+fireLayer.list.length=0;smokeLayer.list.length=0;
+ctx.state.activeParticleBudget=90;
+for(let i=0;i<50;i++)ctx.spawnEffect('explosion',100,200,null,{entityKind:'tank',size:22});
+assert.ok(fireLayer.list.length+smokeLayer.list.length<=90,'dense-army decorative budget is enforced on spawn');
+assert.ok(smokeLayer.list.length<=25);
+delete ctx.state.activeParticleBudget;fireLayer.list.length=0;smokeLayer.list.length=0;
+ctx.spawnEffect('explosion',100,200,null,{entityKind:'dragon',faction:'magic',size:34});
+assert.ok(fireLayer.list.slice(0,5).every(p=>p.b>p.r),'arcane collapse keeps a cold energy core');
+fireLayer.list.length=0;smokeLayer.list.length=0;
 ctx.inViewportBounds=()=>false;ctx.spawnEffect('explosion',100,200);assert.equal(fireLayer.list.length,0);
 assert.doesNotMatch(source,/if \(isVisible\(vis.x, vis.y\)\) spawnEffect\('explosion'/,'vision loss is not a death');
 assert.match(source,/pool.mesh, pool.simple, pool.barrel/,'recoiling barrels participate in real picking');
