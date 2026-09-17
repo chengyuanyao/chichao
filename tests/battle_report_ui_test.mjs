@@ -37,6 +37,24 @@ assert.ok(operations.includes('矿车损失 2') && operations.includes('生产�
 assert.ok(operations.includes('最后一击') && operations.includes('连续 30 秒'));
 assert.ok(operationsCsv.includes('先锋坦克') && operationsCsv.includes('首次科技建筑落成') && operationsCsv.includes('到账中断'));
 assert.ok(html.includes('旧版战报未记录'));
+const detailed = {...extended,version:3,players:[{...extended.players[0],damageDealt:73,damageTaken:9,cargoLost:123,
+  opponents:{p2:{damageDealt:73,damageTaken:9,unitsDestroyed:1,structuresDestroyed:0,harvestersDestroyed:1,destroyedValue:500,lostValue:0}},
+  lossCauses:{self:{units:1,structures:0,value:640}}},enemy]};
+const detailHtml=renderBattleReport(detailed,'p1'),detailCsv=reportCsv(detailed);
+assert.equal((detailHtml.match(/data-report-panel=/g)||[]).length,5);
+for(const label of ['交战与贡献明细','对兵伤害','终局存量','战损来源','主动自爆消耗','矿车携矿损失']) assert.ok(detailHtml.includes(label),label);
+for(const label of ['玩家交战明细','有效伤害','产出原价','战损来源']) assert.ok(detailCsv.includes(label),label);
+assert.ok(!detailHtml.includes('<img') && detailHtml.includes('&lt;img'));
+assert.ok(detailCsv.includes('"\'=HYPERLINK'));
+assert.ok(!/NaN|Infinity/.test(detailHtml));
+const phased = {...detailed,version:4,phaseSeconds:60,phases:[{time:0,players:{p1:{harvest:900,lostValue:700,destroyedValue:500}}}],
+  engagements:[{start:12,end:20,value:700,players:{p1:{lostValue:700,byKind:{tank:1}},p2:{lostValue:0,byKind:{}}}}],omittedEngagements:3};
+const phaseHtml=renderBattleReport(phased,'p1'),phaseCsv=reportCsv(phased);
+assert.equal((phaseHtml.match(/data-report-panel=/g)||[]).length,7);
+for(const label of ['阶段复盘','资金收支','撤单退款','平均持币','核对差额','关键战损片段','不是整局停电时长']) assert.ok(phaseHtml.includes(label),label);
+for(const label of ['分阶段复盘','真实资金收支','关键战损片段','省略片段','生产受阻']) assert.ok(phaseCsv.includes(label),label);
+assert.ok(!phaseHtml.includes('<img') && !/NaN|Infinity/.test(phaseHtml));
+assert.ok(phaseCsv.includes('"\'=HYPERLINK'));
 for (const samples of [[],[{time:0,players:{p1:[0,0,0],p2:[0,0,0]}}]]) {
   const empty = renderBattleReport({...report,duration:0,firstCombatAt:null,events:[],samples},'p1');
   assert.ok(!/NaN|Infinity/.test(empty));

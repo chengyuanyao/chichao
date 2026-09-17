@@ -37,17 +37,23 @@ def start_fixture(room):
     for step in range(1, 31):
         game["elapsed"] = step * 10
         for index, player in enumerate(players):
-            player["harvested"] += 450 + index * 90
             if not 8 <= step <= 14:
+                player["harvested"] += 450 + index * 90
+                player["cash"] += 450 + index * 90
                 battle_report.income(room, player["id"], 450 + index * 90)
-            player["cash"] = 1000 + (step * (390 + index * 43)) % 7000
             if step % 2 == 0:
                 kind = "golem" if player["faction"] == "magic" else "tank"
+                cost = server.UNIT_TYPES[kind]["cost"]
+                player["cash"] -= cost
+                battle_report.cash_flow(room, player["id"], "unitSpend", cost)
                 produced = server.make_unit(kind, player["id"], 600 + index * 520, 1100 + step * 10)
                 game["units"].append(produced)
                 battle_report.unit_created(room, produced)
             if step == 5:
                 tech = server.make_structure("mcircle" if player["faction"] == "magic" else "factory", player["id"],600+index*520,1200,True)
+                cost = server.STRUCTURE_TYPES[tech["kind"]]["cost"]
+                player["cash"] -= cost
+                battle_report.cash_flow(room, player["id"], "structureSpend", cost)
                 game["structures"].append(tech)
                 battle_report.structure_completed(room, tech)
             if step % (3 + index % 3) == 0:

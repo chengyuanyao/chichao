@@ -2706,6 +2706,7 @@ def place_structure(room, player_id, kind, x, y, free=False,
         if player["cash"] < definition["cost"]:
             raise ValueError("资金不足")
         player["cash"] -= definition["cost"]
+        battle_report.cash_flow(room, player_id, "structureSpend", definition["cost"])
     structure = make_structure(kind, player_id, x, y, False)
     game["structures"].append(structure)
     return structure
@@ -2730,6 +2731,7 @@ def queue_structure(room, player_id, kind):
     if player["cash"] < definition["cost"]:
         raise ValueError("资金不足")
     player["cash"] -= definition["cost"]
+    battle_report.cash_flow(room, player_id, "structureSpend", definition["cost"])
     item = {
         "id": new_id("c"), "kind": kind,
         "remaining": float(definition["build"]),
@@ -2758,6 +2760,7 @@ def cancel_structure_queue(room, player_id):
         raise ValueError("没有可取消的建筑任务")
     item = queue[0]
     player["cash"] += STRUCTURE_TYPES[item["kind"]]["cost"]
+    battle_report.cash_flow(room, player_id, "structureRefund", STRUCTURE_TYPES[item["kind"]]["cost"])
     player["buildQueue"] = []
 
 
@@ -2786,6 +2789,7 @@ def queue_unit(room, player_id, kind):
     if player["cash"] < definition["cost"]:
         raise ValueError("资金不足")
     player["cash"] -= definition["cost"]
+    battle_report.cash_flow(room, player_id, "unitSpend", definition["cost"])
     producer["queue"].append({
         "kind": kind, "remaining": float(definition["build"]),
         "total": float(definition["build"]),
@@ -2820,6 +2824,7 @@ def cancel_unit_queue(room, player_id, kind):
         raise ValueError("没有该单位在生产")
     best_producer["queue"].pop(best_index)
     player["cash"] += definition["cost"]
+    battle_report.cash_flow(room, player_id, "unitRefund", definition["cost"])
 
 
 def clear_repair_order(unit):
@@ -3191,7 +3196,7 @@ def issue_deploy(game, player_id, unit_ids):
         new_hq = make_structure(hq_kind, player_id, unit["x"], unit["y"], True)
         new_hq["packable"] = True
         game["structures"].append(new_hq)
-        battle_report.structure_completed({"game": game}, new_hq)
+        battle_report.structure_completed({"game": game}, new_hq, transformed=True)
         unit["_silentRemoval"] = True
         unit["hp"] = 0
         game["effects"].append({
@@ -3982,6 +3987,7 @@ def handle_game_command(room, player, payload, role="commander"):
             raise ValueError("该建筑不可出售")
         refund = int(STRUCTURE_TYPES[structure["kind"]]["cost"] * 0.5 * max(0.25, structure["hp"] / structure["maxHp"]))
         player["cash"] += refund
+        battle_report.cash_flow(room, player["id"], "sales", refund)
         structure["hp"] = 0
         game["effects"].append({"id": new_id("e"), "type": "sell", "x": structure["x"], "y": structure["y"], "ttl": 0.8})
     elif command == "ping":
@@ -5107,6 +5113,7 @@ def award_combat_reward(room, game, source_owner, target):
     if reward <= 0:
         return 0
     source["cash"] = source.get("cash", 0) + reward
+    battle_report.cash_flow(room, source_owner, "rewards", reward)
     source["combatRewardsEarned"] = source.get("combatRewardsEarned", 0) + reward
     return reward
 
@@ -5192,7 +5199,8 @@ def apply_damage(room, target, damage, source_owner, damage_type=None, game=None
                 source_unit = unit
                 break
     hostile = bool(game_state and not is_friendly(game_state, source_owner, target["owner"]))
-    battle_report.damage(room, target, min(target["hp"], applied), source_owner, hostile)
+    battle_report.damage(room, target, min(target["hp"], applied), source_owner, hostile,
+                         source_kind=source_kind or (source_unit or {}).get("kind"))
     target["hp"] -= applied
     if applied > 0.0:
         mark_unit_combat(target, game_state)
@@ -5340,6 +5348,7 @@ def tick_repair_unit(room, unit, dt, entity_index, power_cache, terrain):
     unit["repairing"] = True
     unit["dir"] = math.atan2(repair_bay["y"] - unit["y"], repair_bay["x"] - unit["x"])
     player["cash"] = max(0.0, player["cash"] - healed * REPAIR_COST_PER_HP)
+    battle_report.cash_flow(room, unit["owner"], "unitRepair", healed * REPAIR_COST_PER_HP)
     if unit["hp"] >= unit["maxHp"] - 0.1:
         unit["hp"] = unit["maxHp"]
         clear_repair_order(unit)
@@ -5755,8 +5764,11 @@ def tick_build_queues(room, dt):
         # 关闭机动建造时，最后一座总部折叠后暂停；默认开启时，存活基地车
         # 继续承接建筑生产。总部与基地车都不存在则始终没有建造授权。
         if not player_has_construction_authority(room, player["id"]):
+            battle_report.production_delay(room, player["id"], "authorityPause", dt)
             continue
         production_rate = production_power_factor(room, player["id"], 0.4)
+        if production_rate < 1:
+            battle_report.production_delay(room, player["id"], "buildPowerLoss", min(dt * production_rate, item["remaining"]) / production_rate * (1 - production_rate))
         item["remaining"] = max(0.0, item["remaining"] - dt * production_rate)
         if item["remaining"] <= 0:
             item["ready"] = True
@@ -5795,6 +5807,7 @@ def tick_structure_repair(room, structure, dt, power_cache):
     structure["hp"] += healed
     player["cash"] = max(
         0.0, player["cash"] - healed * REPAIR_COST_PER_HP)
+    battle_report.cash_flow(room, structure["owner"], "structureRepair", healed * REPAIR_COST_PER_HP)
     if structure["hp"] >= structure["maxHp"] - 0.1:
         structure["hp"] = structure["maxHp"]
         structure["repairing"] = False
@@ -5812,6 +5825,8 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
         if not structure["active"]:
             structure["repairing"] = False
             rate = production_power_factor(room, structure["owner"], 0.55)
+            if rate < 1:
+                battle_report.production_delay(room, structure["owner"], "constructionPowerLoss", min(dt * rate, structure["buildRemaining"]) / rate * (1 - rate))
             structure["buildRemaining"] = max(0.0, structure["buildRemaining"] - dt * rate)
             progress = 1.0 - structure["buildRemaining"] / max(0.01, structure["buildTotal"])
             material_hp = structure["maxHp"] * clamp(progress, 0.22, 1.0)
@@ -5842,6 +5857,8 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
             else:
                 production_rate = production_power_factor(room, structure["owner"], 0.35)
                 item = structure["queue"][0]
+                if production_rate < 1:
+                    battle_report.production_delay(room, structure["owner"], "unitPowerLoss", min(dt * production_rate, item["remaining"]) / production_rate * (1 - production_rate))
                 item["remaining"] = max(0.0, item["remaining"] - dt * production_rate)
                 if item["remaining"] <= 0:
                     spawn_x, spawn_y = find_unit_spawn_point(
@@ -6993,6 +7010,7 @@ def apply_crate(room, player_id, crate):
     kind = crate["kind"]
     if kind == "cash":
         player["cash"] += 1500
+        battle_report.cash_flow(room, player_id, "crates", 1500)
         add_chat(room, "补给系统", "%s 拾取了资金补给 +1500" % player["name"], True)
     elif kind == "heal":
         healed = 0
@@ -7014,6 +7032,7 @@ def apply_crate(room, player_id, crate):
         else:
             # 已满充能：折算成资金，免得白捡
             player["cash"] += 800
+            battle_report.cash_flow(room, player_id, "crates", 800)
             add_chat(room, "补给系统",
                      "%s 超级武器已满，转为资金 +800" % player["name"], True)
 
@@ -7287,6 +7306,7 @@ class GameHandler(BaseHTTPRequestHandler):
                             # 随机减去 [0, 请求金额] 之间的一笔；现金最低减到 0，不变负
                             removed = min(player["cash"], random.uniform(0.0, amount))
                             player["cash"] -= removed
+                            battle_report.cash_flow(room, player["id"], "adjustments", removed)
                             found = True
                             self.send_json(200, {"ok": True, "name": player_name, "removed": removed, "cash": player["cash"]})
                             break

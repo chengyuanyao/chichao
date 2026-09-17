@@ -65,7 +65,7 @@ def main():
     published = battle_report.published(room,game["uid"])
     mine = next(p for p in published["players"] if p["id"] == me["id"])
     assert not any(k.startswith("_") for k in mine)
-    assert published["version"] == 2 and mine["incomeGapSeconds"] == 45
+    assert published["version"] == 4 and mine["incomeGapSeconds"] == 45
     assert sum(k["destroyedValue"] for k in mine["byKind"].values()) == mine["destroyedValue"]
     before = len(published["events"])
     battle_report.finish(room)

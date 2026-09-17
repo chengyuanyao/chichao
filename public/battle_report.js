@@ -84,14 +84,99 @@ function operationsPanel(report, playerId) {
     esc(p.name) + ' · 矿车损失 ' + count(p.harvestersLost) + ' · 到账中断 ' + count(p.incomeGapCount) + ' 次 / ' + battleTime(p.incomeGapSeconds) +
     ' · 最长 ' + battleTime(p.longestIncomeGap) + '</summary><div class="report-table-wrap"><table class="report-table">' +
     '<thead><tr><th>兵种 / 火力来源</th><th>生产完成</th><th>初始 / 赠送</th><th>损失数量</th><th>损失价值</th><th>击毁数量</th><th>击毁价值</th></tr></thead><tbody>' +
-    Object.values(p.byKind || {}).map(k => '<tr><th>' + esc(k.name) + '</th><td>' + (k.category === 'unit' ? count(k.produced) : '—') +
-      '</td><td>' + (k.category === 'unit' ? count(k.initial) + ' / ' + count(k.gifted) : '—') + '</td><td>' + count(k.lost) +
+    Object.values(p.byKind || {}).map(k => '<tr><th>' + esc(k.name) + '</th><td>' + (k.category === 'unit' || (report.version >= 3 && k.category === 'structure') ? count(k.produced) : '—') +
+      '</td><td>' + (k.category === 'unit' || (report.version >= 3 && k.category === 'structure') ? count(k.initial) + ' / ' + count(k.gifted) : '—') + '</td><td>' + count(k.lost) +
       '</td><td>' + money(k.lostValue) + '</td><td>' + count(k.destroyed) + '</td><td>' + money(k.destroyedValue) + '</td></tr>').join('') +
     '</tbody></table></div><h3>首次科技建筑落成</h3><div class="report-tech-times">' +
     Object.values(p.techTimes || {}).map(t => '<span>' + esc(t.name) + ' <strong>' + battleTime(t.time) +
       (t.initial ? ' · 初始' : '') + '</strong></span>').join('') + '</div></details>').join('') +
     '<p class="report-note">生产仅计实际出厂，不含排队、撤单、初始和精炼厂赠车；折叠 / 展开不重复计产量。击毁价值按完成最后一击的兵种归属，弹丸发射者阵亡后仍可追溯；炮塔与轨道等来源单列，不等于总伤害贡献。</p>' +
     '<p class="report-note">到账中断：首次卸矿后，连续 30 秒无卸矿到账才开始计时，到账、退场或终局结束计时。不含开局找矿时间，正常采矿往返、主动停采也可能触发，不自动判定为敌方骚扰。科技时间计第一次建筑落成，而非开始排队。</p>';
+}
+
+const lossCauseLabels = {enemy:'敌方玩家击毁', self:'主动自爆消耗', other:'中立 / 友伤 / 环境等'};
+const flowLabels = {harvest:'卸矿收入',rewards:'战斗奖励',crates:'补给收入',unitRefund:'撤单退款 · 兵',structureRefund:'撤单退款 · 建筑',
+  sales:'出售回款',unitSpend:'造兵扣款',structureSpend:'建造扣款',unitRepair:'单位维修',structureRepair:'建筑维修',adjustments:'调试扣款'};
+const flowIncome = new Set(['harvest','rewards','crates','unitRefund','structureRefund','sales']);
+const delayLabels = {unitPowerLoss:'造兵缺电损失',buildPowerLoss:'建筑队列缺电损失',constructionPowerLoss:'落地施工缺电损失',authorityPause:'无建造授权暂停'};
+const exactMoney = value => '$' + (Number(value) || 0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function phaseRows(report, player) {
+  return (report.phases || []).filter(phase => phase.time <= number(player.eliminatedAt ?? report.duration)).map(phase => {
+    const m = (phase.players || {})[player.id] || {};
+    return [battleTime(phase.time) + '—' + battleTime(Math.min(phase.time + report.phaseSeconds, player.eliminatedAt ?? report.duration)),
+      money(m.harvest), money(m.unitProducedValue), money(m.structureProducedValue), money(m.destroyedValue), money(m.lostValue),
+      exchangeLabel(m), count(m.unitsLost) + ' / ' + count(m.structuresLost), count(m.harvestersLost),
+      money(number(m.unitSpend) + number(m.structureSpend) + number(m.unitRepair) + number(m.structureRepair)),
+      money(number(m.unitRefund) + number(m.structureRefund) + number(m.sales)),
+      money(number(m.rewards) + number(m.crates)),
+      m.cashObservedSeconds ? money(number(m.cashSeconds) / m.cashObservedSeconds) : '—',
+      battleTime(m.highCashSeconds || 0)];
+  });
+}
+const phaseHeaders = ['阶段','采集收入','完成造兵原价','完成建筑原价','击毁价值','损失价值','交换比','损失兵 / 建筑','其中矿车',
+  '生产与维修支出','退款 / 出售','奖励 / 补给','平均持币','持币 ≥ 5000 时长'];
+
+function engagementRows(report, episode) {
+  return Object.entries(episode.players || {}).map(([id, side]) => {
+    const player = report.players.find(p => p.id === id) || {};
+    const other = Object.entries(episode.players || {}).find(([pid]) => pid !== id)?.[1] || {};
+    const kinds = Object.entries(side.byKind || {}).map(([kind,n]) => ((player.byKind || {})[kind]?.name || kind) + ' × ' + count(n)).join('、');
+    return [player.name || '未知玩家',kinds || '无损失',money(side.lostValue),money(other.lostValue),exchangeLabel({lostValue:side.lostValue,destroyedValue:other.lostValue})];
+  });
+}
+
+function phasesPanel(report, playerId) {
+  return '<p class="report-note">按事件发生时间累计，初始每分钟一段；长局合并相邻时间段但保留合计，当前每段 ' +
+    battleTime(report.phaseSeconds) + '。区间左闭右开，终局恰在边界发生的事件单列。完成产出不是当期支出，战损包含自爆和非玩家伤害。</p>' +
+    report.players.map(p => {
+      const rows = phaseRows(report,p);
+      return '<details class="report-operations"' + (p.id === playerId ? ' open' : '') + '><summary>' + esc(p.name) +
+        ' · 分阶段收获与战损</summary><h3>生产与交战</h3>' + detailTable(phaseHeaders.slice(0,9),rows.map(r => r.slice(0,9))) +
+        '<h3>资金利用</h3>' + detailTable([phaseHeaders[0],phaseHeaders[1],...phaseHeaders.slice(9)],rows.map(r => [r[0],r[1],...r.slice(9)])) + '</details>';
+    }).join('') +
+    '<h3>关键战损片段 · 按双方损失价值排序</h3><p class="report-note">同一对手之间，相邻敌对击毁间隔不超过 20 秒则合并；不代表单一地点的一场战斗，可能包含多处交火。不含未造成击毁的骚扰、主动自爆或环境损失。最多保留 24 个高价值片段，省略 ' +
+    count(report.omittedEngagements) + ' 个，其战损仍计入总表和分阶段统计。</p>' +
+    ((report.engagements || []).map(e => '<details class="report-operations"><summary>' + battleTime(e.start) + '—' + battleTime(e.end) +
+      ' · 双方损失 ' + money(e.value) + '</summary>' + detailTable(['玩家','损失构成','损失价值','击毁对方价值','交换比'],engagementRows(report,e)) + '</details>').join('') || '<p>本局没有敌对击毁片段。</p>');
+}
+
+function financePanel(report, playerId) {
+  return '<p class="report-note">记录实际扣款与回款；排队时即付费，退款独立展示，不与生产完成原价混用。平均持币按资金变动间隔加权，退场后停止计时。持币 ≥ $5,000 不一定是失误，也可能正在攒高级单位。</p>' +
+    report.players.map(p => {
+      const flow = p.cashFlow || {};
+      return '<details class="report-operations"' + (p.id === playerId ? ' open' : '') + '><summary>' + esc(p.name) +
+        ' · 平均持币 ' + exactMoney(p.averageCash) + ' · 持币 ≥ $5,000 时长 ' + battleTime(p.highCashSeconds) + '</summary>' +
+        detailTable(['项目','流入','流出'],Object.entries(flowLabels).map(([key,label]) => [label,flowIncome.has(key) ? exactMoney(flow[key]) : '—',
+          flowIncome.has(key) ? '—' : exactMoney(flow[key])])) +
+        detailTable(['开局资金','退场 / 终局资金','收支核对差额'],[[exactMoney(p.openingCash),exactMoney(p.closingCash),exactMoney(p.cashReconciliation)]]) +
+        '<h3>生产受阻 · 等效秒数</h3>' + detailTable(['原因','等效损失时间'],Object.entries(delayLabels).map(([key,label]) =>
+          [label,(number((p.productionDelay || {})[key])).toFixed(2) + ' 秒'])) + '</details>';
+    }).join('') + '<p class="report-note">核对差额＝开局资金＋全部流入－全部流出－结束资金，正常约为 0；非零说明有未记录资金变动，不能当作经济损失。缺电项累计“工作时长 × (1－生产倍率)”，多生产建筑并行时叠加，不是整局停电时长。无建造授权暂停单列，不计空队列。</p>';
+}
+
+function detailTable(headers, rows) {
+  return '<div class="report-table-wrap" tabindex="0"><table class="report-table"><thead><tr>' +
+    headers.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' +
+    (rows.length ? rows.map(row => '<tr>' + row.map(v => '<td>' + esc(v) + '</td>').join('') + '</tr>').join('') :
+      '<tr><td colspan="' + headers.length + '">暂无记录</td></tr>') + '</tbody></table></div>';
+}
+
+function detailedPanel(report, playerId) {
+  const players = Object.fromEntries(report.players.map(p => [p.id,p]));
+  return '<p class="report-note">有效伤害仅计敌对玩家实际扣血，排除溢出伤害、中立单位和友伤；按命中时敌我关系统计。伤害贡献与最后一击击毁价值分开计算。以下数量均为整局累计，存量为终局快照。</p>' +
+    report.players.map(p => '<details class="report-operations"' + (p.id === playerId ? ' open' : '') + '><summary>' +
+      esc(p.name) + ' · 有效伤害 ' + count(p.damageDealt) + ' · 承伤 ' + count(p.damageTaken) +
+      ' · 矿车携矿损失 ' + money(p.cargoLost) + '</summary><h3>兵种与建筑贡献</h3>' +
+      detailTable(['兵种 / 来源','产出原价','首次完成','末次完成','对兵伤害','对建筑伤害','有效承伤','终局存量','存量原价'],
+        Object.values(p.byKind || {}).map(k => [k.name,money(k.producedValue),battleTime(k.firstProducedAt),battleTime(k.lastProducedAt),
+          count(k.unitDamage),count(k.structureDamage),count(k.damageTaken),count(k.remaining),money(k.remainingValue)])) +
+      '<h3>与各玩家的交战</h3>' + detailTable(['对手','造成伤害','受到伤害','击毁兵 / 建筑','其中矿车','击毁价值','被其击毁价值','交换比'],
+        Object.entries(p.opponents || {}).map(([id,o]) => [(players[id] || {}).name || '未知玩家',count(o.damageDealt),count(o.damageTaken),
+          count(o.unitsDestroyed) + ' / ' + count(o.structuresDestroyed),count(o.harvestersDestroyed),money(o.destroyedValue),money(o.lostValue),exchangeLabel(o)])) +
+      '<h3>战损来源</h3>' + detailTable(['原因','单位损失','建筑损失','损失原价'],
+        Object.entries(p.lossCauses || {}).map(([cause,s]) => [lossCauseLabels[cause] || cause,count(s.units),count(s.structures),money(s.value)])) + '</details>').join('') +
+    '<p class="report-note">产出原价不是实际支出：只统计完成的生产 / 建造，不含撤单、在建、初始赠送和基地折叠展开。存量不含已淘汰玩家的遗留实体或未完工建筑。携矿损失为被毁矿车尚未卸载的矿，不计入单位原价战损，避免重复计价。伤害可因维修和回血超过目标最大生命。旧版档案不会补造历史数据。</p>';
 }
 
 export function renderBattleReport(report, playerId) {
@@ -113,7 +198,9 @@ export function renderBattleReport(report, playerId) {
   return '<div class="report-heading"><span>战区档案 / AFTER ACTION REPORT</span><strong>' + esc(report.mapName) + '</strong></div>' +
     '<nav class="report-tabs" aria-label="战报栏目"><button type="button" data-report-tab="overview" aria-pressed="true">全员总览</button>' +
     '<button type="button" data-report-tab="curves" aria-pressed="false">经济与军力</button><button type="button" data-report-tab="events" aria-pressed="false">关键时间线</button>' +
-    '<button type="button" data-report-tab="operations" aria-pressed="false">兵种与运营</button></nav>' +
+    '<button type="button" data-report-tab="operations" aria-pressed="false">兵种与运营</button>' +
+    (report.version >= 3 ? '<button type="button" data-report-tab="details" aria-pressed="false">交战与贡献明细</button>' : '') +
+    (report.version >= 4 ? '<button type="button" data-report-tab="phases" aria-pressed="false">阶段复盘</button><button type="button" data-report-tab="finance" aria-pressed="false">资金收支</button>' : '') + '</nav>' +
     '<section data-report-panel="overview"><div class="report-table-wrap" tabindex="0" aria-label="全员战报，可横向滚动"><table class="report-table">' +
     '<thead><tr><th>指挥官</th><th>采集收入</th><th>击毁<br>兵 / 建筑</th><th>损失<br>兵 / 建筑</th><th>摧毁价值</th><th>损失价值</th><th>交换比</th><th>采样军力峰值</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '<p class="report-note">价值按目录原价计算，包含初始赠送单位。击毁只计敌方玩家；损失含主动自爆、中立和环境伤害，不含出售、基地折叠 / 展开、淘汰撤军及退场后的遗留建筑。交换比＝摧毁价值 ÷ 损失价值。</p></section>' +
@@ -125,7 +212,10 @@ export function renderBattleReport(report, playerId) {
     '<section data-report-panel="events" class="hidden"><div class="report-table-wrap"><table class="report-table report-times"><thead><tr><th>指挥官</th><th>首次交战</th><th>退场时间</th><th>最终结果</th></tr></thead><tbody>' + opening +
     '</tbody></table></div><h3>战局节点</h3><ol class="report-events">' + (events || '<li>本局未发生玩家交战或关键建筑损失。</li>') + '</ol>' +
     (report.droppedEvents ? '<p class="report-note">长局已省略 ' + count(report.droppedEvents) + ' 条事件，汇总数值不受影响。</p>' : '') + '</section>' +
-    '<section data-report-panel="operations" class="hidden">' + operationsPanel(report,playerId) + '</section>';
+    '<section data-report-panel="operations" class="hidden">' + operationsPanel(report,playerId) + '</section>' +
+    (report.version >= 3 ? '<section data-report-panel="details" class="hidden">' + detailedPanel(report,playerId) + '</section>' : '') +
+    (report.version >= 4 ? '<section data-report-panel="phases" class="hidden">' + phasesPanel(report,playerId) + '</section>' +
+      '<section data-report-panel="finance" class="hidden">' + financePanel(report,playerId) + '</section>' : '');
 }
 
 export function reportCsv(report) {
@@ -147,6 +237,34 @@ export function reportCsv(report) {
   rows.push([], ['分兵种统计'], ['玩家','兵种 / 来源','生产完成','初始','赠送','损失数量','损失价值','击毁数量','击毁价值']);
   report.players.forEach(p => Object.values(p.byKind || {}).forEach(k => rows.push([
     p.name,k.name,k.produced,k.initial,k.gifted,k.lost,k.lostValue,k.destroyed,k.destroyedValue])));
+  if (report.version >= 3) {
+    rows.push([], ['伤害与携矿损失'], ['玩家','有效伤害','有效承伤','被毁矿车携矿损失']);
+    report.players.forEach(p => rows.push([p.name,p.damageDealt,p.damageTaken,p.cargoLost]));
+    rows.push([], ['兵种与建筑贡献'], ['玩家','兵种 / 来源','产出原价','首次完成','末次完成','有效伤害','对兵伤害','对建筑伤害','有效承伤','终局存量','存量原价']);
+    report.players.forEach(p => Object.values(p.byKind || {}).forEach(k => rows.push([p.name,k.name,k.producedValue,
+      battleTime(k.firstProducedAt),battleTime(k.lastProducedAt),k.damageDealt,k.unitDamage,k.structureDamage,k.damageTaken,k.remaining,k.remainingValue])));
+    rows.push([], ['玩家交战明细'], ['玩家','对手','造成伤害','受到伤害','击毁单位','击毁建筑','其中矿车','击毁价值','被其击毁价值','交换比']);
+    report.players.forEach(p => Object.entries(p.opponents || {}).forEach(([id,o]) => rows.push([p.name,(players[id] || {}).name || '未知玩家',
+      o.damageDealt,o.damageTaken,o.unitsDestroyed,o.structuresDestroyed,o.harvestersDestroyed,o.destroyedValue,o.lostValue,exchangeLabel(o)])));
+    rows.push([], ['战损来源'], ['玩家','原因','单位损失','建筑损失','损失原价']);
+    report.players.forEach(p => Object.entries(p.lossCauses || {}).forEach(([cause,s]) => rows.push([p.name,lossCauseLabels[cause] || cause,s.units,s.structures,s.value])));
+    rows.push([], ['明细口径','伤害仅计敌对玩家实际扣血，不含溢出、中立与友伤；击毁归最后一击；产出为目录原价非实际支出，折叠展开不计生产；终局存量不含在建或已淘汰遗留实体；携矿损失单列，不并入原价战损。']);
+  }
+  if (report.version >= 4) {
+    rows.push([], ['分阶段复盘'], ['玩家',...phaseHeaders]);
+    report.players.forEach(p => phaseRows(report,p).forEach(row => rows.push([p.name,...row])));
+    rows.push([], ['真实资金收支'], ['玩家','项目','流入','流出']);
+    report.players.forEach(p => Object.entries(flowLabels).forEach(([key,label]) => rows.push([p.name,label,
+      flowIncome.has(key) ? (p.cashFlow || {})[key] || 0 : 0,flowIncome.has(key) ? 0 : (p.cashFlow || {})[key] || 0])));
+    rows.push([], ['持币与核对'], ['玩家','开局资金','结束资金','平均持币','持币不少于5000秒数','观察秒数','收支核对差额']);
+    report.players.forEach(p => rows.push([p.name,p.openingCash,p.closingCash,p.averageCash,p.highCashSeconds,p.cashObservedSeconds,p.cashReconciliation]));
+    rows.push([], ['生产受阻'], ['玩家','原因','等效损失秒数']);
+    report.players.forEach(p => Object.entries(delayLabels).forEach(([key,label]) => rows.push([p.name,label,(p.productionDelay || {})[key] || 0])));
+    rows.push([], ['关键战损片段'], ['开始','结束','双方损失价值','玩家','损失构成','损失价值','击毁对方价值','交换比']);
+    (report.engagements || []).forEach(e => engagementRows(report,e).forEach(row => rows.push([battleTime(e.start),battleTime(e.end),e.value,...row])));
+    rows.push([], ['阶段口径','时间段左闭右开；长局合并保留合计；片段按同一对手20秒内连续击毁合并，不等于单一地点的战斗；仅保留高价值24段。'],
+      ['省略片段',report.omittedEngagements || 0],['资金口径','真实支付与产出原价分开；退款回款单列；缺电等效损失多队列叠加；高持币不自动判定为失误。']);
+  }
   rows.push([], ['运营统计'], ['玩家','矿车损失','到账中断次数','中断秒数','最长中断秒数']);
   report.players.forEach(p => rows.push([p.name,p.harvestersLost,p.incomeGapCount,p.incomeGapSeconds,p.longestIncomeGap]));
   rows.push([], ['首次科技建筑落成'], ['玩家','建筑','时间','初始建筑']);
