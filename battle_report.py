@@ -4,6 +4,7 @@ The simulation calls the event hooks, and samples aggregates at low frequency.
 Only a finished match may publish this data. No entity positions are recorded.
 """
 from copy import deepcopy
+import diagnostics
 
 from catalog import STRUCTURE_TYPES, UNIT_TYPES, structure_role, unit_role
 
@@ -33,6 +34,7 @@ def _time(room):
 
 def start(room, map_name):
     game = room["game"]
+    diagnostics.start(room)
     rows = {}
     for player in room["players"].values():
         rows[player["id"]] = {
@@ -483,6 +485,7 @@ def finish(room):
     }
     state["public"]["players"] = [deepcopy({k: v for k, v in row.items() if not k.startswith("_")})
                                    for row in state["players"].values()]
+    diagnostics.queue_archive(room, force=True)
 
 
 def published(room, match_id):

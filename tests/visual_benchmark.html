@@ -149,7 +149,11 @@ function loadScenario(options={}) {
   } else if (scenario === 'army') {
     const count = Math.min(2000,Math.max(1,Number(options.count || query.get('count')) || 400));
     const columns = Math.ceil(Math.sqrt(count*1.65));
-    for (let i=0;i<count;i++) game.units.push(unit(keys[i%keys.length],i,
+    // Stress profiles inspired by report compositions, not replayed concurrent armies.
+    const profiles={heroes:['overlord','dragon'],rockets:['rocket','rocket','rocket','dog','tesla','sniper'],
+      demolition:['overlord','overlord','bomb_truck']};
+    const armyKinds=profiles[query.get('mix')] || keys;
+    for (let i=0;i<count;i++) game.units.push(unit(armyKinds[i%armyKinds.length],i,
       focus.x+(i%columns-(columns-1)/2)*26,
       focus.y+(Math.floor(i/columns)-(Math.ceil(count/columns)-1)/2)*28,i%11===0?100:0));
     Object.keys(catalog.structures).forEach((kind,i)=>game.structures.push(structure(kind,i,
@@ -315,7 +319,7 @@ function waitFrames(count) {
 window.benchmark = {
   ready:false, renderer, catalog, loadScenario,
   stats:()=>renderer.stats(),
-  state:()=>({scenario,map:map.id,camera:{...camera},settings:{...settings},dpr,paused,moving,halted,frameError}),
+  state:()=>({scenario,mix:query.get('mix')||'catalog',map:map.id,camera:{...camera},settings:{...settings},dpr,paused,moving,halted,frameError}),
   setCamera:patch=>{Object.assign(camera,patch);renderer.setCamera(camera);return {...camera};},
   setQuality:patch=>{Object.assign(settings,patch);renderer.setQuality(settings);return {...settings};},
   setDpr:value=>{dpr=value;resize();},

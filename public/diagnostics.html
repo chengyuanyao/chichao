@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>赤潮 · 主机诊断与战报</title><link rel="stylesheet" href="/styles.css">
+<style>
+body{display:block;overflow:auto;background:#141914;color:#ece5cb;padding:28px;font:15px system-ui,sans-serif}
+main{max-width:1400px;margin:auto}h1{color:#dbba71;font-size:26px}p{line-height:1.6;color:#bfc5b7}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0}select,button{padding:10px;background:#2c342c;color:#eee;border:1px solid #697157;border-radius:4px}
+select{flex:1;min-width:280px}section{margin:20px 0}table{width:100%;border-collapse:collapse}td,th{padding:10px;border-bottom:1px solid #41493c;text-align:left}
+.report-table-wrap{overflow:auto}.error{color:#ff9785}.hidden{display:none!important}#archiveStatus{overflow-wrap:anywhere}
+</style></head><body><main>
+<h1>主机诊断与自动战报</h1>
+<p>仅服务器本机可访问。每 5 秒刷新；玩家每 30 秒仅上报小摘要，淘汰、结束或主动退出时上传详细记录。客户端数值为自报，不是服务器验证的硬件测量。没有数据不等于没有卡顿。</p>
+<p id="archiveStatus">正在读取存档状态…</p>
+<div class="toolbar"><select id="matches" aria-label="选择对局"></select><button id="refresh">立即刷新</button><button id="json" disabled>下载完整 JSON</button><button id="csv" disabled>下载战报 CSV</button></div>
+<p id="status" role="status"></p><section id="diagnostics"></section>
+<p>平均 FPS 低优先排查画面和主线程；FPS 正常但往返延迟、状态间隔偏大优先排查同步链路。服务器模拟耗时接近或超过 50 ms 时，也可能拖慢所有玩家。以上是排查方向，不是自动判定根因。</p>
+<p>往返延迟包含网络、服务器和浏览器调度时间；状态间隔通常至少约 125 ms，不是 ping。写出耗时仅代表服务端交给网络栈的时间，不代表对端已收到。</p>
+</main><script type="module" src="/diagnostics_ui.js"></script></body></html>

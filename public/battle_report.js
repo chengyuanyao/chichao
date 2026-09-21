@@ -155,6 +155,39 @@ function financePanel(report, playerId) {
     }).join('') + '<p class="report-note">核对差额＝开局资金＋全部流入－全部流出－结束资金，正常约为 0；非零说明有未记录资金变动，不能当作经济损失。缺电项累计“工作时长 × (1－生产倍率)”，多生产建筑并行时叠加，不是整局停电时长。无建造授权暂停单列，不计空队列。</p>';
 }
 
+function performancePanel(report) {
+  const p=report.clientPerformance;
+  if(!p || p.matchId!==report.matchId)return '';
+  const fixed=v=>number(v).toFixed(1);
+  return '<h3>本机性能摘要</h3><p class="report-note">仅此浏览器前台对局期间，非全员性能；不含后台和菜单。帧间隔不是 GPU 耗时，也不能单独判断网络卡顿。负载约每秒采样，峰值不代表同时发生。</p>' +
+    detailTable(['平均 FPS','p95 帧间隔','超过 50ms 帧数','其中超过 100ms','最低渲染比例','记录时长'],[[fixed(p.averageFps),
+      (p.p95Overflow?'≥ ':'')+fixed(p.p95Ms)+' ms',count(p.over50),count(p.over100),Math.round(number(p.minScale)*100)+'%',battleTime(p.ms/1000)]]) +
+    detailTable(['对局时间','平均 FPS','>50ms 帧','>100ms 帧','最多画面单位','绘制调用峰值','粒子峰值','几何资源','纹理资源','最低比例'],
+      (p.periods || []).filter(r=>r.frames).map(r=>[battleTime(r.time),fixed(r.averageFps),count(r.over50),count(r.over100),
+        count(r.maxUnits),count(r.maxDrawCalls),count(r.maxParticles),count(r.maxGeometries),count(r.maxTextures),Math.round(number(r.minScale)*100)+'%'])) +
+    '<p class="report-note">每行起点对应约 '+count(p.interval)+' 秒窗口，长局自动合并。几何/纹理为资源数量，不是显存字节数；新出现的兵种会建立缓存，增长不自动等于泄漏。</p>';
+}
+
+export function renderDiagnostics(data) {
+  if(!data)return '';
+  const avg=(p,sum,count)=>p[count]?number(p[sum]/p[count]).toFixed(1):'—';
+  const rows=[];
+  for(const player of data.players||[]) {
+    const entry=(data.clients||{})[player.id];
+    if(!entry?.runs?.length) {rows.push([player.name,player.isBot?'AI，无浏览器':'尚未收到上报','—','—','—','—','—','—','—','—']);continue;}
+    for(const [index,p] of entry.runs.entries()) {
+      const age=Math.max(0,Date.now()/1000-number(p.receivedAt));
+      rows.push([player.name+' / 会话 '+(index+1),(data.status==='playing'?(age>75?'上报过期 '+Math.round(age)+' 秒':'已收到'):'已保存')+(p.detailReceivedAt?' · 含详细记录':' · 仅摘要'),
+        number(p.averageFps).toFixed(1),number(p.p95Ms)+' ms',avg(p,'probeMs','probeSamples'),avg(p,'commandMs','commandSamples'),
+        avg(p,'netGapMs','netGapSamples'),number(p.netMaxGapMs).toFixed(0),count(p.netOver500),count(p.probeFailures)+' / '+count(p.reconnects)]);
+    }
+  }
+  const metricRows=Object.entries(data.server||{}).map(([key,m])=>[({tickWorkMs:'模拟计算',tickIntervalMs:'模拟帧间隔（目标约 50ms）',tickLockWaitMs:'模拟等待房间锁',snapshotBuildMs:'生成状态（含等锁）',snapshotEncodeMs:'状态编码'}[key]||key),count(m.count),m.count?(m.sum/m.count).toFixed(2):'—',number(m.max).toFixed(2)]);
+  return '<h3>服务器汇总：各玩家画面与网络</h3>'+detailTable(['玩家 / 浏览器会话','数据状态','平均 FPS','p95 帧间隔','探测 RTT 均值 ms','指令 RTT 均值 ms','状态间隔均值 ms','最长状态间隔 ms','>500ms 间隔','探测失败 / 重连事件'],rows)+
+    '<h3>服务器处理耗时</h3>'+detailTable(['环节','样本数','平均 ms','最大 ms'],metricRows)+
+    '<p class="report-note">RTT 包含调度和服务端处理，不是纯网络 ping；状态间隔不是单程延迟；指令 RTT 不含本地命令队列等待。每人最多保留 4 个浏览器会话，超出数量见 JSON omittedRuns。客户端关闭前未送达的数据无法追补。详细时间段、发送字节与写出耗时保存在 JSON / CSV。</p>';
+}
+
 function detailTable(headers, rows) {
   return '<div class="report-table-wrap" tabindex="0"><table class="report-table"><thead><tr>' +
     headers.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' +
@@ -208,7 +241,7 @@ export function renderBattleReport(report, playerId) {
     chart(report, 0, '累计采集收入', '只计矿车卸矿到账，不含初始资金、补给箱或战斗奖励。') +
     chart(report, 2, '现存作战部队价值', '不含矿车、基地车、建筑与队列；按原价计，不随残血或军衔折算。') + '</div>' +
     '<p class="report-note">初始每 5 秒采样；长局自动稀疏，当前采样间隔约 ' + number(report.sampleInterval) +
-    ' 秒。峰值为采样峰值，可能略过短暂变化；淘汰后的军力归零是部队退场，不代表全部被击毁。</p></section>' +
+    ' 秒。峰值为采样峰值，可能略过短暂变化；淘汰后的军力归零是部队退场，不代表全部被击毁。</p>' + performancePanel(report) + renderDiagnostics(report.serverDiagnostics) + '</section>' +
     '<section data-report-panel="events" class="hidden"><div class="report-table-wrap"><table class="report-table report-times"><thead><tr><th>指挥官</th><th>首次交战</th><th>退场时间</th><th>最终结果</th></tr></thead><tbody>' + opening +
     '</tbody></table></div><h3>战局节点</h3><ol class="report-events">' + (events || '<li>本局未发生玩家交战或关键建筑损失。</li>') + '</ol>' +
     (report.droppedEvents ? '<p class="report-note">长局已省略 ' + count(report.droppedEvents) + ' 条事件，汇总数值不受影响。</p>' : '') + '</section>' +
@@ -234,6 +267,36 @@ export function reportCsv(report) {
     p.harvested, p.combatRewardsEarned, p.unitsDestroyed, p.structuresDestroyed, p.unitsLost, p.structuresLost,
     p.destroyedValue, p.lostValue, p.selfConsumedValue, exchangeLabel(p), p.peakArmyValue, p.endingArmyValue,
     battleTime(p.firstCombatAt), p.eliminatedAt == null ? '存活至终局' : battleTime(p.eliminatedAt)]));
+  const perf=report.clientPerformance;
+  if(report.incomplete)rows.push([],['存档状态','中途快照，非终局战报，结果和终局数值可能未形成']);
+  const diagnostics=report.serverDiagnostics;
+  if(diagnostics) {
+    rows.push([],['服务器诊断口径','客户端性能为玩家自报；RTT含调度/服务端处理；状态间隔非ping；无样本不是零延迟']);
+    rows.push(['服务器耗时'],['环节','次数','合计ms','最大ms']);
+    Object.entries(diagnostics.server||{}).forEach(([k,m])=>rows.push([k,m.count,m.sum,m.max]));
+    rows.push([],['服务器耗时时间段'],['起始秒','区间秒数','环节','次数','合计ms','最大ms']);
+    (diagnostics.periods||[]).forEach(p=>Object.entries(p.metrics||{}).forEach(([k,m])=>rows.push([p.time,diagnostics.interval,k,m.count,m.sum,m.max])));
+    const fields=['time','frames','ms','averageFps','over50','over100','maxMs','minScale','maxUnits','maxDrawCalls','maxTriangles','maxParticles','maxGeometries','maxTextures','probeSamples','probeMs','probeMaxMs','probeFailures','commandSamples','commandMs','commandMaxMs','commandFailures','netMessages','netGapSamples','netGapMs','netMaxGapMs','netOver500','parseMs','parseMaxMs','reconnects'];
+    rows.push([],['全员客户端诊断'],['玩家','浏览器会话','区间秒数','服务器收到时间',...fields]);
+    for(const player of diagnostics.players||[]) {
+      const entry=(diagnostics.clients||{})[player.id];
+      if(!entry?.runs?.length){rows.push([player.name,player.isBot?'AI':'未收到上报']);continue;}
+      for(const p of entry.runs) {
+        rows.push([player.name,p.clientRunId,'整次会话',p.receivedAt,...fields.map(k=>p[k])]);
+        rows.push([player.name,p.clientRunId,'明细收到时间',p.detailReceivedAt||'未收到','p95帧间隔ms',p.p95Ms,'画面设置',JSON.stringify(p.settings||{})]);
+        for(const r of p.periods||[])rows.push([player.name,p.clientRunId,p.interval,p.receivedAt,...fields.map(k=>r[k])]);
+      }
+      rows.push([player.name,'省略浏览器会话',entry.omittedRuns]);
+      rows.push([player.name,'服务端发送统计（snapshotBytes单位为字节、writeMs为毫秒）',JSON.stringify(entry.transport||{})]);
+    }
+  }
+  if(perf && perf.matchId===report.matchId) {
+    rows.push([],['本机性能摘要'],['记录玩家','平均FPS','p95帧间隔ms','p95是否超量程','超过50ms帧数','超过100ms帧数','记录毫秒','记录帧数','最低渲染比例'],
+      [(players[perf.viewerId] || {}).name || perf.viewerId,perf.averageFps,perf.p95Ms,!!perf.p95Overflow,perf.over50,perf.over100,perf.ms,perf.frames,perf.minScale]);
+    rows.push([],['本机性能时间段'],['起始秒','区间秒数','平均FPS','帧数','记录毫秒','超过50ms帧数','超过100ms帧数','最长帧ms','画面单位峰值','绘制调用峰值','三角形峰值','粒子峰值','几何资源峰值','纹理资源峰值','最低渲染比例']);
+    (perf.periods || []).forEach(r=>rows.push([r.time,perf.interval,r.averageFps,r.frames,r.ms,r.over50,r.over100,r.maxMs,r.maxUnits,r.maxDrawCalls,r.maxTriangles,r.maxParticles,r.maxGeometries,r.maxTextures,r.minScale]));
+    rows.push([],['性能口径','仅本机前台；帧间隔不是GPU耗时；负载每秒采样；资源数不是显存；不同峰值不一定同时发生。'],['开局画面配置',JSON.stringify(perf.settings || {})]);
+  }
   rows.push([], ['分兵种统计'], ['玩家','兵种 / 来源','生产完成','初始','赠送','损失数量','损失价值','击毁数量','击毁价值']);
   report.players.forEach(p => Object.values(p.byKind || {}).forEach(k => rows.push([
     p.name,k.name,k.produced,k.initial,k.gifted,k.lost,k.lostValue,k.destroyed,k.destroyedValue])));

@@ -24,7 +24,8 @@ if (-not $compiler) {
     /reference:System.dll `
     /reference:System.Drawing.dll `
     /reference:System.Windows.Forms.dll `
-    $source
+    /reference:System.Web.Extensions.dll `
+    $source (Join-Path $launcherDir 'NetworkSupport.cs')
 
 if ($LASTEXITCODE -ne 0) {
     throw "Launcher build failed. csc exit code: $LASTEXITCODE"

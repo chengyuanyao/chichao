@@ -168,6 +168,14 @@ namespace SteelFrontLauncher
         private Button _toggleButton;
         private Button _openButton;
         private LinkLabel _logLink;
+        private ComboBox _networkInput;
+        private Button _refreshNetworks, _hotspotButton;
+        private Button _diagnosticsButton;
+        private TextBox _hotspotName, _hotspotPassword;
+        private Label _hotspotStatus;
+        private bool _hotspotBusy, _ownsHotspot, _closeAfterHotspot;
+        private string _hotspotSourceId, _ownedSsid, _ownedPassword;
+        private string _boundAddress = "0.0.0.0";
 
         private Process _serverProcess;
         private IntPtr _serverJob = IntPtr.Zero;
@@ -187,15 +195,14 @@ namespace SteelFrontLauncher
             BackColor = Background;
             ForeColor = Pale;
             Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            ClientSize = new Size(620, 440);
-            MinimumSize = new Size(636, 479);
-            MaximumSize = new Size(636, 479);
+            ClientSize = new Size(740, 700);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
             AutoScaleMode = AutoScaleMode.Dpi;
 
             BuildInterface();
+            RefreshNetworks(null);
             _portInput.Value = options.Port;
             _openBrowserCheck.Checked = options.OpenBrowser;
             UpdateAddresses();
@@ -205,7 +212,19 @@ namespace SteelFrontLauncher
             _healthTimer.Interval = 400;
             _healthTimer.Tick += delegate { QueueHealthCheck(); };
 
-            FormClosing += delegate { StopServer(true); };
+            FormClosing += delegate(object sender, FormClosingEventArgs e)
+            {
+                if (_hotspotBusy) { e.Cancel = true; return; }
+                if (_ownsHotspot)
+                {
+                    e.Cancel = true;
+                    StopServer(false);
+                    _closeAfterHotspot = true;
+                    ToggleHotspot();
+                    return;
+                }
+                StopServer(true);
+            };
             Shown += delegate
             {
                 if (_options.AutoStart)
@@ -216,7 +235,7 @@ namespace SteelFrontLauncher
         private void BuildInterface()
         {
             Panel header = new Panel();
-            header.SetBounds(0, 0, 620, 92);
+            header.SetBounds(0, 0, 740, 92);
             header.BackColor = Panel;
             Controls.Add(header);
 
@@ -244,7 +263,7 @@ namespace SteelFrontLauncher
 
             Label sourceCaption = MakeCaption("运行文件", 30, 153);
             Controls.Add(sourceCaption);
-            _sourceLabel = MakeValue(Path.Combine(_repoRoot, "server.py"), 116, 151, 470);
+            _sourceLabel = MakeValue(Path.Combine(_repoRoot, "server.py"), 116, 151, 590);
             Controls.Add(_sourceLabel);
 
             Label portCaption = MakeCaption("服务端口", 30, 194);
@@ -266,23 +285,71 @@ namespace SteelFrontLauncher
             modeNote.Location = new Point(246, 193);
             Controls.Add(modeNote);
 
-            Label localCaption = MakeCaption("本机地址", 30, 239);
+            Controls.Add(MakeCaption("服务网卡", 30, 230));
+            _networkInput = new ComboBox();
+            _networkInput.DropDownStyle = ComboBoxStyle.DropDownList;
+            _networkInput.SetBounds(116, 226, 474, 30);
+            _networkInput.SelectedIndexChanged += delegate { UpdateAddresses(); };
+            Controls.Add(_networkInput);
+            _refreshNetworks = SmallButton("刷新网卡", 604, 225, 106);
+            _refreshNetworks.Click += delegate { RefreshNetworks(null); };
+
+            Label localCaption = MakeCaption("本机访问", 30, 283);
             Controls.Add(localCaption);
-            _localAddressLabel = MakeValue("", 116, 237, 470);
+            _localAddressLabel = MakeValue("", 116, 281, 580);
             _localAddressLabel.ForeColor = Gold;
             Controls.Add(_localAddressLabel);
 
-            Label lanCaption = MakeCaption("局域网", 30, 278);
+            Label lanCaption = MakeCaption("队友地址", 30, 322);
             Controls.Add(lanCaption);
-            _lanAddressLabel = MakeValue("", 116, 276, 470);
+            _lanAddressLabel = MakeValue("", 116, 320, 475);
             Controls.Add(_lanAddressLabel);
+            var copy = SmallButton("复制地址", 604, 315, 106);
+            copy.Click += delegate {
+                if (_lanAddressLabel.Text.StartsWith("http://")) Clipboard.SetText(_lanAddressLabel.Text);
+            };
+            Controls.Add(MakeCaption("本地 Wi-Fi 热点 · 以上所选网卡作为共享来源，Wi-Fi 发射由 Windows 管理", 30, 365));
+            Controls.Add(MakeCaption("热点名称", 30, 405));
+            _hotspotName = new TextBox();
+            _hotspotName.Text = "Chichao-LAN";
+            _hotspotName.SetBounds(116, 400, 210, 30);
+            Controls.Add(_hotspotName);
+            Controls.Add(MakeCaption("热点密码", 349, 405));
+            _hotspotPassword = new TextBox();
+            _hotspotPassword.Text = "12345678";
+            _hotspotPassword.UseSystemPasswordChar = true;
+            _hotspotPassword.SetBounds(435, 400, 180, 30);
+            Controls.Add(_hotspotPassword);
+            var showPassword = new CheckBox();
+            showPassword.Text = "显示";
+            showPassword.SetBounds(630, 400, 78, 30);
+            showPassword.CheckedChanged += delegate { _hotspotPassword.UseSystemPasswordChar = !showPassword.Checked; };
+            Controls.Add(showPassword);
+            _hotspotButton = SmallButton("创建并开启热点", 116, 444, 220);
+            _hotspotButton.Click += delegate { ToggleHotspot(); };
+            var systemHotspot = SmallButton("Windows 热点设置", 350, 444, 210);
+            _diagnosticsButton = SmallButton("延迟 / 战报", 574, 444, 136);
+            _diagnosticsButton.Click += delegate {
+                try { Process.Start(new ProcessStartInfo(_localAddressLabel.Text + "/diagnostics.html") { UseShellExecute = true }); }
+                catch (Exception ex) { MessageBox.Show(ex.Message); }
+            };
+            systemHotspot.Click += delegate {
+                try { Process.Start(new ProcessStartInfo("ms-settings:network-mobilehotspot") { UseShellExecute = true }); }
+                catch (Exception ex) { MessageBox.Show(ex.Message); }
+            };
+            var hotspotNote = MakeValue("密码至少 8 位，默认 12345678 仅建议临时使用。热点不保证改善无线干扰。\n先开启热点，再选择热点网卡启动服务。关闭启动器会停止本次创建的热点。\n停止游戏服务不会自动关闭热点；不会修改防火墙或覆盖已经开启的系统热点。", 30, 493, 680);
+            hotspotNote.Height = 66;
+            hotspotNote.ForeColor = Muted;
+            Controls.Add(hotspotNote);
+            _hotspotStatus = MakeValue("热点尚未由本启动器开启。", 30, 558, 680);
+            Controls.Add(_hotspotStatus);
 
             _openBrowserCheck = new CheckBox();
             _openBrowserCheck.Text = "服务器启动成功后自动打开浏览器";
             _openBrowserCheck.AutoSize = true;
             _openBrowserCheck.ForeColor = Pale;
             _openBrowserCheck.FlatStyle = FlatStyle.Flat;
-            _openBrowserCheck.Location = new Point(30, 319);
+            _openBrowserCheck.Location = new Point(30, 593);
             Controls.Add(_openBrowserCheck);
 
             _logLink = new LinkLabel();
@@ -291,12 +358,12 @@ namespace SteelFrontLauncher
             _logLink.LinkColor = Muted;
             _logLink.ActiveLinkColor = Gold;
             _logLink.VisitedLinkColor = Muted;
-            _logLink.Location = new Point(493, 319);
+            _logLink.Location = new Point(605, 593);
             _logLink.LinkClicked += delegate { OpenLog(); };
             Controls.Add(_logLink);
 
             _toggleButton = new Button();
-            _toggleButton.SetBounds(30, 360, 385, 54);
+            _toggleButton.SetBounds(30, 634, 505, 48);
             _toggleButton.FlatStyle = FlatStyle.Flat;
             _toggleButton.FlatAppearance.BorderSize = 1;
             _toggleButton.Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
@@ -312,7 +379,7 @@ namespace SteelFrontLauncher
 
             _openButton = new Button();
             _openButton.Text = "打开游戏";
-            _openButton.SetBounds(429, 360, 161, 54);
+            _openButton.SetBounds(549, 634, 161, 48);
             _openButton.FlatStyle = FlatStyle.Flat;
             _openButton.FlatAppearance.BorderColor = Border;
             _openButton.FlatAppearance.BorderSize = 1;
@@ -322,6 +389,103 @@ namespace SteelFrontLauncher
             _openButton.Cursor = Cursors.Hand;
             _openButton.Click += delegate { OpenGame(); };
             Controls.Add(_openButton);
+        }
+
+        private Button SmallButton(string text, int x, int y, int width)
+        {
+            var button = new Button();
+            button.Text = text;
+            button.SetBounds(x, y, width, 34);
+            button.FlatStyle = FlatStyle.Flat;
+            button.BackColor = Panel;
+            button.ForeColor = Pale;
+            Controls.Add(button);
+            return button;
+        }
+
+        private NetworkChoice SelectedNetwork { get { return _networkInput.SelectedItem as NetworkChoice; } }
+
+        private void RefreshNetworks(string preferredAddress)
+        {
+            string previous = preferredAddress ?? (SelectedNetwork == null ? "0.0.0.0" : SelectedNetwork.Address);
+            try
+            {
+                var choices = NetworkSupport.Choices();
+                _networkInput.Items.Clear();
+                foreach (var choice in choices) _networkInput.Items.Add(choice);
+                foreach (NetworkChoice choice in _networkInput.Items)
+                    if (choice.Address == previous) { _networkInput.SelectedItem = choice; break; }
+                // Never silently widen a vanished explicit binding to all interfaces.
+                if (_networkInput.SelectedItem == null)
+                    _networkInput.SelectedIndex = _networkInput.Items.Count - 1;
+                UpdateAddresses();
+            }
+            catch (Exception ex) { MessageBox.Show("读取网卡失败：" + ex.Message); }
+        }
+
+        private void UpdateNetworkControls()
+        {
+            bool idle = _state == ServerState.Stopped && !_hotspotBusy;
+            _networkInput.Enabled = _refreshNetworks.Enabled = idle;
+            _hotspotButton.Enabled = idle;
+            _hotspotName.Enabled = _hotspotPassword.Enabled = idle && !_ownsHotspot;
+            _hotspotButton.Text = _hotspotBusy ? "正在处理热点…" : _ownsHotspot ? "关闭本次创建的热点" : "创建并开启热点";
+            if (_state == ServerState.Stopped) _toggleButton.Enabled = !_hotspotBusy;
+        }
+
+        private void ToggleHotspot()
+        {
+            if (_hotspotBusy || _state != ServerState.Stopped) return;
+            bool stopping = _ownsHotspot;
+            string ssid = stopping ? _ownedSsid : _hotspotName.Text;
+            string password = stopping ? _ownedPassword : _hotspotPassword.Text;
+            string source = stopping ? _hotspotSourceId : SelectedNetwork == null ? "" : SelectedNetwork.Id;
+            if (!stopping)
+            {
+                string error = NetworkSupport.ValidateHotspot(ssid, password);
+                if (error != null) { MessageBox.Show(error, "热点配置不正确"); return; }
+                if (SelectedNetwork != null && SelectedNetwork.Address == "127.0.0.1")
+                { MessageBox.Show("请先选择连接中的以太网 / Wi-Fi 来源网卡，或全部网卡模式。"); return; }
+                if (MessageBox.Show("将开启 Windows 移动热点，并可能共享所选网络的互联网连接。\n附近知道密码的人可以加入。默认密码较弱，请仅在可信环境临时使用。\n\n是否开启？", "开启本地热点", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            }
+            _hotspotBusy = true;
+            _hotspotStatus.Text = stopping ? "正在关闭热点…" : "正在配置热点，请稍候（最长约 45 秒）…";
+            UpdateNetworkControls();
+            ThreadPool.QueueUserWorkItem(delegate {
+                Dictionary<string, object> result = null;
+                string failure = null;
+                try { result = NetworkSupport.Hotspot(_repoRoot, stopping ? "stop" : "start", source, ssid, password); }
+                catch (Exception ex) { failure = ex.Message; }
+                SafeBeginInvoke(delegate {
+                    _hotspotBusy = false;
+                    if (failure != null)
+                    {
+                        _closeAfterHotspot = false;
+                        _hotspotStatus.Text = "热点操作未完成，请检查 Windows 热点设置。";
+                        MessageBox.Show(failure + "\n\n可用“Windows 热点设置”手动处理。不会自动关闭防火墙。", "热点操作未完成", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                    else
+                    {
+                        _ownsHotspot = !stopping;
+                        if (stopping)
+                        {
+                            _ownedPassword = null;
+                            _hotspotStatus.Text = "本次创建的热点已关闭。";
+                            RefreshNetworks(null);
+                        }
+                        else
+                        {
+                            _hotspotSourceId = Convert.ToString(result["adapterId"]);
+                            _ownedSsid = ssid; _ownedPassword = password;
+                            string address = Convert.ToString(result["address"]);
+                            RefreshNetworks(String.IsNullOrEmpty(address) ? null : address);
+                            _hotspotStatus.Text = String.IsNullOrEmpty(address) ? "热点已开启；请刷新并选择热点虚拟网卡，再启动服务。" : "热点已开启，已选择新网卡。队友加入 " + ssid + " 后打开上方地址。";
+                        }
+                    }
+                    UpdateNetworkControls();
+                    if (_closeAfterHotspot && !_ownsHotspot) Close();
+                });
+            });
         }
 
         private static Label MakeCaption(string text, int x, int y)
@@ -346,8 +510,19 @@ namespace SteelFrontLauncher
 
         private void StartServer()
         {
-            if (_state != ServerState.Stopped)
+            if (_state != ServerState.Stopped || _hotspotBusy)
                 return;
+
+            var selected = SelectedNetwork;
+            if (selected == null) { MessageBox.Show("请选择服务网卡。"); return; }
+            bool available = false;
+            try {
+                foreach (var choice in NetworkSupport.Choices())
+                    if (choice.Address == selected.Address && choice.Id == selected.Id) available = true;
+            }
+            catch (Exception ex) { MessageBox.Show("无法检查网卡：" + ex.Message); return; }
+            if (!available) { MessageBox.Show("所选网卡已断开或 IP 已改变，请刷新网卡后重试。"); return; }
+            _boundAddress = selected.Address;
 
             string script = Path.Combine(_repoRoot, "server.py");
             if (!File.Exists(script))
@@ -381,6 +556,7 @@ namespace SteelFrontLauncher
             startInfo.StandardOutputEncoding = Encoding.UTF8;
             startInfo.StandardErrorEncoding = Encoding.UTF8;
             startInfo.EnvironmentVariables["PORT"] = port.ToString();
+            startInfo.EnvironmentVariables["HOST"] = _boundAddress;
             startInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
             startInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
 
@@ -442,6 +618,7 @@ namespace SteelFrontLauncher
             }
 
             _state = ServerState.Starting;
+            UpdateNetworkControls();
             _stoppingByUser = false;
             _browserOpenedForRun = false;
             _startDeadline = DateTime.UtcNow.AddSeconds(12);
@@ -472,7 +649,8 @@ namespace SteelFrontLauncher
                 try
                 {
                     HttpWebRequest request = (HttpWebRequest)WebRequest.Create(
-                        "http://127.0.0.1:" + port + "/api/health");
+                        "http://" + NetworkSupport.AccessHost(_boundAddress) + ":" + port + "/api/health");
+                    request.Proxy = null;
                     request.Method = "GET";
                     request.Timeout = 350;
                     request.ReadWriteTimeout = 350;
@@ -504,6 +682,7 @@ namespace SteelFrontLauncher
             if (_state != ServerState.Starting)
                 return;
             _state = ServerState.Running;
+            _diagnosticsButton.Enabled = true;
             _healthTimer.Stop();
             _openButton.Enabled = true;
             SetStatus("● 服务器运行中", Green);
@@ -610,7 +789,9 @@ namespace SteelFrontLauncher
                 _toggleButton.FlatAppearance.BorderColor = Color.FromArgb(248, 214, 107);
             }
             if (_openButton != null) _openButton.Enabled = false;
+            if (_diagnosticsButton != null) _diagnosticsButton.Enabled = false;
             if (_statusLabel != null) SetStatus("● 服务器已停止", Muted);
+            UpdateNetworkControls();
         }
 
         private void SetStatus(string text, Color color)
@@ -624,7 +805,13 @@ namespace SteelFrontLauncher
             if (_portInput == null || _localAddressLabel == null)
                 return;
             int port = Decimal.ToInt32(_portInput.Value);
-            _localAddressLabel.Text = "http://127.0.0.1:" + port;
+            string bind = SelectedNetwork == null ? "0.0.0.0" : SelectedNetwork.Address;
+            _localAddressLabel.Text = "http://" + NetworkSupport.AccessHost(bind) + ":" + port;
+            if (bind != "0.0.0.0")
+            {
+                _lanAddressLabel.Text = bind == "127.0.0.1" ? "仅本机，其他玩家无法访问" : _localAddressLabel.Text;
+                return;
+            }
             List<string> addresses = LocalIpv4Addresses();
             if (addresses.Count == 0)
                 _lanAddressLabel.Text = "未检测到可用的局域网地址";
@@ -803,26 +990,13 @@ namespace SteelFrontLauncher
         {
             try
             {
-                using (TcpClient client = new TcpClient())
-                {
-                    IAsyncResult pending = client.BeginConnect(
-                        IPAddress.Loopback, port, null, null);
-                    try
-                    {
-                        if (!pending.AsyncWaitHandle.WaitOne(150))
-                            return false;
-                        client.EndConnect(pending);
-                        return true;
-                    }
-                    finally
-                    {
-                        pending.AsyncWaitHandle.Close();
-                    }
-                }
+                foreach (var endpoint in IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners())
+                    if (endpoint.Port == port) return true;
+                return false;
             }
             catch
             {
-                return false;
+                return true; // Cannot verify release: do not claim success.
             }
         }
 

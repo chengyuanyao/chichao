@@ -73,14 +73,24 @@ let complete;
 const context={session:{roomId:'test',playerId:'p1',token:'test-only'},roomState:{status:'finished',game:{matchId:'g-test'}},
   completedBattleReport:null,reportRequestSerial:0,$:element,
   request:()=>new Promise(resolve=>{complete=resolve;}),renderBattleReport,renderReportSummary,encodeURIComponent,
-  localStorage:{},saveReportHistory:()=>true};
+  localStorage:{},saveReportHistory:()=>true,performanceRecorder:{snapshot:()=>null},telemetryUploader:{send:async()=>false}};
 vm.createContext(context);vm.runInContext(loader,context);
-const pending=context.loadBattleReport();complete({report});await pending;
+const pending=context.loadBattleReport();await new Promise(setImmediate);complete({report});await pending;
 assert.equal(context.completedBattleReport.matchId,'g-test');assert.equal(element('#exportReportBtn').disabled,false);
-const old=context.loadBattleReport();context.session=null;complete({report});await old;
+const localPerformance={matchId:'g-test',viewerId:'p1',frames:60,averageFps:60,ms:1000,periods:[]};
+let archived;
+context.performanceRecorder.snapshot=(id,viewer)=>{
+  assert.equal(id,'g-test');assert.equal(viewer,'p1');return localPerformance;
+};
+context.saveReportHistory=(_storage,value)=>{archived=value;return true;};
+const withPerformance=context.loadBattleReport();await new Promise(setImmediate);complete({report});await withPerformance;
+assert.equal(context.completedBattleReport.clientPerformance,localPerformance);
+assert.equal(archived.clientPerformance,localPerformance,'local summary survives automatic history save');
+assert.equal(report.clientPerformance,undefined,'server result remains unmodified');
+const old=context.loadBattleReport();await new Promise(setImmediate);context.session=null;complete({report});await old;
 assert.equal(element('#battleReport').textContent,'正在整理本局战报…','stale response must not paint another room');
 context.session={roomId:'next',playerId:'p1',token:'next'};
-const mismatch=context.loadBattleReport();complete({report:{...report,matchId:'wrong'}});await mismatch;
+const mismatch=context.loadBattleReport();await new Promise(setImmediate);complete({report:{...report,matchId:'wrong'}});await mismatch;
 assert.ok(element('#battleReport').textContent.includes('不匹配'));
 context.roomState.status='playing';complete=null;await context.loadBattleReport();assert.equal(complete,null);
 console.log('Battle report UI: charts, tables, zero denominators, safe CSV/HTML, loader privacy and stale-session isolation passed.');

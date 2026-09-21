@@ -7,6 +7,8 @@ import { renderBattleReport, renderReportSummary, reportCsv } from './battle_rep
 import { createTacticalSelection } from './tactical_selection.js';
 import { readReportHistory, saveReportHistory } from './report_history.js';
 import { createBattleAudio } from './battle_audio.js';
+import { createPerformanceRecorder } from './performance_report.js';
+import { createTelemetryUploader } from './telemetry_upload.js';
 
 (function () {
   'use strict';
@@ -1312,6 +1314,30 @@ import { createBattleAudio } from './battle_audio.js';
   // 自动动态分辨率只调内部像素密度，不换模型、不改单位外形。低帧持续一段
   // 时间才降档，恢复也使用更长的迟滞，避免在两个档位之间来回抖动。
   var renderScale = 1;
+  var performanceRecorder = createPerformanceRecorder();
+  document.addEventListener('visibilitychange', function () { performanceRecorder.pause(); });
+  function telemetryContext() {
+    if (!session || !roomState || !roomState.game || !roomState.game.matchId || !['playing','finished'].includes(roomState.status)) return null;
+    return {roomId:session.roomId,playerId:session.playerId,token:session.token,matchId:roomState.game.matchId};
+  }
+  var telemetryUploader = createTelemetryUploader({context:telemetryContext,
+    snapshot:function(id,viewer,detail){return performanceRecorder.snapshot(id,viewer,detail);},
+    probe:function(ms,ok){performanceRecorder.network('probe',ms,ok,roomState.game.elapsed);}});
+  setInterval(function () { if (!document.hidden && roomState && roomState.status==='playing') telemetryUploader.send(); }, 30000);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) telemetryUploader.send(); });
+  window.addEventListener('pagehide', function () {
+    var ctx=telemetryContext();
+    if(!ctx)return;
+    var data=performanceRecorder.snapshot(ctx.matchId,ctx.playerId);
+    if(!data)return;
+    var body=JSON.stringify(Object.assign({},ctx,{performance:data}));
+    // Browsers cap keepalive/beacon payloads. Periodic uploads remain the fallback.
+    if(new TextEncoder().encode(body).length>=60000) {
+      data=performanceRecorder.snapshot(ctx.matchId,ctx.playerId,false);
+      body=JSON.stringify(Object.assign({},ctx,{performance:data}));
+    }
+    navigator.sendBeacon('/api/telemetry',new Blob([body],{type:'application/json'}));
+  });
   var renderScaleSteps = [1, 0.90, 0.80, 0.70, 0.60];
   var lowFpsSamples = 0;
   var highFpsSamples = 0;
@@ -1673,6 +1699,13 @@ import { createBattleAudio } from './battle_audio.js';
       throw new Error('会话已失效');
     }
     var requestSession = session;
+    var requestMatch = roomState && roomState.game && roomState.game.matchId;
+    var commandStarted = performance.now();
+    function recordCommand(ok) {
+      if (!document.hidden && session===requestSession && roomState && roomState.status==='playing' &&
+          roomState.game && roomState.game.matchId===requestMatch && action==='command')
+        performanceRecorder.network('command',performance.now()-commandStarted,ok,roomState.game.elapsed);
+    }
     try {
       var data = await request('/api/action', {
         method: 'POST',
@@ -1684,6 +1717,7 @@ import { createBattleAudio } from './battle_audio.js';
           payload: payload || {}
         }
       });
+      recordCommand(true);
       // 离开/换房期间，旧请求可能比新会话更晚返回。它的响应只能结束原
       // 请求，不能把上一局的房间状态重新盖到当前页面上。
       if (data.room && session === requestSession) {
@@ -1691,6 +1725,7 @@ import { createBattleAudio } from './battle_audio.js';
       }
       return data;
     } catch (error) {
+      recordCommand(false);
       if (!silent) {
         toast(error.message, 'error');
         sound('error');
@@ -1811,10 +1846,14 @@ import { createBattleAudio } from './battle_audio.js';
         return;
       }
       try {
+        var parseStarted = performance.now();
         var state = JSON.parse(event.data);
+        var parseMs = performance.now() - parseStarted;
         lastSnapshotAt = performance.now();
         setConnectionState(true);
         applyRoomState(state);
+        if (!document.hidden && roomState && roomState.status==='playing' && roomState.game)
+          performanceRecorder.received(lastSnapshotAt, roomState.game.elapsed, parseMs);
       } catch (_error) {
         setConnectionState(false);
       }
@@ -1825,6 +1864,8 @@ import { createBattleAudio } from './battle_audio.js';
     };
     source.onerror = function () {
       if (eventSource !== source || eventStreamGeneration !== generation) { return; }
+      if (!document.hidden && roomState && roomState.status==='playing' && roomState.game)
+        performanceRecorder.network('reconnect',0,false,roomState.game.elapsed);
       setConnectionState(false);
     };
   }
@@ -1998,6 +2039,10 @@ import { createBattleAudio } from './battle_audio.js';
       delete state.game;
     }
     roomState = state;
+    if (previousMe && !previousMe.eliminated && state.players && state.status==='playing' &&
+        state.players.some(function(p){return p.id===session.playerId && p.eliminated;})) {
+      telemetryUploader.send(true);
+    }
     if (previousRewardTotal !== null && state.status === 'playing' && previousStatus === 'playing' &&
         roomHasCombatRewards(state) && state.players) {
       var rewardedMe = state.players.find(function (p) { return p.id === session.playerId; });
@@ -2785,6 +2830,7 @@ import { createBattleAudio } from './battle_audio.js';
     pendingEffects.length = 0;
     if (session) {
       try {
+        await telemetryUploader.send(true);
         await sendAction('leave', {}, true);
       } catch (_error) {
         // Leaving locally is still safe if the connection disappeared.
@@ -2841,6 +2887,10 @@ import { createBattleAudio } from './battle_audio.js';
       selectionInfo.dataset.key = '';
       minimapStaticKey = '';
       adaptiveStartedAt = performance.now();
+      performanceRecorder.start(roomState.game.matchId, session.playerId, {
+        shadows: settings.shadowQuality, bloomQuality: settings.bloomQuality, particleQuality: settings.particleQuality,
+        width: window.innerWidth, height: window.innerHeight
+      });
       lowFpsSamples = 0;
       highFpsSamples = 0;
       lastHudOverlayAt = -Infinity;
@@ -3657,6 +3707,9 @@ import { createBattleAudio } from './battle_audio.js';
   }
 
   function frame(timestamp) {
+    var recordPerformance = currentScreen === 'game' && !document.hidden && roomState &&
+      roomState.status === 'playing' && roomState.game;
+    performanceRecorder.frame(timestamp, !!recordPerformance, recordPerformance ? roomState.game.elapsed : 0);
     var dt = Math.min(0.05, Math.max(0.001, (timestamp - lastFrame) / 1000));
     lastFrame = timestamp;
 
@@ -3710,6 +3763,7 @@ import { createBattleAudio } from './battle_audio.js';
       fpsElement.innerHTML = fps + ' <small style="color:' + color + '">FPS</small>' +
         (renderScale < 1 ? ' <small>· ' + Math.round(renderScale * 100) + '%</small>' : '');
       var perfStats = view3d.stats();
+      if (recordPerformance) performanceRecorder.load(timestamp, roomState.game.elapsed, perfStats, renderScale);
       fpsElement.title = '画面单位 ' + perfStats.renderedUnits + ' / ' + perfStats.snapshotUnits +
         '，精细模型 ' + perfStats.detailedUnits + '，远景模型 ' + perfStats.lodUnits +
         '，绘制调用 ' + perfStats.drawCalls;
@@ -5162,12 +5216,16 @@ import { createBattleAudio } from './battle_audio.js';
     $('#battleReport').textContent = '正在整理本局战报…';
     $('#reportSaveStatus').textContent = '终局战报加载后自动保存，无录像。';
     try {
+      await telemetryUploader.send(true);
+      if(session!==requestSession || serial!==reportRequestSerial || !roomState || roomState.status!=='finished' || roomState.game.matchId!==matchId)return;
       var data = await request('/api/report?roomId=' + encodeURIComponent(session.roomId) +
         '&playerId=' + encodeURIComponent(session.playerId) + '&token=' + encodeURIComponent(session.token) +
         '&matchId=' + encodeURIComponent(matchId || ''));
       if (session !== requestSession || serial !== reportRequestSerial || !roomState ||
           roomState.status !== 'finished' || roomState.game.matchId !== matchId) { return; }
       if (!data.report || data.report.matchId !== matchId) { throw new Error('战报对局不匹配，请重试'); }
+      var localPerformance = performanceRecorder.snapshot(matchId, session.playerId);
+      if (localPerformance) data.report = {...data.report, clientPerformance: localPerformance};
       completedBattleReport = data.report;
       $('#resultStats').innerHTML = renderReportSummary(data.report, session.playerId);
       $('#battleReport').innerHTML = renderBattleReport(data.report, session.playerId);
