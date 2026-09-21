@@ -148,6 +148,26 @@ def main():
     assert only_dragon is None, "射程内只有巨龙时不该锁定"
     print("  忽略贴脸巨龙、锁定法师；单独巨龙不入猎物: PASS")
 
+    print("\n=== Test 9: 爆裂魔仆轻甲，扑咬 0 伤害且不当猎物 ===")
+    assert server.UNIT_TYPES["hexling"]["armor"] == "light"
+    assert "hexling" not in server.VEHICLE_KINDS
+    assert not server.is_dog_prey("hexling")
+    bite = server.UNIT_TYPES["dog"]["damage"]
+    expect_bite = bite * server.DAMAGE_MULTIPLIER["bite"]["light"]
+    assert abs(expect_bite) < 1e-9, expect_bite
+    room, a, b = make_room("DOG08")
+    game = room["game"]
+    familiar = server.make_unit("hexling", b["id"], 9000, 9000)
+    game["units"].append(familiar)
+    before = familiar["hp"]
+    server.apply_damage(room, familiar, bite, a["id"], "bite", game)
+    assert abs(familiar["hp"] - before) < 0.001, familiar["hp"]
+    game["units"].append(server.make_unit("mage", b["id"], 5080, 5000))
+    game["units"].append(server.make_unit("hexling", b["id"], 5050, 5000))
+    pick = server.nearest_enemy_infantry(game, a["id"], 5000, 5000, 400)
+    assert pick is not None and pick["kind"] == "mage", pick and pick["kind"]
+    print("  轻甲 bite ×0，贴脸魔仆不入猎物: PASS")
+
     print("\n=== 军犬测试全部通过 ===")
 
 
