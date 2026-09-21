@@ -1229,6 +1229,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     snipe: '偷家'
   };
   var BUILTIN_MAPS = {
+    central_rift: { id: 'central_rift', name: '五车争霸·裂谷旷野', width: 4000, height: 4000, maxPlayers: 5, theme: 'temperate', neutralOreGuards: false, briefing: '五辆折叠基地车中央出发。五处背靠林岩的高台，河谷与桥梁连接侧翼；五片15万主矿与五片8万争夺矿，无中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
     central_scramble: { id: 'central_scramble', name: '五车争霸', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在无矿的中央低地同时落地。外围五个方向各有一片随机位置的23万矿，无中立守军。长缓坡通往五处高地，高耸岩脊与沟谷之间留有侧翼绕行口。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
     gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着陨石核打，地图紧凑，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[5530,2443],[4640,5182],[1760,5182],[870,2443]] },
     iron_river_duel: { id: 'iron_river_duel', name: '铁峡争渡', width: 4800, height: 3200, maxPlayers: 2, theme: 'temperate', briefing: '左右对称的写实河谷战场：上中下三座钢桥分出正面与两路侧翼战线。', spawnLabels: ['西岸指挥部', '东岸指挥部'], spawnPoints: [[700,1600],[4100,1600]] }

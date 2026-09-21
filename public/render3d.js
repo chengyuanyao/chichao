@@ -3878,14 +3878,20 @@ export function createRenderer(canvas) {
     const rivers = (state.terrain && state.terrain.rivers) || [];
     const parts = [];
     const rockTemplates = [0, 1, 2].map(makeWeatheredRockGeometry);
+    const bankMaterial = applyWildernessRock(applyFogMask(new THREE.MeshLambertMaterial({
+      map: groundTexture, vertexColors: true, side: THREE.DoubleSide
+    })));
+    let bankCount = 0;
     rivers.forEach(function (river, r) {
       const dx = river.x2 - river.x1, dy = river.y2 - river.y1;
       const length = Math.hypot(dx, dy);
       if (length < 1) return;
       const nx = -dy / length, ny = dx / length;
       const count = Math.ceil(length / 24);
+      // 同一短河段的两岸共享边界与材质，静态合批，不增加逐帧工作。
+      const positions = [], colors = [], uv = [], indices = [];
       for (const side of [-1, 1]) {
-        const positions = [], colors = [], uv = [], indices = [], valid = [];
+        const valid = [], vertexOffset = positions.length / 3;
         for (let k = 0; k <= count; k++) {
           const t = k / count, cx = river.x1 + dx * t, cy = river.y1 + dy * t;
           const wave = (wildernessNoise(t * 18 + r * 7, side + 11) - 0.5) * 20;
@@ -3911,7 +3917,7 @@ export function createRenderer(canvas) {
         for (let k = 0; k < count; k++) {
           if (!valid[k] || !valid[k + 1]) continue;
           for (let row = 0; row < 4; row++) {
-            const a = k * 5 + row, b = a + 5;
+            const a = vertexOffset + k * 5 + row, b = a + 5;
             if (side > 0) indices.push(a, a + 1, b, a + 1, b + 1, b);
             else indices.push(a, b, a + 1, a + 1, b, b + 1);
           }
@@ -3928,24 +3934,24 @@ export function createRenderer(canvas) {
           transform.setPosition(x, -3, y);
           parts.push({ geo: rockTemplates[k % 3], matrix: transform, rgb: [0.73, 0.71, 0.65] });
         }
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-        geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-        geometry.setIndex(indices);
-        geometry.computeVertexNormals();
-        // Preserve the per-band sediment color when merging the bank geometry.
-        const mesh = new THREE.Mesh(geometry, applyWildernessRock(applyFogMask(new THREE.MeshLambertMaterial({
-          map: groundTexture, vertexColors: true, side: THREE.DoubleSide
-        }))));
-        mesh.name = 'river-stratified-bank-' + r + '-' + side;
-        mesh.userData.shadowCaster = true;
-        mesh.castShadow = state.shadows !== 'off';
-        mesh.receiveShadow = true;
-        geometry.computeBoundingSphere();
-        terrainGroup.add(mesh);
       }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      // Preserve the per-band sediment color when merging the bank geometry.
+      const mesh = new THREE.Mesh(geometry, bankMaterial);
+      mesh.name = 'river-stratified-bank-' + r;
+      mesh.userData.shadowCaster = true;
+      mesh.castShadow = state.shadows !== 'off';
+      mesh.receiveShadow = true;
+      geometry.computeBoundingSphere();
+      terrainGroup.add(mesh);
+      bankCount++;
     });
+    if (!bankCount) bankMaterial.dispose();
     if (parts.length) {
       const mesh = new THREE.Mesh(mergeParts(parts),
         applyWildernessRock(applyFogMask(new THREE.MeshLambertMaterial({
@@ -4151,7 +4157,8 @@ export function createRenderer(canvas) {
           const uy = rdy / len;
           const nx = -uy;
           const ny = ux;
-          const count = Math.max(24, Math.ceil(len / 58));
+          // 按米数而非线段数预算：弯河拆成短段不应每段重复铺 24 排树。
+          const count = Math.max(2, Math.ceil(len / 58));
           for (let k = 1; k < count; k++) {
             const t = k / count;
             for (let side = -1; side <= 1; side += 2) {
@@ -4288,6 +4295,7 @@ export function createRenderer(canvas) {
       return LOW[pick];
     };
 
+    const rockChunks = new Map();
     mountains.forEach(function (m, mi) {
       // 固定伪随机：同一张地图每次布局一致
       let seed = (Math.round(m.x) * 73856093 ^ Math.round(m.y) * 19349663 ^ mi) >>> 0;
@@ -4295,13 +4303,16 @@ export function createRenderer(canvas) {
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         return seed / 0x7fffffff;
       };
-      const parts = [];
+      const key = forestChunkKey(m.x, m.y);
+      let parts = rockChunks.get(key);
+      if (!parts) { parts = []; rockChunks.set(key, parts); }
+      const mountainPartStart = parts.length;
       const push = function (px, py, sx, sy, sz, rotY, tilt, rgb) {
         const mat = new THREE.Matrix4().makeRotationY(rotY);
         mat.multiply(new THREE.Matrix4().makeRotationX(tilt));
         mat.scale(new THREE.Vector3(sx, sy, sz));
         mat.setPosition(px, groundHeight(px, py) - sy * 0.05, py);
-        parts.push({ geo: rockTemplates[parts.length % 3], matrix: mat, rgb: rgb });
+        parts.push({ geo: rockTemplates[(parts.length - mountainPartStart) % 3], matrix: mat, rgb: rgb });
       };
 
       const count = Math.max(9, Math.round(m.r / 15));
@@ -4333,7 +4344,12 @@ export function createRenderer(canvas) {
           rand() * TAU, (rand() - 0.5) * 0.8, LOW[Math.floor(rand() * 3)]);
       }
 
-      const mesh = new THREE.Mesh(mergeParts(parts), material);
+    });
+    // 岩块保持原坐标/模板/颜色，只按空间分块合批，仍能视锥剔除。
+    rockChunks.forEach(function (parts) {
+      const geometry = mergeParts(parts);
+      geometry.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geometry, material);
       mesh.userData.shadowCaster = true;
       mesh.castShadow = state.shadows !== 'off';
       mesh.receiveShadow = true;
@@ -4354,8 +4370,10 @@ export function createRenderer(canvas) {
     const rivers=state.terrain.rivers||[];
     for(const river of rivers) {
       const dx=river.x2-river.x1,dy=river.y2-river.y1,len=Math.hypot(dx,dy)||1;
-      for(let i=0;i<110;i++) {
-        const t=(i+.5)/110,cx=river.x1+dx*t,cy=river.y1+dy*t;
+      // 长河仍保留原来的 110 组上限；短河按长度取样，避免曲线分段放大面数。
+      const count=Math.min(110,Math.max(1,Math.ceil(len/30)));
+      for(let i=0;i<count;i++) {
+        const t=(i+.5)/count,cx=river.x1+dx*t,cy=river.y1+dy*t;
         for(const side of [-1,1]) {
           const spread=river.width*.5+55+wildernessNoise(i*.7,side+5)*48;
           const x=cx-dy/len*spread*side,y=cy+dx/len*spread*side;

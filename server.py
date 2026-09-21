@@ -53,6 +53,7 @@ from catalog import (
 import easter_eggs
 import battle_report
 import diagnostics
+import rift_map
 from tactical_orders import scatter_destinations
 
 
@@ -482,9 +483,12 @@ MAPS = {
     },
 }
 
-# 当前版本只发布三张正式图；顺序同时作为公共目录的稳定顺序。
+MAPS[rift_map.MAP_ID] = rift_map.build_map()
+
+# 新图独立发布，保留原版五车争霸；顺序同时作为公共目录的稳定顺序。
 SHIPPED_MAP_IDS = (
     "central_scramble",
+    "central_rift",
     "gold_crater_small",
     "iron_river_duel",
 )
@@ -536,6 +540,10 @@ TERRAIN_DETAIL_PROFILES = {
 }
 
 MAP_TERRAIN_DETAIL = {
+    "central_rift": {
+        "relief": 1.4, "colorVariation": 1.48, "grassDensity": 1.15,
+        "rockDensity": 1.1, "spawnFlatRadius": 110, "centerFlatRadius": 350,
+    },
     # 仅保留中央小片平整落地区；大范围高差由专门的高地/岩脊/沟谷控制。
     "central_scramble": {
         "relief": 1.62,
@@ -2539,7 +2547,10 @@ def start_game(room):
 
     # 地图可布置固定争夺矿（中庭头奖、口袋矿）。公共矿走同一套守军逻辑。
     bonus_public = []
-    for bonus in room_map.get("bonusResources") or ():
+    bonus_resources = (rift_map.resource_layout(game["map"]["seed"])
+                       if room_map["id"] == rift_map.MAP_ID
+                       else room_map.get("bonusResources") or ())
+    for bonus in bonus_resources:
         resource = add_resource(
             game, bonus["x"], bonus["y"], bonus.get("amount", 20000),
             public=bool(bonus.get("public", True)))

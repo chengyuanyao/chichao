@@ -40,7 +40,7 @@ def main():
     random.seed(20260719)
 
     # --- Test 1: 赤金陨坑与写实河谷图使用权威 rivers / bridges ---
-    river_maps = {"gold_crater_small", "iron_river_duel"}
+    river_maps = {"gold_crater_small", "iron_river_duel", "central_rift"}
     for map_id in sorted(server.MAPS):
         map_data = server.MAPS[map_id]
         if map_id in river_maps:

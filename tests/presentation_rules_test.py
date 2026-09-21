@@ -146,7 +146,7 @@ def main():
     assert "max-width: 100%;" in styles
 
     # 赤金陨坑用河数据做林带；新双人图用同一权威数据画真河谷。
-    crater_ids = ("gold_crater_small", "iron_river_duel")
+    crater_ids = ("gold_crater_small", "iron_river_duel", "central_rift")
     for map_id in crater_ids:
         crater = server.MAPS[map_id]
         assert crater.get("rivers") and crater.get("bridges")
@@ -159,6 +159,7 @@ def main():
     expected_sizes = {
         "gold_crater_small": (6400, 6400),
         "central_scramble": (4000, 4000),
+        "central_rift": (4000, 4000),
         "iron_river_duel": (4800, 3200),
     }
     assert {map_id: (map_def["width"], map_def["height"])

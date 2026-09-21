@@ -38,6 +38,7 @@ def fixture_catalog():
         sector_jitter_degrees=definition["publicOreSectorJitterDegrees"],
         sector_clearance=definition["publicOreSectorClearance"])
     maps["central_scramble"]["resources"] = game["resources"]
+    maps["central_rift"]["resources"] = server.rift_map.resource_layout(90241)
     return {
         "maps": maps,
         "units": server.UNIT_TYPES,

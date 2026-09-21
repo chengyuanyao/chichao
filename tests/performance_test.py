@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 
 
-def main():
+def main(map_id="central_scramble"):
     random.seed(110)
     players = [server.create_human("性能%d" % index, server.COLORS[index])
                for index in range(4)]
@@ -24,7 +24,7 @@ def main():
         "players": {player["id"]: player for player in players},
         "chat": [], "game": None, "createdAt": time.time(),
         # 五车争霸没有中立守军，适合稳定衡量密集部队本身的实时预算。
-        "selectedMap": "central_scramble",
+        "selectedMap": map_id,
     }
     server.start_game(room)
     game = room["game"]
@@ -66,10 +66,11 @@ def main():
     assert average_ms < 15.0, average_ms
     assert p95_ms < 25.0, p95_ms
     assert maximum_ms < 45.0, maximum_ms
-    print("performance ok: 4 players, %d units, avg %.2f ms/tick, p95 %.2f ms, max %.2f ms, snapshots %.1f KiB" % (
-        len(game["units"]), average_ms, p95_ms, maximum_ms,
+    print("performance ok [%s]: 4 players, %d units, avg %.2f ms/tick, p95 %.2f ms, max %.2f ms, snapshots %.1f KiB" % (
+        map_id, len(game["units"]), average_ms, p95_ms, maximum_ms,
         snapshot_bytes / 1024.0))
 
 
 if __name__ == "__main__":
     main()
+    main("central_rift")

@@ -99,6 +99,9 @@ def check_map(map_id, map_def):
     if map_id == "gold_crater_small":
         assert map_def.get("rivers"), "%s: 外环卡口需要河流" % map_id
         assert map_def.get("bridges"), "%s: 外环卡口需要桥梁" % map_id
+    elif map_id == "central_rift":
+        assert len(map_def["rivers"]) == 15 and len(map_def["bridges"]) == 5
+        assert map_def["visualStyle"] == "river_valley"
     elif map_id == "iron_river_duel":
         assert map_def.get("rivers"), "%s: 需要中央河谷" % map_id
         assert len(map_def.get("bridges") or []) == 3, \
@@ -112,6 +115,7 @@ def check_map(map_id, map_def):
     expected_sizes = {
         "gold_crater_small": (6400, 6400),
         "central_scramble": (4000, 4000),
+        "central_rift": (4000, 4000),
         "iron_river_duel": (4800, 3200),
     }
     assert (width, height) == expected_sizes[map_id], \

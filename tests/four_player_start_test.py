@@ -15,7 +15,7 @@ import server
 
 
 SHIPPED_MAPS = (
-    "central_scramble", "gold_crater_small", "iron_river_duel")
+    "central_scramble", "central_rift", "gold_crater_small", "iron_river_duel")
 TICKS = 24
 
 
@@ -115,8 +115,8 @@ def main():
     assert tuple(server.MAPS) == SHIPPED_MAPS
     assert server.DEFAULT_MAP == "gold_crater_small"
 
-    print("=== 两张 5 人图支持 4 人与满 5 人开局 ===")
-    for map_id in ("gold_crater_small", "central_scramble"):
+    print("=== 三张 5 人图支持 4 人与满 5 人开局 ===")
+    for map_id in ("gold_crater_small", "central_scramble", "central_rift"):
         for count in (4, 5):
             factions = tuple("tech" if i % 2 == 0 else "magic"
                              for i in range(count))
