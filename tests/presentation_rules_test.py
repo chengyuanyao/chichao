@@ -498,7 +498,8 @@ def main():
     assert "function scaleUnitModel(model, sx, sy, sz)" in render
     assert "}, 1.65, 1.25, 1.65);" in render
     assert "}, 1.65, 1.42, 1.65);" in render
-    assert "scalePartList(wingBody, 1.0, 1.0, 0.82)" in render
+    assert "scalePartList(wingBody.concat(wingGlow),1,1,.82)" in render
+    assert "rigs.push({parts,pivot,axis:'x',side,mode:'wing'})" in render
     assert "scalePartList(wings, 1.0, 1.0, 0.82)" in render
     assert "UNIT_VISUAL_PICK_SCALE" not in app
     assert "view3d.pickEntityAt(roomState.game, pointer.x, pointer.y)" in app

@@ -29,6 +29,7 @@ input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;
 <button id="artToggle">切换样板美术</button>
 <button id="freeze">固定时间截图</button><button id="resume">继续动画</button><button id="hide">隐藏面板</button>
 <button id="capture">保存实际渲染 PNG</button>
+<button id="flightStep">飞翔动作下一帧</button>
 <button id="audio">试听战场音效</button><button id="healed">修复全部</button><button id="fxBurst">密集爆炸测试</button>
 <span id="fogControls" hidden><button id="scout">侦察首个矿区</button><button id="retreat">撤走侦察单位</button><button id="observe">淘汰观战</button><button id="restart">重开本图</button></span>
 </div>
@@ -36,6 +37,7 @@ input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;
 <script type="module">
 // Deliberately outside the game client: no login, SSE, rooms, or simulation worker.
 const query = new URLSearchParams(location.search);
+document.querySelector('#scenario').add(new Option('巨龙飞翔验收','dragon'));
 const status = document.querySelector('#status');
 if (query.get('hud') === '0') status.hidden = true;
 const modulePath = query.get('renderer') || '/public/render3d.js';
@@ -116,7 +118,9 @@ function loadScenario(options={}) {
   game = {elapsed:0,units:[],structures:[],ore:resources.map(r=>[r.id,r.amount,false]),
     projectiles:[],effects:[],crates:[],strikes:[],pings:[]};
   const keys = Object.keys(catalog.units);
-  if(scenario==='art') {
+  if(scenario==='dragon') {
+    for(let i=0;i<3;i++) game.units.push(unit('dragon',i,focus.x+(i-1)*165,focus.y));
+  } else if(scenario==='art') {
     game.units.push(unit('tank',0,2070,1450),unit('overlord',1,2010,1600),
       unit('overlord',2,2080,1640,3),unit('overlord',3,2100,1790,16),
       unit('dragon',4,2740,1630),unit('mage',5,2780,1760),unit('mage',6,2820,1770));
@@ -150,7 +154,7 @@ function loadScenario(options={}) {
     const count = Math.min(2000,Math.max(1,Number(options.count || query.get('count')) || 400));
     const columns = Math.ceil(Math.sqrt(count*1.65));
     // Stress profiles inspired by report compositions, not replayed concurrent armies.
-    const profiles={heroes:['overlord','dragon'],rockets:['rocket','rocket','rocket','dog','tesla','sniper'],
+    const profiles={dragons:['dragon'],heroes:['overlord','dragon'],rockets:['rocket','rocket','rocket','dog','tesla','sniper'],
       demolition:['overlord','overlord','bomb_truck']};
     const armyKinds=profiles[query.get('mix')] || keys;
     for (let i=0;i<count;i++) game.units.push(unit(armyKinds[i%armyKinds.length],i,
@@ -268,7 +272,7 @@ function renderPoint(x,y) {
   return {x:(x-r.left)*(renderWidth||innerWidth)/r.width,y:(y-r.top)*(renderHeight||innerHeight)/r.height};
 }
 canvas.addEventListener('pointerdown', async event => {
-  if (!['picking','art'].includes(scenario) || ![0,2].includes(event.button)) return;
+  if (!['picking','art','dragon'].includes(scenario) || ![0,2].includes(event.button)) return;
   event.preventDefault();
   const {x:sx,y:sy}=renderPoint(event.clientX,event.clientY);
   if(event.button===0) {inputDrag={x:event.clientX,y:event.clientY};canvas.setPointerCapture(event.pointerId);return;}
@@ -452,6 +456,7 @@ document.querySelector('#artToggle').onclick=async()=>{
   document.querySelector('#results').hidden=false;
 };
 document.querySelector('#freeze').onclick=()=>window.benchmark.freeze();
+document.querySelector('#flightStep').onclick=()=>window.benchmark.freeze(sceneTime+327);
 document.querySelector('#capture').onclick=()=>{
   if(runningBenchmark) return;
   halted=false;lastAt=0;kick();

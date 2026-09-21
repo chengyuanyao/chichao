@@ -15,6 +15,7 @@ import { createBlastSurface, BLAST_FRAGMENT } from './blast_surface.js';
 import { warmAssetTasks, solidSurface } from './asset_warmup.js';
 import { createPostFX } from './postfx.js';
 import { riverUnitModel, riverStructureDetails, artJointAngle } from './river_art_models.js';
+import { advanceDragonFlight, dragonFlightPoint } from './dragon_flight.js';
 import { createRiverSurfaceMaps, createRiverEnvironment, applyRiverPBR, applyRiverGround } from './river_art_materials.js';
 import { createAttackRangePreview } from './attack_range_preview.js';
 import { createModelPicker } from './model_picker.js';
@@ -1328,7 +1329,7 @@ const UNIT_BUILDERS = {
     // ——背甲、颈甲、尾甲、翼板——全部走玩家色实色，脊梁、节缝与胸核走玩家色
     // 自发光，固定霓虹只留目镜、颊灯、翼尖边和龙息这些小件。
     //
-    // 包围盒与上一版持平（长 64 / 高 22.3 / 翼展 52.6），俯视点选半径继续有效。
+    // 静态尺寸沿用上一版；动态点选读取身体和翼关节的实际实例矩阵。
     const PLATE = MAT.odyPlate;
     const LIT = MAT.odyPlateLit;
     const FRAME = MAT.odyFrame;
@@ -1436,9 +1437,9 @@ const UNIT_BUILDERS = {
     [1, -1].forEach(function (side) {
       glow.push(sph(0.42, 5, 15.2, 21.9, side * 4.2, SEAM));     // 天线发射端
     });
-    const wingBody = [];
-    const wingGlow = [];
+    const rigs = [];
     [1, -1].forEach(function (side) {
+      const wingBody = [], wingGlow = [];
       // 翼骨：金梁 + 铬撑
       wingBody.push.apply(wingBody, surfaced(SURF.metal, [
         boxOrient(18, 1.30, 1.70, -1.6, 14.4, side * 12.4, GOLD, side * 0.16, side * 0.52, 0.26),
@@ -1458,11 +1459,14 @@ const UNIT_BUILDERS = {
         side * 0.18, side * 0.48, 0.16));
       wingGlow.push(boxOrient(9.6, 0.16, 0.42, -13.2, 16.2, side * 25.2, SEAM,
         side * 0.24, side * 0.82, 0.10));
+      const pivot=[3,13,side*4];
+      const parts=scalePartList(wingBody.concat(wingGlow),1,1,.82);
+      const rebase=new THREE.Matrix4().makeTranslation(-pivot[0],-pivot[1],-pivot[2]);
+      for(const part of parts) part.matrix.premultiply(rebase);
+      rigs.push({parts,pivot,axis:'x',side,mode:'wing'});
     });
-    // 只收短翼展，不压缩头、躯干与尾巴；依旧是同一份合并网格。
-    body.push.apply(body, scalePartList(wingBody, 1.0, 1.0, 0.82));
-    glow.push.apply(glow, scalePartList(wingGlow, 1.0, 1.0, 0.82));
-    return { body: body, glow: glow };
+    // 两侧各一个实例批次，与龙的数量无关；翼板与发光边一起绕翼根转动。
+    return { body: body, glow: glow, rigs };
   },
   warden: function () {
     // 晶铠卫士：天启级巨型持盾构装。宽肩重甲、晶冠、分层塔盾与晶锤组成
@@ -5941,7 +5945,8 @@ export function createRenderer(canvas) {
       const barW = (u.size > 16 ? 26 : 18) + (sel ? 4 : 0);
       const barH = sel ? 4 : 3;
       const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
-      const barY = gy + u.size * 1.9 + 12;
+      // 血条保持在巡航高度上方，不为悬浮微动强迫全场血条每帧重建。
+      const barY = gy + u.size * 1.9 + 12 + (u.kind==='dragon'?10*UNIT_VISUAL_SCALE.dragon:0);
 
       barScale.set(barW + 1.5, 1, barH + 1);
       barBgMesh.setMatrixAt(bg, matrix.compose(barPos.set(vis.x, barY, vis.y), barQuat, barScale));
@@ -7517,6 +7522,7 @@ export function createRenderer(canvas) {
   // 逐帧复用，避免每单位每帧都分配临时对象
   const matrix = new THREE.Matrix4();
   const artLocal = new THREE.Matrix4();
+  const flightEuler = new THREE.Euler();
   const quat = new THREE.Quaternion();
   const quatIdentity = new THREE.Quaternion();
   const vecPos = new THREE.Vector3();
@@ -7714,10 +7720,10 @@ export function createRenderer(canvas) {
     } else if (kind === 'dragon') {
       // 待机时炮口的余能。这里过去还留着最早那版西方龙的橙火（2.2/1.0/0.28），
       // 改玉龙时漏掉了，跟现在的紫青龙息完全对不上，一并改成奥术紫。
-      const mx = vis.x + Math.cos(vis.dir) * 22 * scale * 0.55;
-      const mz = vis.y + Math.sin(vis.dir) * 22 * scale * 0.55;
+      const tip=state.artSample?29:31, height=state.artSample?27:14;
+      dragonFlightPoint(vecAux,vis,tip,height,scale);
       emit(fireLayer, {
-        x: mx, y: gy + 16 * scale * 0.55, z: mz,
+        x: vecAux.x, y: vecAux.y, z: vecAux.z,
         vx: Math.cos(vis.dir) * 16 + (Math.random() - 0.5) * 8,
         vy: 6 + Math.random() * 10,
         vz: Math.sin(vis.dir) * 16 + (Math.random() - 0.5) * 8,
@@ -7946,6 +7952,9 @@ export function createRenderer(canvas) {
       const vkind = unitVisualKind(u);
       vis.visualKind = vkind;
       advanceTracks(vis,vis.x-oldX,vis.y-oldY,turn,UNIT_VISUAL_SCALE[vkind]||1);
+      if(vkind==='dragon') advanceDragonFlight(vis,payload.time,dt,
+        Math.hypot(vis.x-oldX,vis.y-oldY),turn,UNIT_VISUAL_SCALE.dragon,
+        !state.lod||camDist<=HERO_LOD_DISTANCE);
       if(state.artSample) {
       const distanceMoved=Math.hypot(vis.x-oldX,vis.y-oldY)/(UNIT_VISUAL_SCALE[vkind]||1);
       vis.artTravel=((vis.artTravel||0)+Math.min(distanceMoved,30))%(Math.PI*8);
@@ -8031,15 +8040,25 @@ export function createRenderer(canvas) {
         let gy = vis.groundY;
         const artVehicle=state.artSample&&!simpleKind&&TRACK_SPANS[kind]!=null &&
           (snapshotVisuals.length<=120 || kind==='tank' || kind==='overlord');
-        const transformDirty = (artVehicle && Math.abs((vis.lastRenderPitch??Infinity)-(vis.artPitch||0))>.0001) || ids[i] !== vis.unit.id ||
+        const flying=kind==='dragon';
+        const flightDirty=flying&&(!simpleKind||Math.abs((vis.lastSimpleFlightLift??Infinity)-vis.flightLift)>.005);
+        const transformDirty = flightDirty || (artVehicle && Math.abs((vis.lastRenderPitch??Infinity)-(vis.artPitch||0))>.0001) || ids[i] !== vis.unit.id ||
           Math.abs(xs[i] - vis.x) > 0.005 ||
           Math.abs(ys[i] - vis.y) > 0.005 ||
           Math.abs(dirs[i] - vis.dir) > 0.0001;
         if (transformDirty) {
-          gy = groundHeight(vis.x, vis.y);
+          if(gy==null || ids[i]!==vis.unit.id || Math.abs(xs[i]-vis.x)>.005 || Math.abs(ys[i]-vis.y)>.005)
+            gy = groundHeight(vis.x, vis.y);
           vis.groundY = gy;
-          quat.setFromAxisAngle(upAxis, -vis.dir);
-          vecPos.set(vis.x, gy, vis.y);
+          if(flying) {
+            // YZX 与原来的朝向·俯仰·侧倾同序，只 compose 一次，省掉三次矩阵乘法。
+            quat.setFromEuler(flightEuler.set(simpleKind?0:vis.flightBank,-vis.dir,vis.flightPitch,'YZX'));
+            vecPos.set(vis.x,gy+vis.flightLift*scale,vis.y);
+            if(simpleKind) vis.lastSimpleFlightLift=vis.flightLift;
+          } else {
+            quat.setFromAxisAngle(upAxis, -vis.dir);
+            vecPos.set(vis.x, gy, vis.y);
+          }
           matrix.compose(vecPos, quat, vecScale);
           if(artVehicle) {
             artLocal.makeTranslation(0,9,0);matrix.multiply(artLocal);
@@ -8088,22 +8107,32 @@ export function createRenderer(canvas) {
       mesh.receiveShadow = doContactShadows && !simpleKind;
       if(!simpleKind) (pool.rigs||[]).forEach((rig,j)=>{
         const rigMesh=pool['rig'+j];
+        let rigColorDirty=false,rigFeedbackDirty=false;
         for(let i=0;i<list.length;i++) {
           const vis=list[i];
-          quat.setFromAxisAngle(upAxis,-vis.dir);
-          matrix.compose(vecPos.set(vis.x,vis.groundY,vis.y),quat,vecScale.set(scale,scale,scale));
+          // 直接继承主模型矩阵：悬浮、俯仰和转弯倾斜不能把翼根撕开。
+          mesh.getMatrixAt(i,matrix);
           artLocal.makeTranslation(...rig.pivot);matrix.multiply(artLocal);
-          const angle=artJointAngle(rig,payload.time,vis.artTravel||0,vis.artMotion||0);
+          const angle=kind==='dragon'?rig.side*vis.flightWing:
+            artJointAngle(rig,payload.time,vis.artTravel||0,vis.artMotion||0);
           if(rig.axis==='x') artLocal.makeRotationX(angle);else artLocal.makeRotationZ(angle);
           matrix.multiply(artLocal);rigMesh.setMatrixAt(i,matrix);
           rigMesh.userData.instanceIds[i]=vis.unit.id;
-          tmpColor.set(colorOf(vis.unit.owner));rigMesh.setColorAt(i,tmpColor);
-          rigMesh.geometry.attributes.aFeedback.setXYZW(i,0,0,vis.hitFlash,vis.condition);
+          const color=colorOf(vis.unit.owner);
+          if(rigMesh.userData.instanceColors[i]!==color) {
+            tmpColor.set(color);rigMesh.setColorAt(i,tmpColor);
+            rigMesh.userData.instanceColors[i]=color;rigColorDirty=true;
+          }
+          const attr=rigMesh.geometry.attributes.aFeedback;
+          if(Math.abs(attr.getZ(i)-vis.hitFlash)>.0001||Math.abs(attr.getW(i)-vis.condition)>.0001) {
+            attr.setXYZW(i,0,0,vis.hitFlash,vis.condition);rigFeedbackDirty=true;
+          }
         }
         rigMesh.count=list.length;rigMesh.visible=list.length>0;rigMesh.castShadow=doShadows;
         rigMesh.receiveShadow=doContactShadows;
-        rigMesh.instanceMatrix.needsUpdate=true;rigMesh.instanceColor.needsUpdate=true;
-        rigMesh.geometry.attributes.aFeedback.needsUpdate=true;
+        rigMesh.instanceMatrix.needsUpdate=true;
+        if(rigColorDirty) rigMesh.instanceColor.needsUpdate=true;
+        if(rigFeedbackDirty) rigMesh.geometry.attributes.aFeedback.needsUpdate=true;
       });
       // Barrels remain instanced by kind, and their real matrices are pickable.
       if (!simpleKind && pool.barrel) {
@@ -8198,16 +8227,13 @@ export function createRenderer(canvas) {
     if (dragonOrbitVisuals.length) {
       const orbs = ensureDragonOrbitMesh(dragonOrbitVisuals.length);
       orbs.material=state.artSample?(riverUnitMaterials.get('metal')||unitMetalMaterial):unitMetalMaterial;
-      const orbScale = UNIT_VISUAL_SCALE.dragon;
       for (let i = 0; i < dragonOrbitVisuals.length; i++) {
         const vis = dragonOrbitVisuals[i];
         // 每台龙给一个固定相位，否则一队龙的核球会整齐划一地同步转
         if (vis.orbitPhase == null) vis.orbitPhase = Math.random() * TAU;
-        const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
-        quat.setFromAxisAngle(upAxis, -vis.dir);
-        matrix.compose(
-          vecPos.set(vis.x, gy + DRAGON_ORBIT_PIVOT_Y * orbScale, vis.y),
-          quat, vecScale.set(orbScale, orbScale, orbScale));
+        unitPools.get('dragon').mesh.getMatrixAt(i,matrix);
+        dragonOrbitLocal.makeTranslation(0,DRAGON_ORBIT_PIVOT_Y,0);
+        matrix.multiply(dragonOrbitLocal);
         // 均匀缩放和旋转可交换：先沿模型 +X 推到颈根上方，再绕该点自转
         dragonOrbitLocal.makeTranslation(DRAGON_ORBIT_PIVOT_X, 0, 0);
         matrix.multiply(dragonOrbitLocal);
@@ -8441,7 +8467,10 @@ export function createRenderer(canvas) {
         const point=state.artSample&&vis.visualKind==='dragon'?[29,27]:MUZZLE_POINTS[vis.visualKind];
         const tip=(bounds?bounds.max.x:(point?point[0]:vis.unit.size*.7))*scale;
         const height=(bounds?(bounds.max.y+bounds.min.y)*.5:(point?point[1]:vis.unit.size))*scale;
-        spawnEffect(fx.type,vis.x+Math.cos(vis.dir)*tip,vis.y+Math.sin(vis.dir)*tip,fxKind,{...fx,height});
+        if(vis.visualKind==='dragon' && vis.inRenderRange) {
+          dragonFlightPoint(vecAux,vis,tip/scale,height/scale,scale);
+          spawnEffect(fx.type,vecAux.x,vecAux.z,fxKind,{...fx,height:vecAux.y-groundHeight(vecAux.x,vecAux.z)});
+        } else spawnEffect(fx.type,vis.x+Math.cos(vis.dir)*tip,vis.y+Math.sin(vis.dir)*tip,fxKind,{...fx,height});
       } else spawnEffect(fx.type, fx.x, fx.y, fxKind,fx);
     }
     projectileHintPrev = projectileHints;

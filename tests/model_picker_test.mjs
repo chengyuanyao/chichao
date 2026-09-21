@@ -54,7 +54,9 @@ const building={id:'s1',owner:'enemy',kind:'hq',hp:100};
 // actual instance transforms, not the entity's (deliberately wrong) position.
 let cases=0;
 for(const kind of factories.kinds) {
-  for(const geo of Object.values(factories.unitGeometry(kind))) {
+  const geometry=factories.unitGeometry(kind);
+  for(const geo of Object.entries(geometry).filter(([key])=>key!=='rigs').map(([,geo])=>geo)
+      .concat((geometry.rigs||[]).map(r=>r.geometry))) {
     const mesh=new THREE.InstancedMesh(geo,mat,1);
     const matrix=new THREE.Matrix4().compose(new THREE.Vector3(18,35,9),
       new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),.63),new THREE.Vector3(1.6,1.6,1.6));
@@ -62,6 +64,20 @@ for(const kind of factories.kinds) {
     picker.begin(); picker.addInstances(mesh,()=>unit);
     assert.equal(pick(trianglePoint(geo).applyMatrix4(matrix)),unit,kind);
     mesh.dispose(); cases++;
+  }
+}
+// 翅膀绕真实翼根扇动；升空、转向和地面起伏后仍按实例矩阵点选。
+for(const rig of factories.unitGeometry('dragon').rigs) {
+  for(const angle of [-.44,.56]) {
+    const mesh=new THREE.InstancedMesh(rig.geometry,mat,1);
+    const matrix=new THREE.Matrix4().makeTranslation(18,52,9)
+      .multiply(new THREE.Matrix4().makeRotationY(.63))
+      .multiply(new THREE.Matrix4().makeRotationZ(-.065))
+      .multiply(new THREE.Matrix4().makeTranslation(...rig.pivot))
+      .multiply(new THREE.Matrix4().makeRotationX(angle*rig.side));
+    mesh.setMatrixAt(0,matrix);picker.begin();picker.addInstances(mesh,()=>unit);
+    assert.equal(pick(trianglePoint(rig.geometry).applyMatrix4(matrix)),unit,'animated dragon wing');
+    mesh.dispose();cases++;
   }
 }
 // All 15 buildings, including their heads, spinners and construction scaling.

@@ -38,7 +38,8 @@ for (const kind of Object.keys(builders)) {
   assert.strictEqual(geometryFor(kind), entry, `${kind}: cache must reuse entry`);
   assert.equal(calls, 1, `${kind}: all instances must share one model build`);
 
-  for (const [lod, geo] of Object.entries(entry)) {
+  for (const [lod, geo] of Object.entries(entry).filter(([key])=>key!=='rigs')
+      .concat((entry.rigs||[]).map((rig,i)=>['rig'+i,rig.geometry]))) {
     assert.ok(geo.attributes.position.count > 0, `${kind}/${lod}: empty model`);
     for (const attr of ['position', 'normal', 'color', 'aOcc', 'aSurf', 'aTeam']) {
       assert.ok(geo.attributes[attr].array.every(Number.isFinite),
@@ -49,7 +50,7 @@ for (const kind of Object.keys(builders)) {
     if (lod === 'simple') {
       assert.ok(occ.every(value => value === 1), `${kind}: distant LOD must skip AO baking`);
     } else {
-      if (lod !== 'barrel') assert.ok(occ.some(value => value < 0.99), `${kind}: near model must bake occlusion`);
+      if (lod !== 'barrel' && !lod.startsWith('rig')) assert.ok(occ.some(value => value < 0.99), `${kind}: near model must bake occlusion`);
       const color = geo.attributes.color;
       for (let i = 0; i < color.count; i++) {
         if (Math.max(color.getX(i), color.getY(i), color.getZ(i)) > 1.05) {
