@@ -57,7 +57,7 @@ VEHICLE_KINDS = frozenset((
     "golem", "dragon", "warden", "colossus", "comet", "mharvester", "mmcv",
 ))
 
-# 死亡/贴脸引爆的玻璃大炮。钢铁是轻甲载具，秘法会对位是魔导活体（非载具）。
+# 死亡/贴脸引爆的玻璃大炮。钢铁是轻甲载具，秘法会对位是轻甲活体（非载具）。
 SUICIDE_KINDS = frozenset(("bomb_truck", "hexling"))
 
 UNIT_TYPES = {
@@ -309,14 +309,14 @@ UNIT_TYPES = {
     # 爆裂魔仆：秘法会对位自爆单位，不是卡车。符核活体，法阵召唤。
     # 造价/训练/移速/血/爆炸与卡车对齐（1000 / 8.5 / 97.9 / 160 / 700 / 120）。
     # 目标倍率也与卡车一致：建筑/采矿单位 ×1.5，其余单位 ×0.8。
-    # 邻近自爆不连带。魔导甲、不算载具：军犬能扑，但一口咬不死（160 血，咬 90）。
-    # 圣泉修不了。
+    # 邻近自爆不连带。轻甲、不算载具：军犬 bite ×0，不当猎物。
+    # 狙击按轻甲 55×0.4=22 / 发。圣泉修不了。
     "hexling": {
         "name": "爆裂魔仆", "cost": 1000, "hp": 160, "speed": 97.9,
         "damage": 0.0, "range": 22.0, "cooldown": 0.0,
         "size": 11.0, "build": 8.5, "producer": "mcircle",
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
-        "sight": 350.0, "armor": "arcane", "damageType": "explosive",
+        "sight": 350.0, "armor": "light", "damageType": "explosive",
         "deathExplosion": {
             "damage": 700.0, "radius": 120.0,
             "damageType": "explosive",

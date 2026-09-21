@@ -65,7 +65,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     comet: { icon: '✺', desc: '超远程坠星，曲射拆建筑，弹速慢能躲 · 需圣泉' },
     mharvester: { icon: '◈', desc: '自动采集水晶' },
     mmcv: { icon: '⬡', desc: '可展开为魔法主堡' },
-    hexling: { icon: '✶', desc: '符核魔仆，贴脸或阵亡引爆；非载具，军犬能扑' }
+    hexling: { icon: '✶', desc: '符核魔仆，贴脸或阵亡引爆；轻甲非载具，军犬咬不动' }
   };
 
   var BUILDINGS = {};

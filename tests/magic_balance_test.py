@@ -69,10 +69,10 @@ def main():
             field, truck["deathExplosion"][field], hexling["deathExplosion"][field])
     assert "chainRadius" not in truck["deathExplosion"]
     assert "chainRadius" not in hexling["deathExplosion"]
-    assert hexling["hp"] > bite_arcane
-    assert hexling["armor"] == "arcane"
+    assert hexling["armor"] == "light"
     assert truck["armor"] == "light"
-    assert server.is_dog_prey("hexling")
+    assert "hexling" not in server.VEHICLE_KINDS
+    assert not server.is_dog_prey("hexling")
     assert not server.is_dog_prey("bomb_truck")
     room, a, b = make_room("MB02")
     game = room["game"]
@@ -81,12 +81,11 @@ def main():
     before = familiar["hp"]
     dog_bite = server.UNIT_TYPES["dog"]["damage"]
     server.apply_damage(room, familiar, dog_bite, a["id"], "bite", game)
-    assert familiar["hp"] > 0
-    assert abs((before - familiar["hp"]) - bite_arcane) < 0.1
+    assert abs(familiar["hp"] - before) < 0.001, familiar["hp"]
     assert truck["cost"] == 1000
     assert truck["build"] == 8.5
     assert truck["speed"] == 97.9
-    print("  1000/8.5/97.9/160/700/r120 对齐，魔仆一口不死: PASS")
+    print("  1000/8.5/97.9/160/700/r120 对齐，魔仆轻甲 bite ×0: PASS")
 
     print("\n=== Test 3: 经济甲种与钢铁对齐，采矿仍结算 ===")
     assert server.UNIT_TYPES["mharvester"]["armor"] == "heavy"
@@ -134,6 +133,7 @@ def main():
     assert abs(sniper["light"] - 0.40) < 1e-6
     tesla_hit = 26 * tesla["arcane"]
     sniper_hit = 55 * sniper["arcane"]
+    hex_sniper = 55 * sniper["light"]
     mage_hp = server.UNIT_TYPES["mage"]["hp"]
     frost_hp = server.UNIT_TYPES["frost"]["hp"]
     hex_hp = server.UNIT_TYPES["hexling"]["hp"]
@@ -141,8 +141,8 @@ def main():
     assert tesla_hit * 2 < mage_hp, "160 血法师应吃下两发磁暴"
     assert sniper_hit < mage_hp, "狙击不应一枪法师"
     assert sniper_hit * 2 >= mage_hp
-    assert tesla_hit * 2 < hex_hp
-    assert sniper_hit < hex_hp
+    assert abs(hex_sniper - 22.0) < 1e-6, hex_sniper
+    assert hex_sniper < hex_hp
     room, a, b = make_room("MB04")
     game = room["game"]
     mage = server.make_unit("mage", b["id"], 9000, 9000)
@@ -151,7 +151,12 @@ def main():
     server.apply_damage(room, mage, 26, a["id"], "tesla", game)
     assert abs((before - mage["hp"]) - tesla_hit) < 0.1
     assert mage["hp"] > 0
-    print("  tesla/sniper vs arcane ×1.6；对载具/步兵表不变: PASS")
+    hexling = server.make_unit("hexling", b["id"], 9100, 9100)
+    game["units"].append(hexling)
+    before = hexling["hp"]
+    server.apply_damage(room, hexling, 55, a["id"], "sniper", game)
+    assert abs((before - hexling["hp"]) - 22.0) < 0.1, hexling["hp"]
+    print("  tesla/sniper vs arcane ×1.6；魔仆轻甲狙击 22；对载具/步兵表不变: PASS")
 
     print("\n=== Test 5: 天启生命下调 300，其他钢铁单位数值不变 ===")
     dog = server.UNIT_TYPES["dog"]

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """自爆卡车 / 爆裂魔仆：
-   1) 目录与阵营：钢铁是轻甲载具，秘法会是魔导活体（非载具）
+   1) 目录与阵营：钢铁是轻甲载具，秘法会是轻甲活体（非载具）
    2) 工厂/法阵可训练，跨阵营拒绝
    3) 死亡爆炸打附近单位与建筑，带衰减；不伤友军
    4) 单车拆不掉满血总部；贴脸引爆
-   5) 军犬：卡车不当猎物且咬不动；魔仆是猎物但一口咬不死
+   5) 军犬：卡车不当猎物且咬不动；魔仆轻甲 bite ×0，也不当猎物
    6) 造价/血/速/爆炸对齐；单辆拆不掉满血总部；普通单位（含天启/巨龙）×0.8
    7) 速胜 AI 工厂一立就出自爆卡车，同时仍会混编其他兵种
    8) 无连环爆炸：溅射未致死则邻居还活着；友军并排不炸；圈外邻居不引爆
@@ -99,9 +99,8 @@ def main():
     assert hexling["deathExplosion"]["targetMultipliers"] == target_multipliers
     bite_to_hexling = (
         server.UNIT_TYPES["dog"]["damage"]
-        * server.DAMAGE_MULTIPLIER["bite"]["arcane"])
-    assert bite_to_hexling < hexling["hp"], (
-        "一口咬死魔仆：咬 %.0f / 血 %.0f" % (bite_to_hexling, hexling["hp"]))
+        * server.DAMAGE_MULTIPLIER["bite"]["light"])
+    assert abs(bite_to_hexling) < 1e-9, bite_to_hexling
     assert truck["name"] == "自爆卡车"
     assert hexling["name"] == "爆裂魔仆"
     assert truck["producer"] == "factory"
@@ -109,7 +108,7 @@ def main():
     assert truck["faction"] == "tech"
     assert hexling["faction"] == "magic"
     assert truck["armor"] == "light"
-    assert hexling["armor"] == "arcane"
+    assert hexling["armor"] == "light"
     assert "bomb_truck" in server.VEHICLE_KINDS
     assert "hexling" not in server.VEHICLE_KINDS
     assert "hexling" in server.MAGIC_UNITS
@@ -300,8 +299,8 @@ def main():
     assert prey["hp"] < 200, "目标应吃爆炸"
     print("  贴脸引爆: PASS")
 
-    print("\n=== Test 9: 军犬规则不把卡车当钢铁猎物，魔仆可咬但一口不死 ===")
-    assert server.is_dog_prey("hexling")
+    print("\n=== Test 9: 军犬规则不把卡车/魔仆当猎物，轻甲 bite ×0 ===")
+    assert not server.is_dog_prey("hexling")
     assert not server.is_dog_prey("bomb_truck")
     assert server.unit_can_attack("bomb_truck")
     assert server.unit_can_attack("hexling")
@@ -316,19 +315,18 @@ def main():
     game["units"].append(familiar)
     before = familiar["hp"]
     bite = server.UNIT_TYPES["dog"]["damage"]
-    expect_bite = bite * server.DAMAGE_MULTIPLIER["bite"]["arcane"]
-    assert expect_bite < before, (expect_bite, before)
+    expect_bite = bite * server.DAMAGE_MULTIPLIER["bite"]["light"]
+    assert abs(expect_bite) < 1e-9, expect_bite
     server.apply_damage(room, familiar, bite, a["id"], "bite", game)
-    assert familiar["hp"] > 0, "魔仆不该被一口咬死，剩 %s" % familiar["hp"]
-    assert abs((before - familiar["hp"]) - expect_bite) < 0.1, (
-        before - familiar["hp"], expect_bite)
+    assert abs(familiar["hp"] - before) < 0.001, (
+        "魔仆轻甲不该掉血，实际 %s -> %s" % (before, familiar["hp"]))
     room, a, b = make_room("SU08", magic_b=True)
     game = room["game"]
     game["units"].append(server.make_unit("bomb_truck", a["id"], 5050, 5000))
     game["units"].append(server.make_unit("hexling", b["id"], 5080, 5000))
     pick = server.nearest_enemy_infantry(game, a["id"], 5000, 5000, 400)
-    assert pick is not None and pick["kind"] == "hexling", pick and pick["kind"]
-    print("  卡车非猎物 / 魔仆可咬但一口不死: PASS")
+    assert pick is None, pick and pick["kind"]
+    print("  卡车/魔仆均非猎物，轻甲 bite ×0: PASS")
 
     print("\n=== Test 10: 攻击指令能发给自爆单位 ===")
     room, a, b = make_room("SU09")
