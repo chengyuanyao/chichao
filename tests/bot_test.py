@@ -108,7 +108,7 @@ def main():
     hq = player_hq(game, a["id"])
     hq["hp"] = hq["maxHp"] * 0.4
     server.tick_bots(room)
-    queued = a.get("buildQueue") or []
+    queued = a.get("defenseQueue") or []
     assert queued and queued[0]["kind"] == "turret", queued
     print("  总部受伤 → 哨戒炮塔: PASS")
 

@@ -251,7 +251,7 @@ def main():
 
     # 队列就绪后 AI 也必须能落地，否则魔法电脑永远卡在「建筑已就绪」
     b["isBot"] = True
-    b["buildQueue"] = [{
+    b["defenseQueue"] = [{
         "id": "c-ready", "kind": "mtower",
         "remaining": 0.0, "total": 12.0, "ready": True,
     }]

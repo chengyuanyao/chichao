@@ -205,13 +205,13 @@ class Commander(object):
                 return False
         return True
 
-    def _next_building(self, room, bot, plan, own_structures, supply, usage):
+    def _next_building(self, room, bot, plan, own_structures, supply, usage, queue_key=None):
         game = room["game"]
         bot_id = bot["id"]
         power_kind = faction_buildings(bot.get("faction", "tech")).get("power")
 
         # 电力是所有产能的总开关，排在固定序列之前。
-        if power_kind and supply - usage < POWER_BUFFER:
+        if queue_key != "defenseQueue" and power_kind and supply - usage < POWER_BUFFER:
             if self._prereq_ok(game, bot_id, power_kind):
                 return power_kind
 
@@ -221,6 +221,8 @@ class Commander(object):
 
         want = {}
         for kind in plan["build"]:
+            if queue_key and server.structure_queue_key(kind) != queue_key:
+                continue
             want[kind] = want.get(kind, 0) + 1
             if structure_role(kind) == "defense":
                 # 建造序列里 defense 只写一次，真正要几座由阶段（或 LLM）的
@@ -236,7 +238,7 @@ class Commander(object):
             return kind
 
         # 序列走完还堆着钱，说明产能不够：按配比给权重最高的产地加一座。
-        if bot.get("cash", 0) >= SURPLUS_CASH:
+        if queue_key != "defenseQueue" and bot.get("cash", 0) >= SURPLUS_CASH:
             best = None
             best_key = None
             for unit_kind, weight in plan["mix"].items():
@@ -254,19 +256,18 @@ class Commander(object):
         return None
 
     def _build(self, room, bot, plan, own_structures, supply, usage):
-        build_queue = bot.get("buildQueue", [])
-        if build_queue and build_queue[0].get("ready"):
-            server.bot_place_prepared(room, bot, build_queue[0]["kind"])
-            return
-        if build_queue:
-            return
-        kind = self._next_building(room, bot, plan, own_structures, supply, usage)
-        if not kind:
-            return
-        try:
-            queue_structure(room, bot["id"], kind)
-        except ValueError:
-            pass
+        for queue_key in server.BUILD_QUEUE_KEYS:
+            queue = bot.get(queue_key, [])
+            if queue:
+                if queue[0].get("ready"):
+                    server.bot_place_prepared(room, bot, queue[0]["kind"])
+                continue
+            kind = self._next_building(room, bot, plan, own_structures, supply, usage, queue_key)
+            if kind:
+                try:
+                    queue_structure(room, bot["id"], kind)
+                except ValueError:
+                    pass
 
     # ---------------------------------------------------------------- 生产
     def _produce(self, room, bot, plan, faction):

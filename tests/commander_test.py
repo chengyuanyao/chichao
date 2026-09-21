@@ -226,7 +226,7 @@ def check_bot_intents_distinct():
     game["units"].append(tank)
     server.set_commander_intent(room, a, {"kind": "defend", "x": focus_x, "y": focus_y})
     server.tick_bots(room)
-    queued = a.get("buildQueue") or []
+    queued = a.get("defenseQueue") or []
     assert queued and queued[0]["kind"] == "turret", queued
     assert tank.get("destX") is not None
     dist = hypot(tank["destX"] - focus_x, tank["destY"] - focus_y)

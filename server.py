@@ -894,6 +894,8 @@ def public_player(room, player, viewer_id=None):
         "powerUse": usage,
         "buildQueue": [dict(item) for item in player.get("buildQueue", [])]
         if viewer_id == player["id"] else [],
+        "defenseQueue": [dict(item) for item in player.get("defenseQueue", [])]
+        if viewer_id == player["id"] else [],
         "strikeCharges": player.get("strikeCharges", 0),
         "intent": public_intent(player) if commander_mode_on(room) else None,
         "executorBound": executor_is_bound(player) if commander_mode_on(room) else False,
@@ -1486,6 +1488,7 @@ def create_human(name, color, team=0, spawn=-1):
         "unitsLost": 0,
         "harvested": 0,
         "buildQueue": [],
+        "defenseQueue": [],
         "strikeCharges": 0,
         "bindToken": uuid.uuid4().hex,
         "intent": empty_commander_intent(),
@@ -1503,7 +1506,7 @@ def create_bot(room):
         # 新 AI 随机站队，加进来就是科技对魔法；房主仍可在列表里改它的阵营
         "team": 0, "faction": random.choice(("tech", "magic")), "spawn": -1, "ready": True, "isBot": True, "connections": 1, "lastSeen": now(),
         "cash": 0, "eliminated": False, "kills": 0, "unitsLost": 0,
-        "harvested": 0, "buildQueue": [], "strikeCharges": 0,
+        "harvested": 0, "buildQueue": [], "defenseQueue": [], "strikeCharges": 0,
         "bindToken": uuid.uuid4().hex,
         "intent": empty_commander_intent(),
         "executor": {"token": None, "lastSeen": 0, "connections": 0},
@@ -2466,6 +2469,7 @@ def start_game(room):
         player["harvested"] = 0
         player["combatRewardsEarned"] = 0
         player["buildQueue"] = []
+        player["defenseQueue"] = []
         player["strikeCharges"] = 0
         sp = player_spawns[player["id"]]
         player["spawn"] = sp
@@ -2733,6 +2737,15 @@ def place_structure(room, player_id, kind, x, y, free=False,
     return structure
 
 
+BUILD_QUEUE_KEYS = ("buildQueue", "defenseQueue")
+
+
+def structure_queue_key(kind):
+    if kind not in STRUCTURE_TYPES or structure_role(kind) == "hq":
+        raise ValueError("未知建筑")
+    return "defenseQueue" if structure_role(kind) == "defense" else "buildQueue"
+
+
 def queue_structure(room, player_id, kind):
     game = room["game"]
     player = room["players"][player_id]
@@ -2747,8 +2760,9 @@ def queue_structure(room, player_id, kind):
     for requirement in definition["requires"]:
         if not has_active_structure(game, player_id, requirement):
             raise ValueError("缺少前置建筑")
-    if player.get("buildQueue"):
-        raise ValueError("建筑生产队列已有任务")
+    queue_key = structure_queue_key(kind)
+    if player.get(queue_key):
+        raise ValueError("该类建筑生产队列已有任务")
     if player["cash"] < definition["cost"]:
         raise ValueError("资金不足")
     player["cash"] -= definition["cost"]
@@ -2758,31 +2772,41 @@ def queue_structure(room, player_id, kind):
         "remaining": float(definition["build"]),
         "total": float(definition["build"]), "ready": False,
     }
-    player["buildQueue"] = [item]
+    player[queue_key] = [item]
     return item
 
 
 def place_prepared_structure(room, player_id, kind, x, y):
     player = room["players"][player_id]
-    queue = player.get("buildQueue", [])
+    queue_key = structure_queue_key(kind)
+    queue = player.get(queue_key, [])
     if not queue or queue[0]["kind"] != kind or not queue[0].get("ready"):
         raise ValueError("该建筑尚未生产完成")
     structure = place_structure(
         room, player_id, kind, x, y, free=True,
         requirements_locked=True)
-    player["buildQueue"] = []
+    player[queue_key] = []
     return structure
 
 
-def cancel_structure_queue(room, player_id):
+def cancel_structure_queue(room, player_id, kind=None, queue_id=None):
     player = room["players"][player_id]
-    queue = player.get("buildQueue", [])
+    if kind is not None:
+        queue_key = structure_queue_key(kind)
+    else:
+        occupied = [key for key in BUILD_QUEUE_KEYS if player.get(key)]
+        if len(occupied) > 1:
+            raise ValueError("请指定要取消的建筑")
+        queue_key = occupied[0] if occupied else "buildQueue"
+    queue = player.get(queue_key, [])
     if not queue:
         raise ValueError("没有可取消的建筑任务")
     item = queue[0]
+    if (kind is not None and item["kind"] != kind) or (queue_id is not None and item["id"] != queue_id):
+        raise ValueError("该建筑生产任务已发生变化")
     player["cash"] += STRUCTURE_TYPES[item["kind"]]["cost"]
     battle_report.cash_flow(room, player_id, "structureRefund", STRUCTURE_TYPES[item["kind"]]["cost"])
-    player["buildQueue"] = []
+    player[queue_key] = []
 
 
 def queue_unit(room, player_id, kind):
@@ -3998,7 +4022,7 @@ def handle_game_command(room, player, payload, role="commander"):
     elif command == "placeBuild":
         place_prepared_structure(room, player["id"], str(payload.get("structureType", "")), payload.get("x", 0), payload.get("y", 0))
     elif command == "cancelBuild":
-        cancel_structure_queue(room, player["id"])
+        cancel_structure_queue(room, player["id"], payload.get("structureType"), payload.get("queueId"))
     elif command == "cancelTrain":
         cancel_unit_queue(room, player["id"], str(payload.get("unitType", "")))
     elif command == "sell":
@@ -5776,23 +5800,24 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
 def tick_build_queues(room, dt):
     game = room["game"]
     for player in room["players"].values():
-        queue = player.get("buildQueue", [])
-        if not queue or player.get("eliminated"):
+        if player.get("eliminated"):
             continue
-        item = queue[0]
-        if item.get("ready"):
+        items = [player[key][0] for key in BUILD_QUEUE_KEYS
+                 if player.get(key) and not player[key][0].get("ready")]
+        if not items:
             continue
         # 关闭机动建造时，最后一座总部折叠后暂停；默认开启时，存活基地车
         # 继续承接建筑生产。总部与基地车都不存在则始终没有建造授权。
         if not player_has_construction_authority(room, player["id"]):
-            battle_report.production_delay(room, player["id"], "authorityPause", dt)
+            battle_report.production_delay(room, player["id"], "authorityPause", dt * len(items))
             continue
         production_rate = production_power_factor(room, player["id"], 0.4)
-        if production_rate < 1:
-            battle_report.production_delay(room, player["id"], "buildPowerLoss", min(dt * production_rate, item["remaining"]) / production_rate * (1 - production_rate))
-        item["remaining"] = max(0.0, item["remaining"] - dt * production_rate)
-        if item["remaining"] <= 0:
-            item["ready"] = True
+        for item in items:
+            if production_rate < 1:
+                battle_report.production_delay(room, player["id"], "buildPowerLoss", min(dt * production_rate, item["remaining"]) / production_rate * (1 - production_rate))
+            item["remaining"] = max(0.0, item["remaining"] - dt * production_rate)
+            if item["remaining"] <= 0:
+                item["ready"] = True
 
 
 def tick_structure_repair(room, structure, dt, power_cache):
@@ -6469,9 +6494,6 @@ def bot_queue_building(room, bot, fb, roles, own_structures, supply, usage,
             enqueue("refinery")
         return
     if threatened or inbound:
-        defense_n = bot_role_count(own_structures, "defense")
-        if defense_n < 1 and afford("defense") and enqueue("defense"):
-            return
         if threatened and "repair" not in roles and afford("repair") and enqueue("repair"):
             return
         return
@@ -6716,10 +6738,15 @@ def tick_bots(room):
         if policy is not None:
             phase, threatened, inbound = apply_commander_bot_plan(
                 bot, roles, phase, threatened, inbound, policy)
-        build_queue = bot.get("buildQueue", [])
-        if build_queue and build_queue[0].get("ready"):
-            bot_place_prepared(room, bot, build_queue[0]["kind"])
-        elif not build_queue:
+        busy_queues = set(key for key in BUILD_QUEUE_KEYS if bot.get(key))
+        for queue_key in BUILD_QUEUE_KEYS:
+            queue = bot.get(queue_key, [])
+            if queue and queue[0].get("ready"):
+                bot_place_prepared(room, bot, queue[0]["kind"])
+        if ("defenseQueue" not in busy_queues and (threatened or inbound is not None)
+                and bot_role_count(own_structures, "defense") < 1):
+            bot_try_queue_structure(room, bot, fb["defense"])
+        if "buildQueue" not in busy_queues:
             bot_queue_building(
                 room, bot, fb, roles, own_structures, supply, usage,
                 threatened, phase, inbound is not None)

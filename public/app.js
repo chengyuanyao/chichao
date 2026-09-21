@@ -9,6 +9,7 @@ import { readReportHistory, saveReportHistory } from './report_history.js';
 import { createBattleAudio } from './battle_audio.js';
 import { createPerformanceRecorder } from './performance_report.js';
 import { createTelemetryUploader } from './telemetry_upload.js';
+import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './build_queues.js';
 
 (function () {
   'use strict';
@@ -1378,7 +1379,7 @@ import { createTelemetryUploader } from './telemetry_upload.js';
   var lobbyMutationsPending = 0;
   var lastHudUpdate = 0;
   var lastHudOverlayAt = -Infinity;
-  var lastReadyBuildId = null;
+  var lastReadyBuildIds = new Set();
   var ambientNode = null;
   // 静态开局数据：服务端只在每条 SSE 流的首帧（以及 REST 拉取时）下发
   var matchStatic = null;
@@ -2882,7 +2883,7 @@ import { createTelemetryUploader } from './telemetry_upload.js';
       if (battleAudio) battleAudio.clear();
       pendingEffects.length = 0;
       seenEffects.clear();
-      lastReadyBuildId = null;
+      lastReadyBuildIds.clear();
       commandGrid.dataset.key = '';
       selectionInfo.dataset.key = '';
       minimapStaticKey = '';
@@ -3140,28 +3141,37 @@ import { createTelemetryUploader } from './telemetry_upload.js';
 
   function syncPreparedBuilding() {
     var me = ownPlayer();
-    var item = me && me.buildQueue && me.buildQueue[0];
-    if (!item) {
-      lastReadyBuildId = null;
-      return;
-    }
-    if (!hasConstructionAuthority()) {
-      // 关闭机动建造且总部折叠时不显示放置鬼影；成品仍保留在队列中。
+    var ready = readyBuildings(me);
+    if (!ready.length) {
+      lastReadyBuildIds.clear();
       if (buildMode) { cancelModes(); }
-      if (item.ready && item.id !== lastReadyBuildId) {
-        lastReadyBuildId = item.id;
-        toast(((BUILDINGS[item.kind] || {}).name || item.kind) +
-          ' 已生产完成，展开总部后可部署', 'success');
-        sound('complete');
-      }
       return;
     }
-    if (item.ready && item.id !== lastReadyBuildId) {
-      lastReadyBuildId = item.id;
-      activateBuildMode(item.kind, true);
-      toast(((BUILDINGS[item.kind] || {}).name || item.kind) + ' 已生产完成，等待部署', 'success');
+    var authorized = hasConstructionAuthority() && me && !me.eliminated;
+    if (buildMode && (!authorized || !ready.some(function(item){return item.kind===buildMode;}))) { cancelModes(); }
+    ready.forEach(function(item) {
+      if (lastReadyBuildIds.has(item.id)) { return; }
+      // A second completed queue must never replace the building under the cursor.
+      if (authorized && !buildMode && !commandMode) { activateBuildMode(item.kind, true); }
+      toast(((BUILDINGS[item.kind] || {}).name || item.kind) +
+        (authorized ? ' 已生产完成，等待部署' : ' 已生产完成，展开总部后可部署'), 'success');
       sound('complete');
-    }
+    });
+    lastReadyBuildIds = new Set(ready.map(function(item){return item.id;}));
+  }
+
+  function renderBuildQueueStatus(me) {
+    var authorized = hasConstructionAuthority();
+    BUILD_LANES.forEach(function(key,index) {
+      var button = $('#'+key+'Status');
+      var item = me[key] && me[key][0];
+      var caption = queueCaption(item,index?'防御':'发展',BUILDINGS,authorized);
+      if (button.textContent !== caption) { button.textContent = caption; }
+      button.classList.toggle('ready',!!(item && item.ready));
+      button.disabled = !!me.eliminated;
+      button.title = caption+'；点击切换页面，成品可点击部署';
+      button.style.setProperty('--queue-progress',item?(100*(1-item.remaining/Math.max(.01,item.total)))+'%':'0%');
+    });
   }
 
   function handleBuildingCard(kind, event) {
@@ -3169,13 +3179,9 @@ import { createTelemetryUploader } from './telemetry_upload.js';
     if (!me) {
       return;
     }
-    var item = me.buildQueue && me.buildQueue[0];
-    if (event && event.shiftKey && item) {
-      sendAction('command', { command: 'cancelBuild' }).then(function () {
-        cancelModes();
-        toast('已取消建筑生产，资金已返还');
-        sound('confirm');
-      }).catch(function () {});
+    var item = buildingQueue(me,kind,BUILDINGS)[0];
+    if (event && event.shiftKey) {
+      cancelProduction(kind,true);
       return;
     }
     if (!hasConstructionAuthority()) {
@@ -3205,12 +3211,12 @@ import { createTelemetryUploader } from './telemetry_upload.js';
     var name = label ? label.name : kind;
     if (isBuilding) {
       var me = ownPlayer();
-      var queue = (me && me.buildQueue) || [];
+      var queue = buildingQueue(me,kind,BUILDINGS);
       if (!queue.length || queue[0].kind !== kind) {
         toast('该建筑没有在生产');
         return;
       }
-      sendAction('command', { command: 'cancelBuild' }).then(function () {
+      sendAction('command', { command: 'cancelBuild', structureType:kind, queueId:queue[0].id }).then(function () {
         // 取消已经造好待放置的建筑时，顺手退出放置模式
         if (buildMode === kind) { cancelModes(); }
         toast('已取消 ' + name + '，资金已退回', 'success');
@@ -3233,13 +3239,15 @@ import { createTelemetryUploader } from './telemetry_upload.js';
       return;
     }
     var myFaction = (me && me.faction) || 'tech';
+    renderBuildQueueStatus(me);
     // 阵营过滤：科技/魔法各看各的建造树；缺 faction 字段的按科技处理
     var sameFaction = function (entry) { return (entry.faction || 'tech') === myFaction; };
     var definitions;
-    if (activeTab === 'buildings') {
+    if (activeTab === 'buildings' || activeTab === 'defense') {
       definitions = {};
       Object.keys(BUILDINGS).forEach(function (key) {
         if (BUILDINGS[key].role === 'hq') { return; }
+        if ((BUILDINGS[key].role === 'defense') !== (activeTab === 'defense')) { return; }
         if (sameFaction(BUILDINGS[key])) { definitions[key] = BUILDINGS[key]; }
       });
     } else if (activeTab === 'infantry') {
@@ -3263,7 +3271,7 @@ import { createTelemetryUploader } from './telemetry_upload.js';
       commandGrid.innerHTML = '';
       Object.keys(definitions).forEach(function (kind) {
         var definition = definitions[kind];
-        var isBuilding = activeTab === 'buildings';
+        var isBuilding = activeTab === 'buildings' || activeTab === 'defense';
         var button = document.createElement('button');
         button.className = 'command-card';
         button.dataset.kind = kind;
@@ -3313,7 +3321,7 @@ import { createTelemetryUploader } from './telemetry_upload.js';
       button.classList.remove('queued', 'ready');
 
       if (isBuilding) {
-        var buildItem = me.buildQueue && me.buildQueue[0];
+        var buildItem = buildingQueue(me,kind,BUILDINGS)[0];
         var isCurrent = buildItem && buildItem.kind === kind;
         if (isCurrent) {
           queued = 1;
@@ -4725,7 +4733,6 @@ import { createTelemetryUploader } from './telemetry_upload.js';
         y: pointer.worldY
       });
       cancelModes();
-      lastReadyBuildId = null;
       toast(((BUILDINGS[kind] || {}).name || kind) + ' 已部署，施工阶段可被攻击', 'success');
       sound('confirm');
     } catch (_error) {}
@@ -5776,7 +5783,7 @@ import { createTelemetryUploader } from './telemetry_upload.js';
   });
   function activateCommandTab(button) {
     if (!button || !button.dataset ||
-        ['buildings', 'infantry', 'vehicles'].indexOf(button.dataset.tab) < 0) {
+        ['buildings', 'defense', 'infantry', 'vehicles'].indexOf(button.dataset.tab) < 0) {
       return false;
     }
     var nextTab = button.dataset.tab;
@@ -5796,6 +5803,13 @@ import { createTelemetryUploader } from './telemetry_upload.js';
   }
 
   var commandTabsElement = $('.command-tabs');
+  BUILD_LANES.forEach(function(key,index) {
+    $('#'+key+'Status').addEventListener('click',function() {
+      activateCommandTab($('.command-tab[data-tab="'+(index?'defense':'buildings')+'"]'));
+      var me=ownPlayer(), item=me && me[key] && me[key][0];
+      if(item && item.ready) { handleBuildingCard(item.kind); }
+    });
+  });
   // 页签位于可滚动侧栏内。只依赖 click 时，轻微的鼠标/触控位移会被浏览器
   // 当成滚动并取消 click；主指针按下即切换，响应不会再丢一拍。
   commandTabsElement.addEventListener('pointerdown', function (event) {

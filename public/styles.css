@@ -1842,7 +1842,7 @@ kbd {
   /* 单列必须允许收缩；部分浏览器缩放 / 高 DPI 组合会按卡片的
      intrinsic width 撑大隐式列，随后被 overflow-x 裁掉。 */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(150px, 1fr) repeat(5, auto);
+  grid-template-rows: auto auto auto minmax(150px, 1fr) repeat(5, auto);
   width: var(--sidebar-w);
   border-left: 1px solid var(--brass-dark);
   background:
@@ -2171,7 +2171,7 @@ kbd {
   display: grid;
   width: 100%;
   min-width: 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   padding: 7px 10px 14px;
   background: rgba(10, 10, 6, 0.4);
@@ -2181,6 +2181,28 @@ kbd {
 }
 
 /* 危险条纹分隔（全局第 2 处） */
+.build-lane-status {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 0 10px 6px;
+  flex-shrink: 0;
+}
+.build-lane-status button {
+  min-width: 0;
+  padding: 6px 4px;
+  border: 1px solid #514b32;
+  color: #c9be96;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  background: linear-gradient(90deg,#42442b var(--queue-progress,0%),#191e17 var(--queue-progress,0%));
+}
+.build-lane-status button.ready {color:#f8d778;border-color:#b3903a;}
+.build-lane-status button:disabled {opacity:.45;cursor:default;}
+
 .command-tabs::before {
   content: "";
   position: absolute;
@@ -3850,6 +3872,7 @@ kbd {
 
   .game-screen.commander-play .control-legend,
   .game-screen.commander-play .command-tabs,
+  .game-screen.commander-play .build-lane-status,
   .game-screen.commander-play .command-grid,
   .game-screen.commander-play .tactical-readout,
   .game-screen.commander-play .selection-info,

@@ -107,16 +107,16 @@ def main():
     server.tick_build_queues(room, 1.0)
     hq = own_hq(game, alpha["id"])
     server.issue_undeploy(game, alpha["id"], hq["id"])
-    moving_at = alpha["buildQueue"][0]["remaining"]
+    moving_at = alpha["defenseQueue"][0]["remaining"]
     server.tick_build_queues(room, 5.0)
-    assert alpha["buildQueue"][0]["remaining"] < moving_at
+    assert alpha["defenseQueue"][0]["remaining"] < moving_at
     assert not server.player_has_active_headquarters(game, alpha["id"])
     assert server.player_has_mobile_headquarters(game, alpha["id"])
 
     # 移动时可以取消退款，也能在现有前置仍满足时开新建筑队列。
     server.cancel_structure_queue(room, alpha["id"])
     server.queue_structure(room, alpha["id"], "turret")
-    assert alpha["buildQueue"][0]["kind"] == "turret"
+    assert alpha["defenseQueue"][0]["kind"] == "turret"
     server.cancel_structure_queue(room, alpha["id"])
 
     # 兵营/工厂是独立生产建筑，总部迁移时单位队列照常运转。
@@ -150,11 +150,11 @@ def main():
     server.tick_build_queues(room2, 1.0)
     first_hq = own_hq(game2, alpha2["id"])
     server.issue_undeploy(game2, alpha2["id"], first_hq["id"])
-    paused_at = alpha2["buildQueue"][0]["remaining"]
+    paused_at = alpha2["defenseQueue"][0]["remaining"]
     server.tick_build_queues(room2, 5.0)
-    assert alpha2["buildQueue"][0]["remaining"] == paused_at
-    alpha2["buildQueue"][0]["remaining"] = 0.0
-    alpha2["buildQueue"][0]["ready"] = True
+    assert alpha2["defenseQueue"][0]["remaining"] == paused_at
+    alpha2["defenseQueue"][0]["remaining"] = 0.0
+    alpha2["defenseQueue"][0]["ready"] = True
     try:
         server.place_prepared_structure(room2, alpha2["id"], "turret", 1200, 1200)
     except ValueError as error:
@@ -172,9 +172,9 @@ def main():
     game3["structures"].append(second_hq)
     server.queue_structure(room3, alpha3["id"], "turret")
     server.issue_undeploy(game3, alpha3["id"], first_hq["id"])
-    before = alpha3["buildQueue"][0]["remaining"]
+    before = alpha3["defenseQueue"][0]["remaining"]
     server.tick_build_queues(room3, 1.0)
-    assert alpha3["buildQueue"][0]["remaining"] < before
+    assert alpha3["defenseQueue"][0]["remaining"] < before
     print("OK: 机动建造默认开启并可关闭；成品资格锁定；单位生产/多总部不受影响")
 
 

@@ -219,10 +219,11 @@ def test_live_ticks():
         for _ in range(40):
             server.tick_bots(room)
             # 建筑读条在真实循环里要花时间，自检里直接放行
-            queue = bot.get("buildQueue") or []
-            if queue:
-                queue[0]["ready"] = True
-                queue[0]["remaining"] = 0.0
+            for key in server.BUILD_QUEUE_KEYS:
+                queue = bot.get(key) or []
+                if queue:
+                    queue[0]["ready"] = True
+                    queue[0]["remaining"] = 0.0
             bot["cash"] = 20000
         kinds = owned_kinds(game, bot["id"])
         check("造出了发电站/精炼厂等基础建筑", len(kinds) >= 4, str(kinds))

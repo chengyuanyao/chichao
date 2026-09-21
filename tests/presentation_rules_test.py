@@ -139,7 +139,9 @@ def main():
     # 侧栏的隐式网格列和三列生产网格都必须允许缩到 0；否则在浏览器
     # 缩放或高 DPI 下，canvas 的固有宽度会把第三列撑出侧栏并被裁掉。
     assert "grid-template-columns: minmax(0, 1fr);" in styles
-    assert styles.count("grid-template-columns: repeat(3, minmax(0, 1fr));") >= 2
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in styles  # production cards
+    assert "grid-template-columns: repeat(4, minmax(0, 1fr));" in styles  # four tabs
+    assert "grid-template-rows: auto auto auto minmax(150px, 1fr) repeat(5, auto);" in styles
     assert ".command-sidebar > *" in styles
     assert "max-width: 100%;" in styles
 

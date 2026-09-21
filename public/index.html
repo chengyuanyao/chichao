@@ -301,10 +301,15 @@
 
           <div class="command-tabs" role="tablist">
             <button type="button" role="tab" aria-selected="true" class="command-tab active" data-tab="buildings">建筑</button>
+            <button type="button" role="tab" aria-selected="false" class="command-tab" data-tab="defense">防御</button>
             <button type="button" role="tab" aria-selected="false" class="command-tab" data-tab="infantry">步兵</button>
             <button type="button" role="tab" aria-selected="false" class="command-tab" data-tab="vehicles">载具</button>
           </div>
 
+          <div class="build-lane-status" aria-label="独立建筑队列">
+            <button type="button" id="buildQueueStatus">发展：空闲</button>
+            <button type="button" id="defenseQueueStatus">防御：空闲</button>
+          </div>
           <div id="commandGrid" class="command-grid"></div>
 
           <div id="tacticalReadout" class="tactical-readout">
