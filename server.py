@@ -52,6 +52,7 @@ from catalog import (
 )
 import easter_eggs
 import battle_report
+import diagnostics
 from tactical_orders import scatter_destinations
 
 
@@ -62,6 +63,12 @@ PUBLIC_ROOT = os.path.join(ROOT, "public")
 # 绑定会失败并报 WinError 10013。详见 README 的「端口说明」。
 PORT = int(os.environ.get("PORT", "18081"))
 HOST = os.environ.get("HOST", "0.0.0.0")
+
+
+def local_server_host():
+    # An explicit NIC binding does not also listen on loopback.
+    return "127.0.0.1" if HOST == "0.0.0.0" else HOST
+
 STARTED_AT = time.time()
 
 # 刷钱调试接口 /api/give 默认只对服务器本机开放（你在服务器上跑 give_cash.py 做
@@ -127,8 +134,20 @@ def tick_all_rooms(dt):
     with LOCK:
         rooms = list(ROOMS.values())
     for room in rooms:
+        waiting = time.perf_counter()
         with room_lock(room):
+            began = time.perf_counter()
+            data = diagnostics.state(room)
+            measuring = data is not None and room.get("status") == "playing"
+            if measuring:
+                if data["_lastTick"] is not None:
+                    diagnostics.metric(room, "tickIntervalMs", (began - data["_lastTick"]) * 1000)
+                data["_lastTick"] = began
+                diagnostics.metric(room, "tickLockWaitMs", (began - waiting) * 1000)
             tick_game(room, dt)
+            if measuring:
+                diagnostics.metric(room, "tickWorkMs", (time.perf_counter() - began) * 1000)
+                diagnostics.queue_archive(room, force=room.get("status") == "finished")
 
 
 # 静态资源内存缓存：路径 -> ((mtime, size), (content, content_type, last_modified))。
@@ -1397,6 +1416,8 @@ def reap_abandoned_rooms(current=None):
         for room_id, room in list(ROOMS.items()):
             with room_lock(room):
                 abandoned = room_is_abandoned(room, current)
+                if abandoned:
+                    diagnostics.queue_archive(room, force=True, status="finished" if room.get("status") == "finished" else "abandoned")
             if abandoned and ROOMS.get(room_id) is room:
                 ROOMS.pop(room_id, None)
                 removed.append(room_id)
@@ -1745,7 +1766,7 @@ def prepare_server_agent(room, player):
         "playerId": player["id"],
         "command": [
             python, os.path.join(RTS_AGENT_DIR, "run.py"),
-            "--base", "http://127.0.0.1:%d" % PORT,
+            "--base", "http://%s:%d" % (local_server_host(), PORT),
             "--possess", "%s:%s" % (room["id"], code),
             "--headless", "--full-control",
         ],
@@ -7226,12 +7247,15 @@ class GameHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
-    def read_json(self):
+    def read_json(self, limit=65536):
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = 0
-        if length <= 0 or length > 65536:
+        if length > limit or length < 0:
+            self.close_connection = True
+            raise ValueError("请求正文超过上限")
+        if length == 0:
             return {}
         raw = self.rfile.read(length)
         try:
@@ -7250,7 +7274,40 @@ class GameHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         query = parse_qs(parsed.query)
-        if path == "/api/health":
+        if path == "/api/diagnostics":
+            # Operator dashboard is machine-local, never available to LAN peers.
+            if self.client_address[0] not in ("127.0.0.1", "::1", local_server_host()):
+                self.send_json(403, {"ok": False, "error": "诊断与服务器档案仅服务器本机可查看"})
+                return
+            with LOCK:
+                rooms = list(ROOMS.values())
+            requested = (query.get("matchId") or [""])[0]
+            live = []
+            for room in rooms:
+                with room_lock(room):
+                    diag = diagnostics.state(room)
+                    if requested and (not diag or diag["matchId"] != requested):
+                        continue
+                    data = diagnostics.snapshot(room, include_report=bool(requested) and room.get("status") == "finished", summary=not requested)
+                if data:
+                    if requested == data["matchId"]:
+                        self.send_json(200, {"ok": True, "document": data, "live": True})
+                        return
+                    if not requested:
+                        live.append({k: data[k] for k in ("matchId", "mapName", "status", "elapsed", "startedAt", "savedAt")})
+            writer = diagnostics.WRITER
+            if requested:
+                try:
+                    if writer is None:
+                        raise ValueError("服务器自动存档尚未启用")
+                    self.send_json(200, {"ok": True, "document": writer.read(requested), "live": False})
+                except (OSError, ValueError):
+                    self.send_json(404, {"ok": False, "error": "战报不存在或无法读取"})
+                return
+            payload = writer.history() if writer else {"archives": [], "archiveError": "自动存档未启用"}
+            payload.update(ok=True, live=live)
+            self.send_json(200, payload)
+        elif path == "/api/health":
             with LOCK:
                 payload = {"ok": True, "version": VERSION, "uptime": int(now() - STARTED_AT), "rooms": len(ROOMS), "port": PORT}
             self.send_json(200, payload)
@@ -7277,6 +7334,7 @@ class GameHandler(BaseHTTPRequestHandler):
                     except ValueError as exc:
                         self.send_json(409, {"ok": False, "error": str(exc)})
                         return
+                    report = dict(report, serverDiagnostics=diagnostics.snapshot(room))
                     payload = {"ok": True, "report": report}
                 else:
                     payload = {"ok": True, "room": public_room(room, viewer_id=player["id"])}
@@ -7320,8 +7378,10 @@ class GameHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
         try:
-            data = self.read_json()
-            if parsed.path == "/api/create":
+            data = self.read_json(131072 if parsed.path == "/api/telemetry" else 65536)
+            if parsed.path == "/api/telemetry":
+                self.receive_telemetry(data)
+            elif parsed.path == "/api/create":
                 self.create_room(data)
             elif parsed.path == "/api/join":
                 self.join_room(data)
@@ -7338,6 +7398,23 @@ class GameHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self.log_message("Unhandled error: %r", exc)
             self.send_json(500, {"ok": False, "error": "服务器内部错误"})
+
+    def receive_telemetry(self, data):
+        began = time.perf_counter()
+        with LOCK:
+            room = ROOMS.get(str(data.get("roomId", "")).upper())
+        if not room:
+            self.send_json(403, {"ok": False, "error": "会话已失效"})
+            return
+        with room_lock(room):
+            player = room["players"].get(data.get("playerId"))
+            # Do not refresh lastSeen: periodic telemetry must not keep abandoned rooms alive.
+            if not player or session_role(player, data.get("token")) != "commander":
+                self.send_json(403, {"ok": False, "error": "无权上报其他玩家的数据"})
+                return
+            accepted = diagnostics.accept(room, player, data.get("matchId"), data.get("performance"))
+        self.send_json(200, {"ok": True, "accepted": accepted,
+                             "serverProcessingMs": (time.perf_counter() - began) * 1000})
 
     def create_room(self, data):
         with LOCK:
@@ -7698,6 +7775,8 @@ class GameHandler(BaseHTTPRequestHandler):
             with LOCK:
                 live = ROOMS.get(room["id"])
                 if live is room and not any(not p["isBot"] for p in room["players"].values()):
+                    with room_lock(room):
+                        diagnostics.queue_archive(room, force=True, status="finished" if room.get("status") == "finished" else "abandoned")
                     ROOMS.pop(room["id"], None)
         if action == "leave":
             self.send_json(200, {"ok": True})
@@ -7745,6 +7824,7 @@ class GameHandler(BaseHTTPRequestHandler):
             # 变。这里记住已经发出去的 revision，静默期就只发状态不发正文。
             sent_agent_revision = -1
             while RUNNING:
+                snapshot_started = time.perf_counter()
                 with room_lock(room):
                     live, player = authenticate(room_id, player_id, token)
                     if not live or not player:
@@ -7761,10 +7841,20 @@ class GameHandler(BaseHTTPRequestHandler):
                                            agent_messages=send_agent_messages)
                     status = live["status"]
                 # Encoding stays outside the lock so it never blocks the sim.
+                built_at = time.perf_counter()
                 payload = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
                 message = ("event: state\ndata: %s\n\n" % payload).encode("utf-8")
+                encoded_at = time.perf_counter()
                 self.wfile.write(message)
                 self.wfile.flush()
+                sent_at = time.perf_counter()
+                if status == "playing" and stream_role != "agent":
+                    with room_lock(room):
+                        if (room.get("game") or {}).get("uid") == game_uid:
+                            diagnostics.metric(room, "snapshotBuildMs", (built_at - snapshot_started) * 1000)
+                            diagnostics.metric(room, "snapshotEncodeMs", (encoded_at - built_at) * 1000)
+                            diagnostics.transport(room, player_id, "writeMs", (sent_at - encoded_at) * 1000)
+                            diagnostics.transport(room, player_id, "snapshotBytes", len(message))
                 first_frame = False
                 if send_agent_messages:
                     sent_agent_revision = agent_revision
@@ -7938,14 +8028,15 @@ def main():
         explain_bind_failure(exc, HOST, PORT)
         return 1
     # 端口绑定成功后再开模拟线程，避免失败退出时留下后台线程
+    diagnostics.WRITER = diagnostics.ArchiveWriter(os.path.join(ROOT, "battle_reports"))
     loop_thread = threading.Thread(target=game_loop, name="game-loop")
     loop_thread.daemon = True
     loop_thread.start()
     server.timeout = 0.5
     print("=" * 58)
     print("  赤潮：钢铁前线 LAN 服务器 v%s" % VERSION)
-    print("  本机访问:   http://127.0.0.1:%d" % PORT)
-    lan_ips = lan_addresses()
+    print("  本机访问:   http://%s:%d" % (local_server_host(), PORT))
+    lan_ips = lan_addresses() if HOST == "0.0.0.0" else ([] if HOST == "127.0.0.1" else [HOST])
     if lan_ips:
         print("  局域网地址: http://%s:%d   <- 优先发给队友" % (lan_ips[0], PORT))
         for extra in lan_ips[1:]:
@@ -7966,6 +8057,12 @@ def main():
             room_id, player_id = key.split(":", 1)
             stop_server_agent(room_id, player_id)
         server.server_close()
+        with LOCK:
+            remaining = list(ROOMS.values())
+        for room in remaining:
+            with room_lock(room):
+                diagnostics.queue_archive(room, force=True, status="finished" if room.get("status") == "finished" else "interrupted")
+        diagnostics.WRITER.close()
         print("服务器已停止。")
     return 0
 
