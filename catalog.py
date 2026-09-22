@@ -241,10 +241,10 @@ UNIT_TYPES = {
         "sight": 360.0, "armor": "arcane", "damageType": "magic",
     },
     # 虹视使：圣殿远程点射。玻璃后排，对位狙击档，不用狙击伤种、不抄 420/75。
-    # 80 血低于一口咬 (90)，比法师更脆；无溅射，不卡圣泉。
+    # 射程与狙击手对齐 310；80 血低于一口咬 (90)，比法师更脆；无溅射，不卡圣泉。
     "oracle": {
         "name": "虹视使", "cost": 450, "hp": 80, "speed": 88.0,
-        "damage": 48.0, "range": 300.0, "cooldown": 1.55,
+        "damage": 48.0, "range": 310.0, "cooldown": 1.55,
         "size": 10.0, "build": 6.0, "producer": "mtemple",
         "projectile": "iris", "projectileSpeed": 1100.0, "splash": 0.0,
         "sight": 470.0, "armor": "arcane", "damageType": "magic",

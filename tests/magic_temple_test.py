@@ -80,7 +80,8 @@ def main():
     assert imp["speed"] == 120.0
     assert oracle["speed"] == 88.0
     assert imp["range"] == 90.0
-    assert oracle["range"] == 300.0
+    assert oracle["range"] == 310.0
+    assert oracle["range"] == server.UNIT_TYPES["sniper"]["range"]
     assert imp["damage"] == 18.0
     assert oracle["damage"] == 48.0
     assert imp["cooldown"] == 0.7
@@ -91,7 +92,9 @@ def main():
     assert oracle["sight"] == oracle["_baseSight"] == 470.0
     assert imp["sight"] > imp["range"]
     assert oracle["sight"] > oracle["range"]
-    # 不抄钢铁突击/狙击数字
+    # 310×1.10=341，仍低于基础 470，不扩视野
+    assert oracle["sight"] > oracle["range"] * 1.10
+    # 不抄钢铁突击/狙击造价与血量
     assert imp["cost"] != server.UNIT_TYPES["rifle"]["cost"]
     assert oracle["cost"] != server.UNIT_TYPES["sniper"]["cost"]
     assert imp["hp"] != server.UNIT_TYPES["rifle"]["hp"]
