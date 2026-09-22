@@ -80,7 +80,7 @@ TEMPLATES = {
             "late": _t({"tesla": 3, "prism": 3, "overlord": 3, "rifle": 2},
                        "光棱激光 ×1.50 远程点，天启抗魔法（魔法对重甲 ×1.60，靠 2000 血硬吃）"),
         },
-        # 混编/混甲（晶铠卫士、裂地晶兽这种重轻混甲也落这里）
+        # 混编/混甲（裂地晶兽这种重轻混甲、以及多甲种混编都落这里）
         "mixed": {
             "open": _t({"rifle": 3, "dog": 2, "rocket": 2}, "对面混编，先铺便宜的通用兵"),
             "mid": _t({"tank": 3, "rocket": 3, "tesla": 2, "rifle": 2},
@@ -94,8 +94,10 @@ TEMPLATES = {
         "unknown": {
             "open": _t({"imp": 4, "mage": 2}, "没情报，晶刺 200 一个先铺场"),
             "mid": _t({"mage": 3, "golem": 3, "imp": 2}, "傀儡抗线 + 法师输出"),
-            # 晶铠改圣殿产，仍卡圣泉，所以只进 late（repair/圣泉已立）
-            "late": _t({"dragon": 3, "golem": 2, "mage": 2, "warden": 2}, "巨龙 + 卫士通用重型"),
+            # 晶铠改圣殿产，仍卡圣泉，所以只进 late（repair/圣泉已立）。
+            # 对位磁暴：反甲脉冲，不当 1280 前排；抗线仍给傀儡。
+            "late": _t({"dragon": 3, "golem": 2, "mage": 2, "warden": 2},
+                       "巨龙/傀儡抗线，晶铠 tesla 伤种反甲"),
         },
         "infantry": {
             "open": _t({"imp": 4, "mage": 2}, "魔法对步兵 ×1.20，晶刺便宜好铺"),
@@ -106,24 +108,27 @@ TEMPLATES = {
         "light": {
             "open": _t({"mage": 3, "imp": 3}, "魔法对轻甲 ×1.30"),
             "mid": _t({"mage": 3, "golem": 2, "oracle": 2}, "法师主输出，虹视使远程补枪"),
-            "late": _t({"dragon": 3, "mage": 2, "oracle": 2, "warden": 2}, "巨龙领衔，卫士挡前"),
+            "late": _t({"dragon": 3, "mage": 2, "oracle": 2, "warden": 2},
+                       "晶铠 tesla 伤种打轻甲 ×1.40，傀儡仍是前排"),
         },
         "heavy": {
             "open": _t({"mage": 3, "imp": 3}, "魔法对重甲 ×1.60，法师天生反坦克"),
             "mid": _t({"mage": 4, "golem": 2, "imp": 2}, "堆法师熔钢铁载具"),
             "late": _t({"dragon": 3, "mage": 3, "warden": 2, "golem": 2},
-                       "巨龙 1100 血 + 法师 ×1.60，钢铁重甲吃不消"),
+                       "法师 ×1.60 + 晶铠 tesla 反甲；傀儡挡线，不当晶铠当肉盾"),
         },
         # 镜像内战：魔法对魔导甲是中性 ×1.00，纯拼性价比和血量
         "arcane": {
             "open": _t({"imp": 4, "mage": 2}, "同族对轰是中性伤害，拼每块钱输出"),
             "mid": _t({"imp": 3, "golem": 3, "mage": 2}, "傀儡 760 血换血，晶刺补输出"),
-            "late": _t({"dragon": 3, "golem": 2, "warden": 2, "imp": 2}, "拼血量和溅射"),
+            "late": _t({"dragon": 3, "golem": 2, "warden": 2, "imp": 2},
+                       "晶铠 tesla 对魔导 ×1.60；傀儡换血，不当卫士拼血"),
         },
         "mixed": {
             "open": _t({"imp": 3, "mage": 3}, "对面混编，法师伤害对各甲都不吃亏"),
             "mid": _t({"mage": 3, "golem": 3, "imp": 2}, "法师 + 傀儡的通用组合"),
-            "late": _t({"dragon": 3, "warden": 2, "golem": 2, "mage": 2}, "重型混编"),
+            "late": _t({"dragon": 3, "warden": 2, "golem": 2, "mage": 2},
+                       "傀儡抗线 + 晶铠反甲脉冲覆盖轻重甲"),
         },
     },
 }

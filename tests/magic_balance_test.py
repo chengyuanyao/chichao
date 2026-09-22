@@ -204,16 +204,21 @@ def main():
     assert not server.is_dog_prey("panther")
     assert abs(bite_to("light")) < 1e-9
     warden = server.UNIT_TYPES["warden"]
-    assert warden["cost"] == 1180
-    assert warden["hp"] == 1280
-    assert warden["damage"] == 80.0
-    assert warden["speed"] == 55.0
-    assert warden["range"] == 148.0
-    assert warden["cooldown"] == 1.30
-    assert warden["build"] == 11.0
+    assert warden["cost"] == 720
+    assert warden["hp"] == 220
+    assert warden["damage"] == 28.0
+    assert warden["speed"] == 80.0
+    assert warden["range"] == 155.0
+    assert warden["cooldown"] == 0.50
+    assert warden["size"] == 12.0
+    assert warden["build"] == 7.5
+    assert warden["splash"] == 0.0
+    assert warden["projectile"] == "crystal"
+    assert warden["projectileSpeed"] == 900.0
     assert warden["producer"] == "mtemple"
     assert warden["requires"] == ["mspring"]
-    assert warden["armor"] == ("heavy", "light")
+    assert warden["armor"] == "light"
+    assert warden["damageType"] == "tesla"
     assert "warden" in server.VEHICLE_KINDS
     assert not server.is_dog_prey("warden")
     room, a, b = make_room("MB07")
@@ -229,7 +234,7 @@ def main():
     before = cat["hp"]
     server.apply_damage(room, cat, 55, a["id"], "sniper", game)
     assert abs((before - cat["hp"]) - 22.0) < 0.1, cat["hp"]
-    print("  影豹 240/34 轻甲 bite ×0；晶铠 1280/80 圣殿+圣泉: PASS")
+    print("  影豹 240/34 轻甲 bite ×0；晶铠 220/28 tesla 轻甲构装 圣殿+圣泉: PASS")
 
     print("\n=== 秘法会平衡测试全部通过 ===")
 
