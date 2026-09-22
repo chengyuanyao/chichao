@@ -3008,8 +3008,8 @@ def issue_move(game, player_id, unit_ids, x, y, attack_move=False, formation=Non
         dest_x, dest_y = assigned[unit["id"]]
         dest_x = clamp(dest_x, 15, game["map"]["width"] - 15)
         dest_y = clamp(dest_y, 15, game["map"]["height"] - 15)
-        # 单单位沿用原 0.35 贴边；编队槽位按站立半径回收，避免前排贴河岸
-        # 时下一步就被体积卡住。阻挡格仍走 nearest_open_point。
+        # 单单位沿用原 0.35 贴边；编队槽位按站立半径、朝点击点回收，
+        # 避免前排贴河岸时下一步就被体积卡住。
         clearance = max(8.0, unit["size"] * (0.5 if len(selected) > 1 else 0.35))
         if terrain.blocked(dest_x, dest_y, clearance):
             dest_x, dest_y = terrain.nearest_open_point(

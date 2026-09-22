@@ -115,11 +115,10 @@ def formation_world_slots(origin_x, origin_y, target_x, target_y, count, style,
 
 
 def assign_nearest_slots(units, slots):
-    """Greedy nearest-slot matching; id order keeps it deterministic."""
+    """Greedy nearest-slot matching; keep the caller's unit order."""
     remaining = list(slots)
     assigned = {}
-    ordered = sorted(units, key=lambda unit: unit.get("id") or "")
-    for unit in ordered:
+    for unit in units:
         ux, uy = unit["x"], unit["y"]
         best_index = 0
         best_dist = None
