@@ -13,7 +13,7 @@ def rejects(fn):
 
 
 def main():
-    assert all(server.structure_queue_key(k)=="defenseQueue" for k in ("turret","missile","mtower"))
+    assert all(server.structure_queue_key(k)=="defenseQueue" for k in ("turret","missile","mtower","mstorm"))
     for magic in (False, True):
         room, p, enemy = make_room(789)
         game = room["game"]

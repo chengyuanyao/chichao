@@ -995,6 +995,9 @@ def public_effect(effect):
     for key in ("dir", "size"):
         if key in effect:
             result[key] = round(effect[key], 2)
+    for key in ("fromX", "fromY"):
+        if key in effect:
+            result[key] = round(effect[key], 1)
     return result
 
 
@@ -5161,6 +5164,70 @@ def mark_unit_combat(entity, game):
         entity["_lastCombatAt"] = float(game.get("elapsed", 0.0))
 
 
+def storm_network_damage(definition, extras):
+    """雷暴塔联网伤害：70 + 35 * extras，extras 夹在 0..supportMax。"""
+    cap = max(0, int(definition.get("supportMax") or 0))
+    extras = max(0, min(int(extras), cap))
+    bonus = float(definition.get("supportBonus") or 0.0)
+    return float(definition.get("damage") or 0.0) + extras * bonus
+
+
+def collect_storm_supports(game, firer):
+    """就绪、已建成、存活的友军雷暴塔。奥术塔不计入；开火塔自己不算 extras。"""
+    definition = STRUCTURE_TYPES.get(firer.get("kind"), {})
+    radius = float(definition.get("supportRadius") or 0.0)
+    cap = int(definition.get("supportMax") or 0)
+    if radius <= 0 or cap <= 0:
+        return []
+    found = []
+    for structure in game.get("structures") or []:
+        if structure is firer or structure.get("id") == firer.get("id"):
+            continue
+        if structure.get("kind") != firer.get("kind"):
+            continue
+        if not structure.get("active") or structure.get("hp", 0) <= 0:
+            continue
+        if float(structure.get("buildRemaining") or 0.0) > 0:
+            continue
+        if float(structure.get("cooldown") or 0.0) > 0:
+            continue
+        if not is_friendly(game, firer.get("owner"), structure.get("owner")):
+            continue
+        dist = math.hypot(structure["x"] - firer["x"], structure["y"] - firer["y"])
+        if dist <= radius:
+            found.append((dist, structure))
+    found.sort(key=lambda item: item[0])
+    return [item[1] for item in found[:cap]]
+
+
+def consume_storm_supports(game, firer, supporters):
+    """支援塔把本轮充能喂给开火塔：拉冷却、朝向开火塔、画一条雷链。"""
+    definition = STRUCTURE_TYPES.get(firer.get("kind"), {})
+    cooldown = float(definition.get("cooldown") or 0.0)
+    for tower in supporters:
+        tower["cooldown"] = cooldown
+        tower["dir"] = math.atan2(firer["y"] - tower["y"], firer["x"] - tower["x"])
+        game["effects"].append({
+            "id": new_id("e"), "type": "tether", "kind": "storm",
+            "x": firer["x"], "y": firer["y"],
+            "fromX": tower["x"], "fromY": tower["y"],
+            "ttl": 0.22,
+            "entityId": tower["id"], "entityKind": tower["kind"],
+        })
+
+
+def defense_shot_multiplier(game, structure, definition, combat_mult):
+    """防御塔开火倍率。雷暴塔把支援加进这一发，其它塔仍只乘战场倍率。"""
+    if not definition.get("supportRadius"):
+        return combat_mult
+    supporters = collect_storm_supports(game, structure)
+    consume_storm_supports(game, structure, supporters)
+    base = float(definition.get("damage") or 0.0)
+    if base <= 0:
+        return combat_mult
+    return combat_mult * (storm_network_damage(definition, len(supporters)) / base)
+
+
 def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
     # 发射就算交战：不能让远程弹丸在飞行时攻击者先回血。
     mark_unit_combat(attacker, game)
@@ -6023,7 +6090,9 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
             if target and combat_mult > 0:
                 structure["dir"] = math.atan2(target["y"] - structure["y"], target["x"] - structure["x"])
                 if structure["cooldown"] <= 0:
-                    launch_projectile(game, structure, target, definition, combat_mult)
+                    shot_mult = defense_shot_multiplier(
+                        game, structure, definition, combat_mult)
+                    launch_projectile(game, structure, target, definition, shot_mult)
                     structure["cooldown"] = definition["cooldown"]
 
 
@@ -6031,7 +6100,8 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
 # 阶段 open → commit → stabilize → close。科技电站→兵营→工厂，魔法法力塔→圣殿→法阵。
 # 第一波自爆仍尽早出；总部挨打或家矿里有敌军时取消下一波，先补防。
 # 第一波没拆掉总部才补第二精炼所/第二矿车。维修厂/圣泉只在中后期或总部告急时补。
-# 魔法仍然不造导弹塔。决策按可见编制 + 上次看见的敌军，不靠随机权重。
+# 远程防御塔（导弹/雷暴）只在后期或第一波失败后补，开局 rush 仍只造近距塔。
+# 决策按可见编制 + 上次看见的敌军，不靠随机权重。
 BOT_SUICIDE_CAP = 5
 BOT_SUICIDE_WAVE = 2
 BOT_OPENING_SECONDS = 120.0
@@ -6818,9 +6888,15 @@ def tick_bots(room):
             queue = bot.get(queue_key, [])
             if queue and queue[0].get("ready"):
                 bot_place_prepared(room, bot, queue[0]["kind"])
-        if ("defenseQueue" not in busy_queues and (threatened or inbound is not None)
-                and bot_role_count(own_structures, "defense") < 1):
-            bot_try_queue_structure(room, bot, fb["defense"])
+        if "defenseQueue" not in busy_queues and (threatened or inbound is not None):
+            defense_n = bot_role_count(own_structures, "defense")
+            if defense_n < 1:
+                bot_try_queue_structure(room, bot, fb["defense"])
+            elif (phase in (BOT_PHASE_STABILIZE, BOT_PHASE_CLOSE)
+                  and fb.get("defense_long")
+                  and not any(s["kind"] == fb["defense_long"]
+                              for s in own_structures)):
+                bot_try_queue_structure(room, bot, fb["defense_long"])
         if "buildQueue" not in busy_queues:
             bot_queue_building(
                 room, bot, fb, roles, own_structures, supply, usage,

@@ -37,6 +37,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     mtemple: { icon: '✠', desc: '训练圣殿步兵' },
     mcircle: { icon: '⬡', desc: '召唤构装体与魔兽' },
     mtower: { icon: '✵', desc: '自动攻击附近敌军（魔法）' },
+    mstorm: { icon: '⚡', desc: '联网雷暴，支援增伤，命中麻痹 · 需圣殿' },
     mspring: { icon: '✚', desc: '修复受损构装、巨龙与晶簇；解锁进阶召唤' }
   };
   var UNIT_VFX = {
@@ -133,6 +134,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
         requires: src.requires || [],
         faction: src.faction || 'tech',
         role: src.role || null,
+        range: src.range || 0,
         icon: vfx.icon || '■',
         desc: vfx.desc || ''
       };
@@ -237,7 +239,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
 
   var STRUCTURE_ICONS = {
     hq: '★', power: 'ϟ', refinery: '◆', barracks: '♟', factory: '▰', repair: '✚', turret: '⌖', missile: '⊿',
-    mhq: '★', mpower: '✦', mrefinery: '◈', mtemple: '✠', mcircle: '⬡', mspring: '✚', mtower: '✵'
+    mhq: '★', mpower: '✦', mrefinery: '◈', mtemple: '✠', mcircle: '⬡', mspring: '✚', mtower: '✵', mstorm: '⚡'
   };
 
   /* -------------------- 肖像绘制器 --------------------
@@ -282,7 +284,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   var P_MITE = '#8ad4ff';
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
-    mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1,
+    mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1, mstorm: 1,
     mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, panther: 1, dragon: 1,
     warden: 1, colossus: 1, comet: 1, mharvester: 1, mmcv: 1, hexling: 1
   };
@@ -857,6 +859,20 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       c.strokeStyle = P_GOLDTRIM; c.lineWidth = 2.4;
       c.beginPath(); c.ellipse(62, 22, 8, 5, -0.4, 0, Math.PI * 2); c.stroke();
       pCirc(c, 68, 20, 2.2, P_RUNE);
+    },
+    mstorm: function (c) {
+      pShadow(c, 48, 60, 22);
+      // 风暴尖塔 + 双侧雷线圈，不是奥术塔单尖，也不是钢铁磁暴背包
+      pPoly(c, [[30, 60], [66, 60], [60, 50], [36, 50]], P_GOLDSTONE);
+      pPoly(c, [[42, 50], [54, 50], [51, 18], [45, 18]], P_GOLDSTONE);
+      pCirc(c, 48, 16, 4.2, P_GOLDTRIM);
+      pCirc(c, 48, 16, 2.2, P_RUNE);
+      pLine(c, 34, 48, 34, 22, 3, P_GOLDTRIM);
+      pLine(c, 62, 48, 62, 22, 3, P_GOLDTRIM);
+      pCirc(c, 34, 20, 3.4, P_CRYSTAL);
+      pCirc(c, 62, 20, 3.4, P_FROST);
+      pPoly(c, [[36, 28], [44, 24], [42, 30], [50, 26], [44, 33], [38, 31]], P_RUNE);
+      pCirc(c, 48, 16, 1.2, '#f4f0ff');
     },
     /* ---- 秘法会（魔法阵营）单位 ---- */
     mage: function (c) {
