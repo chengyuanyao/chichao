@@ -783,6 +783,13 @@ def main():
     assert "双击己方单位" in readme
     assert "Ctrl+1 / Ctrl+2 / Ctrl+3" in readme
     assert "不设置生产快捷键" in readme
+    assert "阵型" in readme
+    assert "F：循环行军阵型" in readme
+    assert "function cycleFormation()" in app
+    assert "event.code === 'KeyF'" in app
+    assert 'id="formationBtn"' in hud
+    assert 'command: \'setFormation\'' in app or 'command: "setFormation"' in app
+    assert "def set_player_formation(" in server_source
 
     # 可选模式「轨道天降」：大厅开关文案在，预警圈跟这发 radius 走。
     # 上面的房间上限循环把 index 重绑成了 int，这里读 hud（同一份 index.html）。
