@@ -5,7 +5,7 @@
    2) 阵营门槛：科技不能产；魔法圣殿能产
    3) 军犬：一口咬不死晶刺，两口死；载具仍咬不动
    4) 大师 AI 法阵后仍排魔仆
-   5) 晶铠改圣殿产，仍卡圣泉，算载具可修
+   5) 晶铠改圣殿产，仍卡圣泉，轻甲 tesla 构装，算载具可修
 """
 
 from __future__ import print_function
@@ -184,10 +184,12 @@ def main():
     warden = server.UNIT_TYPES["warden"]
     assert warden["producer"] == "mtemple"
     assert warden["requires"] == ["mspring"]
-    assert warden["hp"] == 1280
-    assert warden["damage"] == 80.0
-    assert warden["cost"] == 1180
-    assert warden["armor"] == ("heavy", "light")
+    assert warden["hp"] == 220
+    assert warden["damage"] == 28.0
+    assert warden["cost"] == 720
+    assert warden["armor"] == "light"
+    assert warden["damageType"] == "tesla"
+    assert warden["splash"] == 0.0
     assert "warden" in server.VEHICLE_KINDS
     assert "warden" in server.MAGIC_UNITS
     catalog = server.public_catalog()

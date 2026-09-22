@@ -87,8 +87,11 @@ def test_counter_table():
     check("攻城对建筑 ×1.80、对重甲只有 ×0.25",
           abs(codex.counter("siege", "power") - 1.80) < 1e-6
           and abs(codex.counter("siege", "tank") - 0.25) < 1e-6)
-    check("混甲取平均：穿甲对晶铠卫士 (2.10+0.65)/2",
-          abs(codex.counter("ap", "warden") - 1.375) < 1e-6)
+    check("混甲取平均：穿甲对裂地晶兽 (2.10+0.65)/2",
+          abs(codex.counter("ap", "colossus") - 1.375) < 1e-6)
+    check("晶铠轻甲走磁暴表：tesla ×1.40 / 穿甲 ×0.65",
+          abs(codex.counter("tesla", "warden") - 1.40) < 1e-6
+          and abs(codex.counter("ap", "warden") - 0.65) < 1e-6)
     check("扑咬对构装体是硬 0（巨龙护甲是 arcane 但算载具）",
           codex.counter("bite", "dragon") == 0.0
           and codex.counter("bite", "golem") == 0.0)

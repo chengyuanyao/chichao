@@ -51,6 +51,7 @@ def veteran_rank(kills):
 
 
 # 可进维修厂/圣泉的单位。步兵、法师、影豹不算；构装、巨龙、晶簇与科技载具对位。
+# 晶铠卫士是轻甲反甲构装（对位磁暴），仍留在本表：圣泉可修，军犬 bite ×0。
 VEHICLE_KINDS = frozenset((
     "tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv",
     "v3", "overlord", "prism", "bomb_truck",
@@ -211,7 +212,7 @@ UNIT_TYPES = {
         "sight": 320.0, "armor": "heavy", "damageType": "none",
         "canDeploy": True, "deploysInto": "mhq",
     },
-    # ---- 军事：奥术圣殿(步兵与晶铠) / 召唤法阵(构装与魔兽) ----
+    # ---- 军事：奥术圣殿(步兵与反甲晶击构装) / 召唤法阵(构装与魔兽) ----
     # 奥术法师：远程魔法弹，熔重甲的反坦克答案。160 血与魔仆同一口咬不死门槛
     # （咬 90，剩 70）；两口仍死。子弹有效血≈107，和突击兵 110 同档。
     "mage": {
@@ -277,15 +278,17 @@ UNIT_TYPES = {
         "sight": 460.0, "armor": "arcane", "damageType": "magic",
     },
     # ---- 进阶：圣泉卡二级。不改开局 3 法师+傀儡，只补中后期缺口 ----
-    # 晶铠卫士：圣殿训练的构装前排，仍卡圣泉。heavy/light 混甲，
-    # 磁暴/狙击/军犬不能当纯魔导一锅端。算载具，圣泉可修。
+    # 晶铠卫士：对位磁暴步兵的反甲晶击构装，不是 1280 混甲前排。
+    # 圣殿训练、仍卡圣泉。轻甲 + tesla 伤种（对轻/重/魔导同磁暴表），
+    # 无溅射，快脉冲。比磁暴略贵略厚：圣泉门槛 + 轻甲（军犬 bite ×0，
+    # 火箭/磁暴仍打）。仍算载具，圣泉可修。前排继续交给岩石傀儡。
     "warden": {
-        "name": "晶铠卫士", "cost": 1180, "hp": 1280, "speed": 55.0,
-        "damage": 80.0, "range": 148.0, "cooldown": 1.30,
-        "size": 20.0, "build": 11.0, "producer": "mtemple",
+        "name": "晶铠卫士", "cost": 720, "hp": 220, "speed": 80.0,
+        "damage": 28.0, "range": 155.0, "cooldown": 0.50,
+        "size": 12.0, "build": 7.5, "producer": "mtemple",
         "requires": ["mspring"],
-        "projectile": "crystal", "projectileSpeed": 460.0, "splash": 24.0,
-        "sight": 380.0, "armor": ("heavy", "light"), "damageType": "magic",
+        "projectile": "crystal", "projectileSpeed": 900.0, "splash": 0.0,
+        "sight": 380.0, "armor": "light", "damageType": "tesla",
     },
     # 坠星台：秘法会对位东风快递。超远曲射彗星，弹速慢能被看见躲。
     # missile ×1.50 拆建筑（190×1.5=285），满血 2400 总部一发拆不掉。
@@ -299,7 +302,8 @@ UNIT_TYPES = {
         "sight": 300.0, "armor": "light", "damageType": "missile",
     },
     # 裂地晶兽：缺的攻城行。siege ×1.8 拆建筑，对单位很差，对位攻城炮/光棱。
-    # 600 血不再一碰就碎，仍远低于晶铠 1280 / 巨龙 1100 / 天启 1700。
+    # 600 血不再一碰就碎，仍远低于傀儡 760 / 巨龙 1100 / 天启 1700。
+    # 仍是唯一的 heavy/light 混甲构装（晶铠已改为轻甲反甲脉冲）。
     "colossus": {
         "name": "裂地晶兽", "cost": 1280, "hp": 600, "speed": 48.0,
         "damage": 120.0, "range": 340.0, "cooldown": 2.10,
