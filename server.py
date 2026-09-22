@@ -56,6 +56,14 @@ import battle_report
 import diagnostics
 import rift_map
 from tactical_orders import scatter_destinations
+from formation import (
+    FORMATION_MODES,
+    assign_nearest_slots,
+    formation_spacing,
+    formation_world_slots,
+    normalize_formation,
+    resolve_move_formation,
+)
 
 
 VERSION = "2.1.0"
@@ -915,6 +923,7 @@ def public_player(room, player, viewer_id=None):
                       and viewer_id == player["id"]
                       and not player.get("isBot")
                       else None),
+        "formation": normalize_formation(player.get("formation")),
     }
 
 
@@ -1507,6 +1516,7 @@ def create_human(name, color, team=0, spawn=-1):
         "bindToken": uuid.uuid4().hex,
         "intent": empty_commander_intent(),
         "executor": {"token": None, "lastSeen": 0, "connections": 0},
+        "formation": "box",
     }
 
 
@@ -1524,6 +1534,7 @@ def create_bot(room):
         "bindToken": uuid.uuid4().hex,
         "intent": empty_commander_intent(),
         "executor": {"token": None, "lastSeen": 0, "connections": 0},
+        "formation": "box",
     }
     room["players"][bot["id"]] = bot
     return bot
@@ -2956,7 +2967,15 @@ def issue_patrol(game, player_id, unit_ids, x, y):
             unit["returnTarget"] = None
 
 
-def issue_move(game, player_id, unit_ids, x, y, attack_move=False):
+def set_player_formation(player, value):
+    text = "" if value is None else str(value).strip().lower()
+    if text not in FORMATION_MODES:
+        raise ValueError("未知阵型")
+    player["formation"] = text
+    return text
+
+
+def issue_move(game, player_id, unit_ids, x, y, attack_move=False, formation=None):
     selected = [u for u in game["units"] if u["owner"] == player_id and u["id"] in unit_ids and u["hp"] > 0]
     if not selected:
         return
@@ -2977,19 +2996,27 @@ def issue_move(game, player_id, unit_ids, x, y, attack_move=False):
     if terrain.blocked(target_x, target_y, group_clearance):
         target_x, target_y = terrain.nearest_open_point(
             target_x, target_y, origin_x, origin_y, group_clearance)
-    columns = max(1, int(math.ceil(math.sqrt(len(selected)))))
-    spacing = 52
-    for index, unit in enumerate(selected):
-        row = index // columns
-        column = index % columns
-        offset_x = (column - (columns - 1) / 2.0) * spacing
-        offset_y = (row - (math.ceil(len(selected) / float(columns)) - 1) / 2.0) * spacing
-        dest_x = clamp(target_x + offset_x, 15, game["map"]["width"] - 15)
-        dest_y = clamp(target_y + offset_y, 15, game["map"]["height"] - 15)
-        clearance = max(8.0, unit["size"] * 0.35)
+    style = normalize_formation(formation)
+    if len(selected) == 1:
+        assigned = {selected[0]["id"]: (target_x, target_y)}
+    else:
+        slots = formation_world_slots(
+            origin_x, origin_y, target_x, target_y, len(selected), style,
+            formation_spacing(selected))
+        assigned = assign_nearest_slots(selected, slots)
+    for unit in selected:
+        dest_x, dest_y = assigned[unit["id"]]
+        dest_x = clamp(dest_x, 15, game["map"]["width"] - 15)
+        dest_y = clamp(dest_y, 15, game["map"]["height"] - 15)
+        # 单单位沿用原 0.35 贴边；编队槽位按站立半径、朝点击点回收，
+        # 避免前排贴河岸时下一步就被体积卡住。
+        clearance = max(8.0, unit["size"] * (0.5 if len(selected) > 1 else 0.35))
         if terrain.blocked(dest_x, dest_y, clearance):
             dest_x, dest_y = terrain.nearest_open_point(
-                dest_x, dest_y, unit["x"], unit["y"], clearance)
+                dest_x, dest_y,
+                target_x if len(selected) > 1 else unit["x"],
+                target_y if len(selected) > 1 else unit["y"],
+                clearance)
         unit["destX"] = dest_x
         unit["destY"] = dest_y
         unit["targetId"] = None
@@ -4047,7 +4074,14 @@ def handle_game_command(room, player, payload, role="commander"):
         raise ValueError("副官不能执行该指令")
     if command in ("move", "attackMove"):
         unit_ids = command_unit_ids(payload)
-        issue_move(game, player["id"], unit_ids, payload.get("x", 0), payload.get("y", 0), command == "attackMove")
+        issue_move(
+            game, player["id"], unit_ids, payload.get("x", 0), payload.get("y", 0),
+            command == "attackMove",
+            formation=resolve_move_formation(player, payload.get("formation")))
+    elif command == "setFormation":
+        if role == "agent":
+            raise ValueError("副官不能执行该指令")
+        set_player_formation(player, payload.get("formation"))
     elif command == "patrol":
         issue_patrol(game, player["id"], command_unit_ids(payload),
                      payload.get("x"), payload.get("y"))

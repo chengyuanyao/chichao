@@ -1320,6 +1320,23 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   var viewingArchivedReport = false;
   var activeTab = 'buildings';
   var selectedUnits = new Set();
+  var FORMATION_MODES = ['box', 'line', 'wedge', 'column', 'double', 'circle'];
+  var FORMATION_LABELS = {
+    box: '方阵', line: '横排', wedge: '楔形',
+    column: '纵队', double: '双排', circle: '圆环'
+  };
+  var FORMATION_ICONS = {
+    box: '▦', line: '☰', wedge: '▲',
+    column: '↓', double: '≣', circle: '◯'
+  };
+  var FORMATION_STORAGE_KEY = 'steel-front-formation';
+  var selectedFormation = 'box';
+  try {
+    var storedFormation = sessionStorage.getItem(FORMATION_STORAGE_KEY);
+    if (FORMATION_MODES.indexOf(storedFormation) >= 0) {
+      selectedFormation = storedFormation;
+    }
+  } catch (_) {}
   var tacticalSelection = createTacticalSelection();
   var selectedStructureId = null;
   var selectedResourceId = null;
@@ -2926,6 +2943,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       toast('战斗开始：保护' + factionCopy().hq + '，摧毁所有敌方总部', 'success');
       sound('start');
     }
+    syncFormationPreference();
     resizeCanvas();
     renderCommandGrid(true);
     if (!renderStarted) {
@@ -4804,7 +4822,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       command: command,
       unitIds: ids,
       x: x,
-      y: y
+      y: y,
+      formation: selectedFormation
     }).then(function (result) { if (!result.cancelled) sound('move'); }).catch(function () {});
     if (commandMode) {
       cancelModes();
@@ -5031,6 +5050,42 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     selectedResourceId = null;
     renderSelectionInfo(true);
     sound('select');
+  }
+
+  function formationLabel(mode) {
+    return FORMATION_LABELS[mode] || FORMATION_LABELS.box;
+  }
+
+  function persistFormation(mode) {
+    selectedFormation = FORMATION_MODES.indexOf(mode) >= 0 ? mode : 'box';
+    try { sessionStorage.setItem(FORMATION_STORAGE_KEY, selectedFormation); } catch (_) {}
+  }
+
+  function updateFormationButton() {
+    var button = $('#formationBtn');
+    if (!button) { return; }
+    button.innerHTML = '<span>' + (FORMATION_ICONS[selectedFormation] || '▦') + '</span>' +
+      formationLabel(selectedFormation) + ' F';
+    button.title = '循环行军阵型 (F)：' + formationLabel(selectedFormation);
+  }
+
+  function cycleFormation() {
+    var index = FORMATION_MODES.indexOf(selectedFormation);
+    persistFormation(FORMATION_MODES[(index + 1) % FORMATION_MODES.length]);
+    updateFormationButton();
+    toast('阵型：' + formationLabel(selectedFormation), 'success');
+    sound('select');
+    if (session && roomState && roomState.status === 'playing') {
+      sendAction('command', { command: 'setFormation', formation: selectedFormation }).catch(function () {});
+    }
+  }
+
+  function syncFormationPreference() {
+    var me = ownPlayer();
+    if (me && FORMATION_MODES.indexOf(me.formation) >= 0 && me.formation !== selectedFormation) {
+      sendAction('command', { command: 'setFormation', formation: selectedFormation }).catch(function () {});
+    }
+    updateFormationButton();
   }
 
   function tacticalSelected(command) {
@@ -5550,6 +5605,9 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     } else if (event.code === 'KeyQ') {
       event.preventDefault();
       setCommandMode('attackMove');
+    } else if (event.code === 'KeyF') {
+      event.preventDefault();
+      if (!event.repeat) { cycleFormation(); }
     } else if (event.code === 'KeyH') {
       event.preventDefault();
       if (!event.repeat) { stopSelected(); }
@@ -5863,6 +5921,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   $('#stopBtn').addEventListener('click', stopSelected);
   $('#scatterBtn').addEventListener('click', function () { tacticalSelected('scatter'); });
   $('#holdBtn').addEventListener('click', function () { tacticalSelected('hold'); });
+  $('#formationBtn').addEventListener('click', function () { cycleFormation(); });
+  updateFormationButton();
   $('#selectionKinds').addEventListener('click', function (event) {
     var button = event.target.closest('[data-select-kind]');
     if (button && this.contains(button)) { filterSelectedKind(button.dataset.selectKind); }
