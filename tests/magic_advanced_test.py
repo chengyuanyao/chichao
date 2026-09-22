@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """秘法会进阶兵种：晶铠卫士 / 裂地晶兽，以及巨龙改走圣泉门槛。
    1) 目录与阵营登记齐全
-   2) 圣泉门槛：只有法阵不够，缺圣泉拒绝排队
+   2) 圣泉门槛：法阵进阶仍卡圣泉；晶铠改圣殿产，仍卡圣泉
    3) 魔法能生产、科技不能；place_structure 阵营门槛仍在
    4) 混甲：磁暴/狙击不再按纯魔导 ×2；军犬不把构装/巨龙当猎物
    5) 裂地晶兽用 siege 拆建筑
@@ -18,7 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 
 
-ADVANCED = ("warden", "colossus", "dragon", "comet")
+ADVANCED = ("colossus", "dragon", "comet")
+WARDEN = "warden"
 
 
 def make_room(tag, magic_b=True):
@@ -56,8 +57,23 @@ def main():
         assert d["faction"] == "magic", kind
         assert kind in server.MAGIC_UNITS, kind
         assert kind in server.VEHICLE_KINDS, kind
+    warden = server.UNIT_TYPES[WARDEN]
+    for field in ("name", "cost", "hp", "speed", "damage", "range",
+                  "cooldown", "size", "build", "producer", "projectile",
+                  "projectileSpeed", "splash", "sight", "armor",
+                  "damageType", "requires"):
+        assert field in warden, "warden 缺字段 %s" % field
+    assert warden["producer"] == "mtemple"
+    assert warden["requires"] == ["mspring"]
+    assert warden["faction"] == "magic"
+    assert WARDEN in server.MAGIC_UNITS
+    assert WARDEN in server.VEHICLE_KINDS
+    assert warden["hp"] == 1280
+    assert warden["damage"] == 80.0
+    assert warden["cost"] == 1180
+    assert warden["armor"] == ("heavy", "light")
     assert server.UNIT_TYPES["colossus"]["damageType"] == "siege"
-    assert server.UNIT_TYPES["warden"]["damageType"] == "magic"
+    assert warden["damageType"] == "magic"
     assert server.UNIT_TYPES["dragon"]["damageType"] == "magic"
     assert server.UNIT_TYPES["comet"]["damageType"] == "missile"
     colo = server.UNIT_TYPES["colossus"]
@@ -69,7 +85,7 @@ def main():
     assert colo["cost"] == 1280
     assert colo["cooldown"] == 2.10
     assert colo["requires"] == ["mspring"]
-    assert colo["hp"] < server.UNIT_TYPES["warden"]["hp"]
+    assert colo["hp"] < warden["hp"]
     assert colo["hp"] < server.UNIT_TYPES["dragon"]["hp"]
     assert colo["hp"] < server.UNIT_TYPES["overlord"]["hp"]
     catalog = server.public_catalog()
@@ -81,6 +97,13 @@ def main():
         assert entry["requires"] == ["mspring"]
         assert entry["repairable"] is True
         assert entry["producer"] == "mcircle"
+    entry = catalog["units"][WARDEN]
+    assert entry["name"] == warden["name"]
+    assert entry["cost"] == warden["cost"]
+    assert entry["faction"] == "magic"
+    assert entry["requires"] == ["mspring"]
+    assert entry["repairable"] is True
+    assert entry["producer"] == "mtemple"
     print("  定义/阵营/目录 requires: PASS")
 
     print("\n=== Test 2: 只有法阵不能出进阶；补圣泉放行 ===")
@@ -94,14 +117,25 @@ def main():
             raise AssertionError("无圣泉时不该能出 %s" % kind)
         except ValueError as exc:
             assert "前置建筑" in str(exc), str(exc)
+    try:
+        server.queue_unit(room, b["id"], WARDEN)
+        raise AssertionError("无法阵外圣殿时不该能出晶铠")
+    except ValueError as exc:
+        assert "生产建筑" in str(exc) or "前置建筑" in str(exc), str(exc)
     give(game, b["id"], "mspring")
     for kind in ADVANCED:
         server.queue_unit(room, b["id"], kind)
+    try:
+        server.queue_unit(room, b["id"], WARDEN)
+        raise AssertionError("有圣泉无法殿时不该能出晶铠")
+    except ValueError as exc:
+        assert "生产建筑" in str(exc), str(exc)
     queued = [item["kind"] for s in game["structures"]
               if s["owner"] == b["id"] for item in s["queue"]]
     for kind in ADVANCED:
         assert kind in queued, queued
-    print("  缺圣泉拒绝 / 补圣泉放行: PASS")
+    assert WARDEN not in queued, queued
+    print("  缺圣泉拒绝 / 补圣泉放行法阵进阶: PASS")
 
     print("\n=== Test 3: 阵营门槛（科技不能产，魔法不能建科技）===")
     room, a, b = make_room("MADV02")
@@ -109,15 +143,16 @@ def main():
     a["cash"] = b["cash"] = 99999
     give(game, a["id"], "factory")
     give(game, a["id"], "repair")
+    give(game, b["id"], "mtemple")
     give(game, b["id"], "mcircle")
     give(game, b["id"], "mspring")
-    for kind in ("warden", "colossus", "comet"):
+    for kind in (WARDEN, "colossus", "comet"):
         try:
             server.queue_unit(room, a["id"], kind)
             raise AssertionError("科技不该能产 %s" % kind)
         except ValueError as exc:
             assert "阵营" in str(exc), str(exc)
-    server.queue_unit(room, b["id"], "warden")
+    server.queue_unit(room, b["id"], WARDEN)
     server.queue_unit(room, b["id"], "colossus")
     try:
         server.place_structure(room, b["id"], "turret", 800, 800, free=True)
@@ -198,6 +233,26 @@ def main():
     assert produced.intersection(ADVANCED), produced
     assert produced.issubset(server.MAGIC_UNITS), produced
     print("  AI 排出 %s: PASS" % sorted(produced.intersection(ADVANCED)))
+
+    print("\n=== Test 7: 圣殿可排晶铠，仍卡圣泉 ===")
+    room, a, b = make_room("MADV06")
+    game = room["game"]
+    b["cash"] = 99999
+    give(game, b["id"], "mtemple")
+    try:
+        server.queue_unit(room, b["id"], WARDEN)
+        raise AssertionError("无圣泉时圣殿不该能出晶铠")
+    except ValueError as exc:
+        assert "前置建筑" in str(exc), str(exc)
+    give(game, b["id"], "mspring")
+    server.queue_unit(room, b["id"], WARDEN)
+    queued = [item["kind"] for s in game["structures"]
+              if s["owner"] == b["id"] for item in s["queue"]]
+    assert WARDEN in queued, queued
+    temple = next(s for s in game["structures"]
+                  if s["owner"] == b["id"] and s["kind"] == "mtemple")
+    assert any(item["kind"] == WARDEN for item in temple["queue"]), temple["queue"]
+    print("  圣殿缺圣泉拒绝 / 补圣泉放行晶铠: PASS")
 
     print("\n=== 秘法会进阶兵种测试全部通过 ===")
 

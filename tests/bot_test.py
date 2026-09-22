@@ -333,6 +333,28 @@ def main():
                                            queued_kinds(game, a["id"]))
     print("  波次失败 → 建造 %s，未加卡车: PASS" % queued[0]["kind"])
 
+    print("\n=== Test 12: 晶铠从圣殿出，仍卡圣泉 ===")
+    scout = server.bot_empty_scout()
+    defend_with_spring = server.bot_unit_choices(
+        "magic", set(["barracks", "repair"]), server.BOT_PHASE_COMMIT,
+        scout, True, True, 2, False)
+    assert "warden" in defend_with_spring, defend_with_spring
+    defend_no_spring = server.bot_unit_choices(
+        "magic", set(["barracks"]), server.BOT_PHASE_COMMIT,
+        scout, True, True, 2, False)
+    assert "warden" not in defend_no_spring, defend_no_spring
+    mid_with_spring = server.bot_support_choices(
+        "magic", set(["barracks", "repair"]), False, False, True, 2)
+    assert "warden" in mid_with_spring, mid_with_spring
+    mid_no_spring = server.bot_support_choices(
+        "magic", set(["barracks"]), False, False, True, 2)
+    assert "warden" not in mid_no_spring, mid_no_spring
+    circle_late = server.bot_support_choices(
+        "magic", set(["factory", "repair"]), False, True, True, 2)
+    assert "warden" not in circle_late, circle_late
+    assert "colossus" in circle_late and "dragon" in circle_late
+    print("  防守/中期圣殿+圣泉才排晶铠，法阵不再产: PASS")
+
     print("\n=== 大师 AI 测试全部通过 ===")
 
 

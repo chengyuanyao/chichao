@@ -284,6 +284,7 @@ def main():
     assert catalog["units"]["mage"]["repairable"] is False
     assert catalog["units"]["dragon"]["requires"] == ["mspring"]
     assert catalog["units"]["warden"]["requires"] == ["mspring"]
+    assert catalog["units"]["warden"]["producer"] == "mtemple"
     assert catalog["units"]["colossus"]["requires"] == ["mspring"]
     assert catalog["units"]["comet"]["requires"] == ["mspring"]
     assert catalog["units"]["comet"]["name"] == "坠星台"
@@ -556,9 +557,14 @@ def main():
     assert "非载具，军犬能扑" not in app
     assert "轻甲非载具，军犬咬不动" in app
     assert "可咬法师/晶刺/虹视使与爆裂魔仆" not in hud
-    assert "军犬咬不动载具/建筑/巨龙/坠星台/爆裂魔仆（×0）" in hud
+    assert "军犬咬不动载具/建筑/巨龙/坠星台/爆裂魔仆/影豹（×0）" in hud
     assert "晶刺/法师/女巫/魔仆一口剩血" not in readme
     assert "爆裂魔仆与自爆卡车同为轻甲" in readme
+    assert "影豹同为轻甲" in readme
+    assert "奥术圣殿在圣泉建成后可训练晶铠卫士" in readme
+    assert "圣殿训练 · 需圣泉" in hud
+    assert "圣殿晶铠前排" in app
+    assert "需圣泉" in app
     assert "魔导甲怕磁暴/狙击×1.6" in hud
     assert "魔导甲怕磁暴/狙击×2.0" not in hud
     assert "frostRobe:" in render
@@ -753,6 +759,11 @@ def main():
     assert catalog["units"]["oracle"]["name"] == "虹视使"
     assert catalog["units"]["imp"]["producer"] == "mtemple"
     assert catalog["units"]["oracle"]["producer"] == "mtemple"
+    assert catalog["units"]["warden"]["producer"] == "mtemple"
+    assert catalog["units"]["warden"]["requires"] == ["mspring"]
+    assert catalog["units"]["panther"]["producer"] == "mcircle"
+    assert server.UNIT_TYPES["panther"]["armor"] == "light"
+    assert "panther" not in server.VEHICLE_KINDS
     assert catalog["units"]["imp"]["faction"] == "magic"
     assert catalog["units"]["oracle"]["faction"] == "magic"
     assert catalog["units"]["imp"]["repairable"] is False

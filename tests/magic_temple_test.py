@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""秘法会圣殿补兵：晶刺 / 虹视使。
+"""秘法会圣殿补兵：晶刺 / 虹视使 / 晶铠卫士。
    1) 目录锁定：圣殿产、无圣泉门槛、魔导甲、魔法伤、造价血量
    2) 阵营门槛：科技不能产；魔法圣殿能产
    3) 军犬：一口咬不死晶刺，两口死；载具仍咬不动
    4) 大师 AI 法阵后仍排魔仆
+   5) 晶铠改圣殿产，仍卡圣泉，算载具可修
 """
 
 from __future__ import print_function
@@ -175,6 +176,43 @@ def main():
     produced = queued_kinds(game, b["id"])
     assert "hexling" in produced, produced
     print("  无法阵外圣泉也排出 hexling: PASS")
+
+    print("\n=== Test 5: 晶铠卫士归圣殿，仍需圣泉 ===")
+    warden = server.UNIT_TYPES["warden"]
+    assert warden["producer"] == "mtemple"
+    assert warden["requires"] == ["mspring"]
+    assert warden["hp"] == 1280
+    assert warden["damage"] == 80.0
+    assert warden["cost"] == 1180
+    assert warden["armor"] == ("heavy", "light")
+    assert "warden" in server.VEHICLE_KINDS
+    assert "warden" in server.MAGIC_UNITS
+    catalog = server.public_catalog()
+    entry = catalog["units"]["warden"]
+    assert entry["producer"] == "mtemple"
+    assert entry["requires"] == ["mspring"]
+    assert entry["repairable"] is True
+    room, a, b = make_room("MTEMP05")
+    game = room["game"]
+    a["cash"] = b["cash"] = 99999
+    give(game, a["id"], "barracks")
+    give(game, a["id"], "repair")
+    give(game, b["id"], "mtemple")
+    try:
+        server.queue_unit(room, a["id"], "warden")
+        raise AssertionError("科技不该能产晶铠")
+    except ValueError as exc:
+        assert "阵营" in str(exc), str(exc)
+    try:
+        server.queue_unit(room, b["id"], "warden")
+        raise AssertionError("无圣泉时圣殿不该能出晶铠")
+    except ValueError as exc:
+        assert "前置建筑" in str(exc), str(exc)
+    give(game, b["id"], "mspring")
+    server.queue_unit(room, b["id"], "warden")
+    queued = queued_kinds(game, b["id"])
+    assert "warden" in queued, queued
+    print("  圣殿+圣泉放行晶铠 / 缺圣泉锁定: PASS")
 
     print("\n=== 秘法会圣殿补兵测试全部通过 ===")
 
