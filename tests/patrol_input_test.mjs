@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {createUnitCommandQueue, ORDERED_UNIT_COMMANDS} from '../public/unit_commands.js';
 
 const app=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 function sourceFunction(name) {
@@ -12,36 +13,25 @@ function sourceListener(target,event) {
   assert.ok(source,target+event);return source[0];
 }
 
-// Actual command dispatcher under delayed/reordered HTTP completion.
-const sent=[],waiting=[];
-const queue={session:{playerId:'me'},gameKey:'room:match1',unitCommandTail:Promise.resolve(),pendingUnitCommands:[],
-  performAction(action,payload){sent.push({...payload,unitIds:payload.unitIds?.slice()});
-    return new Promise((resolve,reject)=>waiting.push({resolve,reject}));}};
+// Actual app dispatcher uses the bounded sequenced transport (detailed delay
+// and timeout regressions live in unit_command_transport_test.mjs).
+const sent=[];
+const queue={session:{playerId:'me'},roomState:{game:{matchId:'match1'}},
+  unitCommands:null,unitCommandSession:null,unitCommandMatch:null,
+  createUnitCommandQueue,ORDERED_UNIT_COMMANDS,
+  async performAction(action,payload){
+    if(action==='commandChannel') return {channel:'channel1'};
+    sent.push(payload); return {};
+  }};
 vm.createContext(queue);vm.runInContext(sourceFunction('sendAction'),queue);
-const drain=()=>new Promise(resolve=>setImmediate(resolve));
 const first=queue.sendAction('command',{command:'patrol',unitIds:['dog'],x:100,y:200});
 const second=queue.sendAction('command',{command:'patrol',unitIds:['dog'],x:300,y:400});
 const third=queue.sendAction('command',{command:'patrol',unitIds:['dog'],x:500,y:600});
-await drain();assert.equal(sent.length,1);
-waiting.shift().resolve({});await first;await drain();assert.equal(sent[1].x,300);
-waiting.shift().resolve({});await second;await drain();assert.equal(sent[2].x,500);
-waiting.shift().resolve({});await third;
-const blocked=queue.sendAction('command',{command:'patrol',unitIds:['dog'],x:700,y:600});
-await drain();
-const unsent=queue.sendAction('command',{command:'patrol',unitIds:['dog'],x:800,y:600});
-const stop=queue.sendAction('command',{command:'stop',unitIds:['dog']});
-waiting.shift().resolve({});await blocked;await drain();
-assert.equal((await unsent).cancelled,true);assert.equal(sent.at(-1).command,'stop');
-waiting.shift().resolve({});await stop;
-const failure=queue.sendAction('command',{command:'patrol',unitIds:['dog'],x:900,y:600});
-const caught=assert.rejects(failure,/test failure/);
-const recovery=queue.sendAction('command',{command:'patrol',unitIds:['dog'],x:1000,y:600});
-await drain();waiting.shift().reject(new Error('test failure'));await caught;await drain();
-assert.equal(sent.at(-1).x,1000);waiting.shift().resolve({});await recovery;
-const inFlight=queue.sendAction('command',{command:'patrol',unitIds:['dog'],x:1100,y:600});
-await drain();const stale=queue.sendAction('command',{command:'patrol',unitIds:['dog'],x:1200,y:600});
-queue.gameKey='room:match2';waiting.shift().resolve({});await inFlight;
-assert.equal((await stale).cancelled,true);assert.notEqual(sent.at(-1).x,1200);
+await Promise.all([first,second,third]);
+assert.deepEqual(sent.map(item=>item.x),[100,300,500]);
+assert.deepEqual(sent.map(item=>item.input.sequence),[1,2,3]);
+assert.ok(sent.every(item=>item.input.matchId==='match1'));
+queue.unitCommands.dispose();
 
 // Real pointer handlers: Shift right click must take precedence over contextual
 // attacks/mining; ordinary right click and Shift additive left selection remain.

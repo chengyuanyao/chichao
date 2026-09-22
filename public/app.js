@@ -9,6 +9,7 @@ import { readReportHistory, saveReportHistory } from './report_history.js';
 import { createBattleAudio } from './battle_audio.js';
 import { createPerformanceRecorder } from './performance_report.js';
 import { createTelemetryUploader } from './telemetry_upload.js';
+import { createUnitCommandQueue, ORDERED_UNIT_COMMANDS } from './unit_commands.js';
 import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './build_queues.js';
 
 (function () {
@@ -1371,8 +1372,9 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   var battleAudio = null;
   var renderStarted = false;
   var actionInFlight = false;
-  var unitCommandTail = Promise.resolve();
-  var pendingUnitCommands = [];
+  var unitCommands = null;
+  var unitCommandSession = null;
+  var unitCommandMatch = null;
   // 房主改队伍时还会连带重排出生位。过去这些请求并发飞出去，房主紧接着
   // 点“开始”就可能让服务端在一半新配置、一半旧配置上开局。把大厅配置
   // 串成一条队列；开始按钮也排在同一条队列末尾。
@@ -1652,12 +1654,14 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       method: options.method || 'GET',
       headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
       body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: options.signal,
       cache: 'no-store'
     });
     var data;
     try {
       data = await response.json();
     } catch (_error) {
+      if (options.signal && options.signal.aborted) throw _error;
       throw new Error('服务器响应异常');
     }
     if (!response.ok || data.ok === false) {
@@ -1667,36 +1671,31 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   }
 
   function sendAction(action, payload, silent) {
-    var orderedCommands = ['move', 'attackMove', 'patrol', 'attack', 'stop', 'hold', 'scatter', 'harvest', 'repair', 'deploy'];
-    if (action !== 'command' || !payload || orderedCommands.indexOf(payload.command) < 0) {
+    if (action !== 'command' || !payload || !ORDERED_UNIT_COMMANDS.has(payload.command)) {
       return performAction(action, payload, silent);
     }
-    var ids = Array.isArray(payload.unitIds) ? payload.unitIds.slice() : [];
-    // Rapid Shift clicks must reach the server in click order. A later explicit
-    // move/stop discards unsent patrol additions for those units, so H cannot
-    // be undone by a stale route request finishing afterwards.
-    if (payload.command !== 'patrol') {
-      pendingUnitCommands.forEach(function (entry) {
-        if (entry.session === session && entry.payload.command === 'patrol') {
-          entry.payload.unitIds = entry.payload.unitIds.filter(function (id) { return ids.indexOf(id) < 0; });
+    var match = roomState && roomState.game && roomState.game.matchId;
+    if (!unitCommands || unitCommands.broken || unitCommandSession !== session || unitCommandMatch !== match) {
+      if (unitCommands) unitCommands.dispose();
+      var owner = session;
+      unitCommandSession = owner;
+      unitCommandMatch = match;
+      unitCommands = createUnitCommandQueue({
+        isCurrent: function () { return session === owner && roomState && roomState.game && roomState.game.matchId === match; },
+        open: function (signal) { return performAction('commandChannel', {matchId: match}, true, signal); },
+        send: function (command, signal) {
+          command.input.matchId = match;
+          return performAction('command', command, true, signal);
         }
       });
     }
-    var entry = { session: session, gameKey: gameKey,
-      payload: Object.assign({}, payload, { unitIds: ids }) };
-    pendingUnitCommands.push(entry);
-    var result = unitCommandTail.then(function () {
-      pendingUnitCommands.splice(pendingUnitCommands.indexOf(entry), 1);
-      if (entry.session !== session || entry.gameKey !== gameKey || !entry.payload.unitIds.length) {
-        return { cancelled: true };
-      }
-      return performAction(action, entry.payload, silent);
+    return unitCommands.enqueue(payload).catch(function (error) {
+      if (!silent) { toast(error.message, 'error'); sound('error'); }
+      throw error;
     });
-    unitCommandTail = result.catch(function () {});
-    return result;
   }
 
-  async function performAction(action, payload, silent) {
+  async function performAction(action, payload, silent, signal) {
     if (!session) {
       throw new Error('会话已失效');
     }
@@ -1711,6 +1710,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     try {
       var data = await request('/api/action', {
         method: 'POST',
+        signal: signal,
         body: {
           roomId: session.roomId,
           playerId: session.playerId,
@@ -1727,6 +1727,10 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       }
       return data;
     } catch (error) {
+      if (signal && signal.aborted) {
+        if (signal.reason === 'superseded') return {cancelled: true};
+        error = new Error('指令发送超时，请检查连接后重新下达（不会自动重发）');
+      }
       recordCommand(false);
       if (!silent) {
         toast(error.message, 'error');
@@ -4788,7 +4792,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       unitIds: ids,
       x: x,
       y: y
-    }).then(function () { sound('move'); }).catch(function () {});
+    }).then(function (result) { if (!result.cancelled) sound('move'); }).catch(function () {});
     if (commandMode) {
       cancelModes();
     }
@@ -4834,7 +4838,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
           command: 'harvest',
           unitIds: harvesters.map(function (unit) { return unit.id; }),
           resourceId: resource.id
-        }).then(function () {
+        }).then(function (result) {
+          if (result.cancelled) return;
           toast(harvesters.length + ' 个采矿单位已优先采集指定矿脉', 'success');
           sound('move');
         }).catch(function () {});
@@ -4871,7 +4876,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
         command: 'attack',
         unitIds: selectedUnitIdList(),
         targetId: target.id
-      }).then(function () { sound('attack'); }).catch(function () {});
+      }).then(function (result) { if (!result.cancelled) sound('attack'); }).catch(function () {});
     } else if (target && isFriendly(target.owner) && structureRole(target.kind) === 'repair' && selectedUnits.size) {
       issueRepairCommand(target);
     } else {
@@ -4898,7 +4903,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       command: 'repair',
       unitIds: vehicles.map(function (unit) { return unit.id; }),
       structureId: repairBay.id
-    }).then(function () {
+    }).then(function (result) {
+      if (result.cancelled) return;
       toast(vehicles.length + ' ' + copy.repairSent, 'success');
       sound('repair');
     }).catch(function () {});
@@ -4971,7 +4977,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     sendAction('command', {
       command: 'stop',
       unitIds: selectedUnitIdList()
-    }).then(function () {
+    }).then(function (result) {
+      if (result.cancelled) return;
       toast(stoppedHarvesters ?
         '已停止；采矿单位将等待你右键指定矿脉' : '已停止当前命令', 'success');
       sound('select');
@@ -5856,7 +5863,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     sendAction('command', {
       command: 'deploy',
       unitIds: mcvIds
-    }).then(function () { toast(factionCopy().mcv + '已展开为新' + factionCopy().hq, 'success'); sound('confirm'); })
+    }).then(function (result) { if (result.cancelled) return; toast(factionCopy().mcv + '已展开为新' + factionCopy().hq, 'success'); sound('confirm'); })
       .catch(function (err) { toast(err.message || '展开失败', 'error'); });
   });
   $('#counterToggle').addEventListener('click', function () {

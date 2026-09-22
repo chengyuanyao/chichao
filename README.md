@@ -481,6 +481,19 @@ python3 tests/integration_test.py http://127.0.0.1:18081  # 需要服务器已�
 
 回归：`python tests/diagnostics_test.py`、`node tests/telemetry_upload_test.mjs`。
 
+### 部队指令与弱网
+
+移动、攻击、H 停止等命令按单位覆盖旧命令，不再共用一个等待响应的全局队列。
+不同部队可独立下令，最多 4 个部队请求在途；同一批单位的 Shift 巡逻点仍按顺序发送。
+单次请求超过 3 秒会提示失败，不自动重放移动或展开命令；巡逻前一节点失败时取消依赖它的待发节点，请重新规划路径。
+服务器按对局、指令通道及单位序号拒绝迟到或重复的旧命令。部队命令只返回简短确认，战场状态由 SSE 更新，不用迟到的指令响应覆盖画面。
+同一玩家在另一页面建立新指令通道后，旧页面需刷新才能继续控制。升级需要重启服务器并让玩家刷新页面；该机制不能消除 Wi-Fi 丢包或状态流断连。
+
+大型部队通过桥头时，中途导航节点使用与体型相符的通过距离，下一段仍检查车体与山河碰撞；避免多辆车争抢同一个 8px 节点被避让力反复推回。最终目的地的到达精度不变。
+
+回归：`node tests/unit_command_transport_test.mjs`、`python tests/unit_command_sequence_test.py`、`python tests/unit_command_http_test.py`。
+密集通行回归：`python tests/dense_bridge_control_test.py`（每座桥 53 辆天启，检查通行和地形碰撞）。
+
 默认监听 TCP **18081**。局域网联机需要在跑服务器的那台机器上放行该端口
 （Windows 防火墙入站规则，或 Linux 的 nftables / ufw）。规则应对本机局域网网段开放，
 不要写死某一台机器的 IP。

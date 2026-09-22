@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {createTacticalSelection} from '../public/tactical_selection.js';
+import {ORDERED_UNIT_COMMANDS} from '../public/unit_commands.js';
 const tank={id:'t',kind:'tank',owner:'me',hp:100},dog={id:'d',kind:'dog',owner:'me',hp:50};
 const enemy={...tank,id:'enemy',owner:'them'},miner={...dog,id:'m',kind:'harvester'};
 let units=[tank,dog,enemy,miner];
@@ -34,5 +35,6 @@ context.tacticalSelected('hold');await Promise.resolve();assert.equal(commands[0
 assert.deepEqual([...commands[0].unitIds],['t']);
 context.selectedUnits=new Set(['t','d','m','enemy']);context.tacticalSelected('scatter');await Promise.resolve();
 assert.deepEqual([...commands[1].unitIds],['t','d']);
-assert.match(source,/orderedCommands = \[[^\n]*'hold', 'scatter'/);
+assert.ok(ORDERED_UNIT_COMMANDS.has('hold') && ORDERED_UNIT_COMMANDS.has('scatter'));
+assert.match(source,/ORDERED_UNIT_COMMANDS\.has\(payload.command\)/);
 console.log('Tactical UI passed: mixed filtering/restoration/deaths/ownership, no command side effects, combat-only ordered actions.');

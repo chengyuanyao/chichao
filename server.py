@@ -3979,6 +3979,56 @@ AGENT_ALLOWED_COMMANDS = frozenset((
 ))
 
 
+SEQUENCED_UNIT_COMMANDS = frozenset((
+    "move", "attackMove", "patrol", "attack", "stop", "hold", "scatter",
+    "harvest", "repair", "deploy",
+))
+
+
+def open_command_channel(room, player, payload):
+    game = room.get("game")
+    if (room["status"] != "playing" or not game or player.get("eliminated")
+            or payload.get("matchId") != game["uid"]):
+        raise ValueError("对局已变更，请刷新战场后重试")
+    channel = new_id("input")
+    game.setdefault("inputChannels", {})[player["id"]] = channel
+    return {"channel": channel}
+
+
+def handle_sequenced_command(room, player, payload, role="commander"):
+    """Called under room lock; late HTTP packets cannot undo newer unit orders.
+
+    Legacy/AI commands remain supported. Private sequence stamps live on units,
+    not public snapshots, and disappear with them. No simulation-tick work.
+    """
+    stamp = payload.get("input")
+    game = room.get("game")
+    if not isinstance(stamp, dict) or not game:
+        raise ValueError("部队指令格式错误")
+    if room["status"] != "playing" or player.get("eliminated"):
+        raise ValueError("本局已结束或你已被击败")
+    channel = game.get("inputChannels", {}).get(player["id"])
+    sequence = stamp.get("sequence")
+    if (not channel or stamp.get("channel") != channel
+            or stamp.get("matchId") != game.get("uid")):
+        raise ValueError("指令通道已失效，请刷新页面后重试")
+    if (type(sequence) is not int or sequence < 1 or sequence > 9007199254740991
+            or payload.get("command") not in SEQUENCED_UNIT_COMMANDS):
+        raise ValueError("部队指令序号错误")
+    ids = command_unit_ids(payload)
+    units = [unit for unit in game["units"]
+             if unit["owner"] == player["id"] and unit["id"] in ids
+             and (unit.get("_inputChannel") != channel
+                  or sequence > unit.get("_inputSequence", 0))]
+    filtered = dict(payload, unitIds=[unit["id"] for unit in units])
+    if units:
+        handle_game_command(room, player, filtered, role)
+        for unit in units:
+            unit["_inputChannel"] = channel
+            unit["_inputSequence"] = sequence
+    return {"acceptedUnits": len(units), "sequence": sequence}
+
+
 def handle_game_command(room, player, payload, role="commander"):
     if room["status"] != "playing" or not room.get("game"):
         raise ValueError("战斗尚未开始")
@@ -4869,7 +4919,18 @@ def move_toward(terrain, entity, target_x, target_y, speed, dt, stop_distance=0.
 
     new_dx = move_target_x - entity["x"]
     new_dy = move_target_y - entity["y"]
-    wp_reached = math.hypot(new_dx, new_dy) <= 8.0
+    waypoint_distance_sq = new_dx * new_dx + new_dy * new_dy
+    wp_reached = waypoint_distance_sq <= 64.0
+    # 中途网格节点不是停车位。大型单位的分离半径远大于旧的 8px
+    # 到点阈值，多辆车围着同一节点会每步前进、随后又被避让推回。
+    # 只在近节点处检查一段前瞻；地形射线含车体半径，不能切穿桥岸。
+    # 最后一个点仍精确抵达，开阔地直线路径不增加射线/寻路开销。
+    if not wp_reached and path and len(path) > 1:
+        waypoint_radius = max(12.0, entity.get("size", 20.0) * 1.6)
+        if waypoint_distance_sq <= waypoint_radius * waypoint_radius:
+            wp_reached = not terrain.segment_blocked(
+                entity["x"], entity["y"], path[1][0], path[1][1],
+                padding=entity.get("size", 20.0) * 0.5)
 
     if wp_reached and path:
         path.pop(0)
@@ -7729,8 +7790,15 @@ class GameHandler(BaseHTTPRequestHandler):
                 if mark_agent_offline(player):
                     append_agent_message(player, "system", "AI 副官已断开。")
                 agent_response = {"agent": public_agent_channel(player)}
+            elif action == "commandChannel":
+                agent_response = open_command_channel(room, player, payload)
             elif action == "command":
-                handle_game_command(room, player, payload, role=role)
+                if "input" in payload:
+                    # Unit orders only need an ACK. SSE supplies authoritative
+                    # state; late POST responses must not rewind the battlefield.
+                    agent_response = handle_sequenced_command(room, player, payload, role)
+                else:
+                    handle_game_command(room, player, payload, role=role)
             elif action == "proposeAlliance":
                 propose_alliance(room, player, payload.get("playerId"))
             elif action == "acceptAlliance":
@@ -7778,7 +7846,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 raise ValueError("未知操作")
             # 指令可能在两个模拟 tick 之间直接改变建筑/队列；REST 响应必须看到
             # 新状态，不能复用刚才 SSE 建出的旧快照。
-            if action not in ("leave", "agentUserMessage", "agentPoll",
+            if action not in ("leave", "commandChannel", "agentUserMessage", "agentPoll",
                               "agentReply", "agentDisconnect",
                               "startServerAgent", "stopServerAgent"):
                 invalidate_game_snapshot(room.get("game"))
