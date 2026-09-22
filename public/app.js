@@ -61,6 +61,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     imp: { icon: '✧', desc: '廉价晶刺肉，短距碎晶，一口军犬咬不死' },
     oracle: { icon: '◎', desc: '超远棱晶点射，玻璃后排，无溅射' },
     golem: { icon: '⛰', desc: '构装前排，高血投石溅射' },
+    behemoth: { icon: '☗', desc: '傀儡进阶 · 玄岩重甲前排 · 需圣泉' },
     panther: { icon: '♞', desc: '全场最快魔兽，近战侧翼包抄；轻甲非载具，军犬咬不动' },
     dragon: { icon: '✹', desc: '重型远程奥术龙息，大溅射压轴 · 需圣泉' },
     warden: { icon: '⛊', desc: '圣殿晶铠前排，混甲抗磁暴/狙击/军犬 · 需圣泉' },
@@ -285,7 +286,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1, mstorm: 1,
-    mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, panther: 1, dragon: 1,
+    mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, behemoth: 1, panther: 1, dragon: 1,
     warden: 1, colossus: 1, comet: 1, mharvester: 1, mmcv: 1, hexling: 1
   };
 
@@ -939,6 +940,30 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       pCirc(c, 48, 42, 1.8, '#f2e6ff');
       pCirc(c, 44, 23, 1.1, P_RUNE);
       pCirc(c, 48, 23, 1.1, P_RUNE);
+    },
+    behemoth: function (c) {
+      // 玄岩巨像：比傀儡更高的黑曜岩躯，紫金符纹裂隙 + 肩环符印
+      pShadow(c, 48, 62, 34);
+      pPoly(c, [[26, 62], [70, 62], [62, 22], [34, 22]], P_ODY_D);
+      pPoly(c, [[70, 62], [50, 62], [50, 22], [62, 22]], 'rgba(10,10,6,.34)');
+      pPoly(c, [[32, 26], [64, 26], [58, 10], [38, 10]], P_ODY);
+      pCirc(c, 48, 10, 7.2, P_ODY);
+      pRect(c, 18, 30, 11, 24, P_ODY_D);
+      pRect(c, 67, 30, 11, 24, P_ODY_D);
+      pRect(c, 16, 50, 13, 8, P_ODY);
+      pRect(c, 67, 50, 13, 8, P_ODY);
+      pLine(c, 40, 20, 44, 54, 1.6, P_GOLDTRIM);
+      pLine(c, 52, 18, 56, 52, 1.5, P_ARCANE);
+      pLine(c, 36, 36, 60, 34, 1.4, P_GOLDTRIM);
+      c.strokeStyle = P_GOLDTRIM; c.lineWidth = 2.2;
+      c.beginPath(); c.ellipse(48, 28, 22, 6, 0, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = P_ODY_CORE; c.lineWidth = 1.2;
+      c.beginPath(); c.ellipse(48, 28, 18, 4.4, 0, 0, Math.PI * 2); c.stroke();
+      pPoly(c, [[42, 6], [48, 0], [54, 6], [48, 10]], P_GOLDTRIM);
+      pCirc(c, 48, 38, 5.2, P_ODY_CORE);
+      pCirc(c, 48, 38, 2.2, P_GOLD);
+      pCirc(c, 45, 9, 1.2, P_ODY_SEAM);
+      pCirc(c, 51, 9, 1.2, P_ODY_SEAM);
     },
     panther: function (c) {
       pShadow(c, 48, 60, 28);

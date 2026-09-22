@@ -95,35 +95,39 @@ TEMPLATES = {
             "open": _t({"imp": 4, "mage": 2}, "没情报，晶刺 200 一个先铺场"),
             "mid": _t({"mage": 3, "golem": 3, "imp": 2}, "傀儡抗线 + 法师输出"),
             # 晶铠改圣殿产，仍卡圣泉，所以只进 late（repair/圣泉已立）
-            "late": _t({"dragon": 3, "golem": 2, "mage": 2, "warden": 2}, "巨龙 + 卫士通用重型"),
+            "late": _t({"dragon": 3, "behemoth": 2, "mage": 2, "warden": 2},
+                       "巨龙 + 玄岩巨像地面抗线"),
         },
         "infantry": {
             "open": _t({"imp": 4, "mage": 2}, "魔法对步兵 ×1.20，晶刺便宜好铺"),
             "mid": _t({"golem": 3, "imp": 3, "mage": 2}, "傀儡溅射 34 清步兵堆"),
-            "late": _t({"dragon": 3, "golem": 3, "oracle": 2},
-                       "巨龙溅射 60 清人海，虹视使 310 射程点后排"),
+            "late": _t({"dragon": 3, "behemoth": 3, "oracle": 2},
+                       "巨龙溅射 60 清人海，玄岩巨像溅射 52 推线"),
         },
         "light": {
             "open": _t({"mage": 3, "imp": 3}, "魔法对轻甲 ×1.30"),
             "mid": _t({"mage": 3, "golem": 2, "oracle": 2}, "法师主输出，虹视使远程补枪"),
-            "late": _t({"dragon": 3, "mage": 2, "oracle": 2, "warden": 2}, "巨龙领衔，卫士挡前"),
+            "late": _t({"dragon": 3, "behemoth": 2, "oracle": 2, "warden": 2},
+                       "巨龙领衔，玄岩巨像挡前"),
         },
         "heavy": {
             "open": _t({"mage": 3, "imp": 3}, "魔法对重甲 ×1.60，法师天生反坦克"),
             "mid": _t({"mage": 4, "golem": 2, "imp": 2}, "堆法师熔钢铁载具"),
-            "late": _t({"dragon": 3, "mage": 3, "warden": 2, "golem": 2},
-                       "巨龙 1100 血 + 法师 ×1.60，钢铁重甲吃不消"),
+            "late": _t({"dragon": 3, "mage": 3, "warden": 2, "behemoth": 2},
+                       "巨龙 + 玄岩巨像 1520 血推线，法师 ×1.60 熔钢铁"),
         },
         # 镜像内战：魔法对魔导甲是中性 ×1.00，纯拼性价比和血量
         "arcane": {
             "open": _t({"imp": 4, "mage": 2}, "同族对轰是中性伤害，拼每块钱输出"),
             "mid": _t({"imp": 3, "golem": 3, "mage": 2}, "傀儡 760 血换血，晶刺补输出"),
-            "late": _t({"dragon": 3, "golem": 2, "warden": 2, "imp": 2}, "拼血量和溅射"),
+            "late": _t({"dragon": 3, "behemoth": 2, "warden": 2, "imp": 2},
+                       "拼血量和溅射，玄岩巨像换血"),
         },
         "mixed": {
             "open": _t({"imp": 3, "mage": 3}, "对面混编，法师伤害对各甲都不吃亏"),
             "mid": _t({"mage": 3, "golem": 3, "imp": 2}, "法师 + 傀儡的通用组合"),
-            "late": _t({"dragon": 3, "warden": 2, "golem": 2, "mage": 2}, "重型混编"),
+            "late": _t({"dragon": 3, "warden": 2, "behemoth": 2, "mage": 2},
+                       "重型混编，玄岩巨像对位天启地面"),
         },
     },
 }

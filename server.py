@@ -6162,6 +6162,7 @@ BOT_INFANTRY_KINDS = frozenset((
 BOT_MAGE_KINDS = frozenset(("mage", "frost"))
 BOT_LATE_UNITS = frozenset((
     "overlord", "prism", "v3", "dragon", "colossus", "warden", "comet",
+    "behemoth",
 ))
 BOT_LATE_STRUCTURES = frozenset(("repair", "mspring"))
 BOT_SCOUT_VEHICLES = VEHICLE_KINDS - frozenset((
@@ -6517,7 +6518,7 @@ def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
         if "factory" in roles:
             choices.extend(("panther", "panther"))
             if "repair" in roles:
-                choices.extend(("colossus", "dragon"))
+                choices.extend(("colossus", "dragon", "behemoth"))
                 if late:
                     choices.append("comet")
             if rich and harvester_n < 2:
@@ -6610,6 +6611,8 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
             choices = []
             if "factory" in roles:
                 choices.extend(("golem", "panther"))
+                if "repair" in roles:
+                    choices.append("behemoth")
             if "barracks" in roles:
                 choices.extend(("frost", "mage", "imp"))
                 if "repair" in roles:
@@ -6624,7 +6627,7 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
 
     if late and "repair" in roles:
         if magic:
-            choices = ["colossus", "dragon"]
+            choices = ["colossus", "dragon", "behemoth"]
             if "barracks" in roles:
                 choices.append("warden")
             if phase in (BOT_PHASE_STABILIZE, BOT_PHASE_CLOSE):
@@ -6719,7 +6722,7 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
     if ("repair" in roles and phase == BOT_PHASE_CLOSE
             and not defend and not inbound):
         late_choices = (
-            (("colossus", "dragon", "comet") +
+            (("colossus", "dragon", "comet", "behemoth") +
              (("warden",) if "barracks" in roles else ()))
             if faction == "magic"
             else ("overlord", "prism", "artillery"))
