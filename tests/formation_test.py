@@ -128,12 +128,66 @@ def main():
     assert me["formation"] == "line"
 
     try:
-        server.handle_game_command(room, me, {"command": "setFormation", "formation": "circle"})
+        server.handle_game_command(room, me, {"command": "setFormation", "formation": "spiral"})
     except ValueError as error:
         assert "阵型" in str(error)
     else:
         raise AssertionError("invalid formation must be rejected")
     assert me["formation"] == "line"
+
+    game["units"] = []
+    squad = place_squad(game, me["id"], 6, 800, 800)
+    tx, ty = 2000.0, 800.0
+    server.issue_move(
+        game, me["id"], {unit["id"] for unit in squad}, tx, ty, formation="column")
+    points = dests(squad)
+    assert distinct(points)
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    assert max(xs) - min(xs) > max(ys) - min(ys) + 80
+    for point in points:
+        assert abs(point[1] - ty) < 8, points
+    tip = min(points, key=lambda point: math.hypot(point[0] - tx, point[1] - ty))
+    assert math.hypot(tip[0] - tx, tip[1] - ty) < 8
+    assert abs(tip[0] - max(xs)) < 1e-6
+
+    game["units"] = []
+    squad = place_squad(game, me["id"], 6, 700, 700)
+    tx, ty = 700.0, 1800.0
+    server.issue_move(
+        game, me["id"], {unit["id"] for unit in squad}, tx, ty, formation="double")
+    points = dests(squad)
+    assert distinct(points)
+    bands = sorted(set(round(point[1] / 4.0) * 4.0 for point in points))
+    assert len(bands) == 2, (bands, points)
+    assert bands[1] - bands[0] > 40
+    assert abs(bands[1] - ty) < 8
+    front = [point for point in points if abs(point[1] - bands[1]) < 6]
+    back = [point for point in points if abs(point[1] - bands[0]) < 6]
+    assert len(front) == 3 and len(back) == 3, (front, back)
+    front_d = sum(math.hypot(point[0] - tx, point[1] - ty) for point in front) / 3.0
+    back_d = sum(math.hypot(point[0] - tx, point[1] - ty) for point in back) / 3.0
+    assert front_d < back_d - 8, (front_d, back_d)
+
+    game["units"] = []
+    squad = place_squad(game, me["id"], 8, 900, 900)
+    tx, ty = 1800.0, 900.0
+    server.issue_move(
+        game, me["id"], {unit["id"] for unit in squad}, tx, ty, formation="circle")
+    points = dests(squad)
+    assert distinct(points)
+    radii = [math.hypot(point[0] - tx, point[1] - ty) for point in points]
+    mean_r = sum(radii) / float(len(radii))
+    assert mean_r > 40, mean_r
+    assert all(abs(radius - mean_r) < 8 for radius in radii), (radii, points)
+    forward = max(points, key=lambda point: point[0])
+    assert abs(forward[1] - ty) < 12, forward
+
+    server.handle_game_command(room, me, {"command": "setFormation", "formation": "column"})
+    assert me["formation"] == "column"
+    assert server.public_player(room, me, me["id"])["formation"] == "column"
+    assert normalize_formation("double") == "double"
+    assert normalize_formation("circle") == "circle"
 
     game["units"] = []
     rifles = place_squad(game, me["id"], 4, 400, 400, "rifle")
@@ -147,7 +201,7 @@ def main():
     dragon_span = max(unit["destX"] for unit in dragons) - min(unit["destX"] for unit in dragons)
     assert dragon_span > rifle_span + 5, (rifle_span, dragon_span)
 
-    print("formation ok: facing box, line, wedge, preference, single-unit click")
+    print("formation ok: facing box, line, wedge, column, double, circle, preference")
 
 
 if __name__ == "__main__":

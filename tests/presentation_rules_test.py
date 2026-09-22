@@ -785,8 +785,10 @@ def main():
     assert "不设置生产快捷键" in readme
     assert "阵型" in readme
     assert "F：循环行军阵型" in readme
+    assert "纵队" in readme and "双排" in readme and "圆环" in readme
     assert "function cycleFormation()" in app
     assert "event.code === 'KeyF'" in app
+    assert "'column', 'double', 'circle'" in app or '"column", "double", "circle"' in app
     assert 'id="formationBtn"' in hud
     assert 'command: \'setFormation\'' in app or 'command: "setFormation"' in app
     assert "def set_player_formation(" in server_source

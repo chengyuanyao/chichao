@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import math
 
-FORMATION_MODES = ("box", "line", "wedge")
+FORMATION_MODES = ("box", "line", "wedge", "column", "double", "circle")
 FORMATION_SPACING = 52.0
 WEDGE_DEPTH = 0.86
 
@@ -60,6 +60,12 @@ def formation_offsets(count, style, spacing=FORMATION_SPACING):
         return [((index - (n - 1) / 2.0) * spacing, 0.0) for index in range(n)]
     if style == "wedge":
         return _wedge_offsets(n, spacing)
+    if style == "column":
+        return _column_offsets(n, spacing)
+    if style == "double":
+        return _double_offsets(n, spacing)
+    if style == "circle":
+        return _circle_offsets(n, spacing)
     return _box_offsets(n, spacing)
 
 
@@ -87,6 +93,35 @@ def _wedge_row_counts(count):
         remaining -= take
         width += 1
     return rows
+
+
+def _column_offsets(count, spacing):
+    """Single file along the march; tip sits on the click."""
+    return [(0.0, -float(index) * spacing) for index in range(count)]
+
+
+def _double_offsets(count, spacing):
+    """Two ranks perpendicular to the march; front rank on the click."""
+    front_count = (count + 1) // 2
+    back_count = count - front_count
+    offsets = []
+    for index in range(front_count):
+        right = (index - (front_count - 1) / 2.0) * spacing
+        offsets.append((right, 0.0))
+    for index in range(back_count):
+        right = (index - (back_count - 1) / 2.0) * spacing
+        offsets.append((right, -spacing))
+    return offsets
+
+
+def _circle_offsets(count, spacing):
+    """Even ring around the click; slot 0 sits on the march-forward angle."""
+    radius = count * spacing / (2.0 * math.pi)
+    offsets = []
+    for index in range(count):
+        angle = index * 2.0 * math.pi / float(count)
+        offsets.append((radius * math.sin(angle), radius * math.cos(angle)))
+    return offsets
 
 
 def _wedge_offsets(count, spacing):

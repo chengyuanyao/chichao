@@ -1320,9 +1320,15 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   var viewingArchivedReport = false;
   var activeTab = 'buildings';
   var selectedUnits = new Set();
-  var FORMATION_MODES = ['box', 'line', 'wedge'];
-  var FORMATION_LABELS = { box: '方阵', line: '横排', wedge: '楔形' };
-  var FORMATION_ICONS = { box: '▦', line: '☰', wedge: '▲' };
+  var FORMATION_MODES = ['box', 'line', 'wedge', 'column', 'double', 'circle'];
+  var FORMATION_LABELS = {
+    box: '方阵', line: '横排', wedge: '楔形',
+    column: '纵队', double: '双排', circle: '圆环'
+  };
+  var FORMATION_ICONS = {
+    box: '▦', line: '☰', wedge: '▲',
+    column: '↓', double: '≣', circle: '◯'
+  };
   var FORMATION_STORAGE_KEY = 'steel-front-formation';
   var selectedFormation = 'box';
   try {
