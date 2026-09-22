@@ -1,7 +1,7 @@
 // Presentation policies shared by rendering and regression tests.
 export const DEBRIS_LIMIT=28, COLLAPSE_LIMIT=6, COLLAPSE_SECONDS=.85;
 const buildings=new Set(['hq','power','refinery','barracks','factory','repair','turret','missile',
-  'mhq','mpower','mrefinery','mtemple','mcircle','mspring','mtower','mrail']);
+  'mhq','mpower','mrefinery','mtemple','mcircle','mspring','mtower','mstorm']);
 export function wreckFamily(kind) {
   if(buildings.has(kind)) return 'rubble';
   if(['dragon','golem','warden','colossus','comet','mharvester','mmcv'].includes(kind)) return 'arcane';

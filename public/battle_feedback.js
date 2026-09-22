@@ -37,7 +37,7 @@ export function weaponFamily(kind) {
   if (['arcane','iris','crystal'].includes(kind)) return 'arcane';
   if (['frost'].includes(kind)) return 'ice';
   if (['fireball','meteor','comet','hexling'].includes(kind)) return 'arcaneHeavy';
-  if (['tesla','laser','plasma','plasmalance'].includes(kind)) return 'electric';
+  if (['tesla','laser','plasma','plasmalance','storm'].includes(kind)) return 'electric';
   if (['siege','missile','boulder'].includes(kind)) return 'heavy';
   if (['shell','ap','rocket'].includes(kind)) return 'cannon';
   if (['bite','claw','dog_arcane'].includes(kind)) return 'melee';
