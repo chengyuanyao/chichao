@@ -4,7 +4,7 @@
    1) 目录与阵营登记齐全
    2) 圣泉门槛：法阵进阶仍卡圣泉；晶铠改圣殿产，仍卡圣泉
    3) 魔法能生产、科技不能；place_structure 阵营门槛仍在
-   4) 混甲：磁暴/狙击不再按纯魔导 ×2；军犬不把构装/巨龙当猎物
+   4) 晶铠轻甲 + tesla 伤种；裂地仍混甲；军犬不把构装/巨龙当猎物
    5) 裂地晶兽用 siege 拆建筑
 """
 
@@ -68,12 +68,20 @@ def main():
     assert warden["faction"] == "magic"
     assert WARDEN in server.MAGIC_UNITS
     assert WARDEN in server.VEHICLE_KINDS
-    assert warden["hp"] == 1280
-    assert warden["damage"] == 80.0
-    assert warden["cost"] == 1180
-    assert warden["armor"] == ("heavy", "light")
+    assert warden["hp"] == 220
+    assert warden["damage"] == 28.0
+    assert warden["cost"] == 720
+    assert warden["speed"] == 80.0
+    assert warden["range"] == 155.0
+    assert warden["cooldown"] == 0.50
+    assert warden["size"] == 12.0
+    assert warden["build"] == 7.5
+    assert warden["splash"] == 0.0
+    assert warden["projectile"] == "crystal"
+    assert warden["projectileSpeed"] == 900.0
+    assert warden["armor"] == "light"
     assert server.UNIT_TYPES["colossus"]["damageType"] == "siege"
-    assert warden["damageType"] == "magic"
+    assert warden["damageType"] == "tesla"
     assert server.UNIT_TYPES["dragon"]["damageType"] == "magic"
     assert server.UNIT_TYPES["comet"]["damageType"] == "missile"
     colo = server.UNIT_TYPES["colossus"]
@@ -85,7 +93,7 @@ def main():
     assert colo["cost"] == 1280
     assert colo["cooldown"] == 2.10
     assert colo["requires"] == ["mspring"]
-    assert colo["hp"] < warden["hp"]
+    assert warden["hp"] < server.UNIT_TYPES["golem"]["hp"]
     assert colo["hp"] < server.UNIT_TYPES["dragon"]["hp"]
     assert colo["hp"] < server.UNIT_TYPES["overlord"]["hp"]
     catalog = server.public_catalog()
@@ -166,7 +174,7 @@ def main():
         assert "阵营" in str(exc), str(exc)
     print("  跨阵营生产/放置仍拦截: PASS")
 
-    print("\n=== Test 4: 混甲克制 + 军犬不扑构装 ===")
+    print("\n=== Test 4: 晶铠轻甲 tesla 伤种 + 裂地混甲 + 军犬不扑构装 ===")
     room, a, b = make_room("MADV03")
     game = room["game"]
     warden = server.make_unit("warden", b["id"], 9000, 9000)
@@ -174,23 +182,34 @@ def main():
     game["units"].append(warden)
     before = warden["hp"]
     server.apply_damage(room, warden, 100, a["id"], "tesla", game)
-    assert abs((before - warden["hp"]) - 135.0) < 0.1, before - warden["hp"]
-    print("  tesla vs 混甲: ×1.35 PASS")
+    assert abs((before - warden["hp"]) - 140.0) < 0.1, before - warden["hp"]
+    print("  tesla vs 晶铠轻甲: ×1.40 PASS")
     before = warden["hp"]
     server.apply_damage(room, warden, 100, a["id"], "sniper", game)
-    assert abs((before - warden["hp"]) - 27.5) < 0.1, before - warden["hp"]
-    print("  sniper vs 混甲: ×0.275 PASS")
+    assert abs((before - warden["hp"]) - 40.0) < 0.1, before - warden["hp"]
+    print("  sniper vs 晶铠轻甲: ×0.40 PASS")
     before = warden["hp"]
     server.apply_damage(room, warden, 60, a["id"], "bite", game)
     assert abs(before - warden["hp"]) < 0.1, before - warden["hp"]
-    print("  bite vs 混甲: ×0 PASS")
+    print("  bite vs 晶铠载具: ×0 PASS")
+    colo = server.make_unit("colossus", b["id"], 9100, 9100)
+    colo["hp"] = 1000
+    game["units"].append(colo)
+    before = colo["hp"]
+    server.apply_damage(room, colo, 100, a["id"], "tesla", game)
+    assert abs((before - colo["hp"]) - 135.0) < 0.1, before - colo["hp"]
+    print("  tesla vs 裂地混甲: ×1.35 PASS")
+    before = colo["hp"]
+    server.apply_damage(room, colo, 100, a["id"], "sniper", game)
+    assert abs((before - colo["hp"]) - 27.5) < 0.1, before - colo["hp"]
+    print("  sniper vs 裂地混甲: ×0.275 PASS")
     assert not server.is_dog_prey("warden")
     assert not server.is_dog_prey("colossus")
     assert not server.is_dog_prey("dragon")
     assert not server.is_dog_prey("comet")
     assert not server.is_dog_prey("behemoth")
     assert server.is_dog_prey("mage")
-    print("  军犬猎物不含混甲构装/巨龙: PASS")
+    print("  军犬猎物不含轻甲构装/混甲/巨龙: PASS")
 
     print("\n=== Test 5: 裂地晶兽 siege 拆建筑 ===")
     room, a, b = make_room("MADV04")

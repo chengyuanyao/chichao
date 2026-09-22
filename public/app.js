@@ -64,7 +64,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     behemoth: { icon: '☗', desc: '傀儡进阶 · 玄岩重甲前排 · 需圣泉' },
     panther: { icon: '♞', desc: '全场最快魔兽，近战侧翼包抄；轻甲非载具，军犬咬不动' },
     dragon: { icon: '✹', desc: '重型远程奥术龙息，大溅射压轴 · 需圣泉' },
-    warden: { icon: '⛊', desc: '圣殿晶铠前排，混甲抗磁暴/狙击/军犬 · 需圣泉' },
+    warden: { icon: '⛊', desc: '反甲晶击脉冲 · 需圣泉' },
     colossus: { icon: '☄', desc: '远程晶陨，专拆建筑 · 需圣泉' },
     comet: { icon: '✺', desc: '超远程坠星，曲射拆建筑，弹速慢能躲 · 需圣泉' },
     mharvester: { icon: '◈', desc: '自动采集水晶' },

@@ -333,7 +333,7 @@ def main():
                                            queued_kinds(game, a["id"]))
     print("  波次失败 → 建造 %s，未加卡车: PASS" % queued[0]["kind"])
 
-    print("\n=== Test 12: 晶铠从圣殿出，仍卡圣泉 ===")
+    print("\n=== Test 12: 晶铠从圣殿出，仍卡圣泉；对位磁暴反甲 ===")
     scout = server.bot_empty_scout()
     defend_with_spring = server.bot_unit_choices(
         "magic", set(["barracks", "repair"]), server.BOT_PHASE_COMMIT,
@@ -343,6 +343,11 @@ def main():
         "magic", set(["barracks"]), server.BOT_PHASE_COMMIT,
         scout, True, True, 2, False)
     assert "warden" not in defend_no_spring, defend_no_spring
+    defend_with_golem = server.bot_unit_choices(
+        "magic", set(["barracks", "factory", "repair"]),
+        server.BOT_PHASE_COMMIT, scout, True, True, 2, False)
+    assert "golem" in defend_with_golem, defend_with_golem
+    assert "warden" not in defend_with_golem, defend_with_golem
     mid_with_spring = server.bot_support_choices(
         "magic", set(["barracks", "repair"]), False, False, True, 2)
     assert "warden" in mid_with_spring, mid_with_spring
@@ -365,8 +370,19 @@ def main():
     no_spring_late = server.bot_support_choices(
         "magic", set(["factory"]), False, True, True, 2)
     assert "behemoth" not in no_spring_late, no_spring_late
+    vs_armor = dict(scout)
+    vs_armor["vehicles"] = 3
+    anti_vehicle = server.bot_unit_choices(
+        "magic", set(["barracks", "repair"]), server.BOT_PHASE_COMMIT,
+        vs_armor, False, True, 2, False)
+    assert "warden" in anti_vehicle, anti_vehicle
+    anti_vehicle_no_spring = server.bot_unit_choices(
+        "magic", set(["barracks"]), server.BOT_PHASE_COMMIT,
+        vs_armor, False, True, 2, False)
+    assert "warden" not in anti_vehicle_no_spring, anti_vehicle_no_spring
     print("  防守/中期圣殿+圣泉才排晶铠，法阵不再产: PASS")
     print("  圣泉+法阵后期/防守可排玄岩巨像: PASS")
+    print("  圣殿+圣泉才排晶铠；有傀儡不当肉盾，见载具才当反甲: PASS")
 
     print("\n=== 大师 AI 测试全部通过 ===")
 

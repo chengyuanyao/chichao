@@ -571,12 +571,18 @@ def main():
     assert "爆裂魔仆与自爆卡车同为轻甲" in readme
     assert "影豹同为轻甲" in readme
     assert "奥术圣殿在圣泉建成后可训练晶铠卫士" in readme
+    assert "对位磁暴步兵的轻甲反甲晶击构装" in readme
     assert "玄岩巨像" in readme
     assert "傀儡进阶 · 玄岩重甲前排 · 需圣泉" in app
     assert "圣殿训练 · 需圣泉" in hud
+    assert "反甲晶击 · 圣殿训练 · 需圣泉" in hud
     assert "玄岩巨像" in hud
-    assert "晶铠/裂地/玄岩走混甲" in hud
-    assert "圣殿晶铠前排" in app
+    assert "裂地/玄岩走混甲" in hud
+    assert "晶铠轻甲构装走磁暴伤种" in hud
+    assert "混甲前排" not in hud
+    assert "反甲晶击脉冲" in app
+    assert "圣殿晶铠前排" not in app
+    assert "混甲抗磁暴" not in app
     assert "需圣泉" in app
     assert "魔导甲怕磁暴/狙击×1.6" in hud
     assert "魔导甲怕磁暴/狙击×2.0" not in hud

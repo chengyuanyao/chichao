@@ -5050,7 +5050,8 @@ def nearest_enemy_structure(game, owner, x, y, max_distance, spatial_index=None)
 # 法师/女巫是 arcane 且不是载具，点选能咬但旧扫描只认 infantry，会从法师身边走过。
 # 秘法巨龙甲种也是 arcane，可它在 VEHICLE_KINDS，不当猎物、咬也不掉血。
 # 影豹/爆裂魔仆改轻甲：bite ×0，不当猎物；仍非载具，不进 VEHICLE_KINDS。
-# 混甲构装（heavy/light）整件都不是猎物，军犬不会去扑晶铠/裂地晶兽。
+# 混甲构装（heavy/light）整件都不是猎物，军犬不会去扑裂地晶兽。
+# 晶铠卫士已改轻甲构装：仍在 VEHICLE_KINDS，圣泉可修，bite ×0，不当猎物。
 DOG_PREY_ARMOR = frozenset(("infantry", "arcane"))
 
 
@@ -6154,14 +6155,14 @@ BOT_PHASE_CLOSE = "close"
 BOT_SUICIDE_BLAST = UNIT_TYPES["bomb_truck"]["deathExplosion"]
 BOT_CHEAP_KINDS = frozenset((
     "rifle", "rocket", "sniper", "dog", "tesla",
-    "mage", "frost", "imp", "oracle", "panther", "scout",
+    "mage", "frost", "imp", "oracle", "panther", "scout", "warden",
 ))
 BOT_INFANTRY_KINDS = frozenset((
     "rifle", "rocket", "sniper", "tesla", "mage", "frost", "imp", "oracle",
 ))
 BOT_MAGE_KINDS = frozenset(("mage", "frost"))
 BOT_LATE_UNITS = frozenset((
-    "overlord", "prism", "v3", "dragon", "colossus", "warden", "comet",
+    "overlord", "prism", "v3", "dragon", "colossus", "comet",
     "behemoth",
 ))
 BOT_LATE_STRUCTURES = frozenset(("repair", "mspring"))
@@ -6514,6 +6515,7 @@ def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
                 choices.extend(("imp", "mage", "frost"))
                 choices.append("oracle")
                 if "repair" in roles:
+                    # 对位磁暴：中期圣殿+圣泉的反甲脉冲，不是替傀儡挡线。
                     choices.append("warden")
         if "factory" in roles:
             choices.extend(("panther", "panther"))
@@ -6559,7 +6561,10 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
     if inbound:
         if magic:
             if "barracks" in roles:
-                return ["frost", "mage"]
+                choices = ["frost", "mage"]
+                if "repair" in roles:
+                    choices.append("warden")
+                return choices
             return ["golem"] if "factory" in roles else []
         if "barracks" in roles:
             choices = ["rocket"]
@@ -6593,6 +6598,9 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
             choices = []
             if "barracks" in roles:
                 choices.extend(("mage", "mage", "frost"))
+                # 晶铠对位磁暴：看见载具才加反甲脉冲，不当肉盾。
+                if "repair" in roles:
+                    choices.append("warden")
             if "factory" in roles:
                 choices.append("golem")
             return choices
@@ -6615,7 +6623,8 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
                     choices.append("behemoth")
             if "barracks" in roles:
                 choices.extend(("frost", "mage", "imp"))
-                if "repair" in roles:
+                # 有傀儡时不当晶铠当肉盾；只在圣殿+圣泉、没法阵时才补反甲脉冲。
+                if "repair" in roles and "factory" not in roles:
                     choices.append("warden")
             return choices
         choices = []
