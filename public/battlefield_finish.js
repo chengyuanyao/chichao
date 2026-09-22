@@ -4,7 +4,7 @@ const buildings=new Set(['hq','power','refinery','barracks','factory','repair','
   'mhq','mpower','mrefinery','mtemple','mcircle','mspring','mtower','mstorm']);
 export function wreckFamily(kind) {
   if(buildings.has(kind)) return 'rubble';
-  if(['dragon','golem','warden','colossus','comet','mharvester','mmcv'].includes(kind)) return 'arcane';
+  if(['dragon','golem','behemoth','warden','colossus','comet','mharvester','mmcv'].includes(kind)) return 'arcane';
   return 'vehicle';
 }
 export function collapsePose(age) {

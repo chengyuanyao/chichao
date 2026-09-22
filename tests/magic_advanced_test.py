@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 
 
-ADVANCED = ("colossus", "dragon", "comet")
+ADVANCED = ("colossus", "dragon", "comet", "behemoth")
 WARDEN = "warden"
 
 
@@ -154,7 +154,7 @@ def main():
     give(game, b["id"], "mtemple")
     give(game, b["id"], "mcircle")
     give(game, b["id"], "mspring")
-    for kind in (WARDEN, "colossus", "comet"):
+    for kind in (WARDEN, "colossus", "comet", "behemoth"):
         try:
             server.queue_unit(room, a["id"], kind)
             raise AssertionError("科技不该能产 %s" % kind)
@@ -207,6 +207,7 @@ def main():
     assert not server.is_dog_prey("colossus")
     assert not server.is_dog_prey("dragon")
     assert not server.is_dog_prey("comet")
+    assert not server.is_dog_prey("behemoth")
     assert server.is_dog_prey("mage")
     print("  军犬猎物不含轻甲构装/混甲/巨龙: PASS")
 

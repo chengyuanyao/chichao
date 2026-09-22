@@ -55,7 +55,8 @@ def veteran_rank(kills):
 VEHICLE_KINDS = frozenset((
     "tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv",
     "v3", "overlord", "prism", "bomb_truck",
-    "golem", "dragon", "warden", "colossus", "comet", "mharvester", "mmcv",
+    "golem", "behemoth", "dragon", "warden", "colossus", "comet",
+    "mharvester", "mmcv",
 ))
 
 # 死亡/贴脸引爆的玻璃大炮。钢铁是轻甲载具，秘法会对位是轻甲活体（非载具）。
@@ -258,6 +259,18 @@ UNIT_TYPES = {
         "projectile": "boulder", "projectileSpeed": 420.0, "splash": 34.0,
         "sight": 360.0, "armor": "arcane", "damageType": "magic",
     },
+    # 玄岩巨像：傀儡进阶，新单位不是原地升级。圣泉后的地面重甲前排，
+    # 短距巨石溅射推线，对位天启的地面存在；巨龙仍是远程溅射压轴。
+    # 移速必须与岩石傀儡相同。heavy/light 混甲，磁暴/狙击/军犬不能当
+    # 纯魔导一锅端。算载具，圣泉可修。
+    "behemoth": {
+        "name": "玄岩巨像", "cost": 1520, "hp": 1520, "speed": 52.0,
+        "damage": 90.0, "range": 145.0, "cooldown": 1.15,
+        "size": 26.0, "build": 14.0, "producer": "mcircle",
+        "requires": ["mspring"],
+        "projectile": "rune_boulder", "projectileSpeed": 400.0, "splash": 52.0,
+        "sight": 380.0, "armor": ("heavy", "light"), "damageType": "magic",
+    },
     # 影豹：全场最快的魔法兽，近战扑击(爪击瞬发)，侧翼包抄/切后排。
     # 轻甲、不算载具：军犬 bite ×0，不当猎物；狙击按轻甲变弱。法阵召唤。
     "panther": {
@@ -281,7 +294,7 @@ UNIT_TYPES = {
     # 晶铠卫士：对位磁暴步兵的反甲晶击构装，不是 1280 混甲前排。
     # 圣殿训练、仍卡圣泉。轻甲 + tesla 伤种（对轻/重/魔导同磁暴表），
     # 无溅射，快脉冲。比磁暴略贵略厚：圣泉门槛 + 轻甲（军犬 bite ×0，
-    # 火箭/磁暴仍打）。仍算载具，圣泉可修。前排继续交给岩石傀儡。
+    # 火箭/磁暴仍打）。仍算载具，圣泉可修。前排继续交给岩石傀儡 / 玄岩巨像。
     "warden": {
         "name": "晶铠卫士", "cost": 720, "hp": 220, "speed": 80.0,
         "damage": 28.0, "range": 155.0, "cooldown": 0.50,
@@ -303,7 +316,7 @@ UNIT_TYPES = {
     },
     # 裂地晶兽：缺的攻城行。siege ×1.8 拆建筑，对单位很差，对位攻城炮/光棱。
     # 600 血不再一碰就碎，仍远低于傀儡 760 / 巨龙 1100 / 天启 1700。
-    # 仍是唯一的 heavy/light 混甲构装（晶铠已改为轻甲反甲脉冲）。
+    # 与玄岩巨像同走 heavy/light 混甲（晶铠已改为轻甲反甲脉冲）。
     "colossus": {
         "name": "裂地晶兽", "cost": 1280, "hp": 600, "speed": 48.0,
         "damage": 120.0, "range": 340.0, "cooldown": 2.10,
@@ -492,7 +505,8 @@ MAGIC_STRUCTURES = frozenset((
 ))
 MAGIC_UNITS = frozenset((
     "mharvester", "mmcv", "mage", "frost", "imp", "oracle",
-    "golem", "panther", "dragon", "warden", "colossus", "comet", "hexling",
+    "golem", "behemoth", "panther", "dragon", "warden", "colossus", "comet",
+    "hexling",
 ))
 
 _STRUCTURE_ROLES = {

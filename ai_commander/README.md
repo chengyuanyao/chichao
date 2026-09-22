@@ -69,7 +69,7 @@ hook.py       运行时替换 server.tick_bots
 cooldown / range）和 `server.DAMAGE_MULTIPLIER`（`apply_damage` 真正查的那张
 表），连两条特判也复用同一套规则：
 
-* 混甲（裂地晶兽的 `("heavy","light")`）取两种倍率的平均；晶铠卫士已改为轻甲 + tesla 伤种，对位磁暴步兵；
+* 混甲（裂地晶兽、玄岩巨像的 `("heavy","light")`）取两种倍率的平均；晶铠卫士已改为轻甲 + tesla 伤种，对位磁暴步兵；
 * 扑咬对**载具**是硬 0——秘法巨龙、岩石傀儡的护甲是 `arcane`，只看护甲类
   会以为军犬能咬，实际是零伤害。
 

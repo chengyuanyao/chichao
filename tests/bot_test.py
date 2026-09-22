@@ -358,6 +358,18 @@ def main():
         "magic", set(["factory", "repair"]), False, True, True, 2)
     assert "warden" not in circle_late, circle_late
     assert "colossus" in circle_late and "dragon" in circle_late
+    assert "behemoth" in circle_late, circle_late
+    defend_circle = server.bot_unit_choices(
+        "magic", set(["factory", "repair"]), server.BOT_PHASE_CLOSE,
+        scout, True, True, 2, False)
+    assert "behemoth" in defend_circle, defend_circle
+    late_circle = server.bot_unit_choices(
+        "magic", set(["factory", "repair"]), server.BOT_PHASE_CLOSE,
+        scout, False, True, 2, False)
+    assert "behemoth" in late_circle, late_circle
+    no_spring_late = server.bot_support_choices(
+        "magic", set(["factory"]), False, True, True, 2)
+    assert "behemoth" not in no_spring_late, no_spring_late
     vs_armor = dict(scout)
     vs_armor["vehicles"] = 3
     anti_vehicle = server.bot_unit_choices(
@@ -368,6 +380,8 @@ def main():
         "magic", set(["barracks"]), server.BOT_PHASE_COMMIT,
         vs_armor, False, True, 2, False)
     assert "warden" not in anti_vehicle_no_spring, anti_vehicle_no_spring
+    print("  防守/中期圣殿+圣泉才排晶铠，法阵不再产: PASS")
+    print("  圣泉+法阵后期/防守可排玄岩巨像: PASS")
     print("  圣殿+圣泉才排晶铠；有傀儡不当肉盾，见载具才当反甲: PASS")
 
     print("\n=== 大师 AI 测试全部通过 ===")

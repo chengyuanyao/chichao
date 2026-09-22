@@ -541,6 +541,9 @@ const MAT = {
   furDark: [0.23, 0.18, 0.14],
   // ---- 秘法会：建筑走暖金石 + 金饰 + 青符；作战单位走冷紫青，互不涂成同一片中紫 ----
   magicStone: [0.44, 0.38, 0.32],   // 傀儡/晶兽岩体：暖灰褐，不是紫晶
+  obsidian: [0.10, 0.09, 0.13],     // 玄岩巨像：近黑曜石
+  obsidianLit: [0.20, 0.17, 0.26],  // 玄岩受光面
+  runeGold: [2.15, 1.55, 0.42],     // 符文金辉（自发光）
   magicHide: [0.18, 0.12, 0.26],    // 影豹近黑紫皮
   crystal: [0.42, 0.38, 0.78],      // 冷紫青晶体（单位）
   miteCrystal: [0.52, 0.74, 0.98],  // 晶刺：更偏青的碎晶
@@ -586,7 +589,7 @@ const MAGIC_STRUCTURE_KINDS = {
   mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1, mstorm: 1
 };
 const MAGIC_UNIT_KINDS = {
-  mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, panther: 1, dragon: 1,
+  mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, behemoth: 1, panther: 1, dragon: 1,
   warden: 1, colossus: 1, comet: 1, mharvester: 1, mmcv: 1, hexling: 1
 };
 // 一张共享军械图仍只产生四个材质变体。普通步兵/磁暴兵走织物粗糙度，
@@ -1065,6 +1068,28 @@ function dragonOrbitParts() {
     // 核球本体固定奥术紫，后面拖一颗小青球做运动方向，转起来才有前后感
     glow.push(sph(1.15, 8, Math.cos(a) * r, 0, Math.sin(a) * r, MAT.odyCore));
     glow.push(sph(0.52, 8, Math.cos(a - 0.34) * r, 0, Math.sin(a - 0.34) * r, MAT.odySeam));
+  }
+  return { body: [], glow: glow };
+}
+
+/**
+ * 玄岩巨像的肩环符印。金环 + 四枚符板合进同一份几何体，原点即环绕中心，
+ * 每台巨像仍只占一个实例。做法与巨龙核球一致，不增加逐零件绘制。
+ */
+const BEHEMOTH_ORBIT_PIVOT_Y = 18.4;
+const BEHEMOTH_ORBIT_RADIUS = 9.2;
+
+function behemothOrbitParts() {
+  const r = BEHEMOTH_ORBIT_RADIUS;
+  const glow = [
+    torus(r, 0.20, 6, 20, 0, 0, 0, MAT.goldTrim, ROT_X90),
+    torus(r, 0.08, 5, 16, 0, 0, 0, MAT.odyCore, ROT_X90)
+  ];
+  for (let i = 0; i < 4; i++) {
+    const a = i * (TAU / 4);
+    glow.push(boxOrient(1.8, 0.18, 1.8, Math.cos(a) * r, 0, Math.sin(a) * r,
+      MAT.odyCore, 0, a, 0));
+    glow.push(sph(0.55, 6, Math.cos(a) * r, 0, Math.sin(a) * r, MAT.odySeam));
   }
   return { body: [], glow: glow };
 }
@@ -1608,6 +1633,50 @@ const UNIT_BUILDERS = {
         box(16, 0.4, 0.4, -2, 11.2, -11.6, MAT.frostGlow)
       ]
     };
+  },
+
+  behemoth: function () {
+    // 玄岩巨像：傀儡进阶。黑曜岩巨躯 + 紫金符纹裂隙 + 肩环符印，
+    // 比傀儡更高更宽，俯视一眼是黑岩巨像不是暖灰褐石人。
+    const torsoProfile = [
+      [0.0, -8.2], [0.70, -8.2], [0.94, -5.8], [1.0, -1.4],
+      [0.92, 3.2], [0.68, 7.4], [0.0, 8.2]
+    ];
+    const body = [
+      profiledVolume(torsoProfile, 8.6, 7.2, 12, 0, 13.6, 0, MAT.obsidian),
+      ellipsoid(3.8, 3.2, 3.4, 3.6, 22.8, 0, MAT.obsidianLit),
+      sph(2.1, 8, 5.6, 23.6, 0, MAT.obsidian),
+      ellipsoid(4.2, 2.2, 3.6, 0.8, 20.4, 7.4, MAT.obsidianLit),
+      ellipsoid(4.2, 2.2, 3.6, 0.8, 20.4, -7.4, MAT.obsidianLit),
+      ellipsoid(5.4, 0.72, 4.2, -0.8, 19.8, 0, 0.90),       // 玩家色胸背甲
+      box(0.42, 9.6, 0.42, 4.8, 14.8, 1.6, MAT.goldTrim),
+      box(0.42, 8.2, 0.42, 4.6, 15.2, -1.8, MAT.goldTrim),
+      box(7.2, 0.38, 0.38, 0.4, 17.6, 0, MAT.goldTrim),
+      limb(3.15, 2.65, 0.6, 17.8, 7.8, 2.2, 11.4, 9.2, MAT.obsidian),
+      limb(3.15, 2.65, 0.6, 17.8, -7.8, 2.2, 11.4, -9.2, MAT.obsidian),
+      limb(2.7, 3.2, 1.6, 10.8, 9.0, 3.4, 4.8, 9.4, MAT.obsidianLit),
+      limb(2.7, 3.2, 1.6, 10.8, -9.0, 3.4, 4.8, -9.4, MAT.obsidianLit),
+      limb(2.45, 2.85, -1.2, 8.6, 3.8, -0.4, 1.2, 4.4, MAT.obsidian),
+      limb(2.45, 2.85, -1.2, 8.6, -3.8, -0.4, 1.2, -4.4, MAT.obsidian),
+      ellipsoid(3.6, 1.55, 3.1, 0.6, 1.05, 4.4, MAT.obsidianLit),
+      ellipsoid(3.6, 1.55, 3.1, 0.6, 1.05, -4.4, MAT.obsidianLit),
+      sph(1.35, 7, 5.4, 5.2, 9.4, MAT.crystal),
+      sph(1.35, 7, 5.4, 5.2, -9.4, MAT.crystal),
+      boxOrient(3.4, 0.22, 3.4, 2.8, 28.6, 0, MAT.goldTrim, 0, 0.4, 0)
+    ];
+    return scaleUnitModel({
+      body: body,
+      glow: [
+        sph(2.35, 8, 5.2, 14.4, 0, MAT.odyCore),
+        sph(0.85, 6, 6.4, 14.8, 0, MAT.runeGold),
+        sph(0.62, 5, 6.8, 20.8, 1.15, MAT.odySeam),
+        sph(0.62, 5, 6.8, 20.8, -1.15, MAT.odySeam),
+        box(0.28, 8.8, 0.28, 5.0, 14.6, 1.6, MAT.odyCore),
+        box(0.28, 7.4, 0.28, 4.8, 15.0, -1.8, MAT.runeGold),
+        cyl(6.8, 6.8, 0.20, 12, 0, 0.38, 0, MAT.odyCore),
+        boxOrient(2.8, 0.16, 2.8, 2.8, 28.6, 0, MAT.odyCore, 0, 0.4, 0)
+      ]
+    }, 1.52, 1.36, 1.52);
   },
 
   mharvester: function () {
@@ -2745,7 +2814,7 @@ const UNIT_VISUAL_SCALE = {
   // 天启人形态站起来后本身就高了一截，缩一档避免比建筑还夸张
   overlord: 1.30, overlord_v1: 1.30, overlord_v2: 1.06,
   prism: 1.28, bomb_truck: 1.32,
-  mage: 2.15, frost: 2.15, imp: 2.05, oracle: 2.15, golem: 1.42, panther: 1.7, dragon: 1.34,
+  mage: 2.15, frost: 2.15, imp: 2.05, oracle: 2.15, golem: 1.42, behemoth: 1.62, panther: 1.7, dragon: 1.34,
   warden: 1.55, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30
 };
@@ -5747,6 +5816,16 @@ export function createRenderer(canvas) {
         sph(2.4, 7, 0.8, 40.0, 0, MAT.runeCyan)
       ];
     }
+    if (kind === 'behemoth') {
+      return scalePartList([
+        taperedBox(16, 13, 12, 9.6, 16, 0, 13.2, 0, MAT.obsidian),
+        box(11.2, 1.05, 8.0, -0.8, 19.8, 0, 0.90),           // 玩家色胸背甲
+        box(6.2, 12, 6.2, 1.4, 11.4, 8.4, MAT.obsidianLit),
+        box(6.2, 12, 6.2, 1.4, 11.4, -8.4, MAT.obsidianLit),
+        boxOrient(3.2, 0.22, 3.2, 2.4, 27.6, 0, MAT.goldTrim, 0, 0.4, 0),
+        sph(2.2, 6, 5.2, 14.4, 0, MAT.odyCore)
+      ], 1.52, 1.36, 1.52);
+    }
     if (kind === 'mharvester') {
       return scalePartList([
         taperedBox(16, 14, 18, 16, 4, 0, 6, 0, MAT.goldStoneDark),
@@ -5935,6 +6014,31 @@ export function createRenderer(canvas) {
     return dragonOrbitMesh;
   }
 
+  /* -------------------- 玄岩巨像的肩环符印（第三个挂件层） -------------------- */
+  let behemothOrbitMesh = null;
+  let behemothOrbitGeo = null;
+  const behemothOrbitVisuals = [];
+  const behemothOrbitLocal = new THREE.Matrix4();
+
+  function ensureBehemothOrbitMesh(needed) {
+    if (behemothOrbitMesh && behemothOrbitMesh.instanceMatrix.count >= needed) return behemothOrbitMesh;
+    if (behemothOrbitMesh) {
+      worldRoot.remove(behemothOrbitMesh);
+      behemothOrbitMesh.dispose();
+    }
+    if (!behemothOrbitGeo) {
+      const parts = behemothOrbitParts();
+      behemothOrbitGeo = mergeParts(parts.body.concat(parts.glow));
+    }
+    behemothOrbitMesh = new THREE.InstancedMesh(behemothOrbitGeo, unitMetalMaterial,
+      Math.max(8, Math.ceil(needed * 1.5)));
+    behemothOrbitMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    behemothOrbitMesh.frustumCulled = false;
+    behemothOrbitMesh.count = 0;
+    worldRoot.add(behemothOrbitMesh);
+    return behemothOrbitMesh;
+  }
+
   function ensureShadowMesh(needed) {
     if (shadowMesh && shadowMesh.instanceMatrix.count >= needed) return shadowMesh;
     if (shadowMesh) {
@@ -6019,7 +6123,9 @@ export function createRenderer(canvas) {
       const barH = sel ? 4 : 3;
       const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
       // 血条保持在巡航高度上方，不为悬浮微动强迫全场血条每帧重建。
-      const barY = gy + u.size * 1.9 + 12 + (u.kind==='dragon'?10*UNIT_VISUAL_SCALE.dragon:0);
+      const barY = gy + u.size * 1.9 + 12
+        + (u.kind==='dragon'?10*UNIT_VISUAL_SCALE.dragon:0)
+        + (u.kind==='behemoth'?8*UNIT_VISUAL_SCALE.behemoth:0);
 
       barScale.set(barW + 1.5, 1, barH + 1);
       barBgMesh.setMatrixAt(bg, matrix.compose(barPos.set(vis.x, barY, vis.y), barQuat, barScale));
@@ -6235,6 +6341,8 @@ export function createRenderer(canvas) {
     frost: { len: 18, thick: 1.15, color: 0xc4f4ff, arc: 12, look: 'shard' },
     // 巨石：傀儡投掷，高弧线
     boulder: { len: 20, thick: 2.6, color: 0xb09a7a, arc: 70, look: 'streak' },
+    // 符文巨石：玄岩巨像投掷，紫金核 + 符纹碎片，比傀儡石更大更亮
+    rune_boulder: { len: 26, thick: 3.4, color: 0xd4a0ff, arc: 76, look: 'rune_boulder' },
     // 奥术龙息：巨龙喷吐，紫核 + 青焰的高弧弹。projectile 键仍是 fireball
     // （服务端目录约定），只换表现。这条样式是巨龙独有的，改色不影响其他兵种。
     fireball: { len: 15, thick: 3.1, color: 0xa864ff, arc: 52, look: 'fireball' },
@@ -6628,7 +6736,7 @@ export function createRenderer(canvas) {
       p.floor = baseY + 1.5;
       if (metadata && metadata.height != null && type === 'muzzle' && relativeHeight>=9) {
         const authored=kind==='plasmalance'?30:kind==='plasma'?20:kind==='fireball'?18:
-          kind==='comet'?22:['meteor','arcane','frost','crystal','iris','boulder'].includes(kind)?16:11;
+          kind==='comet'?22:kind==='rune_boulder'?18:['meteor','arcane','frost','crystal','iris','boulder'].includes(kind)?16:11;
         p.y += metadata.height-authored;
       }
       if (layer === smokeLayer && p.opacity == null) p.opacity = .48;
@@ -6872,6 +6980,42 @@ export function createRenderer(canvas) {
           life: 10, maxLife: 10, hold: true, r: 0.09, g: 0.05, b: 0.15
         });
         flashAt(x, y, 0xb47dff);
+      } else if (kind === 'rune_boulder') {
+        burst(fireLayer, 12, function () {
+          const a = rand() * TAU;
+          const sp = 90 + rand() * 160;
+          return {
+            x: x, y: 7, z: y,
+            vx: Math.cos(a) * sp, vy: 40 + rand() * 80, vz: Math.sin(a) * sp,
+            life: 0.32 + rand() * 0.22, maxLife: 0.54,
+            size: 8 + rand() * 6, grow: true,
+            r: 1.7, g: 0.7, b: 2.25
+          };
+        });
+        burst(fireLayer, 8, function () {
+          const a = rand() * TAU;
+          const sp = 140 + rand() * 180;
+          return {
+            x: x, y: 5 + rand() * 4, z: y,
+            vx: Math.cos(a) * sp, vy: 20 + rand() * 50, vz: Math.sin(a) * sp,
+            life: 0.22 + rand() * 0.16, maxLife: 0.4,
+            size: 4 + rand() * 3,
+            r: 2.15, g: 1.55, b: 0.45
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 14, growth: 92, alpha: 0.72,
+          life: 0.4, maxLife: 0.4, r: 0.95, g: 0.55, b: 1.25
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 6, growth: 54, alpha: 0.42,
+          life: 0.26, maxLife: 0.26, r: 1.25, g: 0.85, b: 0.4
+        });
+        scorchLayer.spawn({
+          x: x, y: y, radius: 26 + rand() * 8, growth: 0, alpha: 0.4,
+          life: 10, maxLife: 10, hold: true, r: 0.1, g: 0.05, b: 0.14
+        });
+        flashAt(x, y, 0xe0b46a);
       } else if (kind === 'meteor') {
         burst(fireLayer, 12, function () {
           const a = rand() * TAU;
@@ -7158,6 +7302,32 @@ export function createRenderer(canvas) {
           life: 1.8, maxLife: 1.8, hold: true, r: 0.14, g: 0.05, b: 0.2
         });
         flashAt(x, y, 0xf2e6ff);
+      } else if (kind === 'rune_boulder') {
+        burst(fireLayer, 8, function () {
+          const a = rand() * TAU;
+          return {
+            x: x + (rand() - 0.5) * 8, y: 16 + rand() * 8, z: y + (rand() - 0.5) * 8,
+            vx: Math.cos(a) * 38, vy: 24 + rand() * 32, vz: Math.sin(a) * 38,
+            life: 0.18 + rand() * 0.12, maxLife: 0.3,
+            size: 6 + rand() * 4,
+            r: 1.7, g: 0.7, b: 2.2
+          };
+        });
+        burst(fireLayer, 5, function () {
+          const a = rand() * TAU;
+          return {
+            x: x, y: 3 + rand() * 3, z: y,
+            vx: Math.cos(a) * 48, vy: 10 + rand() * 16, vz: Math.sin(a) * 48,
+            life: 0.2 + rand() * 0.12, maxLife: 0.32,
+            size: 3.4 + rand() * 2.6,
+            r: 2.15, g: 1.5, b: 0.42
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 9, growth: 74, alpha: 0.56,
+          life: 0.3, maxLife: 0.3, r: 1.05, g: 0.7, b: 0.45
+        });
+        flashAt(x, y, 0xe0b46a);
       } else if (kind === 'plasma' || kind === 'plasmalance') {
         // 天启老兵的炮口：青白电离气团。二星是抬臂双炮，起点高一截也更散。
         const arm = kind === 'plasmalance';
@@ -7612,6 +7782,7 @@ export function createRenderer(canvas) {
     });
     modelPicker.addInstances(apocArmMesh, i => units.get(apocArmVisuals[i]?.unit.id));
     modelPicker.addInstances(dragonOrbitMesh, i => units.get(dragonOrbitVisuals[i]?.unit.id));
+    modelPicker.addInstances(behemothOrbitMesh, i => units.get(behemothOrbitVisuals[i]?.unit.id));
     if(unitOwner != null) return;
     for (const structure of game.structures) {
       if (structure.hp > 0) modelPicker.addObject(structureNodes.get(structure.id)?.group, structure);
@@ -7763,6 +7934,15 @@ export function createRenderer(canvas) {
         life: 0.36, maxLife: 0.36, size: 6.4 + Math.random() * 5,
         r: 1.9, g: 0.75, b: 2.35
       });
+    } else if (look === 'rune_boulder') {
+      emit(fireLayer, {
+        x: x + (Math.random() - 0.5) * 6, y: height, z: y + (Math.random() - 0.5) * 6,
+        vx: (Math.random() - 0.5) * 12, vy: 6 + Math.random() * 8, vz: (Math.random() - 0.5) * 12,
+        life: 0.28, maxLife: 0.28, size: 5.2 + Math.random() * 4,
+        r: Math.random() < 0.45 ? 2.1 : 1.65,
+        g: Math.random() < 0.45 ? 1.5 : 0.62,
+        b: Math.random() < 0.45 ? 0.42 : 2.2
+      });
     } else if (look === 'plasma') {
       emit(fireLayer, {
         x: x, y: height, z: y,
@@ -7796,12 +7976,14 @@ export function createRenderer(canvas) {
       (vis.unit.kills || 0) >= APOC_TITAN_KILLS;
     if (!apocTitan && kind !== 'frost' && kind !== 'dragon' && kind !== 'mage'
         && kind !== 'warden' && kind !== 'colossus' && kind !== 'comet'
+        && kind !== 'behemoth'
         && kind !== 'bomb_truck' && kind !== 'hexling'
         && kind !== 'imp' && kind !== 'oracle') return;
     if (fireLayer.list.length > state.particleBudget * 0.5) return;
     const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6
       : kind === 'bomb_truck' ? 7 : kind === 'hexling' ? 6
-      : kind === 'colossus' ? 7 : kind === 'comet' ? 6 : kind === 'warden' ? 4
+      : kind === 'colossus' ? 7 : kind === 'comet' ? 6 : kind === 'behemoth' ? 7
+      : kind === 'warden' ? 4
       : kind === 'oracle' ? 4 : kind === 'imp' ? 3 : apocTitan ? 4 : 3.5;
     if (Math.random() > dt * rate) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
@@ -7876,6 +8058,17 @@ export function createRenderer(canvas) {
         vx: (Math.random() - 0.5) * 5, vy: 10 + Math.random() * 8, vz: (Math.random() - 0.5) * 5,
         life: 0.4, maxLife: 0.4, size: 4.6 + Math.random() * 3.4,
         r: 1.85, g: 0.72, b: 2.3
+      });
+    } else if (kind === 'behemoth') {
+      const gold = Math.random() < 0.45;
+      emit(fireLayer, {
+        x: vis.x + (Math.random() - 0.5) * 14,
+        y: gy + 12 + Math.random() * 16,
+        z: vis.y + (Math.random() - 0.5) * 14,
+        vx: (Math.random() - 0.5) * 6, vy: 10 + Math.random() * 8,
+        vz: (Math.random() - 0.5) * 6,
+        life: 0.4, maxLife: 0.4, size: 3.8 + Math.random() * 2.4,
+        r: gold ? 2.15 : 1.55, g: gold ? 1.5 : 0.58, b: gold ? 0.42 : 2.2
       });
     } else if (kind === 'warden') {
       emit(fireLayer, {
@@ -8135,7 +8328,8 @@ export function createRenderer(canvas) {
     byKind.forEach(function (list, kind) {
       if (!list.length) return;
       const pool = ensurePool(kind, list.length);
-      const hero = kind === 'dragon' || kind === 'overlord_v1' || kind === 'overlord_v2';
+      const hero = kind === 'dragon' || kind === 'behemoth'
+        || kind === 'overlord_v1' || kind === 'overlord_v2';
       const simpleKind = state.lod && camDist > (hero ? HERO_LOD_DISTANCE : UNIT_LOD_DISTANCE);
       const mesh = simpleKind ? pool.simple : pool.mesh;
       const scale = UNIT_VISUAL_SCALE[kind] || 1;
@@ -8366,6 +8560,45 @@ export function createRenderer(canvas) {
       dragonOrbitMesh.visible = false;
     }
 
+    /* --- 玄岩巨像：肩环符印 --- */
+    behemothOrbitVisuals.length = 0;
+    if (!state.lod || camDist <= HERO_LOD_DISTANCE) {
+      const behemoths = byKind.get('behemoth');
+      if (behemoths) {
+        for (let i = 0; i < behemoths.length; i++) behemothOrbitVisuals.push(behemoths[i]);
+      }
+    }
+    if (behemothOrbitVisuals.length) {
+      const rings = ensureBehemothOrbitMesh(behemothOrbitVisuals.length);
+      rings.material=state.artSample?(riverUnitMaterials.get('metal')||unitMetalMaterial):unitMetalMaterial;
+      const pool = unitPools.get('behemoth');
+      for (let i = 0; i < behemothOrbitVisuals.length; i++) {
+        const vis = behemothOrbitVisuals[i];
+        if (vis.orbitPhase == null) vis.orbitPhase = Math.random() * TAU;
+        if (pool && pool.mesh) pool.mesh.getMatrixAt(i, matrix);
+        else {
+          const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
+          const scale = UNIT_VISUAL_SCALE.behemoth || 1;
+          quat.setFromAxisAngle(upAxis, -vis.dir);
+          matrix.compose(vecPos.set(vis.x, gy, vis.y), quat, vecScale.set(scale, scale, scale));
+        }
+        behemothOrbitLocal.makeTranslation(0, BEHEMOTH_ORBIT_PIVOT_Y, 0);
+        matrix.multiply(behemothOrbitLocal);
+        behemothOrbitLocal.makeRotationY(payload.time * 0.0014 + vis.orbitPhase);
+        matrix.multiply(behemothOrbitLocal);
+        rings.setMatrixAt(i, matrix);
+        tmpColor.set(colorOf(vis.unit.owner));
+        rings.setColorAt(i, tmpColor);
+      }
+      rings.count = behemothOrbitVisuals.length;
+      rings.visible = true;
+      rings.instanceMatrix.needsUpdate = true;
+      if (rings.instanceColor) rings.instanceColor.needsUpdate = true;
+    } else if (behemothOrbitMesh) {
+      behemothOrbitMesh.count = 0;
+      behemothOrbitMesh.visible = false;
+    }
+
     /* --- 建筑 --- */
     state.renderedStructures = 0;
     for (let i = 0; i < game.structures.length; i++) {
@@ -8512,6 +8745,15 @@ export function createRenderer(canvas) {
           writeTracer(shards, shardCount++, p.x, height - 1.6, p.y, yaw + 0.38, 8.2, 2.2, 2.2, 0x9a7fd0);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len * 1.85, style.thick * 0.48, style.thick * 0.48, 0xf2e6ff);
+        } else if (look === 'rune_boulder') {
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 4.8, 4.8, 4.8, 0xf0d8ff);
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 2.6, 2.6, 2.6, 0xe0b46a);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(shards, shardCount++, p.x, height + 1.6, p.y, yaw, 8.8, 2.4, 2.4, 0xf0c45a);
+          writeTracer(shards, shardCount++, p.x, height - 1.1, p.y, yaw + 0.36, 6.6, 1.7, 1.7, 0xb46bff);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len * 1.45, style.thick * 0.4, style.thick * 0.4, 0xf2e6ff);
         } else if (look === 'plasma') {
           // 等离子弹：青白亮核 + 一根笔直的长条 + 更长更细的余辉
           writeTracer(orbs, orbCount++, p.x, height, p.y, yaw,
@@ -9138,6 +9380,11 @@ export function createRenderer(canvas) {
       if (dragonOrbitMesh) {
         dragonOrbitMesh.count = 0;
         dragonOrbitMesh.visible = false;
+      }
+      behemothOrbitVisuals.length = 0;
+      if (behemothOrbitMesh) {
+        behemothOrbitMesh.count = 0;
+        behemothOrbitMesh.visible = false;
       }
       if (barBgMesh) barBgMesh.count = 0;
       if (barFillMesh) barFillMesh.count = 0;

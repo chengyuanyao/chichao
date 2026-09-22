@@ -292,6 +292,12 @@ def main():
     assert catalog["units"]["comet"]["producer"] == "mcircle"
     assert catalog["units"]["comet"]["faction"] == "magic"
     assert catalog["units"]["comet"]["cost"] == 2000
+    assert catalog["units"]["behemoth"]["name"] == "玄岩巨像"
+    assert catalog["units"]["behemoth"]["repairable"] is True
+    assert catalog["units"]["behemoth"]["requires"] == ["mspring"]
+    assert catalog["units"]["behemoth"]["producer"] == "mcircle"
+    assert catalog["units"]["behemoth"]["faction"] == "magic"
+    assert catalog["units"]["behemoth"]["cost"] == 1520
     assert catalog["buildings"]["mstorm"]["name"] == "雷暴塔"
     assert catalog["buildings"]["mstorm"]["faction"] == "magic"
     assert catalog["buildings"]["mstorm"]["role"] == "defense"
@@ -528,6 +534,9 @@ def main():
     assert "天启级巨型持盾构装" in render
     assert "}, 1.18, 1.14, 1.18);" in render
     assert "warden: 1.55" in render
+    assert "behemoth: 1.62" in render
+    assert "玄岩巨像：傀儡进阶" in render
+    assert "玄岩巨像：比傀儡更高的黑曜岩躯" in app
     assert "裂地晶兽：四足晶兽驮晶陨鞍塔" in render
     assert "裂地晶兽：四足晶兽 + 背上晶陨鞍塔" in app
     assert "坠星台：厚重发射底盘 + 竖直晶炮" in render
@@ -563,8 +572,13 @@ def main():
     assert "影豹同为轻甲" in readme
     assert "奥术圣殿在圣泉建成后可训练晶铠卫士" in readme
     assert "对位磁暴步兵的轻甲反甲晶击构装" in readme
+    assert "玄岩巨像" in readme
+    assert "傀儡进阶 · 玄岩重甲前排 · 需圣泉" in app
     assert "圣殿训练 · 需圣泉" in hud
     assert "反甲晶击 · 圣殿训练 · 需圣泉" in hud
+    assert "玄岩巨像" in hud
+    assert "裂地/玄岩走混甲" in hud
+    assert "晶铠轻甲构装走磁暴伤种" in hud
     assert "混甲前排" not in hud
     assert "反甲晶击脉冲" in app
     assert "圣殿晶铠前排" not in app
@@ -577,6 +591,7 @@ def main():
     assert "look: 'fireball'" in render
     assert "look: 'meteor'" in render
     assert "look: 'comet'" in render
+    assert "look: 'rune_boulder'" in render
     assert "look: 'crystal'" in render
     assert "look: 'arc'" in render
     assert "iris:" in render
@@ -647,6 +662,7 @@ def main():
             "ellipsoid(4.55, 0.62, 3.4", "taperedBox(10.0, 6.8",
             "taperedBox(13.6, 11.0", "box(10.4, 0.95, 6.8",
             "taperedBox(15.2, 9.8", "taperedBox(27, 16",
+            "ellipsoid(5.4, 0.72, 4.2",
             "profiledVolume(deckProfile, 7.8, 6.5", "taperedBox(19, 13",
             "torus(4.2, 0.45"):
         assert signature in magic_near, "magic unit lost owner-color marker: %s" % signature
@@ -665,6 +681,7 @@ def main():
             "box(9.0, 0.90, 6.6", "taperedBox(10.0, 6.8",
             "box(30, 1.8, 3.6", "box(10.4, 0.95, 6.8",
             "taperedBox(15.2, 9.8", "taperedBox(27, 16",
+            "box(11.2, 1.05, 8.0",
             "taperedBox(15, 12", "taperedBox(19, 13",
             "torus(4.2, 0.45"):
         assert signature in magic_lod, "magic LOD lost owner-color marker: %s" % signature
@@ -728,6 +745,8 @@ def main():
     assert "probe.raycast(raycaster, intersections)" in picker
     assert "modelPicker.addInstances(apocArmMesh" in render
     assert "modelPicker.addInstances(dragonOrbitMesh" in render
+    assert "modelPicker.addInstances(behemothOrbitMesh" in render
+    assert "function behemothOrbitParts()" in render
     assert "pad.userData.pickIgnore = true" in render
     assert "bestIsScreenUnit" not in app
     assert "if (exact) return exact.entity" in picker
