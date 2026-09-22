@@ -94,13 +94,14 @@ TEMPLATES = {
         "unknown": {
             "open": _t({"imp": 4, "mage": 2}, "没情报，晶刺 200 一个先铺场"),
             "mid": _t({"mage": 3, "golem": 3, "imp": 2}, "傀儡抗线 + 法师输出"),
+            # 晶铠改圣殿产，仍卡圣泉，所以只进 late（repair/圣泉已立）
             "late": _t({"dragon": 3, "golem": 2, "mage": 2, "warden": 2}, "巨龙 + 卫士通用重型"),
         },
         "infantry": {
             "open": _t({"imp": 4, "mage": 2}, "魔法对步兵 ×1.20，晶刺便宜好铺"),
             "mid": _t({"golem": 3, "imp": 3, "mage": 2}, "傀儡溅射 34 清步兵堆"),
             "late": _t({"dragon": 3, "golem": 3, "oracle": 2},
-                       "巨龙溅射 60 清人海，虹视使 300 射程点后排"),
+                       "巨龙溅射 60 清人海，虹视使 310 射程点后排"),
         },
         "light": {
             "open": _t({"mage": 3, "imp": 3}, "魔法对轻甲 ×1.30"),

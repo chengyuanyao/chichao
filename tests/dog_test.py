@@ -168,6 +168,31 @@ def main():
     assert pick is not None and pick["kind"] == "mage", pick and pick["kind"]
     print("  轻甲 bite ×0，贴脸魔仆不入猎物: PASS")
 
+    print("\n=== Test 10: 影豹轻甲，扑咬 0 伤害且不当猎物 ===")
+    panther = server.UNIT_TYPES["panther"]
+    assert panther["armor"] == "light"
+    assert panther["hp"] == 240
+    assert panther["damage"] == 34.0
+    assert panther["cost"] == 420
+    assert panther["producer"] == "mcircle"
+    assert "panther" not in server.VEHICLE_KINDS
+    assert not server.is_dog_prey("panther")
+    bite = server.UNIT_TYPES["dog"]["damage"]
+    expect_bite = bite * server.DAMAGE_MULTIPLIER["bite"]["light"]
+    assert abs(expect_bite) < 1e-9, expect_bite
+    room, a, b = make_room("DOG09")
+    game = room["game"]
+    cat = server.make_unit("panther", b["id"], 9000, 9000)
+    game["units"].append(cat)
+    before = cat["hp"]
+    server.apply_damage(room, cat, bite, a["id"], "bite", game)
+    assert abs(cat["hp"] - before) < 0.001, cat["hp"]
+    game["units"].append(server.make_unit("mage", b["id"], 5080, 5000))
+    game["units"].append(server.make_unit("panther", b["id"], 5050, 5000))
+    pick = server.nearest_enemy_infantry(game, a["id"], 5000, 5000, 400)
+    assert pick is not None and pick["kind"] == "mage", pick and pick["kind"]
+    print("  轻甲 bite ×0，贴脸影豹不入猎物: PASS")
+
     print("\n=== 军犬测试全部通过 ===")
 
 

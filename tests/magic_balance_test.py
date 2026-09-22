@@ -188,6 +188,49 @@ def main():
     assert missile_dps < tower_dps
     print("  巨龙 1100 < 天启 1700；奥术塔 DPS/射程夹在哨戒与导弹之间: PASS")
 
+    print("\n=== Test 7: 影豹轻甲加血加伤；晶铠圣殿产仍卡圣泉 ===")
+    panther = server.UNIT_TYPES["panther"]
+    assert panther["cost"] == 420
+    assert panther["hp"] == 240
+    assert panther["speed"] == 132.0
+    assert panther["damage"] == 34.0
+    assert panther["range"] == 34.0
+    assert panther["cooldown"] == 0.7
+    assert panther["build"] == 5.0
+    assert panther["producer"] == "mcircle"
+    assert panther["armor"] == "light"
+    assert panther["damageType"] == "magic"
+    assert "panther" not in server.VEHICLE_KINDS
+    assert not server.is_dog_prey("panther")
+    assert abs(bite_to("light")) < 1e-9
+    warden = server.UNIT_TYPES["warden"]
+    assert warden["cost"] == 1180
+    assert warden["hp"] == 1280
+    assert warden["damage"] == 80.0
+    assert warden["speed"] == 55.0
+    assert warden["range"] == 148.0
+    assert warden["cooldown"] == 1.30
+    assert warden["build"] == 11.0
+    assert warden["producer"] == "mtemple"
+    assert warden["requires"] == ["mspring"]
+    assert warden["armor"] == ("heavy", "light")
+    assert "warden" in server.VEHICLE_KINDS
+    assert not server.is_dog_prey("warden")
+    room, a, b = make_room("MB07")
+    game = room["game"]
+    cat = server.make_unit("panther", b["id"], 9000, 9000)
+    game["units"].append(cat)
+    before = cat["hp"]
+    server.apply_damage(room, cat, server.UNIT_TYPES["dog"]["damage"],
+                        a["id"], "bite", game)
+    assert abs(cat["hp"] - before) < 0.001, cat["hp"]
+    sniper_vs_light = 55 * server.DAMAGE_MULTIPLIER["sniper"]["light"]
+    assert abs(sniper_vs_light - 22.0) < 1e-6
+    before = cat["hp"]
+    server.apply_damage(room, cat, 55, a["id"], "sniper", game)
+    assert abs((before - cat["hp"]) - 22.0) < 0.1, cat["hp"]
+    print("  影豹 240/34 轻甲 bite ×0；晶铠 1280/80 圣殿+圣泉: PASS")
+
     print("\n=== 秘法会平衡测试全部通过 ===")
 
 

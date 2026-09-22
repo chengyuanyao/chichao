@@ -691,7 +691,7 @@ DAMAGE_MULTIPLIER = {
     "laser":   {"infantry": 0.45, "light": 1.50, "heavy": 0.85, "structure": 1.70, "arcane": 1.50},
     # 军犬扑咬：一口一个步兵，对装甲和建筑完全无从下口（×0）。
     # 对魔导仍 ×1.50（咬 90）；法师/女巫 160 血一口剩 70，两口仍死。
-    # 爆裂魔仆改轻甲：bite ×0，不当猎物；仍非载具，不进 VEHICLE_KINDS。
+    # 爆裂魔仆/影豹改轻甲：bite ×0，不当猎物；仍非载具，不进 VEHICLE_KINDS。
     # 秘法巨龙甲种仍是 arcane，但算载具：apply_damage 里 bite 对 VEHICLE_KINDS 再乘 ×0。
     "bite":    {"infantry": 4.00, "light": 0.00, "heavy": 0.00, "structure": 0.00, "arcane": 1.50},
     # 奥术魔法：无视钢铁装甲熔重甲（法师是反坦克答案），但法术拆不动建筑
@@ -5015,6 +5015,7 @@ def nearest_enemy_structure(game, owner, x, y, max_distance, spatial_index=None)
 # 军犬自动索敌：步兵甲 + 魔导甲，但载具除外。bite 对载具/建筑是 ×0，追上去白送；
 # 法师/女巫是 arcane 且不是载具，点选能咬但旧扫描只认 infantry，会从法师身边走过。
 # 秘法巨龙甲种也是 arcane，可它在 VEHICLE_KINDS，不当猎物、咬也不掉血。
+# 影豹/爆裂魔仆改轻甲：bite ×0，不当猎物；仍非载具，不进 VEHICLE_KINDS。
 # 混甲构装（heavy/light）整件都不是猎物，军犬不会去扑晶铠/裂地晶兽。
 DOG_PREY_ARMOR = frozenset(("infantry", "arcane"))
 
@@ -5041,7 +5042,7 @@ def damage_armor_multiplier(damage_type, armor):
 
 
 def is_dog_prey(kind):
-    """步兵/魔导肉身才是猎物。载具（含秘法巨龙、构装）咬不动，不进索敌表。"""
+    """步兵/魔导肉身才是猎物。载具、轻甲影豹/魔仆咬不动，不进索敌表。"""
     if kind in VEHICLE_KINDS:
         return False
     pieces = iter_armor(UNIT_TYPES.get(kind, {}).get("armor"))
@@ -5051,7 +5052,7 @@ def is_dog_prey(kind):
 def nearest_enemy_infantry(game, owner, x, y, max_distance, spatial_index=None):
     """军犬专用：只扑步兵与魔导肉身。克制表里 bite 对载具/建筑全是 ×0，追上去也是白送，
     所以自动索敌时看装甲为 infantry 或 arcane、且不是载具的敌方单位
-    （步兵、军犬、法师、女巫等；不含秘法巨龙）。"""
+    （步兵、军犬、法师、女巫等；不含秘法巨龙、影豹）。"""
     best = None
     best_dist_sq = max_distance * max_distance
     friendly = friendly_owners(game, owner)
@@ -6477,10 +6478,12 @@ def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
             else:
                 choices.extend(("imp", "mage", "frost"))
                 choices.append("oracle")
+                if "repair" in roles:
+                    choices.append("warden")
         if "factory" in roles:
             choices.extend(("panther", "panther"))
             if "repair" in roles:
-                choices.extend(("colossus", "warden", "dragon"))
+                choices.extend(("colossus", "dragon"))
                 if late:
                     choices.append("comet")
             if rich and harvester_n < 2:
@@ -6575,6 +6578,8 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
                 choices.extend(("golem", "panther"))
             if "barracks" in roles:
                 choices.extend(("frost", "mage", "imp"))
+                if "repair" in roles:
+                    choices.append("warden")
             return choices
         choices = []
         if "barracks" in roles:
@@ -6585,7 +6590,9 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
 
     if late and "repair" in roles:
         if magic:
-            choices = ["colossus", "dragon", "warden"]
+            choices = ["colossus", "dragon"]
+            if "barracks" in roles:
+                choices.append("warden")
             if phase in (BOT_PHASE_STABILIZE, BOT_PHASE_CLOSE):
                 choices.append("comet")
             return choices
@@ -6678,7 +6685,9 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
     if ("repair" in roles and phase == BOT_PHASE_CLOSE
             and not defend and not inbound):
         late_choices = (
-            ("colossus", "dragon", "warden", "comet") if faction == "magic"
+            (("colossus", "dragon", "comet") +
+             (("warden",) if "barracks" in roles else ()))
+            if faction == "magic"
             else ("overlord", "prism", "artillery"))
         if bot_try_choices(room, bot, late_choices):
             return

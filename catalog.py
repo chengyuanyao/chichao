@@ -211,7 +211,7 @@ UNIT_TYPES = {
         "sight": 320.0, "armor": "heavy", "damageType": "none",
         "canDeploy": True, "deploysInto": "mhq",
     },
-    # ---- 军事：奥术圣殿(步兵) / 召唤法阵(构装与魔兽) ----
+    # ---- 军事：奥术圣殿(步兵与晶铠) / 召唤法阵(构装与魔兽) ----
     # 奥术法师：远程魔法弹，熔重甲的反坦克答案。160 血与魔仆同一口咬不死门槛
     # （咬 90，剩 70）；两口仍死。子弹有效血≈107，和突击兵 110 同档。
     "mage": {
@@ -241,10 +241,10 @@ UNIT_TYPES = {
         "sight": 360.0, "armor": "arcane", "damageType": "magic",
     },
     # 虹视使：圣殿远程点射。玻璃后排，对位狙击档，不用狙击伤种、不抄 420/75。
-    # 80 血低于一口咬 (90)，比法师更脆；无溅射，不卡圣泉。
+    # 射程与狙击手对齐 310；80 血低于一口咬 (90)，比法师更脆；无溅射，不卡圣泉。
     "oracle": {
         "name": "虹视使", "cost": 450, "hp": 80, "speed": 88.0,
-        "damage": 48.0, "range": 300.0, "cooldown": 1.55,
+        "damage": 48.0, "range": 310.0, "cooldown": 1.55,
         "size": 10.0, "build": 6.0, "producer": "mtemple",
         "projectile": "iris", "projectileSpeed": 1100.0, "splash": 0.0,
         "sight": 470.0, "armor": "arcane", "damageType": "magic",
@@ -258,12 +258,13 @@ UNIT_TYPES = {
         "sight": 360.0, "armor": "arcane", "damageType": "magic",
     },
     # 影豹：全场最快的魔法兽，近战扑击(爪击瞬发)，侧翼包抄/切后排。
+    # 轻甲、不算载具：军犬 bite ×0，不当猎物；狙击按轻甲变弱。法阵召唤。
     "panther": {
-        "name": "影豹", "cost": 420, "hp": 180, "speed": 132.0,
-        "damage": 26.0, "range": 34.0, "cooldown": 0.7,
+        "name": "影豹", "cost": 420, "hp": 240, "speed": 132.0,
+        "damage": 34.0, "range": 34.0, "cooldown": 0.7,
         "size": 12.0, "build": 5.0, "producer": "mcircle",
         "projectile": "claw", "projectileSpeed": 1000.0, "splash": 0.0,
-        "sight": 520.0, "armor": "arcane", "damageType": "magic",
+        "sight": 520.0, "armor": "light", "damageType": "magic",
     },
     # 秘法巨龙：远程大火球大溅射。圣泉二级后才许召唤，避免法阵一立就能出 1600 压轴。
     # 1100 血仍低于天启 1700；靠射程/溅射/熔甲换耐久，不当新的碾压前排。
@@ -276,11 +277,12 @@ UNIT_TYPES = {
         "sight": 460.0, "armor": "arcane", "damageType": "magic",
     },
     # ---- 进阶：圣泉卡二级。不改开局 3 法师+傀儡，只补中后期缺口 ----
-    # 晶铠卫士：构装前排。heavy/light 混甲，磁暴/狙击/军犬不能当纯魔导一锅端。
+    # 晶铠卫士：圣殿训练的构装前排，仍卡圣泉。heavy/light 混甲，
+    # 磁暴/狙击/军犬不能当纯魔导一锅端。算载具，圣泉可修。
     "warden": {
-        "name": "晶铠卫士", "cost": 1180, "hp": 1040, "speed": 55.0,
-        "damage": 68.0, "range": 148.0, "cooldown": 1.30,
-        "size": 20.0, "build": 11.0, "producer": "mcircle",
+        "name": "晶铠卫士", "cost": 1180, "hp": 1280, "speed": 55.0,
+        "damage": 80.0, "range": 148.0, "cooldown": 1.30,
+        "size": 20.0, "build": 11.0, "producer": "mtemple",
         "requires": ["mspring"],
         "projectile": "crystal", "projectileSpeed": 460.0, "splash": 24.0,
         "sight": 380.0, "armor": ("heavy", "light"), "damageType": "magic",
@@ -297,7 +299,7 @@ UNIT_TYPES = {
         "sight": 300.0, "armor": "light", "damageType": "missile",
     },
     # 裂地晶兽：缺的攻城行。siege ×1.8 拆建筑，对单位很差，对位攻城炮/光棱。
-    # 600 血不再一碰就碎，仍远低于晶铠 1040 / 巨龙 1100 / 天启 1700。
+    # 600 血不再一碰就碎，仍远低于晶铠 1280 / 巨龙 1100 / 天启 1700。
     "colossus": {
         "name": "裂地晶兽", "cost": 1280, "hp": 600, "speed": 48.0,
         "damage": 120.0, "range": 340.0, "cooldown": 2.10,
