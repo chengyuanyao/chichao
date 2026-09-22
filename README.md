@@ -494,6 +494,15 @@ python3 tests/integration_test.py http://127.0.0.1:18081  # 需要服务器已�
 回归：`node tests/unit_command_transport_test.mjs`、`python tests/unit_command_sequence_test.py`、`python tests/unit_command_http_test.py`。
 密集通行回归：`python tests/dense_bridge_control_test.py`（每座桥 53 辆天启，检查通行和地形碰撞）。
 
+状态流支持浏览器原生 gzip（每条事件立即刷新，不攒批）；不支持压缩的旧客户端保持原格式。
+压缩在房间锁外完成，不降低状态发送频率、不修改迷雾或单位精度。诊断里的 `snapshotBytes` 为实际发送的压缩后字节数。
+SSE 写出最多等待 1.5 秒，超时释放连接；浏览器已收到状态后连续约 1.5 秒无新状态，会主动更换半断开的连接。
+首帧给予 5 秒窗口，反复失败逐步延长到 12 秒，后台标签不主动重连；恢复后重新获取本局静态信息，不重放玩家指令。
+这属于弱网恢复和带宽优化，不是断网时仍能实时操控的保证，也不代表低帧渲染问题已经解决。
+
+状态流回归：`python tests/event_stream_test.py`、`python tests/state_stream_http_test.py`、`node tests/state_stream_test.mjs`。
+真实浏览器断流验证：运行 `python tests/state_stream_browser_probe.py`，打开输出的本机 `/probe` 地址；该独立测试人为暂停第一条流 3.5 秒，页面应显示 PASS。结束后向该测试端口的 `/probe-stop` 发 POST。
+
 默认监听 TCP **18081**。局域网联机需要在跑服务器的那台机器上放行该端口
 （Windows 防火墙入站规则，或 Linux 的 nftables / ufw）。规则应对本机局域网网段开放，
 不要写死某一台机器的 IP。

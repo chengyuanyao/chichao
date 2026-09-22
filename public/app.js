@@ -10,6 +10,7 @@ import { createBattleAudio } from './battle_audio.js';
 import { createPerformanceRecorder } from './performance_report.js';
 import { createTelemetryUploader } from './telemetry_upload.js';
 import { createUnitCommandQueue, ORDERED_UNIT_COMMANDS } from './unit_commands.js';
+import { createStateStream } from './state_stream.js';
 import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './build_queues.js';
 
 (function () {
@@ -1843,37 +1844,36 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     var generation = eventStreamGeneration;
     var streamSession = session;
     var query = new URLSearchParams(session).toString();
-    var source = new EventSource('/api/events?' + query);
-    eventSource = source;
     setConnectionState(false);
-    source.addEventListener('state', function (event) {
+    var source = createStateStream({url: '/api/events?' + query,
+      onStatus: function (connected) {
+        if (eventSource !== source || eventStreamGeneration !== generation) return;
+        setConnectionState(connected);
+      },
+      onReconnect: function () {
+        if (eventSource !== source || eventStreamGeneration !== generation) return;
+        if (!document.hidden && roomState && roomState.status==='playing' && roomState.game)
+          performanceRecorder.network('reconnect',0,false,roomState.game.elapsed);
+      },
+      onState: function (event) {
       if (eventSource !== source || eventStreamGeneration !== generation ||
           session !== streamSession) {
-        return;
+        return false;
       }
       try {
         var parseStarted = performance.now();
         var state = JSON.parse(event.data);
         var parseMs = performance.now() - parseStarted;
         lastSnapshotAt = performance.now();
-        setConnectionState(true);
         applyRoomState(state);
         if (!document.hidden && roomState && roomState.status==='playing' && roomState.game)
           performanceRecorder.received(lastSnapshotAt, roomState.game.elapsed, parseMs);
       } catch (_error) {
         setConnectionState(false);
+        return false;
       }
-    });
-    source.onopen = function () {
-      if (eventSource !== source || eventStreamGeneration !== generation) { return; }
-      setConnectionState(true);
-    };
-    source.onerror = function () {
-      if (eventSource !== source || eventStreamGeneration !== generation) { return; }
-      if (!document.hidden && roomState && roomState.status==='playing' && roomState.game)
-        performanceRecorder.network('reconnect',0,false,roomState.game.elapsed);
-      setConnectionState(false);
-    };
+    }});
+    eventSource = source;
   }
 
   function closeEvents() {
@@ -3803,9 +3803,6 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       if (timestamp - lastMinimapDraw >= 100) {
         lastMinimapDraw = timestamp;
         drawMinimap();
-      }
-      if (performance.now() - lastSnapshotAt > 2500) {
-        setConnectionState(false);
       }
     }
     requestAnimationFrame(frame);

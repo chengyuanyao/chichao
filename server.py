@@ -23,6 +23,7 @@ import sys
 import threading
 import time
 import uuid
+import event_stream
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -7915,13 +7916,21 @@ class GameHandler(BaseHTTPRequestHandler):
         if not room or not player:
             self.send_json(403, {"ok": False, "error": "会话已失效"})
             return
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache, no-transform")
-        self.send_header("Connection", "keep-alive")
-        self.send_header("X-Accel-Buffering", "no")
-        self.end_headers()
+        # A stream owns its HTTP connection. Timeouts must close it, not return
+        # to reading another HTTP request after an incomplete gzip/SSE frame.
+        self.close_connection = True
         try:
+            event_stream.configure_socket(self.connection)
+            compressed = event_stream.accepts_gzip(self.headers.get("Accept-Encoding"))
+            encoder = event_stream.StateEncoder(compressed)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache, no-transform")
+            self.send_header("Vary", "Accept-Encoding")
+            if compressed:
+                self.send_header("Content-Encoding", "gzip")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
             # The first frame of a stream carries the match's static data
             # (map, terrain, ore layout, map catalogue); later frames omit it
             # and the client keeps its cached copy. A reconnect starts a new
@@ -7952,6 +7961,7 @@ class GameHandler(BaseHTTPRequestHandler):
                 built_at = time.perf_counter()
                 payload = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
                 message = ("event: state\ndata: %s\n\n" % payload).encode("utf-8")
+                message = encoder.encode(message)
                 encoded_at = time.perf_counter()
                 self.wfile.write(message)
                 self.wfile.flush()
