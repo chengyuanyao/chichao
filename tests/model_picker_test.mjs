@@ -80,7 +80,7 @@ for(const rig of factories.unitGeometry('dragon').rigs) {
     mesh.dispose();cases++;
   }
 }
-// All 15 buildings, including their heads, spinners and construction scaling.
+// All catalog buildings, including their heads, spinners and construction scaling.
 for(const [kind,def] of Object.entries(catalog)) {
   const group=factories.structureGroup(kind,def.size,mat);
   group.position.set(0,22,0);group.scale.y=.6;group.rotation.y=.4;

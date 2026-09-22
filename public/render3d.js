@@ -583,7 +583,7 @@ const MAT = {
 };
 
 const MAGIC_STRUCTURE_KINDS = {
-  mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1
+  mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1, mrail: 1
 };
 const MAGIC_UNIT_KINDS = {
   mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, panther: 1, dragon: 1,
@@ -1979,7 +1979,7 @@ function addStructureFoundation(c, kind, s) {
   const taper = c.taper;
   if (MAGIC_STRUCTURE_KINDS[kind]) {
     // 奥术塔的高瘦轮廓需要更稳的视觉底座；只放大水平尺寸，零件数不变。
-    const footprint = kind === 'mtower' ? s * 1.10 : s;
+    const footprint = (kind === 'mtower' || kind === 'mrail') ? s * 1.10 : s;
     // 暖金砂石台 + 金圈 + 青符环，和作战单位的冷紫青分开。
     taper(HULL, footprint * 1.18, footprint * 1.18,
       footprint * 1.06, footprint * 1.06, 3.2, 0, 1.6, 0, MAT.goldStoneDark);
@@ -2266,6 +2266,26 @@ function structureParts(kind, size) {
     }
     add(HULL, new THREE.TorusGeometry(s * 0.28, s * 0.03, 6, 12), 0, s * 0.72, 0, MAT.goldTrim, ROT_X90);
     add(GLOW, new THREE.CylinderGeometry(s * 0.035, s * 0.035, s * 1.15, 6), 0, s * 0.95, 0, MAT.runeCyan);
+  } else if (kind === 'mrail') {
+    // 虹光塔：双晶轨夹一条竖向虹光，不是奥术塔单尖，也不是钢铁四联发射箱。
+    taper(HULL, s * 1.22, s * 1.22, s * 0.88, s * 0.88, s * 0.26, 0, s * 0.13 + 3.4, 0, MAT.goldStone);
+    taper(TEAM, s * 1.10, s * 1.10, s * 0.82, s * 0.82, s * 0.10, 0, s * 0.32 + 3.4, 0, 0.94);
+    add(HULL, new THREE.CylinderGeometry(s * 0.22, s * 0.28, s * 0.36, 8), 0, s * 0.38 + 3.4, 0, MAT.goldStoneDark);
+    [-1, 1].forEach(function (side) {
+      taper(HULL, s * 0.12, s * 0.10, s * 0.045, s * 0.038, s * 2.05,
+        side * s * 0.32, s * 1.18 + 3.4, 0, MAT.goldStone);
+      add(HULL, new THREE.TorusGeometry(s * 0.09, s * 0.018, 5, 10),
+        side * s * 0.32, s * 1.10, 0, MAT.goldTrim, ROT_X90);
+      add(HULL, new THREE.TorusGeometry(s * 0.075, s * 0.016, 5, 10),
+        side * s * 0.32, s * 1.72, 0, MAT.goldTrim, ROT_X90);
+      add(GLOW, new THREE.CylinderGeometry(s * 0.028, s * 0.022, s * 1.85, 6),
+        side * s * 0.32, s * 1.20, 0, MAT.runeCyan);
+      add(GLOW, new THREE.SphereGeometry(s * 0.055, 8, 6),
+        side * s * 0.32, s * 2.22, 0, MAT.frostGlow);
+    });
+    add(GLOW, new THREE.BoxGeometry(s * 0.58, s * 0.04, s * 0.04), 0, s * 1.55, 0, MAT.arcaneGlow);
+    add(HULL, new THREE.TorusGeometry(s * 0.20, s * 0.028, 6, 12), 0, s * 0.72, 0, MAT.goldTrim, ROT_X90);
+    add(TEAM, new THREE.TorusGeometry(s * 0.26, s * 0.04, 6, 12), 0, s * 0.58, 0, 0.96, ROT_X90);
   }
   return c.parts;
 }
@@ -2316,6 +2336,26 @@ function arcaneHeadParts(size) {
   c.add(GLOW, new THREE.CylinderGeometry(s * 0.10, s * 0.02, s * 0.72, 8),
     s * 0.38, 0, 0, MAT.runeCyan, ROT_Z90);
   c.add(GLOW, new THREE.SphereGeometry(s * 0.09, 8, 6), s * 0.74, 0, 0, MAT.frostGlow);
+  return c.parts;
+}
+
+/** 虹光塔的可旋转头部：双晶矛架，指向开火方向（+X）。 */
+function railHeadParts(size) {
+  const c = partCollector();
+  const s = size;
+  c.add(HULL, new THREE.CylinderGeometry(s * 0.16, s * 0.20, s * 0.18, 8),
+    0, 0, 0, MAT.goldStone);
+  c.add(TEAM, new THREE.TorusGeometry(s * 0.22, s * 0.04, 6, 12),
+    0, 0, 0, 0.96, ROT_X90);
+  [-1, 1].forEach(function (side) {
+    c.add(HULL, new THREE.CylinderGeometry(s * 0.045, s * 0.06, s * 0.92, 6),
+      s * 0.38, side * s * 0.10, 0, MAT.goldTrim, ROT_Z90);
+    c.add(GLOW, new THREE.CylinderGeometry(s * 0.028, s * 0.018, s * 0.86, 6),
+      s * 0.42, side * s * 0.10, 0, MAT.runeCyan, ROT_Z90);
+    c.add(GLOW, new THREE.ConeGeometry(s * 0.05, s * 0.16, 6),
+      s * 0.86, side * s * 0.10, 0, MAT.frostGlow, ROT_Z90);
+  });
+  c.add(GLOW, new THREE.SphereGeometry(s * 0.08, 8, 6), s * 0.18, 0, 0, MAT.arcaneGlow);
   return c.parts;
 }
 
@@ -2396,6 +2436,12 @@ function spinnerParts(kind, size) {
     c.add(GLOW, new THREE.SphereGeometry(s * 0.06, 8, 6), 0, 0, 0, MAT.runeCyan);
     return { parts: c.parts, y: size * 0.66 + 3.4, speed: 1.6 };
   }
+  if (kind === 'mrail') {
+    const c = partCollector();
+    c.add(HULL, new THREE.ConeGeometry(s * 0.07, s * 0.14, 5), s * 0.22, 0, 0, MAT.goldTrim);
+    c.add(GLOW, new THREE.SphereGeometry(s * 0.045, 7, 5), s * 0.22, 0, 0, MAT.runeCyan);
+    return { parts: c.parts, y: size * 1.55, speed: 1.8 };
+  }
   return null;
 }
 
@@ -2441,6 +2487,14 @@ function structureGeometries(kind, size, artSample = false) {
       team: head.length ? mergeParts(head,{fracture:true}) : null,
       hull: null,
       y: size * 1.72 + 3.4
+    };
+  }
+  if (kind === 'mrail') {
+    const head = railHeadParts(size);
+    entry.head = {
+      team: head.length ? mergeParts(head,{fracture:true}) : null,
+      hull: null,
+      y: size * 1.55
     };
   }
   const spin = spinnerParts(kind, size);
@@ -6190,7 +6244,9 @@ export function createRenderer(canvas) {
     // 晶陨：裂地高弧攻城弹
     meteor: { len: 24, thick: 3.1, color: 0xc9a0ff, arc: 118, look: 'meteor' },
     // 坠星：东风同档慢弹高弧，晶彗核 + 长尾，能被看见躲
-    comet: { len: 34, thick: 3.4, color: 0xe8d0ff, arc: 140, look: 'comet' }
+    comet: { len: 34, thick: 3.4, color: 0xe8d0ff, arc: 140, look: 'comet' },
+    // 虹光矛：细长青紫晶矛，几乎无弧，比导弹炮弹更快更直
+    rail: { len: 44, thick: 0.78, color: 0xb8f0ff, arc: 4, look: 'lance' }
   };
 
   function ensureStyledMesh(existing, geo, needed) {
@@ -6913,6 +6969,23 @@ export function createRenderer(canvas) {
           x: x, y: y, radius: 6, growth: 40, alpha: 0.5,
           life: 0.26, maxLife: 0.26, r: 0.85, g: 0.4, b: 1.15
         });
+      } else if (kind === 'rail') {
+        burst(fireLayer, 8, function () {
+          const a = rand() * TAU;
+          const sp = 90 + rand() * 150;
+          return {
+            x: x, y: 7, z: y,
+            vx: Math.cos(a) * sp, vy: 35 + rand() * 70, vz: Math.sin(a) * sp,
+            life: 0.2 + rand() * 0.18, maxLife: 0.38,
+            size: 4 + rand() * 3.5,
+            r: 0.85, g: 1.55, b: 2.2
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 8, growth: 48, alpha: 0.52,
+          life: 0.26, maxLife: 0.26, r: 0.7, g: 0.55, b: 1.25
+        });
+        flashAt(x, y, 0xd6f4ff);
       } else if (kind === 'tesla') {
         burst(fireLayer, 7, function () {
           const a = rand() * TAU;
@@ -7688,6 +7761,13 @@ export function createRenderer(canvas) {
         life: 0.1, maxLife: 0.1, size: 2.6,
         r: 0.55, g: 1.4, b: 2.3
       });
+    } else if (look === 'lance') {
+      emit(fireLayer, {
+        x: x, y: height, z: y,
+        vx: (Math.random() - 0.5) * 8, vy: 7 + Math.random() * 5, vz: (Math.random() - 0.5) * 8,
+        life: 0.16, maxLife: 0.16, size: 2.8 + Math.random() * 1.6,
+        r: 0.85, g: 1.55, b: 2.2
+      });
     }
   }
 
@@ -8442,6 +8522,13 @@ export function createRenderer(canvas) {
             style.len, style.thick, style.thick, style.color);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len * 0.72, style.thick * 2.1, style.thick * 2.1, 0xe8ffff);
+        } else if (look === 'lance') {
+          writeTracer(shards, shardCount++, p.x, height, p.y, yaw, 14, 1.55, 1.55, 0xf2e6ff);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len * 1.12, style.thick * 2.3, style.thick * 2.3, 0xd6a6ff);
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 2.3, 2.3, 2.3, 0xf0e8ff);
         } else {
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len, style.thick, style.thick, style.color);

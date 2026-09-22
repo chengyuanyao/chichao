@@ -6031,7 +6031,8 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
 # 阶段 open → commit → stabilize → close。科技电站→兵营→工厂，魔法法力塔→圣殿→法阵。
 # 第一波自爆仍尽早出；总部挨打或家矿里有敌军时取消下一波，先补防。
 # 第一波没拆掉总部才补第二精炼所/第二矿车。维修厂/圣泉只在中后期或总部告急时补。
-# 魔法仍然不造导弹塔。决策按可见编制 + 上次看见的敌军，不靠随机权重。
+# 远程防御塔（导弹/虹光）只在后期或第一波失败后补，开局 rush 仍只造近距塔。
+# 决策按可见编制 + 上次看见的敌军，不靠随机权重。
 BOT_SUICIDE_CAP = 5
 BOT_SUICIDE_WAVE = 2
 BOT_OPENING_SECONDS = 120.0
@@ -6818,9 +6819,15 @@ def tick_bots(room):
             queue = bot.get(queue_key, [])
             if queue and queue[0].get("ready"):
                 bot_place_prepared(room, bot, queue[0]["kind"])
-        if ("defenseQueue" not in busy_queues and (threatened or inbound is not None)
-                and bot_role_count(own_structures, "defense") < 1):
-            bot_try_queue_structure(room, bot, fb["defense"])
+        if "defenseQueue" not in busy_queues and (threatened or inbound is not None):
+            defense_n = bot_role_count(own_structures, "defense")
+            if defense_n < 1:
+                bot_try_queue_structure(room, bot, fb["defense"])
+            elif (phase in (BOT_PHASE_STABILIZE, BOT_PHASE_CLOSE)
+                  and fb.get("defense_long")
+                  and not any(s["kind"] == fb["defense_long"]
+                              for s in own_structures)):
+                bot_try_queue_structure(room, bot, fb["defense_long"])
         if "buildQueue" not in busy_queues:
             bot_queue_building(
                 room, bot, fb, roles, own_structures, supply, usage,

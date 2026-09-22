@@ -291,6 +291,17 @@ def main():
     assert catalog["units"]["comet"]["producer"] == "mcircle"
     assert catalog["units"]["comet"]["faction"] == "magic"
     assert catalog["units"]["comet"]["cost"] == 2000
+    assert catalog["buildings"]["mrail"]["name"] == "虹光塔"
+    assert catalog["buildings"]["mrail"]["faction"] == "magic"
+    assert catalog["buildings"]["mrail"]["role"] == "defense"
+    assert catalog["buildings"]["mrail"]["cost"] == catalog["buildings"]["missile"]["cost"]
+    assert catalog["buildings"]["mrail"]["requires"] == ["mtemple", "mpower"]
+    assert catalog["buildings"]["mrail"]["range"] == catalog["buildings"]["missile"]["range"] == 420.0
+    assert "虹光塔" in readme
+    assert "虹光塔" in hud
+    assert "range: src.range || 0," in app
+    assert "mrail: { icon:" in app
+    assert "function railHeadParts" in render
 
     assert server.select_lan_ips(
         ["127.0.0.1", "192.168.1.5", "10.18.0.2", "10.0.0.1"]
@@ -419,6 +430,7 @@ def main():
     assert "召唤法阵：多层平面符环 + 悬浮核" in render
     assert "圣泉：石碗泉盆 + 上升泉光" in render
     assert "奥术塔：扭转尖塔 + 武器晶碟" in render
+    assert "虹光塔：双晶轨夹一条竖向虹光" in render
     assert "teamOrOwn9-local-lit-" in render
     assert "armyTimeUniform" in render
     # 顶点烘焙遮蔽 + 逐零件表面通道：两条通道必须一直写进合并几何体，
@@ -553,7 +565,9 @@ def main():
     assert "look: 'meteor'" in render
     assert "look: 'comet'" in render
     assert "look: 'crystal'" in render
+    assert "look: 'lance'" in render
     assert "iris:" in render
+    assert "rail:" in render
     assert "function guessMuzzleKind" in render
     assert "kind === 'meteor'" in render
     assert "kind === 'comet'" in render
@@ -643,7 +657,7 @@ def main():
         assert signature in magic_lod, "magic LOD lost owner-color marker: %s" % signature
     magic_buildings = render[render.index("} else if (kind === 'mhq')"):
                              render.index("return c.parts;", render.index("} else if (kind === 'mhq')"))]
-    for kind in ("mhq", "mpower", "mrefinery", "mtemple", "mcircle", "mspring", "mtower"):
+    for kind in ("mhq", "mpower", "mrefinery", "mtemple", "mcircle", "mspring", "mtower", "mrail"):
         start = magic_buildings.index("kind === '%s'" % kind)
         next_start = magic_buildings.find("kind === '", start + 10)
         branch = magic_buildings[start:next_start if next_start >= 0 else len(magic_buildings)]

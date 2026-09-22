@@ -416,7 +416,7 @@ STRUCTURE_TYPES = {
     },
     # ==================== 魔法阵营「秘法会」建筑（faction=magic） ====================
     # 与科技对位：主堡=hq / 法力塔=power / 精炼所=refinery / 圣殿=barracks /
-    # 法阵=factory / 圣泉=repair / 奥术塔=defense。role 字段让经济与维修逻辑跨阵营复用。
+    # 法阵=factory / 圣泉=repair / 奥术塔+虹光塔=defense。role 字段让经济与维修逻辑跨阵营复用。
     "mhq": {
         "name": "魔法主堡", "cost": 0, "hp": 2400, "size": 58.0,
         "build": 0.0, "deploy": 0.0, "power": 35, "requires": [], "sight": 650.0,
@@ -448,14 +448,24 @@ STRUCTURE_TYPES = {
         "requires": ["mcircle", "mpower"], "sight": 440.0,
         "armor": "structure",
     },
-    # 奥术塔：对位哨戒炮塔的单座基地防空。不另造导弹塔；略加射程
-    # 回答钢铁远程点射，DPS 仍低于哨戒（80/0.9≈89 vs 80/0.70≈114）。
+    # 奥术塔：对位哨戒炮塔的近距基地防空。略加射程回答钢铁点射，
+    # DPS 仍低于哨戒（80/0.9≈89 vs 80/0.70≈114）。远程拆家/压线另有虹光塔。
     "mtower": {
         "name": "奥术塔", "cost": 950, "hp": 1300, "size": 30.0,
         "build": 12.0, "deploy": 3.0, "power": -25, "requires": ["mpower"], "sight": 560.0,
         "damage": 80.0, "range": 360.0, "cooldown": 0.9,
         "projectile": "arcane", "projectileSpeed": 700.0, "splash": 30.0,
         "armor": "structure", "damageType": "magic",
+    },
+    # 虹光塔：对位钢铁导弹炮塔。造价/血/射程/伤/冷却/溅射/占地锁同一档。
+    # 伤种走 missile（拆建筑 ×1.50），好啃前来拆家的载具与建筑；视觉是双晶轨虹光矛。
+    # 圣殿≈兵营门槛，法力塔供电。不改奥术塔、不改钢铁双塔。
+    "mrail": {
+        "name": "虹光塔", "cost": 1200, "hp": 1050, "size": 34.0,
+        "build": 16.0, "deploy": 3.5, "power": -30, "requires": ["mtemple", "mpower"],
+        "sight": 580.0, "damage": 120.0, "range": 420.0, "cooldown": 1.6,
+        "projectile": "rail", "projectileSpeed": 500.0, "splash": 45.0,
+        "armor": "structure", "damageType": "missile",
     },
 }
 
@@ -466,6 +476,7 @@ STRUCTURE_TYPES = {
 # 同 role 的换皮建筑即可整套复用。新增兵种/建筑 = 加定义 + 在下面登记 role。
 MAGIC_STRUCTURES = frozenset((
     "mhq", "mpower", "mrefinery", "mtemple", "mcircle", "mspring", "mtower",
+    "mrail",
 ))
 MAGIC_UNITS = frozenset((
     "mharvester", "mmcv", "mage", "frost", "imp", "oracle",
@@ -480,6 +491,7 @@ _STRUCTURE_ROLES = {
     "factory": "factory", "mcircle": "factory",
     "repair": "repair", "mspring": "repair",
     "turret": "defense", "missile": "defense", "mtower": "defense",
+    "mrail": "defense",
 }
 _UNIT_ROLES = {
     "harvester": "harvester", "mharvester": "harvester",
@@ -514,6 +526,7 @@ def public_catalog():
             "requires": list(definition.get("requires") or []),
             "faction": definition.get("faction", "tech"),
             "role": definition.get("role"),
+            "range": float(definition.get("range", 0) or 0),
         }
     units = {}
     for kind, definition in UNIT_TYPES.items():
@@ -559,12 +572,15 @@ def faction_loadout(faction):
 
 
 # AI 按 role 取的建造 kind（role→具体建筑）。魔法换皮复用同一套决策：
-# 圣殿=兵营 / 法阵=工厂 / 圣泉=维修厂 / 奥术塔=防御塔；魔法不造导弹塔。
+# 圣殿=兵营 / 法阵=工厂 / 圣泉=维修厂 / 奥术塔=近距防御；
+# defense_long 是后期远程塔（钢铁导弹炮塔 / 秘法会虹光塔），开局 rush 不走这条。
 FACTION_BUILDINGS = {
     "tech": {"power": "power", "barracks": "barracks", "refinery": "refinery",
-             "factory": "factory", "repair": "repair", "defense": "turret"},
+             "factory": "factory", "repair": "repair", "defense": "turret",
+             "defense_long": "missile"},
     "magic": {"power": "mpower", "barracks": "mtemple", "refinery": "mrefinery",
-              "factory": "mcircle", "repair": "mspring", "defense": "mtower"},
+              "factory": "mcircle", "repair": "mspring", "defense": "mtower",
+              "defense_long": "mrail"},
 }
 
 
