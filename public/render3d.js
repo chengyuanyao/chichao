@@ -555,8 +555,8 @@ const MAT = {
   // 炭岩略抬亮，避免远距和草地糊成一团；晶冠单独走更热的白青，给辉光余量。
   stormSlate: [0.22, 0.25, 0.32],
   stormSlateDark: [0.14, 0.16, 0.21],
-  stormBolt: [2.15, 2.45, 2.85],
-  stormCrown: [2.55, 2.85, 3.20],
+  stormBolt: [2.05, 2.35, 2.70],
+  stormCrown: [2.20, 2.50, 2.85],
   marble: [0.62, 0.54, 0.40],       // 暖色石面
   bronze: [0.72, 0.52, 0.20],       // 金铜饰，跟建筑金饰一家
   robe: [0.16, 0.10, 0.28],         // 法师深紫袍（不跟团队色走）
@@ -2602,9 +2602,9 @@ function structureParts(kind, size) {
       0, s * 1.06 + 3.4, 0, MAT.stormSlateDark);
     add(HULL, new THREE.CylinderGeometry(s * 0.24, s * 0.24, s * 0.08, 8),
       0, s * 1.30 + 3.4, 0, MAT.goldTrim);
-    add(HULL, new THREE.CylinderGeometry(s * 0.13, s * 0.19, s * 0.44, 8),
+    add(HULL, new THREE.CylinderGeometry(s * 0.15, s * 0.21, s * 0.44, 8),
       0, s * 1.54 + 3.4, 0, MAT.stormSlate);
-    add(HULL, new THREE.CylinderGeometry(s * 0.16, s * 0.16, s * 0.07, 8),
+    add(HULL, new THREE.CylinderGeometry(s * 0.18, s * 0.18, s * 0.07, 8),
       0, s * 1.76 + 3.4, 0, MAT.goldTrim);
     add(GLOW, new THREE.CylinderGeometry(s * 0.058, s * 0.042, s * 1.52, 6),
       0, s * 1.10 + 3.4, 0, MAT.stormBolt);
@@ -2825,8 +2825,8 @@ function stormHeadParts(size) {
   c.add(TEAM, new THREE.TorusGeometry(s * 0.17, s * 0.040, 5, 12),
     0, 0, 0, 0.96, ROT_X90);
   c.add(GLOW, new THREE.IcosahedronGeometry(s * 0.20, 0), 0, s * 0.14, 0, MAT.stormCrown);
-  c.add(GLOW, new THREE.SphereGeometry(s * 0.16, 8, 6), 0, s * 0.14, 0, MAT.frostGlow);
-  c.add(GLOW, new THREE.ConeGeometry(s * 0.09, s * 0.36, 5), 0, s * 0.38, 0, MAT.stormCrown);
+  c.add(GLOW, new THREE.SphereGeometry(s * 0.10, 8, 6), 0, s * 0.14, 0, MAT.frostGlow);
+  c.add(GLOW, new THREE.ConeGeometry(s * 0.08, s * 0.34, 5), 0, s * 0.36, 0, MAT.frostGlow);
   c.add(GLOW, new THREE.ConeGeometry(s * 0.07, s * 0.16, 5), 0, -s * 0.05, 0, MAT.frostGlow, ROT_X180);
   c.add(GLOW, new THREE.IcosahedronGeometry(s * 0.070, 0), s * 0.13, s * 0.06, s * 0.06, MAT.runeCyan);
   c.add(GLOW, new THREE.IcosahedronGeometry(s * 0.060, 0), -s * 0.11, s * 0.10, -s * 0.05, MAT.frostGlow);
