@@ -2570,28 +2570,29 @@ function structureParts(kind, size) {
      * 不能再是钢铁方堡或秘法金塔换一层皮。团队色留给旗帜/兽皮条。
      */
   } else if (kind === 'thq') {
-    // 部落大营：纵深木墙长屋 + 茅草人字顶 + 烟孔，不是混凝土指挥塔。
-    taper(HULL, s * 1.08, s * 1.62, s * 0.98, s * 1.50, s * 0.40, 0, s * 0.20 + 3.4, 0, MAT.barkLit);
-    taper(HULL, s * 1.18, s * 1.72, s * 0.18, s * 1.78, s * 0.40, 0, s * 0.56 + 3.4, 0, MAT.thatch);
-    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.08, s * 1.70), 0, s * 0.78 + 3.4, 0, MAT.thatchDark);
-    add(HULL, new THREE.CylinderGeometry(s * 0.03, s * 0.03, s * 1.76, 6),
-      0, s * 0.82 + 3.4, 0, MAT.bark, ROT_X90);
+    // 部落大营：沿 X 拉长的茅草长屋。默认相机从 +Z 看，必须看见侧墙而不是圆顶端头。
+    taper(HULL, s * 1.72, s * 1.02, s * 1.58, s * 0.92, s * 0.40, 0, s * 0.20 + 3.4, 0, MAT.barkLit);
+    taper(HULL, s * 1.90, s * 1.18, s * 1.94, s * 0.16, s * 0.44, 0, s * 0.58 + 3.4, 0, MAT.thatch);
+    add(HULL, new THREE.BoxGeometry(s * 1.86, s * 0.08, s * 0.10), 0, s * 0.82 + 3.4, 0, MAT.thatchDark);
+    add(HULL, new THREE.CylinderGeometry(s * 0.03, s * 0.03, s * 1.88, 6),
+      0, s * 0.86 + 3.4, 0, MAT.bark, ROT_Z90);
     add(HULL, new THREE.CylinderGeometry(s * 0.10, s * 0.14, s * 0.12, 8),
-      0, s * 0.88 + 3.4, 0, MAT.thatchDark);
-    add(GLOW, new THREE.SphereGeometry(s * 0.06, 8, 6), 0, s * 1.02 + 3.4, 0, MAT.spiritFire);
-    add(HULL, new THREE.BoxGeometry(s * 0.24, s * 0.30, s * 0.06), 0, s * 0.22 + 3.4, s * 0.78, MAT.hideDark);
-    add(HULL, new THREE.BoxGeometry(s * 0.18, s * 0.14, s * 0.04), 0, s * 0.34 + 3.4, s * 0.80, MAT.hideTan);
+      0, s * 0.92 + 3.4, 0, MAT.thatchDark);
+    add(GLOW, new THREE.SphereGeometry(s * 0.08, 8, 6), 0, s * 1.06 + 3.4, 0, MAT.spiritFire);
+    add(GLOW, new THREE.ConeGeometry(s * 0.05, s * 0.14, 6), 0, s * 1.16 + 3.4, 0, MAT.spiritFire);
+    add(HULL, new THREE.BoxGeometry(s * 0.24, s * 0.30, s * 0.06), 0, s * 0.22 + 3.4, s * 0.50, MAT.hideDark);
+    add(HULL, new THREE.BoxGeometry(s * 0.18, s * 0.14, s * 0.04), 0, s * 0.34 + 3.4, s * 0.52, MAT.hideTan);
     [-1, 1].forEach(function (side) {
-      add(HULL, new THREE.CylinderGeometry(s * 0.045, s * 0.055, s * 0.78, 6),
-        side * s * 0.48, s * 0.38 + 3.4, s * 0.72, MAT.bark);
-      add(HULL, new THREE.CylinderGeometry(s * 0.045, s * 0.055, s * 0.78, 6),
-        side * s * 0.48, s * 0.38 + 3.4, -s * 0.72, MAT.bark);
-      add(TEAM, new THREE.BoxGeometry(s * 0.20, s * 0.32, s * 0.03),
-        side * s * 0.58, s * 0.54 + 3.4, s * 0.20, 1.0);
+      add(HULL, new THREE.CylinderGeometry(s * 0.045, s * 0.055, s * 0.72, 6),
+        side * s * 0.78, s * 0.36 + 3.4, s * 0.46, MAT.bark);
+      add(HULL, new THREE.CylinderGeometry(s * 0.045, s * 0.055, s * 0.72, 6),
+        side * s * 0.78, s * 0.36 + 3.4, -s * 0.46, MAT.bark);
+      add(TEAM, new THREE.BoxGeometry(s * 0.03, s * 0.32, s * 0.20),
+        side * s * 0.22, s * 0.54 + 3.4, s * 0.56, 1.0);
       add(HULL, new THREE.CylinderGeometry(s * 0.018, s * 0.018, s * 0.20, 5),
-        side * s * 0.58, s * 0.72 + 3.4, s * 0.20, MAT.bark);
+        side * s * 0.22, s * 0.72 + 3.4, s * 0.56, MAT.bark);
     });
-    add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.08, s * 0.16), 0, s * 0.10 + 3.4, s * 0.84, MAT.moss);
+    add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.08, s * 0.16), 0, s * 0.10 + 3.4, s * 0.54, MAT.moss);
   } else if (kind === 'tpower') {
     // 图腾柱：叠脸木柱 + 横翼 + 顶上火碗。单柱剪影，暖橙火，不是磁能双塔也不是晶针。
     taper(HULL, s * 0.92, s * 0.92, s * 0.70, s * 0.70, s * 0.16, 0, s * 0.08 + 3.4, 0, MAT.earthPack);
@@ -2611,9 +2612,9 @@ function structureParts(kind, size) {
     add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.24, s * 0.08), -s * 0.34, s * 0.92 + 3.4, 0, MAT.boneIvory);
     add(TEAM, new THREE.BoxGeometry(s * 0.22, s * 0.32, s * 0.03), s * 0.24, s * 0.72 + 3.4, 0, 1.0);
     add(TEAM, new THREE.BoxGeometry(s * 0.22, s * 0.32, s * 0.03), -s * 0.24, s * 0.72 + 3.4, 0, 1.0);
-    add(HULL, new THREE.CylinderGeometry(s * 0.18, s * 0.12, s * 0.10, 8), 0, s * 1.74 + 3.4, 0, MAT.barkLit);
-    add(GLOW, new THREE.SphereGeometry(s * 0.10, 8, 6), 0, s * 1.88 + 3.4, 0, MAT.spiritFire);
-    add(GLOW, new THREE.CylinderGeometry(s * 0.03, s * 0.08, s * 0.22, 6), 0, s * 2.02 + 3.4, 0, MAT.spiritFire);
+    add(HULL, new THREE.CylinderGeometry(s * 0.20, s * 0.12, s * 0.10, 8), 0, s * 1.74 + 3.4, 0, MAT.barkLit);
+    add(GLOW, new THREE.SphereGeometry(s * 0.14, 8, 6), 0, s * 1.90 + 3.4, 0, MAT.spiritFire);
+    add(GLOW, new THREE.ConeGeometry(s * 0.08, s * 0.22, 6), 0, s * 2.06 + 3.4, 0, MAT.spiritFire);
   } else if (kind === 'trefinery') {
     // 兽骨精炼棚：斜顶窝棚 + 骨架晾架 + 兽皮 + 矿堆，横扁剪影，不是立式储罐。
     taper(HULL, s * 1.28, s * 1.02, s * 1.12, s * 0.88, s * 0.16, 0, s * 0.08 + 3.4, 0, MAT.earthPack);
@@ -2853,13 +2854,13 @@ function spinnerParts(kind, size) {
   if (kind === 'thq') {
     const c = partCollector();
     c.add(GLOW, new THREE.SphereGeometry(s * 0.04, 6, 5), 0, 0, 0, MAT.spiritFire);
-    return { parts: c.parts, y: size * 1.04 + 3.4, speed: 0.9 };
+    return { parts: c.parts, y: size * 1.08 + 3.4, speed: 0.9 };
   }
   if (kind === 'tpower') {
     const c = partCollector();
-    c.add(GLOW, new THREE.TorusGeometry(s * 0.10, s * 0.018, 5, 10), 0, 0, 0, MAT.spiritFire,
+    c.add(GLOW, new THREE.TorusGeometry(s * 0.12, s * 0.022, 5, 10), 0, 0, 0, MAT.spiritFire,
       new THREE.Matrix4().makeRotationX(1.15));
-    return { parts: c.parts, y: size * 1.94 + 3.4, speed: -1.8 };
+    return { parts: c.parts, y: size * 1.98 + 3.4, speed: -1.8 };
   }
   if (kind === 'taltar') {
     const c = partCollector();
