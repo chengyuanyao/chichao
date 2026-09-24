@@ -88,7 +88,7 @@ def main():
     for kind in ("thq", "tpower", "trefinery", "tcamp", "tpen", "taltar"):
         assert kind in server.TRIBE_STRUCTURES
         assert server.STRUCTURE_TYPES[kind]["faction"] == "tribe"
-    for kind in ("tharvester", "tmcv", "spear", "tamer", "wolf"):
+    for kind in ("tharvester", "tmcv", "spear", "tamer", "wolf", "spider"):
         assert kind in server.TRIBE_UNITS
         assert server.UNIT_TYPES[kind]["faction"] == "tribe"
     assert server.UNIT_TYPES["tmcv"]["deploysInto"] == "thq"
@@ -182,6 +182,8 @@ def main():
     assert server.UNIT_TYPES["tamer"]["producer"] == "tcamp"
     assert server.UNIT_TYPES["wolf"]["producer"] == "tpen"
     assert server.UNIT_TYPES["tharvester"]["producer"] == "tpen"
+    assert server.UNIT_TYPES["spider"]["producer"] == "tpen"
+    assert server.UNIT_TYPES["spider"]["requires"] == ["taltar"]
     try:
         server.queue_unit(room, a["id"], "rifle")
         raise AssertionError("部落不该能产突击兵")

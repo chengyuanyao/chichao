@@ -119,7 +119,7 @@ def test_orbit_layer():
 def test_surface_and_faction():
     """硬表面材质 + 阵营归属：巨龙改走金属，但仍是秘法会的单位。"""
     render = read("public/render3d.js")
-    assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1 };" in render
+    assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1 };" in render
     assert re.search(r"MAGIC_UNIT_KINDS = \{[^}]*dragon: 1", render, re.S)
     # 近景 AO 已推广到全部兵种，巨龙继续受益；远景不再付烘焙成本。
     assert "body: mergeParts(allParts.filter(p => !p.recoil), { occlusion: true })" in render

@@ -396,6 +396,19 @@ UNIT_TYPES = {
         "projectile": "bite", "projectileSpeed": 1000.0, "splash": 0.0,
         "sight": 420.0, "armor": "beast", "damageType": "bite",
     },
+    # 蛛网巨蛛：围栏进阶控制兽。血祭坛后才许驯养，对位冰霜女巫的单目标锁腿。
+    # 中距吐丝，直伤一般；命中挂定身（slow.mult 0）+ 可复用的毒丝 DoT。
+    # 刷新只续时，不叠乘。兽甲、非载具、无自爆。比战狼慢、比女巫厚。
+    "spider": {
+        "name": "蛛网巨蛛", "cost": 720, "hp": 340, "speed": 108.0,
+        "damage": 18.0, "range": 170.0, "cooldown": 1.45,
+        "size": 14.0, "build": 8.0, "producer": "tpen",
+        "requires": ["taltar"],
+        "projectile": "web", "projectileSpeed": 520.0, "splash": 0.0,
+        "sight": 400.0, "armor": "beast", "damageType": "venom",
+        "slow": {"mult": 0.0, "duration": 2.2},
+        "dot": {"dps": 14.0, "duration": 3.0, "damageType": "venom"},
+    },
 }
 
 
@@ -596,7 +609,7 @@ TRIBE_STRUCTURES = frozenset((
     "thq", "tpower", "trefinery", "tcamp", "tpen", "taltar",
 ))
 TRIBE_UNITS = frozenset((
-    "tharvester", "tmcv", "spear", "tamer", "wolf",
+    "tharvester", "tmcv", "spear", "tamer", "wolf", "spider",
 ))
 VALID_FACTIONS = frozenset(("tech", "magic", "tribe"))
 

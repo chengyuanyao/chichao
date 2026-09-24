@@ -713,6 +713,8 @@ DAMAGE_MULTIPLIER = {
     # ×0.8 属于具体兵种的 targetMultipliers，在 trigger_death_explosion 里按目标
     # kind 结算。
     "explosive": {"infantry": 1.00, "light": 1.00, "heavy": 1.00, "structure": 1.00, "arcane": 1.00, "beast": 1.00},
+    # 毒丝 / 可复用 DoT：略克步兵，打甲偏弱。缺省 1.0 的甲种保持中性。
+    "venom":   {"infantry": 1.15, "light": 0.85, "heavy": 0.55, "structure": 0.40, "arcane": 1.00, "beast": 1.00},
 }
 
 DEFAULT_MAP = "gold_crater_small"
@@ -946,6 +948,10 @@ def public_unit(unit):
         result["harvestPaused"] = bool(unit.get("harvestPaused"))
     if unit.get("slowMult", 1.0) < 1.0:
         result["slow"] = True
+        if float(unit.get("slowMult", 1.0)) <= 0.0:
+            result["rooted"] = True
+    if float(unit.get("dotTimer", 0.0) or 0.0) > 0.0:
+        result["dot"] = True
     if unit.get("repairing"):
         result["repairing"] = True
     if unit.get("order") in ("hold", "scatter"):
@@ -1878,6 +1884,9 @@ def make_unit(kind, owner, x, y):
         "repairTargetId": None, "repairAngle": 0.0, "repairRing": 0,
         "repairing": False, "manualUntil": 0.0, "order": "guard",
         "slowMult": 1.0, "slowTimer": 0.0,
+        "dotDps": 0.0, "dotTimer": 0.0,
+        "dotOwner": None, "dotSourceId": None, "dotSourceKind": None,
+        "dotDamageType": None,
         "_path": None, "_pathDest": None, "kills": 0,
         # 内部作战时间戳不下发给客户端，只用于判定脱战回血。
         "_lastCombatAt": -VETERAN_REGEN_DELAY,
@@ -3071,9 +3080,10 @@ def tick_tame(room, unit, dt, entity_index, terrain):
              + float(target.get("size", 0) or 0) * 0.35)
     dist = math.hypot(target["x"] - unit["x"], target["y"] - unit["y"])
     if dist > reach:
+        # 移速倍率只在 move_toward 里乘一次；0 是合法定身。
         move_toward(
             terrain, unit, target["x"], target["y"],
-            definition["speed"] * float(unit.get("slowMult", 1.0) or 1.0), dt)
+            definition["speed"], dt)
         return
     unit["destX"] = None
     unit["destY"] = None
@@ -5052,7 +5062,7 @@ def game_terrain(game):
 
 
 def move_toward(terrain, entity, target_x, target_y, speed, dt, stop_distance=0.0):
-    # 冰霜减速：被女巫命中的单位短期移速下降（slowMult<1），所有移动统一走这里
+    # 冰霜减速 / 蛛网定身：slowMult<1 降速，0 是合法定身。所有移动统一走这里。
     speed *= entity.get("slowMult", 1.0)
     # pathDest 存的是调用方传入的原始目标，用来判断「是不是还在去同一个地方」。
     path = entity.get("_path")
@@ -5391,13 +5401,69 @@ def trigger_death_explosion(room, source, game, combat_spatial=None):
     return True
 
 
+def unit_move_slow(entity):
+    """单位移速倍率。0 是合法定身，不能用 `or 1.0` 把根态冲掉。"""
+    try:
+        return float(entity.get("slowMult", 1.0))
+    except (TypeError, ValueError):
+        return 1.0
+
+
 def apply_slow(projectile, target):
-    """冰霜命中：给敌方单位挂上短期减速。只影响单位(移动)，建筑无所谓。"""
+    """命中挂减速/定身。只影响单位；重命中刷新时长，不叠乘。"""
     slow = projectile.get("slow")
     if not slow or not target["id"].startswith("u") or target["hp"] <= 0:
         return
-    target["slowMult"] = slow["mult"]
-    target["slowTimer"] = slow["duration"]
+    target["slowMult"] = float(slow["mult"])
+    target["slowTimer"] = float(slow["duration"])
+
+
+def apply_dot(projectile, target):
+    """可复用持续伤害：刷新时长与每秒伤害，不叠乘。只挂单位。"""
+    dot = projectile.get("dot")
+    if not dot or not target["id"].startswith("u") or target["hp"] <= 0:
+        return
+    dps = float(dot.get("dps") or 0.0)
+    duration = float(dot.get("duration") or 0.0)
+    if dps <= 0.0 or duration <= 0.0:
+        return
+    target["dotDps"] = dps
+    target["dotTimer"] = duration
+    target["dotDamageType"] = dot.get("damageType")
+    target["dotOwner"] = projectile.get("owner")
+    target["dotSourceId"] = projectile.get("sourceId")
+    target["dotSourceKind"] = projectile.get("sourceKind")
+
+
+def apply_hit_status(projectile, target):
+    """弹丸命中时的控制/持续伤害。溅射与直击共用。"""
+    apply_slow(projectile, target)
+    apply_dot(projectile, target)
+
+
+def tick_dot(room, unit, dt, entity_index=None):
+    """按目录 dps 结算持续伤害，击杀记给挂状态时的来源。"""
+    timer = float(unit.get("dotTimer") or 0.0)
+    dps = float(unit.get("dotDps") or 0.0)
+    if timer <= 0.0:
+        return
+    game = room.get("game")
+    if dps > 0.0 and unit["hp"] > 0:
+        source_id = unit.get("dotSourceId")
+        source_unit = None
+        if source_id and entity_index is not None:
+            source_unit = entity_index.get(source_id)
+        apply_damage(
+            room, unit, dps * dt, unit.get("dotOwner"),
+            unit.get("dotDamageType"), game,
+            source_id, source_unit, unit.get("dotSourceKind"))
+    unit["dotTimer"] = max(0.0, timer - dt)
+    if unit["dotTimer"] <= 0.0:
+        unit["dotDps"] = 0.0
+        unit["dotOwner"] = None
+        unit["dotSourceId"] = None
+        unit["dotSourceKind"] = None
+        unit["dotDamageType"] = None
 
 
 def mark_unit_combat(entity, game):
@@ -5492,6 +5558,7 @@ def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
         "kind": kind,
         "damageType": definition.get("damageType", "bullet"),
         "slow": definition.get("slow"),
+        "dot": definition.get("dot"),
         "ttl": 3.5,
     })
     muzzle = {
@@ -5693,7 +5760,7 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
                 apply_damage(room, target, projectile["damage"], projectile["owner"],
                              projectile.get("damageType"), game,
                              source_id, source_unit, projectile.get("sourceKind"))
-                apply_slow(projectile, target)
+                apply_hit_status(projectile, target)
             splash = projectile.get("splash", 0)
             if splash > 0:
                 friendly = friendly_owners(game, projectile["owner"])
@@ -5712,7 +5779,7 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
                         apply_damage(room, entity, projectile["damage"] * 0.45 * (1.0 - radius / splash), projectile["owner"],
                                      projectile.get("damageType"), game,
                                      source_id, source_unit, projectile.get("sourceKind"))
-                        apply_slow(projectile, entity)
+                        apply_hit_status(projectile, entity)
             game["effects"].append({
                 "id": new_id("e"), "type": "impact", "x": impact_x, "y": impact_y,
                 "kind": projectile["kind"],
@@ -6056,11 +6123,15 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
         unit["repairing"] = False
         unit["cooldown"] = max(0.0, unit["cooldown"] - dt * (1.0 / cd_mult))
         unit["scan"] = max(0.0, unit["scan"] - dt)
-        # 冰霜减速衰减：计时归零则恢复满速
+        # 冰霜减速 / 蛛网定身衰减：计时归零则恢复满速
         if unit.get("slowTimer", 0.0) > 0.0:
             unit["slowTimer"] = max(0.0, unit["slowTimer"] - dt)
             if unit["slowTimer"] <= 0.0:
                 unit["slowMult"] = 1.0
+        if unit.get("dotTimer", 0.0) > 0.0:
+            tick_dot(room, unit, dt, entity_index)
+            if unit["hp"] <= 0:
+                continue
         if unit.get("order") == "repair":
             tick_repair_unit(room, unit, dt, entity_index, repair_power_cache, terrain)
             continue
@@ -6736,6 +6807,8 @@ def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
             choices.extend(("spear", "spear", "tamer") if not opening else ("spear", "spear"))
         if "factory" in roles:
             choices.append("wolf")
+            if "repair" in roles:
+                choices.append("spider")
             if rich and harvester_n < 2:
                 choices.append("tharvester")
         return choices
@@ -6896,7 +6969,7 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         if tribe:
             choices = []
             if "factory" in roles:
-                choices.append("wolf")
+                choices.extend(("spider", "wolf"))
             if "barracks" in roles:
                 choices.extend(("spear", "tamer"))
             return choices
@@ -7001,7 +7074,7 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
             late_choices = (("colossus", "dragon", "comet", "behemoth") +
                             (("warden",) if "barracks" in roles else ()))
         elif faction == "tribe":
-            late_choices = (("wolf",) if "factory" in roles else ()) + (
+            late_choices = (("spider", "wolf") if "factory" in roles else ()) + (
                 ("spear", "tamer") if "barracks" in roles else ())
         else:
             late_choices = ("overlord", "prism", "artillery")

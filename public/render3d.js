@@ -588,6 +588,10 @@ const MAT = {
   moss: [0.28, 0.38, 0.18],         // 苔藓点缀
   bloodCloth: [0.48, 0.10, 0.10],   // 祭坛血布（固有色，不是团队色）
   spiritFire: [2.35, 1.05, 0.28],   // 图腾火碗：暖橙，不是奥术紫
+  chitin: [0.16, 0.10, 0.08],       // 蛛甲：暗几丁质，不是钢板
+  chitinDark: [0.10, 0.07, 0.06],   // 腹甲阴影
+  chitinLit: [0.28, 0.16, 0.10],    // 受光甲壳
+  webSilk: [0.86, 0.78, 0.58],      // 骨色蛛丝
   // 自发光（分量 > 1）
   exhaust: [2.4, 0.95, 0.28],
   furnace: [2.6, 1.35, 0.35],
@@ -622,7 +626,7 @@ const CLOTH_UNIT_KINDS = {
 };
 // 巨龙从兽皮改成金属：奥德赛那版是硬表面构装体，皮毛粗糙度会把甲板和铬边
 // 一起照哑，硬表面的折角就读不出来了。
-const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1 };
+const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1 };
 
 function unitSurfaceFamily(kind) {
   if (CLOTH_UNIT_KINDS[kind]) return 'cloth';
@@ -2115,6 +2119,51 @@ const UNIT_BUILDERS = {
     };
   },
 
+  spider: function () {
+    // 蛛网巨蛛：八足蛛形，暗甲壳 + 骨螯 + 兽皮鞍斑，不要钢板也不要晶簇。
+    const body = surfaced(SURF.hide, [
+      ellipsoid(5.6, 3.1, 4.4, 1.6, 6.4, 0, MAT.chitin),
+      ellipsoid(6.8, 4.2, 5.0, -6.8, 7.2, 0, MAT.chitinDark),
+      ellipsoid(2.4, 1.8, 2.2, 7.2, 6.2, 0, MAT.chitinLit),
+      pyr(0.72, 2.6, 5, 9.4, 5.4, 1.15, MAT.boneIvory),
+      pyr(0.72, 2.6, 5, 9.4, 5.4, -1.15, MAT.boneIvory),
+      ellipsoid(3.4, 0.55, 3.6, -1.2, 9.2, 0, 0.90),
+      ellipsoid(2.8, 0.7, 4.2, -6.4, 10.4, 0, MAT.hideDark),
+      limb(0.38, 0.28, 6.2, 5.6, 2.1, 8.8, 4.0, 3.2, MAT.chitinDark),
+      limb(0.38, 0.28, 6.2, 5.6, -2.1, 8.8, 4.0, -3.2, MAT.chitinDark)
+    ]);
+    const sockets = [
+      [4.2, 2.4], [1.4, 3.0], [-1.6, 3.2], [-4.8, 2.6]
+    ];
+    sockets.forEach(function (sock, i) {
+      const flare = 1 + i * 0.08;
+      [1, -1].forEach(function (side) {
+        const z0 = sock[1] * side;
+        const midX = sock[0] + 1.2 * flare;
+        const midY = 9.2 + (i < 2 ? 0.4 : 0);
+        const midZ = (5.6 + i * 0.35) * side;
+        const endX = sock[0] + 0.4;
+        const endY = 0.7;
+        const endZ = (8.4 + i * 0.45) * side;
+        body.push(Object.assign(
+          limb(0.48, 0.38, sock[0], 6.0, z0, midX, midY, midZ, MAT.chitinDark),
+          { surf: SURF.hide }));
+        body.push(Object.assign(
+          limb(0.36, 0.22, midX, midY, midZ, endX, endY, endZ, MAT.chitin),
+          { surf: SURF.hide }));
+      });
+    });
+    return {
+      body: body,
+      glow: [
+        sph(0.42, 5, 7.6, 7.1, 1.05, MAT.spiritFire),
+        sph(0.42, 5, 7.6, 7.1, -1.05, MAT.spiritFire),
+        sph(0.22, 5, 6.8, 7.4, 1.85, MAT.spiritFire),
+        sph(0.22, 5, 6.8, 7.4, -1.85, MAT.spiritFire)
+      ]
+    };
+  },
+
   tharvester: function () {
     // 驮兽：有角驮畜 + 两侧筐，有机轮廓，不是轮式矿车。
     const body = surfaced(SURF.hide, [
@@ -3172,7 +3221,7 @@ const UNIT_VISUAL_SCALE = {
   mage: 2.15, frost: 2.15, imp: 2.05, oracle: 2.15, golem: 1.42, behemoth: 1.62, panther: 1.7, dragon: 1.34,
   warden: 1.55, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30,
-  spear: 2.15, tamer: 2.15, wolf: 1.85,
+  spear: 2.15, tamer: 2.15, wolf: 1.85, spider: 1.72,
   tharvester: 1.16, tmcv: 1.30
 };
 
@@ -6238,6 +6287,19 @@ export function createRenderer(canvas) {
       });
       return quad;
     }
+    if (kind === 'spider') {
+      const legs = [
+        box(12, 5.6, 7.2, -2.2, 6.8, 0, MAT.chitinDark),
+        box(8, 4.2, 5.4, 5.2, 6.2, 0, MAT.chitin),
+        box(6.4, 1.0, 5.2, -1.0, 9.2, 0, 0.90)
+      ];
+      [[4, 2.4], [1, 3], [-2, 3.1], [-5, 2.5]].forEach(function (sock) {
+        [1, -1].forEach(function (side) {
+          legs.push(box(1.2, 8.2, 1.2, sock[0], 4.2, sock[1] * side * 2.2, MAT.chitinDark));
+        });
+      });
+      return legs;
+    }
     if (kind === 'tharvester') {
       return [
         box(28, 12, 12, -1, 10, 0, MAT.hideTan),
@@ -6762,7 +6824,9 @@ export function createRenderer(canvas) {
     // 坠星：东风同档慢弹高弧，晶彗核 + 长尾，能被看见躲
     comet: { len: 34, thick: 3.4, color: 0xe8d0ff, arc: 140, look: 'comet' },
     // 雷暴电弧：紫青主弧 + 电白错位，比钢铁磁暴更偏秘法色
-    storm: { len: 20, thick: 1.2, color: 0xd8c8ff, arc: 0, look: 'arc' }
+    storm: { len: 20, thick: 1.2, color: 0xd8c8ff, arc: 0, look: 'arc' },
+    // 蛛网：骨色丝团，低弧，一眼不是冰棱也不是奥术弹
+    web: { len: 16, thick: 1.8, color: 0xe8d4a0, arc: 18, look: 'web' }
   };
 
   function ensureStyledMesh(existing, geo, needed) {
@@ -7143,7 +7207,7 @@ export function createRenderer(canvas) {
       p.floor = baseY + 1.5;
       if (metadata && metadata.height != null && type === 'muzzle' && relativeHeight>=9) {
         const authored=kind==='plasmalance'?30:kind==='plasma'?20:kind==='fireball'?18:
-          kind==='comet'?22:kind==='rune_boulder'?18:['meteor','arcane','frost','crystal','iris','boulder'].includes(kind)?16:11;
+          kind==='comet'?22:kind==='rune_boulder'?18:['meteor','arcane','frost','crystal','iris','boulder','web'].includes(kind)?16:11;
         p.y += metadata.height-authored;
       }
       if (layer === smokeLayer && p.opacity == null) p.opacity = .48;
@@ -7158,7 +7222,7 @@ export function createRenderer(canvas) {
       }
     }
     if (metadata && metadata.wreck) {
-      const flesh = ['rifle','rocket','sniper','tesla','dog','mage','frost','oracle','panther','hexling'];
+      const flesh = ['rifle','rocket','sniper','tesla','dog','mage','frost','oracle','panther','hexling','spear','tamer','wolf','spider'];
       if (!flesh.includes(metadata.entityKind)) spawnWreck({x,y,dir:metadata.dir || 0,
         radius:Math.min(48,Math.max(9,(metadata.size||18)*.8)),
         life:FEEDBACK_LIMITS.wreckSeconds,maxLife:FEEDBACK_LIMITS.wreckSeconds,
@@ -7352,6 +7416,37 @@ export function createRenderer(canvas) {
           life: 2.1, maxLife: 2.1, hold: true, r: 0.42, g: 0.68, b: 0.82
         });
         flashAt(x, y, 0x9fe8ff);
+      } else if (kind === 'web') {
+        burst(fireLayer, 10, function () {
+          const a = rand() * TAU;
+          const sp = 40 + rand() * 70;
+          return {
+            x: x, y: 5, z: y,
+            vx: Math.cos(a) * sp, vy: 18 + rand() * 36, vz: Math.sin(a) * sp,
+            life: 0.34 + rand() * 0.22, maxLife: 0.56,
+            size: 3.2 + rand() * 3.4,
+            r: 1.75, g: 1.45, b: 0.85
+          };
+        });
+        burst(smokeLayer, 4, function () {
+          const a = rand() * TAU;
+          return {
+            x: x, y: 4, z: y,
+            vx: Math.cos(a) * 14, vy: 10 + rand() * 12, vz: Math.sin(a) * 14,
+            life: 0.8 + rand() * 0.4, maxLife: 1.2,
+            size: 14 + rand() * 10, grow: true, buoyancy: -0.06,
+            r: 0.72, g: 0.64, b: 0.48
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 8, growth: 40, alpha: 0.48,
+          life: 0.42, maxLife: 0.42, r: 0.86, g: 0.74, b: 0.48
+        });
+        scorchLayer.spawn({
+          x: x, y: y, radius: 20, growth: 7, alpha: 0.34,
+          life: 2.0, maxLife: 2.0, hold: true, r: 0.62, g: 0.52, b: 0.34
+        });
+        flashAt(x, y, 0xe8d4a0);
       } else if (kind === 'fireball') {
         // 龙息炸点：外圈奥术紫、内芯青白。亮度量级和上一版玉息一致，
         // 只换色相，不改爆点大小与存续，命中反馈的可读性保持不变。
@@ -7773,6 +7868,15 @@ export function createRenderer(canvas) {
           life: 0.24, maxLife: 0.24, r: 0.78, g: 0.42, b: 1.20
         });
         flashAt(x, y, 0xc79dff);
+      } else if (kind === 'web') {
+        burst(fireLayer, 4, function () {
+          return {
+            x: x + (rand() - 0.5) * 5, y: 10, z: y + (rand() - 0.5) * 5,
+            vx: (rand() - 0.5) * 16, vy: 10, vz: (rand() - 0.5) * 16,
+            life: 0.18, maxLife: 0.18, size: 3.4,
+            r: 1.7, g: 1.4, b: 0.8
+          };
+        });
       } else if (['arcane','frost','crystal','iris','boulder'].includes(kind)) {
         const cold=kind==='frost',earth=kind==='boulder';
         burst(fireLayer,3,function(){return {x:x,y:16,z:y,
@@ -8371,6 +8475,13 @@ export function createRenderer(canvas) {
         life: 0.1, maxLife: 0.1, size: 2.6,
         r: 0.55, g: 1.4, b: 2.3
       });
+    } else if (look === 'web') {
+      emit(fireLayer, {
+        x: x + (Math.random() - 0.5) * 4, y: height, z: y + (Math.random() - 0.5) * 4,
+        vx: (Math.random() - 0.5) * 8, vy: 3 + Math.random() * 6, vz: (Math.random() - 0.5) * 8,
+        life: 0.26, maxLife: 0.26, size: 3.8 + Math.random() * 2.4,
+        r: 1.7, g: 1.45, b: 0.85
+      });
     }
   }
 
@@ -8385,13 +8496,14 @@ export function createRenderer(canvas) {
         && kind !== 'warden' && kind !== 'colossus' && kind !== 'comet'
         && kind !== 'behemoth'
         && kind !== 'bomb_truck' && kind !== 'hexling'
-        && kind !== 'imp' && kind !== 'oracle') return;
+        && kind !== 'imp' && kind !== 'oracle' && kind !== 'spider') return;
     if (fireLayer.list.length > state.particleBudget * 0.5) return;
     const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6
       : kind === 'bomb_truck' ? 7 : kind === 'hexling' ? 6
       : kind === 'colossus' ? 7 : kind === 'comet' ? 6 : kind === 'behemoth' ? 7
       : kind === 'warden' ? 4
-      : kind === 'oracle' ? 4 : kind === 'imp' ? 3 : apocTitan ? 4 : 3.5;
+      : kind === 'oracle' ? 4 : kind === 'imp' ? 3 : kind === 'spider' ? 4
+      : apocTitan ? 4 : 3.5;
     if (Math.random() > dt * rate) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
     const scale = UNIT_VISUAL_SCALE[kind] || 1;
@@ -8419,6 +8531,15 @@ export function createRenderer(canvas) {
         vx: (Math.random() - 0.5) * 7, vy: 8 + Math.random() * 10, vz: (Math.random() - 0.5) * 7,
         life: 0.5, maxLife: 0.5, size: 3.5 + Math.random() * 3,
         r: 0.65, g: 1.35, b: 1.85
+      });
+    } else if (kind === 'spider') {
+      emit(fireLayer, {
+        x: vis.x + Math.cos(vis.dir) * 10 + (Math.random() - 0.5) * 4,
+        y: gy + 5 + Math.random() * 5,
+        z: vis.y + Math.sin(vis.dir) * 10 + (Math.random() - 0.5) * 4,
+        vx: (Math.random() - 0.5) * 5, vy: 6 + Math.random() * 6, vz: (Math.random() - 0.5) * 5,
+        life: 0.36, maxLife: 0.36, size: 2.8 + Math.random() * 2.2,
+        r: 1.65, g: 1.35, b: 0.7
       });
     } else if (kind === 'dragon') {
       // 待机时炮口的余能。这里过去还留着最早那版西方龙的橙火（2.2/1.0/0.28），
@@ -8530,6 +8651,35 @@ export function createRenderer(canvas) {
         vx: 0, vy: 14, vz: 0,
         life: 0.35, maxLife: 0.35, size: 3.2,
         r: 1.45, g: 0.52, b: 2.05
+      });
+    }
+  }
+
+  function emitStatusAura(vis, dt) {
+    const unit = vis.unit;
+    if (!unit || (!unit.rooted && !unit.dot)) return;
+    if (fireLayer.list.length > state.particleBudget * 0.62) return;
+    const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
+    if (unit.rooted && Math.random() < dt * 7) {
+      const a = Math.random() * TAU;
+      const r = (unit.size || 12) * 0.9 + Math.random() * 6;
+      emit(fireLayer, {
+        x: vis.x + Math.cos(a) * r,
+        y: gy + 2 + Math.random() * 8,
+        z: vis.y + Math.sin(a) * r,
+        vx: -Math.cos(a) * 4, vy: 5 + Math.random() * 6, vz: -Math.sin(a) * 4,
+        life: 0.42, maxLife: 0.42, size: 2.6 + Math.random() * 2.2,
+        r: 1.7, g: 1.42, b: 0.78
+      });
+    }
+    if (unit.dot && Math.random() < dt * 5) {
+      emit(fireLayer, {
+        x: vis.x + (Math.random() - 0.5) * 10,
+        y: gy + 4 + Math.random() * 6,
+        z: vis.y + (Math.random() - 0.5) * 10,
+        vx: (Math.random() - 0.5) * 4, vy: 8 + Math.random() * 6, vz: (Math.random() - 0.5) * 4,
+        life: 0.34, maxLife: 0.34, size: 2.4 + Math.random() * 1.8,
+        r: 0.55, g: 1.15, b: 0.38
       });
     }
   }
@@ -9194,6 +9344,12 @@ export function createRenderer(canvas) {
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len * 1.12, style.thick * 2.3, style.thick * 2.3, 0xd6a6ff);
           writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 2.3, 2.3, 2.3, 0xf0e8ff);
+        } else if (look === 'web') {
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 3.4, 3.4, 3.4, 0xf2e6c4);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(shards, shardCount++, p.x, height + 0.8, p.y, yaw + 0.4, 7.2, 1.4, 1.4, 0xe8d4a0);
+          writeTracer(shards, shardCount++, p.x, height - 0.6, p.y, yaw - 0.35, 5.6, 1.1, 1.1, 0xc8b078);
         } else {
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len, style.thick, style.thick, style.color);
@@ -9247,7 +9403,10 @@ export function createRenderer(canvas) {
     if (!useSimple) {
       for (let i = 0; i < snapshotVisuals.length; i++) {
         const vis = snapshotVisuals[i];
-        if (vis.inRenderRange) emitIdleAura(vis, dt, useSimple);
+        if (vis.inRenderRange) {
+          emitIdleAura(vis, dt, useSimple);
+          emitStatusAura(vis, dt);
+        }
       }
     }
     updateEffects(dt);
