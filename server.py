@@ -2928,6 +2928,31 @@ def is_tameable_combat_unit(entity):
     return unit_can_attack(kind)
 
 
+def claim_tame_target(target, tamer_id):
+    """招降读条期间标记目标：它保持静止、不主动交火。"""
+    claimers = target.get("_tameClaimers")
+    if claimers is None:
+        claimers = []
+        target["_tameClaimers"] = claimers
+    if tamer_id not in claimers:
+        claimers.append(tamer_id)
+
+
+def release_tame_target(game, target_id, tamer_id):
+    target = find_entity(game, target_id)
+    if not target:
+        return
+    claimers = target.get("_tameClaimers")
+    if not claimers:
+        return
+    try:
+        claimers.remove(tamer_id)
+    except ValueError:
+        pass
+    if not claimers:
+        target.pop("_tameClaimers", None)
+
+
 def aggro_failed_tame(game, tamer, target_id):
     """驯化失败或被打断：该中立单位敌对驯兽师一侧。"""
     target = find_entity(game, target_id)
@@ -2950,6 +2975,8 @@ def aggro_failed_tame(game, tamer, target_id):
 def abort_tame_order(game, unit, failed=True):
     target_id = unit.get("tameTargetId")
     was_taming = unit.get("order") == "tame" or bool(target_id)
+    if target_id:
+        release_tame_target(game, target_id, unit.get("id"))
     unit["tameTargetId"] = None
     unit["tameProgress"] = 0.0
     if failed and was_taming:
@@ -2990,6 +3017,7 @@ def issue_tame(room, player_id, unit_ids, target_id):
         unit["destX"] = None
         unit["destY"] = None
         unit["order"] = "tame"
+        claim_tame_target(target, unit["id"])
         unit["_path"] = None
         unit["_pathDest"] = None
         unit["_pathEnd"] = None
@@ -3007,6 +3035,8 @@ def complete_tame(room, tamer, target):
     battle_report.cash_flow(room, tamer["owner"], "unitSpend", cost)
     keep_hp = target["hp"]
     keep_kind = target["kind"]
+    release_tame_target(room["game"], target["id"], tamer["id"])
+    target.pop("_tameClaimers", None)
     target["owner"] = tamer["owner"]
     target["kind"] = keep_kind
     target["hp"] = keep_hp
@@ -6042,6 +6072,12 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
             continue
         if unit_role(unit["kind"]) == "harvester":
             tick_harvester(room, unit, dt, entity_index, terrain)
+            continue
+        # 读条期间目标不交火、不回防；只有失败/打断才转入敌对。
+        if unit.get("_tameClaimers"):
+            unit["targetId"] = None
+            unit["destX"] = None
+            unit["destY"] = None
             continue
 
         if tick_neutral_guard(

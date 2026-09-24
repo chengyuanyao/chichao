@@ -175,10 +175,11 @@ def main():
     print("\n=== Test 6: 驯兽师招降中立单位 ===")
     room, a, b = make_room("TRIBE06")
     game = room["game"]
+    game["terrainCtx"] = server.FLAT_TERRAIN
     a["cash"] = 99999
-    tamer = server.make_unit("tamer", a["id"], 800, 800)
+    tamer = server.make_unit("tamer", a["id"], 620, 720)
     game["units"].append(tamer)
-    guard = server.make_unit("rifle", server.NEUTRAL_OWNER, 820, 800)
+    guard = server.make_unit("rifle", server.NEUTRAL_OWNER, 650, 720)
     guard["hp"] = 77.0
     game["units"].append(guard)
     cash0 = a["cash"]
@@ -191,7 +192,10 @@ def main():
         server.tick_game(room, 0.05)
         if guard["owner"] == a["id"]:
             break
-    assert guard["owner"] == a["id"], guard["owner"]
+    assert guard["owner"] == a["id"], (
+        "owner=%s tamer_hp=%s tamer_order=%s progress=%s guard_hp=%s"
+        % (guard["owner"], tamer.get("hp"), tamer.get("order"),
+           tamer.get("tameProgress"), guard.get("hp")))
     assert guard["kind"] == "rifle"
     assert abs(guard["hp"] - 77.0) < 0.2
     assert a["cash"] < cash0
