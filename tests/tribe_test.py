@@ -5,6 +5,7 @@
 from __future__ import print_function
 
 import os
+import random
 import sys
 import time
 
@@ -22,10 +23,36 @@ def make_room(tag, tribe_a=True, neutrals=True):
         "hostId": a["id"],
         "players": {a["id"]: a, b["id"]: b},
         "chat": [], "game": None, "createdAt": time.time(),
+        "selectedMap": "iron_river_duel",
         "neutrals": neutrals,
     }
     server.start_game(room)
+    game = room["game"]
+    game["terrainCtx"] = server.FLAT_TERRAIN
+    game["victoryClock"] = 999.0
     return room, a, b
+
+
+def isolate_tame_scene(game, tamer, target):
+    """清掉随机矿区守军/炮塔，避免它们秒杀脆弱驯兽师。"""
+    game["units"] = [
+        unit for unit in game["units"]
+        if unit["owner"] != server.NEUTRAL_OWNER
+    ]
+    game["structures"] = [
+        structure for structure in game["structures"]
+        if structure["owner"] != server.NEUTRAL_OWNER
+    ]
+    game["neutralCamps"] = []
+    game["projectiles"] = []
+    for unit in game["units"]:
+        if unit["id"] not in (tamer["id"], target["id"]):
+            unit["order"] = "hold"
+            unit["targetId"] = None
+            unit["destX"] = None
+            unit["destY"] = None
+    game["units"].append(tamer)
+    game["units"].append(target)
 
 
 def give(game, pid, kind):
@@ -35,6 +62,7 @@ def give(game, pid, kind):
 
 
 def main():
+    random.seed(20260924)
     print("=== Test 1: 部落装备与角色 ===")
     loadout = server.faction_loadout("tribe")
     assert loadout["hq"] == "thq"
@@ -175,13 +203,11 @@ def main():
     print("\n=== Test 6: 驯兽师招降中立单位 ===")
     room, a, b = make_room("TRIBE06")
     game = room["game"]
-    game["terrainCtx"] = server.FLAT_TERRAIN
     a["cash"] = 99999
-    tamer = server.make_unit("tamer", a["id"], 620, 720)
-    game["units"].append(tamer)
-    guard = server.make_unit("rifle", server.NEUTRAL_OWNER, 650, 720)
+    tamer = server.make_unit("tamer", a["id"], 220, 220)
+    guard = server.make_unit("rifle", server.NEUTRAL_OWNER, 250, 220)
     guard["hp"] = 77.0
-    game["units"].append(guard)
+    isolate_tame_scene(game, tamer, guard)
     cash0 = a["cash"]
     server.handle_game_command(room, a, {
         "command": "tame", "unitIds": [tamer["id"]], "targetId": guard["id"],
