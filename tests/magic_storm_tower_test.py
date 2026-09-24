@@ -3,7 +3,7 @@
 """秘法会雷暴塔：对位钢铁远程塔的联网雷电防御。
    1) 目录：魔法-only、防御队列、圣殿+法力塔、射程 420、tesla、70/1.1
    2) 科技不能建；缺圣殿拒绝；补齐前置放行
-   3) 公开目录带射程；客户端是风暴尖塔而不是虹光矛
+   3) 公开目录带射程；客户端是哥特风暴尖碑而不是虹光矛
    4) rush AI 仍先造奥术塔；后期/第一波失败后才补雷暴塔
    5) 开火走 tesla；联网伤害 70+35*extras（上限 3）；奥术塔不支援
    6) 命中单位挂 0.5×/1.8s 麻痹，刷新不叠乘；建筑不受减速
@@ -130,12 +130,19 @@ def main():
     assert "基础射程 ' + definition.range" in app
     assert "mstorm: { icon:" in app
     assert "联网雷暴" in app
+    assert "哥特风暴尖碑" in app
     assert "虹光塔" not in app
     assert "远程虹光矛" not in app
     with open(os.path.join(root, "public", "render3d.js"), "r", encoding="utf-8") as handle:
         render = handle.read()
     assert "kind === 'mstorm'" in render
     assert "function stormHeadParts" in render
+    assert "function addStormBolt" in render
+    assert "MAT.stormSlate" in render
+    assert "MAT.stormCrown" in render
+    assert "哥特风暴尖碑" in render
+    assert "远距可读" in render
+    assert "双侧雷线圈" not in render
     assert "type === 'tether'" in render
     assert "storm: { len:" in render
     assert "虹光塔" not in render
