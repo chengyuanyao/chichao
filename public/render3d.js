@@ -2122,44 +2122,44 @@ const UNIT_BUILDERS = {
   spider: function () {
     // 蛛网巨蛛：八足蛛形，暗甲壳 + 骨螯 + 兽皮鞍斑，不要钢板也不要晶簇。
     const body = surfaced(SURF.hide, [
-      ellipsoid(5.6, 3.1, 4.4, 1.6, 6.4, 0, MAT.chitin),
-      ellipsoid(6.8, 4.2, 5.0, -6.8, 7.2, 0, MAT.chitinDark),
-      ellipsoid(2.4, 1.8, 2.2, 7.2, 6.2, 0, MAT.chitinLit),
-      pyr(0.72, 2.6, 5, 9.4, 5.4, 1.15, MAT.boneIvory),
-      pyr(0.72, 2.6, 5, 9.4, 5.4, -1.15, MAT.boneIvory),
-      ellipsoid(3.4, 0.55, 3.6, -1.2, 9.2, 0, 0.90),
-      ellipsoid(2.8, 0.7, 4.2, -6.4, 10.4, 0, MAT.hideDark),
-      limb(0.38, 0.28, 6.2, 5.6, 2.1, 8.8, 4.0, 3.2, MAT.chitinDark),
-      limb(0.38, 0.28, 6.2, 5.6, -2.1, 8.8, 4.0, -3.2, MAT.chitinDark)
+      ellipsoid(5.2, 3.0, 4.2, 2.2, 6.6, 0, MAT.chitin),
+      ellipsoid(7.4, 4.6, 5.4, -6.4, 7.6, 0, MAT.chitinDark),
+      ellipsoid(2.6, 2.0, 2.4, 7.6, 6.4, 0, MAT.chitinLit),
+      pyr(0.82, 3.2, 5, 10.2, 5.6, 1.25, MAT.boneIvory),
+      pyr(0.82, 3.2, 5, 10.2, 5.6, -1.25, MAT.boneIvory),
+      ellipsoid(3.6, 0.6, 3.8, -0.6, 9.6, 0, 0.90),
+      ellipsoid(3.2, 0.75, 4.6, -6.0, 11.0, 0, MAT.hideDark),
+      limb(0.46, 0.32, 6.6, 5.8, 2.2, 9.6, 4.2, 3.6, MAT.chitinDark),
+      limb(0.46, 0.32, 6.6, 5.8, -2.2, 9.6, 4.2, -3.6, MAT.chitinDark)
     ]);
+    // 四对足径向撑开：前伸 / 侧展 / 后撑，俯视也能数出八条腿。
     const sockets = [
-      [4.2, 2.4], [1.4, 3.0], [-1.6, 3.2], [-4.8, 2.6]
+      { x: 4.6, z: 2.2, midX: 8.4, midZ: 7.2, endX: 10.6, endZ: 11.4 },
+      { x: 1.6, z: 2.8, midX: 2.4, midZ: 8.6, endX: 1.2, endZ: 13.2 },
+      { x: -1.8, z: 3.0, midX: -3.4, midZ: 8.8, endX: -5.2, endZ: 13.0 },
+      { x: -5.2, z: 2.4, midX: -9.0, midZ: 7.0, endX: -12.2, endZ: 10.6 }
     ];
     sockets.forEach(function (sock, i) {
-      const flare = 1 + i * 0.08;
+      const lift = 9.4 + (i < 2 ? 0.5 : 0.15);
       [1, -1].forEach(function (side) {
-        const z0 = sock[1] * side;
-        const midX = sock[0] + 1.2 * flare;
-        const midY = 9.2 + (i < 2 ? 0.4 : 0);
-        const midZ = (5.6 + i * 0.35) * side;
-        const endX = sock[0] + 0.4;
-        const endY = 0.7;
-        const endZ = (8.4 + i * 0.45) * side;
+        const z0 = sock.z * side;
+        const midZ = sock.midZ * side;
+        const endZ = sock.endZ * side;
         body.push(Object.assign(
-          limb(0.48, 0.38, sock[0], 6.0, z0, midX, midY, midZ, MAT.chitinDark),
+          limb(0.95, 0.70, sock.x, 6.2, z0, sock.midX, lift, midZ, MAT.chitinDark),
           { surf: SURF.hide }));
         body.push(Object.assign(
-          limb(0.36, 0.22, midX, midY, midZ, endX, endY, endZ, MAT.chitin),
+          limb(0.64, 0.36, sock.midX, lift, midZ, sock.endX, 0.55, endZ, MAT.chitin),
           { surf: SURF.hide }));
       });
     });
     return {
       body: body,
       glow: [
-        sph(0.42, 5, 7.6, 7.1, 1.05, MAT.spiritFire),
-        sph(0.42, 5, 7.6, 7.1, -1.05, MAT.spiritFire),
-        sph(0.22, 5, 6.8, 7.4, 1.85, MAT.spiritFire),
-        sph(0.22, 5, 6.8, 7.4, -1.85, MAT.spiritFire)
+        sph(0.42, 5, 8.0, 7.3, 1.1, MAT.spiritFire),
+        sph(0.42, 5, 8.0, 7.3, -1.1, MAT.spiritFire),
+        sph(0.22, 5, 7.2, 7.6, 1.9, MAT.spiritFire),
+        sph(0.22, 5, 7.2, 7.6, -1.9, MAT.spiritFire)
       ]
     };
   },
@@ -6289,13 +6289,13 @@ export function createRenderer(canvas) {
     }
     if (kind === 'spider') {
       const legs = [
-        box(12, 5.6, 7.2, -2.2, 6.8, 0, MAT.chitinDark),
-        box(8, 4.2, 5.4, 5.2, 6.2, 0, MAT.chitin),
-        box(6.4, 1.0, 5.2, -1.0, 9.2, 0, 0.90)
+        box(11, 5.2, 7.0, -2.4, 7.0, 0, MAT.chitinDark),
+        box(7.2, 4.0, 5.2, 5.4, 6.4, 0, MAT.chitin),
+        box(6.0, 1.0, 5.0, -1.2, 9.6, 0, 0.90)
       ];
-      [[4, 2.4], [1, 3], [-2, 3.1], [-5, 2.5]].forEach(function (sock) {
+      [[8.4, 8.8], [1.2, 10.4], [-4.6, 10.2], [-10.4, 8.4]].forEach(function (sock) {
         [1, -1].forEach(function (side) {
-          legs.push(box(1.2, 8.2, 1.2, sock[0], 4.2, sock[1] * side * 2.2, MAT.chitinDark));
+          legs.push(box(7.2, 1.5, 1.5, sock[0] * 0.55, 4.4, sock[1] * side * 0.55, MAT.chitinDark));
         });
       });
       return legs;

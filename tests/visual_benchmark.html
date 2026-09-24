@@ -39,7 +39,10 @@ input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;
 const query = new URLSearchParams(location.search);
 document.querySelector('#scenario').add(new Option('巨龙飞翔验收','dragon'));
 const status = document.querySelector('#status');
-if (query.get('hud') === '0') status.hidden = true;
+if (query.get('hud') === '0') {
+  status.hidden = true;
+  document.querySelector('#controls').hidden = true;
+}
 const modulePath = query.get('renderer') || '/public/render3d.js';
 const moduleUrl = new URL(modulePath, location.href);
 if (moduleUrl.origin !== location.origin) throw new Error('Renderer must be same-origin');
@@ -171,14 +174,17 @@ function loadScenario(options={}) {
       unit('rifle',3,focus.x+40,focus.y+15));
   } else if (scenario === 'spider') {
     const spiderU = unit('spider', 0, focus.x, focus.y);
-    spiderU.dir = 0.28;
-    const prey = unit('rifle', 1, focus.x + 88, focus.y + 16);
+    spiderU.dir = 0.15;
+    const prey = unit('rifle', 1, focus.x + 62, focus.y + 10);
     prey.rooted = true;
     prey.dot = true;
     prey.slow = true;
     prey.hp = Math.round(prey.maxHp * 0.55);
-    const wolfU = unit('wolf', 2, focus.x - 108, focus.y + 38);
-    game.units.push(spiderU, prey, wolfU);
+    game.units.push(spiderU, prey);
+    syntheticEffects.push(
+      {type:'muzzle',x:spiderU.x,y:spiderU.y,kind:'web',entityId:spiderU.id,entityKind:'spider',dir:spiderU.dir},
+      {type:'impact',x:prey.x,y:prey.y,kind:'web'}
+    );
   } else if (scenario === 'placement') {
     const kind = query.get('building') || 'turret';
     const definition = catalog.structures[kind];
@@ -193,7 +199,7 @@ function loadScenario(options={}) {
   camera = scenario==='map' ? {x:map.width/2,y:map.height/2,zoom:0.18,yaw:0,pitch:1.22}
     : scenario==='art' ? {x:2400,y:1550,zoom:.82,yaw:0.12,pitch:.88}
     : scenario==='river' ? {x:map.width/2,y:map.height/2,zoom:0.58,yaw:0.25,pitch:0.80}
-    : scenario==='spider' ? {x:focus.x+16,y:focus.y-28,zoom:1.42,yaw:0.46,pitch:0.74}
+    : scenario==='spider' ? {x:focus.x+6,y:focus.y+4,zoom:3.2,yaw:1.18,pitch:0.40}
     : {x:focus.x,y:focus.y-100,zoom:0.82,yaw:0.14,pitch:0.96};
   for(const key of ['x','y','zoom','yaw','pitch']) if(query.has(key)) camera[key]=Number(query.get(key));
   renderer.setCamera(camera); renderer.setFogRevealed(revealMap);
