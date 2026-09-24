@@ -6808,7 +6808,7 @@ def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
         if "factory" in roles:
             choices.append("wolf")
             if "repair" in roles:
-                choices.append("spider")
+                choices.extend(("spider", "scorpion"))
             if rich and harvester_n < 2:
                 choices.append("tharvester")
         return choices
@@ -6969,7 +6969,7 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         if tribe:
             choices = []
             if "factory" in roles:
-                choices.extend(("spider", "wolf"))
+                choices.extend(("spider", "scorpion", "wolf"))
             if "barracks" in roles:
                 choices.extend(("spear", "tamer"))
             return choices
@@ -7074,7 +7074,7 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
             late_choices = (("colossus", "dragon", "comet", "behemoth") +
                             (("warden",) if "barracks" in roles else ()))
         elif faction == "tribe":
-            late_choices = (("spider", "wolf") if "factory" in roles else ()) + (
+            late_choices = (("spider", "scorpion", "wolf") if "factory" in roles else ()) + (
                 ("spear", "tamer") if "barracks" in roles else ())
         else:
             late_choices = ("overlord", "prism", "artillery")

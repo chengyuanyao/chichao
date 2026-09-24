@@ -626,7 +626,7 @@ const CLOTH_UNIT_KINDS = {
 };
 // 巨龙从兽皮改成金属：奥德赛那版是硬表面构装体，皮毛粗糙度会把甲板和铬边
 // 一起照哑，硬表面的折角就读不出来了。
-const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1 };
+const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1, scorpion: 1 };
 
 function unitSurfaceFamily(kind) {
   if (CLOTH_UNIT_KINDS[kind]) return 'cloth';
@@ -2164,6 +2164,72 @@ const UNIT_BUILDERS = {
     };
   },
 
+  scorpion: function () {
+    // 穿甲巨蝎：螯钳 + 弓起毒尾刺，暗甲壳 + 骨刺，不要钢板也不要八足径向蛛形。
+    const clawRot = new THREE.Matrix4().makeRotationZ(-1.15);
+    const stingRot = new THREE.Matrix4().makeRotationZ(-1.85);
+    const body = surfaced(SURF.hide, [
+      ellipsoid(4.8, 2.6, 3.4, 3.2, 6.2, 0, MAT.chitin),
+      ellipsoid(6.6, 3.0, 4.0, -4.4, 6.6, 0, MAT.chitinDark),
+      ellipsoid(2.4, 1.8, 2.2, 7.4, 6.4, 0, MAT.chitinLit),
+      ellipsoid(3.4, 0.55, 3.2, -1.0, 9.0, 0, 0.90),
+      ellipsoid(2.8, 0.6, 2.6, -5.2, 9.2, 0, MAT.hideDark)
+    ]);
+    [1, -1].forEach(function (side) {
+      body.push(Object.assign(
+        limb(0.95, 0.72, 6.2, 5.8, 2.0 * side, 11.4, 5.4, 6.2 * side, MAT.chitinDark),
+        { surf: SURF.hide }));
+      body.push(Object.assign(
+        ellipsoid(2.2, 1.4, 1.6, 13.2, 5.2, 7.0 * side, MAT.chitin),
+        { surf: SURF.hide }));
+      body.push(Object.assign(
+        pyr(0.55, 3.8, 5, 16.0, 5.6, 7.6 * side, MAT.boneIvory, clawRot),
+        { surf: SURF.hide }));
+      body.push(Object.assign(
+        pyr(0.42, 3.2, 5, 15.6, 3.8, 6.4 * side, MAT.boneIvory, clawRot),
+        { surf: SURF.hide }));
+    });
+    // 四对步足沿腹侧前后排列，不是蛛形径向撑开。
+    const sockets = [
+      { x: 3.6, z: 2.4, midX: 5.2, midZ: 7.0, endX: 4.4, endZ: 11.2 },
+      { x: 0.6, z: 2.8, midX: 0.8, midZ: 7.6, endX: -0.4, endZ: 11.8 },
+      { x: -2.4, z: 2.8, midX: -3.2, midZ: 7.4, endX: -5.0, endZ: 11.4 },
+      { x: -5.2, z: 2.4, midX: -7.0, midZ: 6.8, endX: -9.2, endZ: 10.4 }
+    ];
+    sockets.forEach(function (sock, i) {
+      const lift = 8.2 + (i < 2 ? 0.3 : 0.05);
+      [1, -1].forEach(function (side) {
+        body.push(Object.assign(
+          limb(0.72, 0.52, sock.x, 5.6, sock.z * side, sock.midX, lift, sock.midZ * side, MAT.chitinDark),
+          { surf: SURF.hide }));
+        body.push(Object.assign(
+          limb(0.48, 0.28, sock.midX, lift, sock.midZ * side, sock.endX, 0.5, sock.endZ * side, MAT.chitin),
+          { surf: SURF.hide }));
+      });
+    });
+    [
+      { a: [-9.2, 7.0, 0], b: [-11.4, 11.2, 0], r0: 1.05, r1: 0.88 },
+      { a: [-11.4, 11.2, 0], b: [-10.0, 15.6, 0], r0: 0.88, r1: 0.70 },
+      { a: [-10.0, 15.6, 0], b: [-6.4, 18.2, 0], r0: 0.70, r1: 0.52 },
+      { a: [-6.4, 18.2, 0], b: [-2.2, 17.6, 0], r0: 0.52, r1: 0.38 }
+    ].forEach(function (seg) {
+      body.push(Object.assign(
+        limb(seg.r0, seg.r1, seg.a[0], seg.a[1], seg.a[2], seg.b[0], seg.b[1], seg.b[2], MAT.chitinDark),
+        { surf: SURF.hide }));
+    });
+    body.push(Object.assign(
+      pyr(0.55, 4.4, 5, 1.2, 16.4, 0, MAT.boneIvory, stingRot),
+      { surf: SURF.hide }));
+    return {
+      body: body,
+      glow: [
+        sph(0.36, 5, 8.2, 7.0, 1.05, MAT.spiritFire),
+        sph(0.36, 5, 8.2, 7.0, -1.05, MAT.spiritFire),
+        sph(0.28, 5, 2.4, 15.8, 0, MAT.spiritFire)
+      ]
+    };
+  },
+
   tharvester: function () {
     // 驮兽：有角驮畜 + 两侧筐，有机轮廓，不是轮式矿车。
     const body = surfaced(SURF.hide, [
@@ -3221,7 +3287,7 @@ const UNIT_VISUAL_SCALE = {
   mage: 2.15, frost: 2.15, imp: 2.05, oracle: 2.15, golem: 1.42, behemoth: 1.62, panther: 1.7, dragon: 1.34,
   warden: 1.55, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30,
-  spear: 2.15, tamer: 2.15, wolf: 1.85, spider: 1.72,
+  spear: 2.15, tamer: 2.15, wolf: 1.85, spider: 1.72, scorpion: 1.68,
   tharvester: 1.16, tmcv: 1.30
 };
 
@@ -6300,6 +6366,23 @@ export function createRenderer(canvas) {
       });
       return legs;
     }
+    if (kind === 'scorpion') {
+      const parts = [
+        box(12.4, 5.2, 6.4, -1.6, 6.6, 0, MAT.chitinDark),
+        box(6.4, 3.6, 4.6, 5.8, 6.2, 0, MAT.chitin),
+        box(5.6, 2.4, 3.2, 13.2, 5.2, 6.4, MAT.chitin),
+        box(5.6, 2.4, 3.2, 13.2, 5.2, -6.4, MAT.chitin),
+        box(4.8, 10.2, 2.2, -7.2, 13.6, 0, MAT.chitinDark),
+        box(5.2, 1.6, 1.6, 0.6, 16.8, 0, MAT.boneIvory),
+        box(5.0, 0.9, 4.4, -2.0, 9.2, 0, 0.90)
+      ];
+      [[4.0, 8.4], [0.4, 9.2], [-3.2, 9.0], [-7.0, 8.0]].forEach(function (sock) {
+        [1, -1].forEach(function (side) {
+          parts.push(box(5.6, 1.3, 1.3, sock[0] * 0.55, 3.8, sock[1] * side * 0.55, MAT.chitinDark));
+        });
+      });
+      return parts;
+    }
     if (kind === 'tharvester') {
       return [
         box(28, 12, 12, -1, 10, 0, MAT.hideTan),
@@ -6826,7 +6909,9 @@ export function createRenderer(canvas) {
     // 雷暴电弧：紫青主弧 + 电白错位，比钢铁磁暴更偏秘法色
     storm: { len: 20, thick: 1.2, color: 0xd8c8ff, arc: 0, look: 'arc' },
     // 蛛网：骨色丝团，低弧，一眼不是冰棱也不是奥术弹
-    web: { len: 16, thick: 1.8, color: 0xe8d4a0, arc: 18, look: 'web' }
+    web: { len: 16, thick: 1.8, color: 0xe8d4a0, arc: 18, look: 'web' },
+    // 蝎刺：骨琥珀短矢，一眼不是钢铁青白穿甲弹，也不是蛛丝团
+    sting: { len: 18, thick: 1.15, color: 0xe8c070, arc: 10, look: 'sting' }
   };
 
   function ensureStyledMesh(existing, geo, needed) {
@@ -7207,7 +7292,7 @@ export function createRenderer(canvas) {
       p.floor = baseY + 1.5;
       if (metadata && metadata.height != null && type === 'muzzle' && relativeHeight>=9) {
         const authored=kind==='plasmalance'?30:kind==='plasma'?20:kind==='fireball'?18:
-          kind==='comet'?22:kind==='rune_boulder'?18:['meteor','arcane','frost','crystal','iris','boulder','web'].includes(kind)?16:11;
+          kind==='comet'?22:kind==='rune_boulder'?18:['meteor','arcane','frost','crystal','iris','boulder','web','sting'].includes(kind)?16:11;
         p.y += metadata.height-authored;
       }
       if (layer === smokeLayer && p.opacity == null) p.opacity = .48;
@@ -7222,7 +7307,7 @@ export function createRenderer(canvas) {
       }
     }
     if (metadata && metadata.wreck) {
-      const flesh = ['rifle','rocket','sniper','tesla','dog','mage','frost','oracle','panther','hexling','spear','tamer','wolf','spider'];
+      const flesh = ['rifle','rocket','sniper','tesla','dog','mage','frost','oracle','panther','hexling','spear','tamer','wolf','spider','scorpion'];
       if (!flesh.includes(metadata.entityKind)) spawnWreck({x,y,dir:metadata.dir || 0,
         radius:Math.min(48,Math.max(9,(metadata.size||18)*.8)),
         life:FEEDBACK_LIMITS.wreckSeconds,maxLife:FEEDBACK_LIMITS.wreckSeconds,
@@ -7447,6 +7532,33 @@ export function createRenderer(canvas) {
           life: 2.0, maxLife: 2.0, hold: true, r: 0.62, g: 0.52, b: 0.34
         });
         flashAt(x, y, 0xe8d4a0);
+      } else if (kind === 'sting') {
+        burst(fireLayer, 8, function () {
+          const a = rand() * TAU;
+          const sp = 50 + rand() * 80;
+          return {
+            x: x, y: 6, z: y,
+            vx: Math.cos(a) * sp, vy: 22 + rand() * 40, vz: Math.sin(a) * sp,
+            life: 0.22 + rand() * 0.16, maxLife: 0.38,
+            size: 2.6 + rand() * 2.4,
+            r: 1.85, g: 1.25, b: 0.45
+          };
+        });
+        burst(smokeLayer, 3, function () {
+          const a = rand() * TAU;
+          return {
+            x: x, y: 4, z: y,
+            vx: Math.cos(a) * 12, vy: 8 + rand() * 10, vz: Math.sin(a) * 12,
+            life: 0.6 + rand() * 0.3, maxLife: 0.9,
+            size: 10 + rand() * 7, grow: true, buoyancy: -0.05,
+            r: 0.62, g: 0.42, b: 0.22
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 6, growth: 32, alpha: 0.42,
+          life: 0.28, maxLife: 0.28, r: 0.92, g: 0.62, b: 0.28
+        });
+        flashAt(x, y, 0xe8c070);
       } else if (kind === 'fireball') {
         // 龙息炸点：外圈奥术紫、内芯青白。亮度量级和上一版玉息一致，
         // 只换色相，不改爆点大小与存续，命中反馈的可读性保持不变。
@@ -7875,6 +7987,15 @@ export function createRenderer(canvas) {
             vx: (rand() - 0.5) * 16, vy: 10, vz: (rand() - 0.5) * 16,
             life: 0.18, maxLife: 0.18, size: 3.4,
             r: 1.7, g: 1.4, b: 0.8
+          };
+        });
+      } else if (kind === 'sting') {
+        burst(fireLayer, 3, function () {
+          return {
+            x: x + (rand() - 0.5) * 4, y: 16, z: y + (rand() - 0.5) * 4,
+            vx: (rand() - 0.5) * 14, vy: 12, vz: (rand() - 0.5) * 14,
+            life: 0.16, maxLife: 0.16, size: 2.8,
+            r: 1.85, g: 1.2, b: 0.4
           };
         });
       } else if (['arcane','frost','crystal','iris','boulder'].includes(kind)) {
@@ -8482,6 +8603,13 @@ export function createRenderer(canvas) {
         life: 0.26, maxLife: 0.26, size: 3.8 + Math.random() * 2.4,
         r: 1.7, g: 1.45, b: 0.85
       });
+    } else if (look === 'sting') {
+      emit(fireLayer, {
+        x: x + (Math.random() - 0.5) * 3, y: height, z: y + (Math.random() - 0.5) * 3,
+        vx: (Math.random() - 0.5) * 10, vy: 4 + Math.random() * 8, vz: (Math.random() - 0.5) * 10,
+        life: 0.18, maxLife: 0.18, size: 2.4 + Math.random() * 1.8,
+        r: 1.9, g: 1.2, b: 0.38
+      });
     }
   }
 
@@ -8496,13 +8624,15 @@ export function createRenderer(canvas) {
         && kind !== 'warden' && kind !== 'colossus' && kind !== 'comet'
         && kind !== 'behemoth'
         && kind !== 'bomb_truck' && kind !== 'hexling'
-        && kind !== 'imp' && kind !== 'oracle' && kind !== 'spider') return;
+        && kind !== 'imp' && kind !== 'oracle' && kind !== 'spider'
+        && kind !== 'scorpion') return;
     if (fireLayer.list.length > state.particleBudget * 0.5) return;
     const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6
       : kind === 'bomb_truck' ? 7 : kind === 'hexling' ? 6
       : kind === 'colossus' ? 7 : kind === 'comet' ? 6 : kind === 'behemoth' ? 7
       : kind === 'warden' ? 4
       : kind === 'oracle' ? 4 : kind === 'imp' ? 3 : kind === 'spider' ? 4
+      : kind === 'scorpion' ? 3
       : apocTitan ? 4 : 3.5;
     if (Math.random() > dt * rate) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
@@ -8540,6 +8670,15 @@ export function createRenderer(canvas) {
         vx: (Math.random() - 0.5) * 5, vy: 6 + Math.random() * 6, vz: (Math.random() - 0.5) * 5,
         life: 0.36, maxLife: 0.36, size: 2.8 + Math.random() * 2.2,
         r: 1.65, g: 1.35, b: 0.7
+      });
+    } else if (kind === 'scorpion') {
+      emit(fireLayer, {
+        x: vis.x + Math.cos(vis.dir) * 2 + (Math.random() - 0.5) * 3,
+        y: gy + 14 + Math.random() * 4,
+        z: vis.y + Math.sin(vis.dir) * 2 + (Math.random() - 0.5) * 3,
+        vx: (Math.random() - 0.5) * 4, vy: 5 + Math.random() * 6, vz: (Math.random() - 0.5) * 4,
+        life: 0.28, maxLife: 0.28, size: 2.2 + Math.random() * 1.6,
+        r: 1.9, g: 1.15, b: 0.35
       });
     } else if (kind === 'dragon') {
       // 待机时炮口的余能。这里过去还留着最早那版西方龙的橙火（2.2/1.0/0.28），
@@ -9350,6 +9489,11 @@ export function createRenderer(canvas) {
             style.len, style.thick, style.thick, style.color);
           writeTracer(shards, shardCount++, p.x, height + 0.8, p.y, yaw + 0.4, 7.2, 1.4, 1.4, 0xe8d4a0);
           writeTracer(shards, shardCount++, p.x, height - 0.6, p.y, yaw - 0.35, 5.6, 1.1, 1.1, 0xc8b078);
+        } else if (look === 'sting') {
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 2.2, 2.2, 2.2, 0xf2d48a);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(shards, shardCount++, p.x, height, p.y, yaw, 10.4, 1.05, 1.05, 0xf0c45a);
         } else {
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len, style.thick, style.thick, style.color);

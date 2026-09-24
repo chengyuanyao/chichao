@@ -409,6 +409,17 @@ UNIT_TYPES = {
         "slow": {"mult": 0.0, "duration": 2.2},
         "dot": {"dps": 14.0, "duration": 3.0, "damageType": "venom"},
     },
+    # 穿甲巨蝎：围栏进阶玻璃大炮。血祭坛后才许驯养，对位歼击车的兽甲短距穿甲手。
+    # 中短距尾刺，伤种复用 ap（重甲 ×2.10），无溅射、无定身、无 DoT。
+    # 造价低于歼击车，血更薄，射程更短。兽甲、非载具、无自爆。
+    "scorpion": {
+        "name": "穿甲巨蝎", "cost": 820, "hp": 165, "speed": 100.0,
+        "damage": 82.0, "range": 145.0, "cooldown": 1.80,
+        "size": 13.0, "build": 7.5, "producer": "tpen",
+        "requires": ["taltar"],
+        "projectile": "sting", "projectileSpeed": 640.0, "splash": 0.0,
+        "sight": 390.0, "armor": "beast", "damageType": "ap",
+    },
 }
 
 
@@ -609,7 +620,7 @@ TRIBE_STRUCTURES = frozenset((
     "thq", "tpower", "trefinery", "tcamp", "tpen", "taltar",
 ))
 TRIBE_UNITS = frozenset((
-    "tharvester", "tmcv", "spear", "tamer", "wolf", "spider",
+    "tharvester", "tmcv", "spear", "tamer", "wolf", "spider", "scorpion",
 ))
 VALID_FACTIONS = frozenset(("tech", "magic", "tribe"))
 

@@ -42,7 +42,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     tpower: { icon: '↟', desc: '提供 120 图腾之力' },
     trefinery: { icon: '◆', desc: '接收驮兽运回的兽骨矿' },
     tcamp: { icon: '♟', desc: '训练猎手与驯兽师' },
-    tpen: { icon: '▰', desc: '驯养驮兽、战狼与蛛网巨蛛' },
+    tpen: { icon: '▰', desc: '驯养驮兽、战狼、蛛网巨蛛与穿甲巨蝎' },
     taltar: { icon: '✚', desc: '修复驮兽与迁徙驮队；需围栏与图腾柱' }
   };
   var UNIT_VFX = {
@@ -79,6 +79,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     tamer: { icon: '✦', desc: '脆弱辅助，耗时+矿招降中立作战单位；关闭中立后不可用' },
     wolf: { icon: '♞', desc: '围栏战狼，扑咬步兵；兽甲，无自爆' },
     spider: { icon: '🕷', desc: '吐丝定身并造成持续毒伤 · 需血祭坛' },
+    scorpion: { icon: '🦂', desc: '穿甲尾刺点杀重甲，玻璃大炮 · 需血祭坛' },
     tharvester: { icon: '▣', desc: '自动采集矿石的驮兽' },
     tmcv: { icon: '⬢', desc: '可展开为新的部落大营' }
   };
@@ -330,7 +331,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   };
   var TRIBE_KINDS = {
     thq: 1, tpower: 1, trefinery: 1, tcamp: 1, tpen: 1, taltar: 1,
-    spear: 1, tamer: 1, wolf: 1, spider: 1, tharvester: 1, tmcv: 1
+    spear: 1, tamer: 1, wolf: 1, spider: 1, scorpion: 1, tharvester: 1, tmcv: 1
   };
 
   function pRect(c, x, y, w, h, fill) {
@@ -1252,6 +1253,24 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       pCirc(c, 74, 34, 1.3, P_FIRE);
       pCirc(c, 76, 37, 1.1, P_FIRE);
       pLine(c, 22, 28, 38, 22, 1.4, P_BONE);
+    },
+    scorpion: function (c) {
+      // 穿甲巨蝎：螯钳 + 弓起毒尾刺，不要八足蛛或四足狼剪影
+      pShadow(c, 48, 60, 22);
+      pLine(c, 28, 48, 14, 58, 2.0, P_BARK);
+      pLine(c, 36, 50, 22, 66, 2.0, P_BARK);
+      pLine(c, 44, 50, 34, 68, 2.0, P_BARK);
+      pLine(c, 52, 48, 58, 66, 2.0, P_BARK);
+      pPoly(c, [[26, 50], [64, 46], [68, 36], [30, 38]], P_BARK);
+      pCirc(c, 70, 38, 6.5, P_BARK);
+      pPoly(c, [[72, 32], [90, 26], [86, 36]], P_BONE);
+      pPoly(c, [[70, 40], [88, 44], [82, 50]], P_BONE);
+      pLine(c, 28, 36, 16, 18, 2.6, P_BARK);
+      pLine(c, 16, 18, 36, 10, 2.4, P_BARK);
+      pLine(c, 36, 10, 52, 16, 2.2, P_BARK);
+      pPoly(c, [[50, 12], [66, 8], [58, 20]], P_BONE);
+      pCirc(c, 72, 36, 1.2, P_FIRE);
+      pCirc(c, 58, 14, 1.4, P_FIRE);
     },
     tharvester: function (c) {
       pShadow(c, 48, 60, 26);

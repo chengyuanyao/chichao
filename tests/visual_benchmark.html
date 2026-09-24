@@ -15,7 +15,7 @@ input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;
 </style>
 <canvas id="world"></canvas><div id="status">正在准备离线渲染场景…</div><div id="dragBox" hidden></div>
 <div id="controls">
-<select id="scenario"><option value="art">桥头美术样板</option><option value="showcase">双阵营全图鉴</option><option value="army">大军团压力</option><option value="feedback">战场反馈验收</option><option value="river">河谷光影</option><option value="map">地图全景</option><option value="placement">炮塔射程预览</option><option value="picking">模型点击验收</option><option value="spider">蛛网巨蛛</option></select>
+<select id="scenario"><option value="art">桥头美术样板</option><option value="showcase">双阵营全图鉴</option><option value="army">大军团压力</option><option value="feedback">战场反馈验收</option><option value="river">河谷光影</option><option value="map">地图全景</option><option value="placement">炮塔射程预览</option><option value="picking">模型点击验收</option><option value="spider">蛛网巨蛛</option><option value="scorpion">穿甲巨蝎</option></select>
 <select id="map"></select>
 <select id="shadows"><option value="structures">建筑阴影</option><option value="all">全部阴影</option><option value="off">关闭阴影</option></select>
 <select id="bloom"><option value="0">无泛光</option><option value="1">轻量泛光</option><option value="high">完整泛光</option></select>
@@ -134,7 +134,7 @@ function loadScenario(options={}) {
     }
   } else if (scenario === 'feedback') {
     const kinds=['tank','artillery','tank_destroyer','overlord','scout','bomb_truck',
-      'mage','frost','dragon','colossus','comet','hexling','spider'];
+      'mage','frost','dragon','colossus','comet','hexling','spider','scorpion'];
     kinds.forEach((kind,i)=>game.units.push(unit(kind,i,focus.x+(i%6-2.5)*100,
       focus.y+(i<6?-90:95),kind==='overlord'?3:0)));
     game.units.push(unit('overlord',20,focus.x-95,focus.y+240,16));
@@ -185,6 +185,16 @@ function loadScenario(options={}) {
       {type:'muzzle',x:spiderU.x,y:spiderU.y,kind:'web',entityId:spiderU.id,entityKind:'spider',dir:spiderU.dir},
       {type:'impact',x:prey.x,y:prey.y,kind:'web'}
     );
+  } else if (scenario === 'scorpion') {
+    const scorpionU = unit('scorpion', 0, focus.x, focus.y);
+    scorpionU.dir = 0.15;
+    const prey = unit('tank', 1, focus.x + 68, focus.y + 8);
+    prey.hp = Math.round(prey.maxHp * 0.62);
+    game.units.push(scorpionU, prey);
+    syntheticEffects.push(
+      {type:'muzzle',x:scorpionU.x,y:scorpionU.y,kind:'sting',entityId:scorpionU.id,entityKind:'scorpion',dir:scorpionU.dir},
+      {type:'impact',x:prey.x,y:prey.y,kind:'sting'}
+    );
   } else if (scenario === 'placement') {
     const kind = query.get('building') || 'turret';
     const definition = catalog.structures[kind];
@@ -200,6 +210,7 @@ function loadScenario(options={}) {
     : scenario==='art' ? {x:2400,y:1550,zoom:.82,yaw:0.12,pitch:.88}
     : scenario==='river' ? {x:map.width/2,y:map.height/2,zoom:0.58,yaw:0.25,pitch:0.80}
     : scenario==='spider' ? {x:focus.x+6,y:focus.y+4,zoom:3.2,yaw:1.18,pitch:0.40}
+    : scenario==='scorpion' ? {x:focus.x+8,y:focus.y+6,zoom:3.15,yaw:1.22,pitch:0.38}
     : {x:focus.x,y:focus.y-100,zoom:0.82,yaw:0.14,pitch:0.96};
   for(const key of ['x','y','zoom','yaw','pitch']) if(query.has(key)) camera[key]=Number(query.get(key));
   renderer.setCamera(camera); renderer.setFogRevealed(revealMap);
