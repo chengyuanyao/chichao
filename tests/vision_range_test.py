@@ -41,7 +41,9 @@ def main():
             assert server.unit_sight_radius(definition) == definition["sight"]
 
     assert armed, "catalog needs combat units"
-    assert set(utility) == {"harvester", "mharvester", "mcv", "mmcv"}
+    assert set(utility) == {
+        "harvester", "mharvester", "tharvester", "mcv", "mmcv", "tmcv",
+    }
     # Melee, scouts and contact detonators retain their deliberately generous
     # awareness instead of collapsing to 22-34 world units.
     assert server.UNIT_TYPES["dog"]["sight"] == 400.0

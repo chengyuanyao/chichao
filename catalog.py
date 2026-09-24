@@ -57,6 +57,7 @@ VEHICLE_KINDS = frozenset((
     "v3", "overlord", "prism", "bomb_truck",
     "golem", "behemoth", "dragon", "warden", "colossus", "comet",
     "mharvester", "mmcv",
+    "tharvester", "tmcv",
 ))
 
 # 死亡/贴脸引爆的玻璃大炮。钢铁是轻甲载具，秘法会对位是轻甲活体（非载具）。
@@ -190,6 +191,7 @@ UNIT_TYPES = {
                 "structure": 1.5,
                 "harvester": 1.5,
                 "mharvester": 1.5,
+                "tharvester": 1.5,
             },
         },
         "detonateOnContact": True,
@@ -344,9 +346,55 @@ UNIT_TYPES = {
                 "structure": 1.5,
                 "harvester": 1.5,
                 "mharvester": 1.5,
+                "tharvester": 1.5,
             },
         },
         "detonateOnContact": True,
+    },
+    # ==================== 部落阵营「原始部落」（faction=tribe）P0 ====================
+    # 独立经济：大营/图腾/精炼棚/驮兽/迁徙驮队与钢铁对位，只换皮换名。
+    # 驯兽围栏出驮兽与战狼；猎手营地出骨矛与驯兽师。P0 没有自爆对位。
+    "tharvester": {
+        "name": "驮兽", "cost": 920, "hp": 680, "speed": 63.6,
+        "damage": 0.0, "range": 0.0, "cooldown": 0.0,
+        "size": 22.0, "build": 9.0, "producer": "tpen",
+        "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
+        "capacity": 850.0, "harvestRate": 145.0, "sight": 330.0,
+        "armor": "heavy", "damageType": "none",
+    },
+    "tmcv": {
+        "name": "迁徙驮队", "cost": 2500, "hp": 900, "speed": 45.6,
+        "damage": 0.0, "range": 0.0, "cooldown": 0.0,
+        "size": 24.0, "build": 14.0, "producer": "tpen",
+        "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
+        "sight": 320.0, "armor": "heavy", "damageType": "none",
+        "canDeploy": True, "deploysInto": "thq",
+    },
+    # 骨矛猎手：廉价前期步兵，对位突击兵档。短中距骨矛，伤种复用子弹。
+    "spear": {
+        "name": "骨矛猎手", "cost": 190, "hp": 115, "speed": 108.0,
+        "damage": 14.0, "range": 115.0, "cooldown": 0.68,
+        "size": 10.0, "build": 3.0, "producer": "tcamp",
+        "projectile": "bullet", "projectileSpeed": 620.0, "splash": 0.0,
+        "sight": 350.0, "armor": "infantry", "damageType": "bullet",
+    },
+    # 驯兽师：营地出的脆弱辅助。只能招降中立作战单位，耗时+矿；
+    # 大厅关闭 neutrals 时动作不可用，围栏战狼不受影响。
+    "tamer": {
+        "name": "驯兽师", "cost": 260, "hp": 70, "speed": 100.0,
+        "damage": 8.0, "range": 80.0, "cooldown": 1.1,
+        "size": 10.0, "build": 5.0, "producer": "tcamp",
+        "projectile": "bullet", "projectileSpeed": 560.0, "splash": 0.0,
+        "sight": 360.0, "armor": "infantry", "damageType": "bullet",
+        "canTame": True, "tameCost": 150, "tameTime": 4.0, "tameRange": 48.0,
+    },
+    # 战狼：围栏出的轻型野兽，扑咬步兵。兽甲，不算载具，无自爆。
+    "wolf": {
+        "name": "战狼", "cost": 380, "hp": 200, "speed": 138.0,
+        "damage": 36.0, "range": 32.0, "cooldown": 0.75,
+        "size": 11.0, "build": 5.0, "producer": "tpen",
+        "projectile": "bite", "projectileSpeed": 1000.0, "splash": 0.0,
+        "sight": 420.0, "armor": "beast", "damageType": "bite",
     },
 }
 
@@ -492,12 +540,48 @@ STRUCTURE_TYPES = {
         "slow": {"mult": 0.5, "duration": 1.8},
         "supportRadius": 420.0, "supportBonus": 35.0, "supportMax": 3,
     },
+    # ==================== 部落阵营「原始部落」建筑（faction=tribe）P0 ====================
+    # 与科技/秘法对位：大营=hq / 图腾柱=power / 精炼棚=refinery / 营地=barracks /
+    # 围栏=factory / 血祭坛=repair。P0 不建塔。血祭坛门槛严格镜像圣泉/维修厂：
+    # 必须先有工厂角色（驯兽围栏）+ 电力角色（图腾柱）。
+    "thq": {
+        "name": "部落大营", "cost": 0, "hp": 2400, "size": 58.0,
+        "build": 0.0, "deploy": 0.0, "power": 35, "requires": [], "sight": 650.0,
+        "armor": "structure", "packsInto": "tmcv",
+    },
+    "tpower": {
+        "name": "图腾柱", "cost": 600, "hp": 760, "size": 40.0,
+        "build": 8.0, "deploy": 2.2, "power": 120, "requires": ["thq"], "sight": 350.0,
+        "armor": "structure",
+    },
+    "trefinery": {
+        "name": "兽骨精炼棚", "cost": 1400, "hp": 1350, "size": 52.0,
+        "build": 14.0, "deploy": 3.2, "power": -30, "requires": ["thq"], "sight": 390.0,
+        "armor": "structure",
+    },
+    "tcamp": {
+        "name": "猎手营地", "cost": 700, "hp": 900, "size": 42.0,
+        "build": 10.0, "deploy": 2.8, "power": -20, "requires": ["tpower"], "sight": 410.0,
+        "armor": "structure",
+    },
+    "tpen": {
+        "name": "驯兽围栏", "cost": 1600, "hp": 1600, "size": 58.0,
+        "build": 18.0, "deploy": 4.2, "power": -45, "requires": ["trefinery", "tpower"], "sight": 460.0,
+        "armor": "structure",
+    },
+    "taltar": {
+        "name": "血祭坛", "cost": 1250, "hp": 1280, "size": 50.0,
+        "build": 15.0, "deploy": 3.6, "power": -35,
+        "requires": ["tpen", "tpower"], "sight": 440.0,
+        "armor": "structure",
+    },
 }
 
 # ---- 阵营与角色分类 ----
-# faction：tech(钢铁军团) / magic(秘法会)，建造与生产按 player["faction"] 校验。
+# faction：tech(钢铁军团) / magic(秘法会) / tribe(原始部落)，
+# 建造与生产按 player["faction"] 校验。
 # role：跨阵营的功能角色。经济逻辑（出生配置、采矿返回、精炼厂赠车、基地车
-# 展开、出售保护、bot 寻目标）一律按 role 判定而不是写死 kind —— 魔法阵营出
+# 展开、出售保护、bot 寻目标）一律按 role 判定而不是写死 kind —— 新阵营出
 # 同 role 的换皮建筑即可整套复用。新增兵种/建筑 = 加定义 + 在下面登记 role。
 MAGIC_STRUCTURES = frozenset((
     "mhq", "mpower", "mrefinery", "mtemple", "mcircle", "mspring", "mtower",
@@ -508,28 +592,44 @@ MAGIC_UNITS = frozenset((
     "golem", "behemoth", "panther", "dragon", "warden", "colossus", "comet",
     "hexling",
 ))
+TRIBE_STRUCTURES = frozenset((
+    "thq", "tpower", "trefinery", "tcamp", "tpen", "taltar",
+))
+TRIBE_UNITS = frozenset((
+    "tharvester", "tmcv", "spear", "tamer", "wolf",
+))
+VALID_FACTIONS = frozenset(("tech", "magic", "tribe"))
 
 _STRUCTURE_ROLES = {
-    "hq": "hq", "mhq": "hq",
-    "power": "power", "mpower": "power",
-    "refinery": "refinery", "mrefinery": "refinery",
-    "barracks": "barracks", "mtemple": "barracks",
-    "factory": "factory", "mcircle": "factory",
-    "repair": "repair", "mspring": "repair",
+    "hq": "hq", "mhq": "hq", "thq": "hq",
+    "power": "power", "mpower": "power", "tpower": "power",
+    "refinery": "refinery", "mrefinery": "refinery", "trefinery": "refinery",
+    "barracks": "barracks", "mtemple": "barracks", "tcamp": "barracks",
+    "factory": "factory", "mcircle": "factory", "tpen": "factory",
+    "repair": "repair", "mspring": "repair", "taltar": "repair",
     "turret": "defense", "missile": "defense", "mtower": "defense",
     "mstorm": "defense",
 }
 _UNIT_ROLES = {
-    "harvester": "harvester", "mharvester": "harvester",
-    "mcv": "mcv", "mmcv": "mcv",
+    "harvester": "harvester", "mharvester": "harvester", "tharvester": "harvester",
+    "mcv": "mcv", "mmcv": "mcv", "tmcv": "mcv",
 }
+
+
+def kind_faction(kind):
+    if kind in MAGIC_STRUCTURES or kind in MAGIC_UNITS:
+        return "magic"
+    if kind in TRIBE_STRUCTURES or kind in TRIBE_UNITS:
+        return "tribe"
+    return "tech"
+
 
 for _kind, _def in STRUCTURE_TYPES.items():
     _def["role"] = _STRUCTURE_ROLES.get(_kind)
-    _def["faction"] = "magic" if _kind in MAGIC_STRUCTURES else "tech"
+    _def["faction"] = kind_faction(_kind)
 for _kind, _def in UNIT_TYPES.items():
     _def["role"] = _UNIT_ROLES.get(_kind)
-    _def["faction"] = "magic" if _kind in MAGIC_UNITS else "tech"
+    _def["faction"] = kind_faction(_kind)
 
 
 def structure_role(kind):
@@ -569,6 +669,7 @@ def public_catalog():
             "damageType": definition.get("damageType"),
             "repairable": kind in VEHICLE_KINDS,
             "canVeteran": float(definition.get("damage", 0.0) or 0.0) > 0.0,
+            "canTame": bool(definition.get("canTame")),
         }
     return {
         "buildings": buildings,
@@ -590,6 +691,8 @@ FACTION_LOADOUT = {
              "harvester": "harvester", "mcv": "mcv", "infantry": "rifle", "armor": "tank"},
     "magic": {"hq": "mhq", "power": "mpower", "refinery": "mrefinery",
               "harvester": "mharvester", "mcv": "mmcv", "infantry": "mage", "armor": "golem"},
+    "tribe": {"hq": "thq", "power": "tpower", "refinery": "trefinery",
+              "harvester": "tharvester", "mcv": "tmcv", "infantry": "spear", "armor": "wolf"},
 }
 
 
@@ -607,6 +710,9 @@ FACTION_BUILDINGS = {
     "magic": {"power": "mpower", "barracks": "mtemple", "refinery": "mrefinery",
               "factory": "mcircle", "repair": "mspring", "defense": "mtower",
               "defense_long": "mstorm"},
+    # P0 不建塔：没有 defense / defense_long，bot 取不到键就不会排防御。
+    "tribe": {"power": "tpower", "barracks": "tcamp", "refinery": "trefinery",
+              "factory": "tpen", "repair": "taltar"},
 }
 
 

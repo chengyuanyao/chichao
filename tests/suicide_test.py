@@ -94,6 +94,7 @@ def main():
         "structure": 1.5,
         "harvester": 1.5,
         "mharvester": 1.5,
+        "tharvester": 1.5,
     }
     assert truck["deathExplosion"]["targetMultipliers"] == target_multipliers
     assert hexling["deathExplosion"]["targetMultipliers"] == target_multipliers

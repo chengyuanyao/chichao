@@ -38,7 +38,12 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     mcircle: { icon: '⬡', desc: '召唤构装体与魔兽' },
     mtower: { icon: '✵', desc: '自动攻击附近敌军（魔法）' },
     mstorm: { icon: '⚡', desc: '联网雷暴，支援增伤，命中麻痹 · 需圣殿' },
-    mspring: { icon: '✚', desc: '修复受损构装、巨龙与晶簇；解锁进阶召唤' }
+    mspring: { icon: '✚', desc: '修复受损构装、巨龙与晶簇；解锁进阶召唤' },
+    tpower: { icon: '↟', desc: '提供 120 图腾之力' },
+    trefinery: { icon: '◆', desc: '接收驮兽运回的兽骨矿' },
+    tcamp: { icon: '♟', desc: '训练猎手与驯兽师' },
+    tpen: { icon: '▰', desc: '驯养驮兽与战狼' },
+    taltar: { icon: '✚', desc: '修复驮兽与迁徙驮队；需围栏与图腾柱' }
   };
   var UNIT_VFX = {
     rifle: { icon: '♟', desc: '灵活的基础步兵' },
@@ -69,7 +74,12 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     comet: { icon: '✺', desc: '超远程坠星，曲射拆建筑，弹速慢能躲 · 需圣泉' },
     mharvester: { icon: '◈', desc: '自动采集水晶' },
     mmcv: { icon: '⬡', desc: '可展开为魔法主堡' },
-    hexling: { icon: '✶', desc: '符核魔仆，贴脸或阵亡引爆；轻甲非载具，军犬咬不动' }
+    hexling: { icon: '✶', desc: '符核魔仆，贴脸或阵亡引爆；轻甲非载具，军犬咬不动' },
+    spear: { icon: '↟', desc: '廉价骨矛猎手，短中距穿刺，对位突击兵' },
+    tamer: { icon: '✦', desc: '脆弱辅助，耗时+矿招降中立作战单位；关闭中立后不可用' },
+    wolf: { icon: '♞', desc: '围栏战狼，扑咬步兵；兽甲，无自爆' },
+    tharvester: { icon: '▣', desc: '自动采集矿石的驮兽' },
+    tmcv: { icon: '⬢', desc: '可展开为新的部落大营' }
   };
 
   var BUILDINGS = {};
@@ -158,6 +168,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
         damageType: src.damageType,
         repairable: !!src.repairable,
         canVeteran: !!src.canVeteran,
+        canTame: !!src.canTame,
         icon: vfx.icon || '▲',
         desc: vfx.desc || ''
       };
@@ -206,11 +217,31 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       repairNeed: '没有可用的圣泉',
       repairSelect: '请选择受损的构装、巨龙或晶簇',
       repairSent: '个单位已前往圣泉'
+    },
+    tribe: {
+      infantryTab: '营地',
+      vehicleTab: '围栏',
+      power: '图腾',
+      powerLoad: '图腾负载',
+      harvester: '驮兽',
+      hq: '部落大营',
+      mcv: '迁徙驮队',
+      repairBtn: '祭坛修复',
+      repairTitle: '前往最近血祭坛 (R)',
+      repairHint: '修复驮兽',
+      repairNeed: '没有可用的血祭坛',
+      repairSelect: '请选择受损的驮兽或迁徙驮队',
+      repairSent: '头驮兽已前往血祭坛'
     }
   };
 
+  function ownFaction() {
+    var me = ownPlayer();
+    return (me && me.faction) || 'tech';
+  }
+
   function factionCopy() {
-    return FACTION_COPY[isOwnMagicFaction() ? 'magic' : 'tech'];
+    return FACTION_COPY[ownFaction()] || FACTION_COPY.tech;
   }
 
   function applyFactionHud() {
@@ -240,7 +271,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
 
   var STRUCTURE_ICONS = {
     hq: '★', power: 'ϟ', refinery: '◆', barracks: '♟', factory: '▰', repair: '✚', turret: '⌖', missile: '⊿',
-    mhq: '★', mpower: '✦', mrefinery: '◈', mtemple: '✠', mcircle: '⬡', mspring: '✚', mtower: '✵', mstorm: '⚡'
+    mhq: '★', mpower: '✦', mrefinery: '◈', mtemple: '✠', mcircle: '⬡', mspring: '✚', mtower: '✵', mstorm: '⚡',
+    thq: '★', tpower: '↟', trefinery: '◆', tcamp: '♟', tpen: '▰', taltar: '✚'
   };
 
   /* -------------------- 肖像绘制器 --------------------
@@ -283,11 +315,21 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   var P_ODY_SEAM = '#4fe4ff';
   var P_ODY_CORE = '#b46bff';
   var P_MITE = '#8ad4ff';
+  var P_BARK = '#6a4424';
+  var P_THATCH = '#d4b45c';
+  var P_BONE = '#ead8b0';
+  var P_HIDE = '#b8895a';
+  var P_MOSS = '#4a6a38';
+  var P_BLOOD = '#8a2020';
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1, mstorm: 1,
     mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, behemoth: 1, panther: 1, dragon: 1,
     warden: 1, colossus: 1, comet: 1, mharvester: 1, mmcv: 1, hexling: 1
+  };
+  var TRIBE_KINDS = {
+    thq: 1, tpower: 1, trefinery: 1, tcamp: 1, tpen: 1, taltar: 1,
+    spear: 1, tamer: 1, wolf: 1, tharvester: 1, tmcv: 1
   };
 
   function pRect(c, x, y, w, h, fill) {
@@ -1098,19 +1140,131 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       pPoly(c, [[44, 22], [48, 12], [52, 22]], P_FIRE);
       pRect(c, 40, 48, 3, 8, P_VIOLET);
       pRect(c, 53, 48, 3, 8, P_VIOLET);
+    },
+    /* ---- 原始部落：茅草 / 图腾 / 兽皮，不复用钢铁或秘法剪影 ---- */
+    thq: function (c) {
+      pShadow(c, 48, 60, 28);
+      pPoly(c, [[20, 58], [76, 58], [70, 42], [26, 42]], P_BARK);
+      pPoly(c, [[22, 42], [74, 42], [48, 18]], P_THATCH);
+      pLine(c, 26, 40, 48, 18, 1.6, P_BONE);
+      pLine(c, 70, 40, 48, 18, 1.6, P_BONE);
+      pCirc(c, 48, 24, 2.4, P_FIRE);
+      pRect(c, 44, 48, 8, 10, P_HIDE);
+      pRect(c, 22, 36, 5, 10, P_MOSS);
+      pRect(c, 69, 36, 5, 10, P_MOSS);
+    },
+    tpower: function (c) {
+      pShadow(c, 48, 60, 18);
+      pRect(c, 43, 22, 10, 36, P_BARK);
+      pRect(c, 40, 28, 16, 8, P_HIDE);
+      pRect(c, 40, 40, 16, 8, P_BONE);
+      pCirc(c, 45, 32, 1.4, P_OUT);
+      pCirc(c, 51, 32, 1.4, P_OUT);
+      pCirc(c, 48, 20, 5, P_FIRE);
+      pCirc(c, 48, 17, 2.2, '#ffe0a0');
+      pRect(c, 32, 34, 8, 12, P_HIDE);
+      pRect(c, 56, 34, 8, 12, P_HIDE);
+    },
+    trefinery: function (c) {
+      pShadow(c, 46, 59, 28);
+      pPoly(c, [[18, 56], [72, 56], [64, 40], [24, 44]], P_THATCH);
+      pRect(c, 22, 46, 36, 10, P_BARK);
+      pLine(c, 60, 28, 60, 56, 3, P_BONE);
+      pLine(c, 54, 34, 66, 34, 2.2, P_BONE);
+      pCirc(c, 28, 56, 4, P_GOLD);
+      pCirc(c, 36, 58, 3.4, P_GOLD);
+      pRect(c, 40, 38, 8, 10, P_HIDE);
+    },
+    tcamp: function (c) {
+      pShadow(c, 48, 60, 26);
+      pPoly(c, [[22, 56], [46, 56], [34, 28]], P_HIDE);
+      pPoly(c, [[48, 56], [70, 56], [59, 34]], P_THATCH);
+      pLine(c, 34, 28, 34, 56, 1.6, P_BARK);
+      pLine(c, 59, 34, 59, 56, 1.6, P_BARK);
+      pLine(c, 72, 56, 72, 30, 2, P_BONE);
+      pLine(c, 68, 56, 68, 34, 2, P_BONE);
+      pCirc(c, 46, 54, 2.4, P_FIRE);
+    },
+    tpen: function (c) {
+      pShadow(c, 48, 60, 28);
+      pRect(c, 20, 40, 4, 18, P_BARK);
+      pRect(c, 72, 40, 4, 18, P_BARK);
+      pRect(c, 20, 38, 56, 4, P_BARK);
+      pRect(c, 20, 50, 56, 3, P_BARK);
+      pRect(c, 42, 42, 12, 16, P_HIDE);
+      pRect(c, 32, 54, 16, 5, P_BONE);
+      pCirc(c, 58, 50, 4, P_MOSS);
+    },
+    taltar: function (c) {
+      pShadow(c, 48, 60, 26);
+      pCirc(c, 48, 50, 16, P_STONE);
+      pRect(c, 34, 44, 28, 8, P_BONE);
+      pRect(c, 36, 42, 24, 4, P_BLOOD);
+      pLine(c, 28, 56, 28, 30, 2.4, P_BONE);
+      pLine(c, 68, 56, 68, 30, 2.4, P_BONE);
+      pCirc(c, 48, 40, 3, P_FIRE);
+    },
+    spear: function (c) {
+      pBust(c, P_HIDE);
+      pCirc(c, 48, 30, 9.2, P_HIDE);
+      c.strokeStyle = P_BONE; c.lineWidth = 2;
+      c.beginPath(); c.arc(48, 28, 10, Math.PI * 1.05, Math.PI * 1.95); c.stroke();
+      pLine(c, 30, 60, 78, 18, 2.6, P_BARK);
+      pPoly(c, [[74, 12], [84, 16], [76, 24]], P_BONE);
+      pRect(c, 40, 46, 16, 5, P_BARK);
+    },
+    tamer: function (c) {
+      pBust(c, P_BARK);
+      pPoly(c, [[30, 44], [66, 44], [70, 62], [26, 62]], P_HIDE);
+      pCirc(c, 48, 28, 8.5, P_HIDE);
+      pPoly(c, [[40, 20], [44, 8], [48, 20]], P_THATCH);
+      pPoly(c, [[48, 20], [52, 6], [56, 20]], P_THATCH);
+      pLine(c, 32, 58, 78, 22, 3, P_BARK);
+      pCirc(c, 78, 20, 5, P_BONE);
+      pCirc(c, 76, 18, 1.2, P_OUT);
+      pCirc(c, 80, 18, 1.2, P_OUT);
+    },
+    wolf: function (c) {
+      pShadow(c, 48, 60, 22);
+      pPoly(c, [[24, 52], [70, 50], [66, 34], [30, 36]], P_HIDE);
+      pPoly(c, [[62, 36], [82, 40], [76, 28], [64, 30]], P_HIDE);
+      pPoly(c, [[58, 24], [64, 10], [68, 26]], P_BARK);
+      pPoly(c, [[68, 26], [78, 12], [74, 28]], P_BARK);
+      pCirc(c, 72, 32, 1.4, P_FIRE);
+      pPoly(c, [[22, 42], [16, 48], [24, 50]], P_BARK);
+    },
+    tharvester: function (c) {
+      pShadow(c, 48, 60, 26);
+      pPoly(c, [[20, 52], [68, 52], [62, 34], [26, 36]], P_HIDE);
+      pCirc(c, 70, 38, 8, P_HIDE);
+      pLine(c, 66, 30, 62, 16, 2.4, P_BONE);
+      pLine(c, 74, 30, 78, 16, 2.4, P_BONE);
+      pRect(c, 28, 28, 12, 10, P_BARK);
+      pRect(c, 44, 28, 12, 10, P_BARK);
+      pCirc(c, 34, 32, 2.4, P_GOLD);
+      pCirc(c, 50, 32, 2.4, P_GOLD);
+    },
+    tmcv: function (c) {
+      pShadow(c, 48, 61, 28);
+      pPoly(c, [[18, 54], [70, 54], [62, 28], [26, 28]], P_HIDE);
+      pPoly(c, [[22, 28], [66, 28], [48, 14]], P_THATCH);
+      pRect(c, 20, 50, 52, 5, P_BARK);
+      pCirc(c, 74, 46, 7, P_HIDE);
+      pCirc(c, 86, 46, 6, P_HIDE);
+      pRect(c, 18, 32, 6, 12, P_BARK);
     }
   };
 
   // 深红内衬 + 低透明放射线 + 径向明暗：所有肖像共用的底子。
   // 秘法会建筑走暖金底，作战单位走冷紫底，钢铁军团仍是深红。
-  function portraitBackdrop(c, w, h, magic, isBuilding) {
-    c.fillStyle = magic ? (isBuilding ? '#3a2410' : '#1a1040') : '#4a1013';
+  function portraitBackdrop(c, w, h, magic, isBuilding, tribe) {
+    c.fillStyle = magic ? (isBuilding ? '#3a2410' : '#1a1040') : (tribe ? '#3a2a12' : '#4a1013');
     c.fillRect(0, 0, w, h);
     c.save();
     c.translate(w / 2, h * 0.62);
     c.fillStyle = magic
       ? (isBuilding ? 'rgba(224,180,70,.16)' : 'rgba(80,180,230,.14)')
-      : 'rgba(200,36,30,.16)';
+      : (tribe ? 'rgba(196,140,48,.16)' : 'rgba(200,36,30,.16)');
     for (var i = 0; i < 12; i++) {
       var a0 = i * Math.PI / 6;
       c.beginPath();
@@ -1128,6 +1282,10 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     } else if (magic) {
       g.addColorStop(0, 'rgba(50,40,140,.5)');
       g.addColorStop(0.55, 'rgba(26,16,64,0)');
+      g.addColorStop(1, 'rgba(10,10,6,.6)');
+    } else if (tribe) {
+      g.addColorStop(0, 'rgba(120,72,24,.5)');
+      g.addColorStop(0.55, 'rgba(58,42,18,0)');
       g.addColorStop(1, 'rgba(10,10,6,.6)');
     } else {
       g.addColorStop(0, 'rgba(90,18,22,.5)');
@@ -1166,7 +1324,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     cv.width = PORTRAIT_W;
     cv.height = PORTRAIT_H;
     var c = cv.getContext('2d');
-    portraitBackdrop(c, PORTRAIT_W, PORTRAIT_H, !!MAGIC_KINDS[kind], isBuilding);
+    portraitBackdrop(c, PORTRAIT_W, PORTRAIT_H, !!MAGIC_KINDS[kind], isBuilding, !!TRIBE_KINDS[kind]);
     var painter = PORTRAIT_PAINTERS[kind];
     if (painter) {
       c.save();
@@ -2008,8 +2166,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   }
 
   function isOwnMagicFaction() {
-    var me = ownPlayer();
-    return !!(me && (me.faction || 'tech') === 'magic');
+    return ownFaction() === 'magic';
   }
 
   function playerById(id) {
@@ -2312,8 +2469,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       // 阵营选择（自助）：本人随时可改；AI 由房主指定；其它玩家只读
       var factionSelect = document.createElement('select');
       factionSelect.className = 'faction-select';
-      factionSelect.title = '选择阵营：钢铁军团(科技) / 秘法会(魔法)';
-      [['tech', '⚙ 钢铁军团'], ['magic', '✦ 秘法会']].forEach(function (pair) {
+      factionSelect.title = '选择阵营：钢铁军团(科技) / 秘法会(魔法) / 原始部落';
+      [['tech', '⚙ 钢铁军团'], ['magic', '✦ 秘法会'], ['tribe', '🦴 原始部落']].forEach(function (pair) {
         var opt = document.createElement('option');
         opt.value = pair[0];
         opt.textContent = pair[1];
@@ -3304,7 +3461,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     }
     var myFaction = (me && me.faction) || 'tech';
     renderBuildQueueStatus(me);
-    // 阵营过滤：科技/魔法各看各的建造树；缺 faction 字段的按科技处理
+    // 阵营过滤：科技/魔法/部落各看各的建造树；缺 faction 字段的按科技处理
     var sameFaction = function (entry) { return (entry.faction || 'tech') === myFaction; };
     var definitions;
     if (activeTab === 'buildings' || activeTab === 'defense') {
@@ -3462,12 +3619,14 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       var rank = Number(rankInfo.level) || 0;
       var rankStars = ['', '★', '★★', '★★★'];
       var rankLabel = rank > 0 ? ' ' + (rankStars[rank] || '') + ' ' + rankInfo.name : '';
-      var detail = one && one.repairing ?
+      var detail = one && one.taming ?
+        '驯化中 · 生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) :
+        (one && one.repairing ?
         '维修中 · 生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) :
         (one && unitRole(one.kind) === 'harvester' ?
         (one.harvestPaused ? '已停止采矿 · ' : '') +
           '载矿 ' + Math.floor(one.cargo) + ' / ' + Math.floor(one.capacity) :
-        (one ? '生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) + rankLabel : sameKind ? '同型编队' : '混合编队'));
+        (one ? '生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) + rankLabel : sameKind ? '同型编队' : '混合编队')));
       var patrols = (roomState.game.patrols || []).filter(function (route) { return selectedUnits.has(route.unitId); });
       if (patrols.length) {
         detail += one ? ' · 巡逻节点 ' + (patrols[0].next + 1) + '/' + patrols[0].points.length
@@ -3493,6 +3652,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       var unitInfoKey = 'u|' + units.map(function (unit) {
         return unit.id + ':' + Math.ceil(unit.hp) + ':' + Math.floor(unit.cargo || 0) + ':' +
           (unit.kills || 0) + ':' + (unit.repairing ? 1 : 0) + ':' +
+          (unit.taming ? 1 : 0) + ':' +
           (unit.harvestPaused ? 1 : 0) + ':' + (unit.tacticalOrder || '');
       }).join(',') + '|patrol:' + patrols.map(function (route) {
         return route.unitId + ':' + route.next + ':' + route.points.length;
@@ -4928,6 +5088,40 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       return;
     }
     if (target && !isFriendly(target.owner) && selectedUnits.size) {
+      var selectedTamers = roomState.game.units.filter(function (unit) {
+        return selectedUnits.has(unit.id) && unit.owner === session.playerId &&
+          (UNITS[unit.kind] || {}).canTame;
+      });
+      var isNeutralCombatUnit = target.owner === 'neutral' &&
+        UNITS[target.kind] && !BUILDINGS[target.kind];
+      if (selectedTamers.length && isNeutralCombatUnit && commandMode !== 'attackMove') {
+        if (!roomHasNeutrals(roomState)) {
+          toast('当前对局未开启中立单位，无法驯化', 'error');
+          sound('error');
+          return;
+        }
+        markOrder(target.x, target.y, 'move');
+        sendAction('command', {
+          command: 'tame',
+          unitIds: selectedTamers.map(function (unit) { return unit.id; }),
+          targetId: target.id
+        }).then(function (result) {
+          if (result.cancelled) return;
+          toast(selectedTamers.length + ' 名驯兽师开始招降中立单位', 'success');
+          sound('confirm');
+        }).catch(function () {});
+        var others = selectedUnitIdList().filter(function (id) {
+          return selectedTamers.every(function (unit) { return unit.id !== id; });
+        });
+        if (others.length) {
+          sendAction('command', {
+            command: 'attack',
+            unitIds: others,
+            targetId: target.id
+          }).catch(function () {});
+        }
+        return;
+      }
       markOrder(target.x, target.y, 'attack');
       sendAction('command', {
         command: 'attack',
