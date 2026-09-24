@@ -721,10 +721,10 @@ def main():
     assert "scorpion: function () { return UNIT_BUILDERS.dog(); }" not in render
     assert "蛛网巨蛛：八足蛛形" in render
     assert "蛛网巨蛛：八足 + 头胸腹 + 骨螯" in app
-    assert "穿甲巨蝎：螯钳 + 弓起毒尾刺" in render
+    assert "穿甲巨蝎：大螯钳 + 弓起毒尾刺" in render
     assert "穿甲巨蝎：螯钳 + 弓起毒尾刺，不要八足蛛或四足狼剪影" in app
     assert "spider: 1.72" in render
-    assert "scorpion: 1.68" in render
+    assert "scorpion: 1.82" in render
     assert "MAT.chitin" in render
     assert "look: 'web'" in render
     assert "look: 'sting'" in render

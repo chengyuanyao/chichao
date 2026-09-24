@@ -210,7 +210,7 @@ function loadScenario(options={}) {
     : scenario==='art' ? {x:2400,y:1550,zoom:.82,yaw:0.12,pitch:.88}
     : scenario==='river' ? {x:map.width/2,y:map.height/2,zoom:0.58,yaw:0.25,pitch:0.80}
     : scenario==='spider' ? {x:focus.x+6,y:focus.y+4,zoom:3.2,yaw:1.18,pitch:0.40}
-    : scenario==='scorpion' ? {x:focus.x+8,y:focus.y+6,zoom:3.15,yaw:1.22,pitch:0.38}
+    : scenario==='scorpion' ? {x:focus.x+2,y:focus.y+1,zoom:4.35,yaw:1.48,pitch:0.24}
     : {x:focus.x,y:focus.y-100,zoom:0.82,yaw:0.14,pitch:0.96};
   for(const key of ['x','y','zoom','yaw','pitch']) if(query.has(key)) camera[key]=Number(query.get(key));
   renderer.setCamera(camera); renderer.setFogRevealed(revealMap);

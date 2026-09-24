@@ -2165,67 +2165,70 @@ const UNIT_BUILDERS = {
   },
 
   scorpion: function () {
-    // 穿甲巨蝎：螯钳 + 弓起毒尾刺，暗甲壳 + 骨刺，不要钢板也不要八足径向蛛形。
-    const clawRot = new THREE.Matrix4().makeRotationZ(-1.15);
-    const stingRot = new THREE.Matrix4().makeRotationZ(-1.85);
+    // 穿甲巨蝎：大螯钳 + 弓起毒尾刺，暗甲壳 + 骨刺。俯视也能分出钳和尾，不是八足径向蛛。
+    const clawRot = new THREE.Matrix4().makeRotationZ(-1.25);
+    const stingRot = new THREE.Matrix4().makeRotationZ(-2.05);
     const body = surfaced(SURF.hide, [
-      ellipsoid(4.8, 2.6, 3.4, 3.2, 6.2, 0, MAT.chitin),
-      ellipsoid(6.6, 3.0, 4.0, -4.4, 6.6, 0, MAT.chitinDark),
-      ellipsoid(2.4, 1.8, 2.2, 7.4, 6.4, 0, MAT.chitinLit),
-      ellipsoid(3.4, 0.55, 3.2, -1.0, 9.0, 0, 0.90),
-      ellipsoid(2.8, 0.6, 2.6, -5.2, 9.2, 0, MAT.hideDark)
+      ellipsoid(6.2, 2.4, 3.6, 4.0, 5.8, 0, MAT.chitin),
+      ellipsoid(7.4, 2.8, 4.6, -4.8, 6.2, 0, MAT.chitinDark),
+      ellipsoid(2.8, 1.6, 2.4, 9.2, 6.2, 0, MAT.chitinLit),
+      ellipsoid(4.0, 0.55, 3.4, -1.4, 8.6, 0, 0.90),
+      ellipsoid(3.2, 0.6, 2.8, -5.6, 8.8, 0, MAT.hideDark)
     ]);
     [1, -1].forEach(function (side) {
       body.push(Object.assign(
-        limb(0.95, 0.72, 6.2, 5.8, 2.0 * side, 11.4, 5.4, 6.2 * side, MAT.chitinDark),
+        limb(1.35, 1.05, 6.8, 5.4, 2.4 * side, 12.6, 4.8, 8.4 * side, MAT.chitinDark),
         { surf: SURF.hide }));
       body.push(Object.assign(
-        ellipsoid(2.2, 1.4, 1.6, 13.2, 5.2, 7.0 * side, MAT.chitin),
+        ellipsoid(3.4, 1.8, 2.2, 15.4, 4.8, 9.2 * side, MAT.chitin),
         { surf: SURF.hide }));
       body.push(Object.assign(
-        pyr(0.55, 3.8, 5, 16.0, 5.6, 7.6 * side, MAT.boneIvory, clawRot),
+        pyr(0.85, 5.2, 5, 20.0, 5.4, 10.2 * side, MAT.boneIvory, clawRot),
         { surf: SURF.hide }));
       body.push(Object.assign(
-        pyr(0.42, 3.2, 5, 15.6, 3.8, 6.4 * side, MAT.boneIvory, clawRot),
+        pyr(0.62, 4.4, 5, 19.4, 3.2, 8.2 * side, MAT.boneIvory, clawRot),
         { surf: SURF.hide }));
     });
-    // 四对步足沿腹侧前后排列，不是蛛形径向撑开。
+    // 四对步足贴腹侧，比蛛腿短，不向前径向撑。
     const sockets = [
-      { x: 3.6, z: 2.4, midX: 5.2, midZ: 7.0, endX: 4.4, endZ: 11.2 },
-      { x: 0.6, z: 2.8, midX: 0.8, midZ: 7.6, endX: -0.4, endZ: 11.8 },
-      { x: -2.4, z: 2.8, midX: -3.2, midZ: 7.4, endX: -5.0, endZ: 11.4 },
-      { x: -5.2, z: 2.4, midX: -7.0, midZ: 6.8, endX: -9.2, endZ: 10.4 }
+      { x: 3.8, z: 2.6, midX: 4.6, midZ: 6.4, endX: 3.6, endZ: 9.6 },
+      { x: 0.6, z: 3.0, midX: 0.4, midZ: 6.8, endX: -0.8, endZ: 10.0 },
+      { x: -2.6, z: 3.0, midX: -3.4, midZ: 6.6, endX: -5.0, endZ: 9.6 },
+      { x: -5.6, z: 2.6, midX: -7.0, midZ: 6.2, endX: -9.0, endZ: 8.8 }
     ];
     sockets.forEach(function (sock, i) {
-      const lift = 8.2 + (i < 2 ? 0.3 : 0.05);
+      const lift = 7.2 + (i < 2 ? 0.2 : 0);
       [1, -1].forEach(function (side) {
         body.push(Object.assign(
-          limb(0.72, 0.52, sock.x, 5.6, sock.z * side, sock.midX, lift, sock.midZ * side, MAT.chitinDark),
+          limb(0.62, 0.46, sock.x, 5.0, sock.z * side, sock.midX, lift, sock.midZ * side, MAT.chitinDark),
           { surf: SURF.hide }));
         body.push(Object.assign(
-          limb(0.48, 0.28, sock.midX, lift, sock.midZ * side, sock.endX, 0.5, sock.endZ * side, MAT.chitin),
+          limb(0.42, 0.26, sock.midX, lift, sock.midZ * side, sock.endX, 0.45, sock.endZ * side, MAT.chitin),
           { surf: SURF.hide }));
       });
     });
     [
-      { a: [-9.2, 7.0, 0], b: [-11.4, 11.2, 0], r0: 1.05, r1: 0.88 },
-      { a: [-11.4, 11.2, 0], b: [-10.0, 15.6, 0], r0: 0.88, r1: 0.70 },
-      { a: [-10.0, 15.6, 0], b: [-6.4, 18.2, 0], r0: 0.70, r1: 0.52 },
-      { a: [-6.4, 18.2, 0], b: [-2.2, 17.6, 0], r0: 0.52, r1: 0.38 }
+      { a: [-10.4, 6.4, 0], b: [-13.2, 11.6, 0], r0: 1.55, r1: 1.28 },
+      { a: [-13.2, 11.6, 0], b: [-11.4, 17.4, 0], r0: 1.28, r1: 1.02 },
+      { a: [-11.4, 17.4, 0], b: [-6.4, 21.2, 0], r0: 1.02, r1: 0.78 },
+      { a: [-6.4, 21.2, 0], b: [-1.2, 20.4, 0], r0: 0.78, r1: 0.52 }
     ].forEach(function (seg) {
       body.push(Object.assign(
         limb(seg.r0, seg.r1, seg.a[0], seg.a[1], seg.a[2], seg.b[0], seg.b[1], seg.b[2], MAT.chitinDark),
         { surf: SURF.hide }));
+      body.push(Object.assign(
+        sph(seg.r0 * 1.05, 6, seg.a[0], seg.a[1], 0, MAT.boneIvory),
+        { surf: SURF.hide }));
     });
     body.push(Object.assign(
-      pyr(0.55, 4.4, 5, 1.2, 16.4, 0, MAT.boneIvory, stingRot),
+      pyr(0.85, 6.2, 5, 3.4, 18.6, 0, MAT.boneIvory, stingRot),
       { surf: SURF.hide }));
     return {
       body: body,
       glow: [
-        sph(0.36, 5, 8.2, 7.0, 1.05, MAT.spiritFire),
-        sph(0.36, 5, 8.2, 7.0, -1.05, MAT.spiritFire),
-        sph(0.28, 5, 2.4, 15.8, 0, MAT.spiritFire)
+        sph(0.40, 5, 10.0, 6.6, 1.15, MAT.spiritFire),
+        sph(0.40, 5, 10.0, 6.6, -1.15, MAT.spiritFire),
+        sph(0.36, 5, 4.6, 17.8, 0, MAT.spiritFire)
       ]
     };
   },
@@ -3287,7 +3290,7 @@ const UNIT_VISUAL_SCALE = {
   mage: 2.15, frost: 2.15, imp: 2.05, oracle: 2.15, golem: 1.42, behemoth: 1.62, panther: 1.7, dragon: 1.34,
   warden: 1.55, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30,
-  spear: 2.15, tamer: 2.15, wolf: 1.85, spider: 1.72, scorpion: 1.68,
+  spear: 2.15, tamer: 2.15, wolf: 1.85, spider: 1.72, scorpion: 1.82,
   tharvester: 1.16, tmcv: 1.30
 };
 
@@ -6368,17 +6371,17 @@ export function createRenderer(canvas) {
     }
     if (kind === 'scorpion') {
       const parts = [
-        box(12.4, 5.2, 6.4, -1.6, 6.6, 0, MAT.chitinDark),
-        box(6.4, 3.6, 4.6, 5.8, 6.2, 0, MAT.chitin),
-        box(5.6, 2.4, 3.2, 13.2, 5.2, 6.4, MAT.chitin),
-        box(5.6, 2.4, 3.2, 13.2, 5.2, -6.4, MAT.chitin),
-        box(4.8, 10.2, 2.2, -7.2, 13.6, 0, MAT.chitinDark),
-        box(5.2, 1.6, 1.6, 0.6, 16.8, 0, MAT.boneIvory),
-        box(5.0, 0.9, 4.4, -2.0, 9.2, 0, 0.90)
+        box(14.8, 4.8, 7.2, -1.2, 6.2, 0, MAT.chitinDark),
+        box(7.2, 3.4, 5.0, 7.2, 5.8, 0, MAT.chitin),
+        box(7.2, 3.0, 4.0, 16.0, 4.8, 8.4, MAT.chitin),
+        box(7.2, 3.0, 4.0, 16.0, 4.8, -8.4, MAT.chitin),
+        box(5.6, 14.0, 2.8, -8.8, 15.2, 0, MAT.chitinDark),
+        box(7.2, 2.0, 2.0, 2.4, 20.0, 0, MAT.boneIvory),
+        box(5.6, 0.9, 4.6, -2.0, 8.8, 0, 0.90)
       ];
-      [[4.0, 8.4], [0.4, 9.2], [-3.2, 9.0], [-7.0, 8.0]].forEach(function (sock) {
+      [[3.6, 7.2], [0.2, 7.8], [-3.4, 7.6], [-7.2, 6.8]].forEach(function (sock) {
         [1, -1].forEach(function (side) {
-          parts.push(box(5.6, 1.3, 1.3, sock[0] * 0.55, 3.8, sock[1] * side * 0.55, MAT.chitinDark));
+          parts.push(box(4.8, 1.2, 1.2, sock[0] * 0.55, 3.4, sock[1] * side * 0.55, MAT.chitinDark));
         });
       });
       return parts;
