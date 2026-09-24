@@ -306,6 +306,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   var P_GOLDSTONE = '#c4a05a';
   var P_GOLDTRIM = '#e0c25a';
   var P_RUNE = '#5ef0ff';
+  var P_STORM = '#2a323c';
+  var P_STORM_L = '#4e5966';
   var P_VIOLET = '#3a2060';
   // 秘法巨龙走「奥德赛」硬表面配色：暗紫黑铬甲板 + 青金霓虹，
   // 和 render3d.js 里的 odyPlate / odyPlateLit / odyChrome / odySeam 对齐。
@@ -904,18 +906,29 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       pCirc(c, 68, 20, 2.2, P_RUNE);
     },
     mstorm: function (c) {
-      pShadow(c, 48, 60, 22);
-      // 风暴尖塔 + 双侧雷线圈，不是奥术塔单尖，也不是钢铁磁暴背包
-      pPoly(c, [[30, 60], [66, 60], [60, 50], [36, 50]], P_GOLDSTONE);
-      pPoly(c, [[42, 50], [54, 50], [51, 18], [45, 18]], P_GOLDSTONE);
-      pCirc(c, 48, 16, 4.2, P_GOLDTRIM);
-      pCirc(c, 48, 16, 2.2, P_RUNE);
-      pLine(c, 34, 48, 34, 22, 3, P_GOLDTRIM);
-      pLine(c, 62, 48, 62, 22, 3, P_GOLDTRIM);
-      pCirc(c, 34, 20, 3.4, P_CRYSTAL);
-      pCirc(c, 62, 20, 3.4, P_FROST);
-      pPoly(c, [[36, 28], [44, 24], [42, 30], [50, 26], [44, 33], [38, 31]], P_RUNE);
-      pCirc(c, 48, 16, 1.2, '#f4f0ff');
+      pShadow(c, 48, 62, 20);
+      // 哥特风暴尖碑：炭岩多层塔身 + 金饰 + 环绕符环 + 晶冠，不是双侧线圈
+      pPoly(c, [[24, 62], [72, 62], [66, 54], [30, 54]], P_STORM);
+      pPoly(c, [[72, 62], [58, 62], [56, 54], [66, 54]], 'rgba(10,10,6,.28)');
+      c.strokeStyle = P_GOLDTRIM; c.lineWidth = 1.6;
+      c.beginPath(); c.ellipse(48, 54, 18, 3.6, 0, 0, Math.PI * 2); c.stroke();
+      pPoly(c, [[42, 54], [54, 54], [51, 16], [45, 16]], P_STORM);
+      pPoly(c, [[54, 54], [50, 54], [49, 16], [51, 16]], P_STORM_L);
+      pLine(c, 43, 52, 46, 18, 1.3, P_GOLDTRIM);
+      pLine(c, 53, 52, 50, 18, 1.3, P_GOLDTRIM);
+      c.strokeStyle = P_RUNE; c.lineWidth = 1.5;
+      c.beginPath(); c.ellipse(48, 44, 14, 3.0, 0, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.ellipse(48, 32, 11, 2.4, 0, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.ellipse(48, 22, 8, 1.8, 0, 0, Math.PI * 2); c.stroke();
+      pCirc(c, 40, 43, 1.5, P_FROST);
+      pCirc(c, 56, 33, 1.4, P_RUNE);
+      pCirc(c, 42, 23, 1.2, P_FROST);
+      pPoly(c, [[44, 16], [52, 16], [48, 5]], P_FROST);
+      pCirc(c, 48, 13, 2.3, P_RUNE);
+      pCirc(c, 48, 7, 1.3, '#f4ffff');
+      pPoly(c, [[34, 30], [42, 26], [40, 32], [48, 28], [42, 35], [36, 33]], P_RUNE);
+      pLine(c, 58, 20, 70, 10, 1.4, '#e8ffff');
+      pLine(c, 70, 10, 64, 15, 1.2, P_FROST);
     },
     /* ---- 秘法会（魔法阵营）单位 ---- */
     mage: function (c) {
