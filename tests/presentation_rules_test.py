@@ -228,7 +228,7 @@ def main():
     readme = read("README.md")
     assert "火焰兵" not in index and "火焰克步兵" not in index
     assert "火焰兵" not in readme
-    assert "钢铁军团" in readme and "秘法会" in readme
+    assert "钢铁军团" in readme and "秘法会" in readme and "原始部落" in readme
     assert "start-game.sh" in readme
     assert os.path.isfile(os.path.join(ROOT, "start-game.sh"))
     starter = read("start-game.sh")
@@ -692,6 +692,25 @@ def main():
         next_start = magic_buildings.find("kind === '", start + 10)
         branch = magic_buildings[start:next_start if next_start >= 0 else len(magic_buildings)]
         assert "TEAM" in branch, "magic structure has no owner-color surface: %s" % kind
+
+    # 原始部落必须有石器/兽皮专属剪影，不能再 alias 钢铁或秘法模型。
+    assert "TRIBE_STRUCTURE_KINDS" in render
+    assert "MAT.spiritFire" in render
+    assert "MAT.thatch" in render
+    assert "spear: function () { return infantryParts('rifle'); }" not in render
+    assert "tamer: function () { return UNIT_BUILDERS.mage(); }" not in render
+    assert "wolf: function () { return UNIT_BUILDERS.dog(); }" not in render
+    assert "tharvester: function () { return UNIT_BUILDERS.harvester(); }" not in render
+    assert "tmcv: function () { return UNIT_BUILDERS.mcv(); }" not in render
+    tribe_buildings = render[render.index("} else if (kind === 'thq')"):
+                             render.index("return c.parts;", render.index("} else if (kind === 'thq')"))]
+    for kind in ("thq", "tpower", "trefinery", "tcamp", "tpen", "taltar"):
+        start = tribe_buildings.index("kind === '%s'" % kind)
+        next_start = tribe_buildings.find("kind === '", start + 10)
+        branch = tribe_buildings[start:next_start if next_start >= 0 else len(tribe_buildings)]
+        assert "TEAM" in branch, "tribe structure has no owner-color surface: %s" % kind
+        assert "MAT.runeCyan" not in branch, kind
+        assert "MAT.goldStone" not in branch, kind
 
     # 彩蛋挂钩：视觉件只锁字符串，触发逻辑在 easter_egg_test。
     # 陨坑木牌 / 撒点草木已从地图上拆掉，不能再被字符串锁住。

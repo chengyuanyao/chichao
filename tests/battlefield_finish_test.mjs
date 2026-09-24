@@ -6,6 +6,7 @@ import {riverStructureDetails} from '../public/river_art_models.js';
 import {wreckFamily,collapsePose,suspensionSlope,COLLAPSE_LIMIT,applyBuildingCollapse} from '../public/battlefield_finish.js';
 assert.equal(wreckFamily('factory'),'rubble');assert.equal(wreckFamily('dragon'),'arcane');
 assert.equal(wreckFamily('tank'),'vehicle');
+assert.equal(wreckFamily('thq'),'rubble');assert.equal(wreckFamily('tpen'),'rubble');
 assert.equal(collapsePose(0).height,1);assert.equal(collapsePose(1).done,true);
 for(let t=0;t<1;t+=.01) assert.ok(collapsePose(t).height>0);
 assert.equal(suspensionSlope(20,20,40),0);
@@ -37,7 +38,7 @@ for(const type of ['standard','phong']) {
  material.userData.collapseProgress.value=.5;assert.equal(shader.uniforms.uCollapseProgress.value,.5);
  material.dispose();
 }
-assert.match(source,/warmMaterial\(MAGIC_STRUCTURE_KINDS\[kind\]\?'stone':'metal',sample,true\)/,'fracture program prewarmed for both families');
+assert.match(source,/warmMaterial\(structureSurfaceFamily\(kind\),sample,true\)/,'fracture program prewarmed for metal/stone/hide families');
 // Exercise actual cached geometry and attachment groups, not empty mock nodes.
 const geometrySource=source.slice(0,source.indexOf('/**\n * 组装一座建筑'))
  .replace(/^import\s[\s\S]*?;$/mg,'').replace(/^export /mg,'');
@@ -76,5 +77,5 @@ for(const sample of [false,true]) for(const match of catalogBlock.matchAll(/^\s{
  for(const [geo,before] of positions) assert.deepEqual(geo.attributes.position.array,before,kind+' cached model is not mutated');
  checked++;
 }
-assert.equal(checked,32,'all 16 buildings in both model families');
+assert.equal(checked,44,'all 22 buildings in both model families');
 console.log('Battlefield finish passed: debris families, bounded collapse, disposal, confirmed death, suspension clamp and track reset.');

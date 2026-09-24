@@ -63,6 +63,7 @@ const fixture={THREE,console,warmAssetTasks,applyBuildingCollapse,scene:new THRE
   flashPool:[{light:{visible:false}},{light:{visible:true}}],
   makeRiverMaterial:()=>new THREE.MeshStandardMaterial(),applyEmissiveByVertexColor:m=>solidSurface(m),
   CLOTH_UNIT_KINDS:{},HIDE_UNIT_KINDS:{},MAGIC_UNIT_KINDS:{},MAGIC_STRUCTURE_KINDS:{},
+  unitSurfaceFamily(){return 'metal';},structureSurfaceFamily(){return 'metal';},
   unitGeometry(){builds++;return {body:geometry,simple:geometry};},
   structureGeometries(){builds++;return {team:geometry,head:{team:geometry,y:10}};},
   ensureTracerMesh:mesh,ensureTracerOrbMesh:mesh,ensureTracerShardMesh:mesh,

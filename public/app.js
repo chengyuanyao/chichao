@@ -315,6 +315,12 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   var P_ODY_SEAM = '#4fe4ff';
   var P_ODY_CORE = '#b46bff';
   var P_MITE = '#8ad4ff';
+  var P_BARK = '#6a4424';
+  var P_THATCH = '#d4b45c';
+  var P_BONE = '#ead8b0';
+  var P_HIDE = '#b8895a';
+  var P_MOSS = '#4a6a38';
+  var P_BLOOD = '#8a2020';
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1, mstorm: 1,
@@ -1134,19 +1140,120 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       pPoly(c, [[44, 22], [48, 12], [52, 22]], P_FIRE);
       pRect(c, 40, 48, 3, 8, P_VIOLET);
       pRect(c, 53, 48, 3, 8, P_VIOLET);
+    },
+    /* ---- 原始部落：茅草 / 图腾 / 兽皮，不复用钢铁或秘法剪影 ---- */
+    thq: function (c) {
+      pShadow(c, 48, 60, 28);
+      pPoly(c, [[20, 58], [76, 58], [70, 42], [26, 42]], P_BARK);
+      pPoly(c, [[22, 42], [74, 42], [48, 18]], P_THATCH);
+      pLine(c, 26, 40, 48, 18, 1.6, P_BONE);
+      pLine(c, 70, 40, 48, 18, 1.6, P_BONE);
+      pCirc(c, 48, 24, 2.4, P_FIRE);
+      pRect(c, 44, 48, 8, 10, P_HIDE);
+      pRect(c, 22, 36, 5, 10, P_MOSS);
+      pRect(c, 69, 36, 5, 10, P_MOSS);
+    },
+    tpower: function (c) {
+      pShadow(c, 48, 60, 18);
+      pRect(c, 43, 22, 10, 36, P_BARK);
+      pRect(c, 40, 28, 16, 8, P_HIDE);
+      pRect(c, 40, 40, 16, 8, P_BONE);
+      pCirc(c, 45, 32, 1.4, P_OUT);
+      pCirc(c, 51, 32, 1.4, P_OUT);
+      pCirc(c, 48, 20, 5, P_FIRE);
+      pCirc(c, 48, 17, 2.2, '#ffe0a0');
+      pRect(c, 32, 34, 8, 12, P_HIDE);
+      pRect(c, 56, 34, 8, 12, P_HIDE);
+    },
+    trefinery: function (c) {
+      pShadow(c, 46, 59, 28);
+      pPoly(c, [[18, 56], [72, 56], [64, 40], [24, 44]], P_THATCH);
+      pRect(c, 22, 46, 36, 10, P_BARK);
+      pLine(c, 60, 28, 60, 56, 3, P_BONE);
+      pLine(c, 54, 34, 66, 34, 2.2, P_BONE);
+      pCirc(c, 28, 56, 4, P_GOLD);
+      pCirc(c, 36, 58, 3.4, P_GOLD);
+      pRect(c, 40, 38, 8, 10, P_HIDE);
+    },
+    tcamp: function (c) {
+      pShadow(c, 48, 60, 26);
+      pPoly(c, [[22, 56], [46, 56], [34, 28]], P_HIDE);
+      pPoly(c, [[48, 56], [70, 56], [59, 34]], P_THATCH);
+      pLine(c, 34, 28, 34, 56, 1.6, P_BARK);
+      pLine(c, 59, 34, 59, 56, 1.6, P_BARK);
+      pLine(c, 72, 56, 72, 30, 2, P_BONE);
+      pLine(c, 68, 56, 68, 34, 2, P_BONE);
+      pCirc(c, 46, 54, 2.4, P_FIRE);
+    },
+    tpen: function (c) {
+      pShadow(c, 48, 60, 28);
+      pRect(c, 20, 40, 4, 18, P_BARK);
+      pRect(c, 72, 40, 4, 18, P_BARK);
+      pRect(c, 20, 38, 56, 4, P_BARK);
+      pRect(c, 20, 50, 56, 3, P_BARK);
+      pRect(c, 42, 42, 12, 16, P_HIDE);
+      pRect(c, 32, 54, 16, 5, P_BONE);
+      pCirc(c, 58, 50, 4, P_MOSS);
+    },
+    taltar: function (c) {
+      pShadow(c, 48, 60, 26);
+      pCirc(c, 48, 50, 16, P_STONE);
+      pRect(c, 34, 44, 28, 8, P_BONE);
+      pRect(c, 36, 42, 24, 4, P_BLOOD);
+      pLine(c, 28, 56, 28, 30, 2.4, P_BONE);
+      pLine(c, 68, 56, 68, 30, 2.4, P_BONE);
+      pCirc(c, 48, 40, 3, P_FIRE);
+    },
+    spear: function (c) {
+      pBust(c, P_HIDE);
+      pCirc(c, 48, 30, 9.2, P_HIDE);
+      c.strokeStyle = P_BONE; c.lineWidth = 2;
+      c.beginPath(); c.arc(48, 28, 10, Math.PI * 1.05, Math.PI * 1.95); c.stroke();
+      pLine(c, 30, 60, 78, 18, 2.6, P_BARK);
+      pPoly(c, [[74, 12], [84, 16], [76, 24]], P_BONE);
+      pRect(c, 40, 46, 16, 5, P_BARK);
+    },
+    tamer: function (c) {
+      pBust(c, P_BARK);
+      pPoly(c, [[30, 44], [66, 44], [70, 62], [26, 62]], P_HIDE);
+      pCirc(c, 48, 28, 8.5, P_HIDE);
+      pPoly(c, [[40, 20], [44, 8], [48, 20]], P_THATCH);
+      pPoly(c, [[48, 20], [52, 6], [56, 20]], P_THATCH);
+      pLine(c, 32, 58, 78, 22, 3, P_BARK);
+      pCirc(c, 78, 20, 5, P_BONE);
+      pCirc(c, 76, 18, 1.2, P_OUT);
+      pCirc(c, 80, 18, 1.2, P_OUT);
+    },
+    wolf: function (c) {
+      pShadow(c, 48, 60, 22);
+      pPoly(c, [[24, 52], [70, 50], [66, 34], [30, 36]], P_HIDE);
+      pPoly(c, [[62, 36], [82, 40], [76, 28], [64, 30]], P_HIDE);
+      pPoly(c, [[58, 24], [64, 10], [68, 26]], P_BARK);
+      pPoly(c, [[68, 26], [78, 12], [74, 28]], P_BARK);
+      pCirc(c, 72, 32, 1.4, P_FIRE);
+      pPoly(c, [[22, 42], [16, 48], [24, 50]], P_BARK);
+    },
+    tharvester: function (c) {
+      pShadow(c, 48, 60, 26);
+      pPoly(c, [[20, 52], [68, 52], [62, 34], [26, 36]], P_HIDE);
+      pCirc(c, 70, 38, 8, P_HIDE);
+      pLine(c, 66, 30, 62, 16, 2.4, P_BONE);
+      pLine(c, 74, 30, 78, 16, 2.4, P_BONE);
+      pRect(c, 28, 28, 12, 10, P_BARK);
+      pRect(c, 44, 28, 12, 10, P_BARK);
+      pCirc(c, 34, 32, 2.4, P_GOLD);
+      pCirc(c, 50, 32, 2.4, P_GOLD);
+    },
+    tmcv: function (c) {
+      pShadow(c, 48, 61, 28);
+      pPoly(c, [[18, 54], [70, 54], [62, 28], [26, 28]], P_HIDE);
+      pPoly(c, [[22, 28], [66, 28], [48, 14]], P_THATCH);
+      pRect(c, 20, 50, 52, 5, P_BARK);
+      pCirc(c, 74, 46, 7, P_HIDE);
+      pCirc(c, 86, 46, 6, P_HIDE);
+      pRect(c, 18, 32, 6, 12, P_BARK);
     }
   };
-  PORTRAIT_PAINTERS.thq = PORTRAIT_PAINTERS.hq;
-  PORTRAIT_PAINTERS.tpower = PORTRAIT_PAINTERS.power;
-  PORTRAIT_PAINTERS.trefinery = PORTRAIT_PAINTERS.refinery;
-  PORTRAIT_PAINTERS.tcamp = PORTRAIT_PAINTERS.barracks;
-  PORTRAIT_PAINTERS.tpen = PORTRAIT_PAINTERS.factory;
-  PORTRAIT_PAINTERS.taltar = PORTRAIT_PAINTERS.repair;
-  PORTRAIT_PAINTERS.spear = PORTRAIT_PAINTERS.rifle;
-  PORTRAIT_PAINTERS.tamer = PORTRAIT_PAINTERS.mage;
-  PORTRAIT_PAINTERS.wolf = PORTRAIT_PAINTERS.dog;
-  PORTRAIT_PAINTERS.tharvester = PORTRAIT_PAINTERS.harvester;
-  PORTRAIT_PAINTERS.tmcv = PORTRAIT_PAINTERS.mcv;
 
   // 深红内衬 + 低透明放射线 + 径向明暗：所有肖像共用的底子。
   // 秘法会建筑走暖金底，作战单位走冷紫底，钢铁军团仍是深红。

@@ -576,6 +576,18 @@ const MAT = {
   runeCyan: [0.38, 1.90, 2.20],     // 建筑青蓝符文辉光
   frostGlow: [1.15, 1.95, 2.45],    // 冰霜蓝
   fireGlow: [2.45, 1.15, 0.42],     // 龙火橙 / 魔仆不稳核
+  // ---- 原始部落：树皮褐 / 茅草黄 / 骨象牙 / 兽皮棕 / 苔藓点缀，不要钢板也不要符文紫 ----
+  bark: [0.38, 0.24, 0.12],         // 深树皮立柱
+  barkLit: [0.52, 0.34, 0.16],      // 受光木梁
+  thatch: [0.72, 0.56, 0.22],       // 茅草屋顶
+  thatchDark: [0.48, 0.36, 0.14],   // 茅草阴影面
+  hideTan: [0.58, 0.40, 0.24],      // 兽皮罩棚 / 帐篷
+  hideDark: [0.32, 0.20, 0.12],     // 深色兽皮
+  boneIvory: [0.86, 0.78, 0.60],    // 骨矛尖 / 兽骨架
+  earthPack: [0.36, 0.28, 0.16],    // 夯土地基
+  moss: [0.28, 0.38, 0.18],         // 苔藓点缀
+  bloodCloth: [0.48, 0.10, 0.10],   // 祭坛血布（固有色，不是团队色）
+  spiritFire: [2.35, 1.05, 0.28],   // 图腾火碗：暖橙，不是奥术紫
   // 自发光（分量 > 1）
   exhaust: [2.4, 0.95, 0.28],
   furnace: [2.6, 1.35, 0.35],
@@ -588,6 +600,15 @@ const MAT = {
 const MAGIC_STRUCTURE_KINDS = {
   mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1, mstorm: 1
 };
+const TRIBE_STRUCTURE_KINDS = {
+  thq: 1, tpower: 1, trefinery: 1, tcamp: 1, tpen: 1, taltar: 1
+};
+
+function structureSurfaceFamily(kind) {
+  if (MAGIC_STRUCTURE_KINDS[kind]) return 'stone';
+  if (TRIBE_STRUCTURE_KINDS[kind]) return 'hide';
+  return 'metal';
+}
 const MAGIC_UNIT_KINDS = {
   mage: 1, frost: 1, imp: 1, oracle: 1, golem: 1, behemoth: 1, panther: 1, dragon: 1,
   warden: 1, colossus: 1, comet: 1, mharvester: 1, mmcv: 1, hexling: 1
@@ -602,6 +623,13 @@ const CLOTH_UNIT_KINDS = {
 // 巨龙从兽皮改成金属：奥德赛那版是硬表面构装体，皮毛粗糙度会把甲板和铬边
 // 一起照哑，硬表面的折角就读不出来了。
 const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1 };
+
+function unitSurfaceFamily(kind) {
+  if (CLOTH_UNIT_KINDS[kind]) return 'cloth';
+  if (HIDE_UNIT_KINDS[kind] || kind === 'tharvester' || kind === 'tmcv') return 'hide';
+  if (MAGIC_UNIT_KINDS[kind]) return 'stone';
+  return 'metal';
+}
 
 const ROT_X90 = new THREE.Matrix4().makeRotationX(Math.PI / 2);
 const ROT_Y90 = new THREE.Matrix4().makeRotationY(Math.PI / 2);
@@ -1990,12 +2018,172 @@ const UNIT_BUILDERS = {
     };
   },
 
-  /* ---- 原始部落 P0：复用钢铁/秘法网格，目录名分开 ---- */
-  spear: function () { return infantryParts('rifle'); },
-  tamer: function () { return UNIT_BUILDERS.mage(); },
-  wolf: function () { return UNIT_BUILDERS.dog(); },
-  tharvester: function () { return UNIT_BUILDERS.harvester(); },
-  tmcv: function () { return UNIT_BUILDERS.mcv(); }
+  /* ---- 原始部落：石器/兽皮剪影，不复用步枪兵、法师、矿车 ---- */
+  spear: function () {
+    // 骨矛猎手：兽皮短褂 + 裸头骨环 + 骨尖长矛。面向 +X，不是钢盔步枪兵。
+    const hideProfile = [
+      [0.0, -5.4], [1.0, -5.4], [0.92, -3.2], [0.70, 1.4],
+      [0.78, 4.6], [0.52, 5.8], [0.0, 6.0]
+    ];
+    const body = surfaced(SURF.hide, [
+      profiledVolume(hideProfile, 2.15, 2.35, 10, 0, 7.6, 0, MAT.hideTan),
+      taperedBox(3.4, 3.6, 3.6, 4.0, 1.8, 0, 7.2, 0, MAT.hideDark),
+      ellipsoid(1.45, 1.70, 1.50, 0.25, 16.2, 0, MAT.sandArmor),
+      torus(1.55, 0.16, 6, 10, 0.2, 17.15, 0, MAT.boneIvory, ROT_X90),
+      limb(0.95, 0.78, -0.2, 7.4, 1.55, 0.55, 4.2, 1.75, MAT.sandArmor),
+      limb(0.78, 0.62, 0.55, 4.2, 1.75, 0.05, 1.35, 1.85, MAT.sandArmor),
+      limb(0.95, 0.78, -0.2, 7.4, -1.55, -0.45, 4.1, -1.7, MAT.sandArmor),
+      limb(0.78, 0.62, -0.45, 4.1, -1.7, 0.25, 1.35, -1.85, MAT.sandArmor),
+      limb(0.88, 0.70, 0.1, 13.0, 2.5, 1.6, 10.6, 2.8, MAT.hideTan),
+      limb(0.70, 0.56, 1.6, 10.6, 2.8, 4.6, 10.0, -1.6, MAT.sandArmor),
+      limb(0.88, 0.70, 0.1, 13.0, -2.5, 1.4, 10.5, -2.6, MAT.hideTan),
+      limb(0.70, 0.56, 1.4, 10.5, -2.6, 3.4, 9.8, -2.2, MAT.sandArmor)
+    ]).concat(surfaced(SURF.cloth, [
+      ellipsoid(2.8, 0.42, 3.2, -0.2, 12.4, 0, 0.92),
+      taperedBox(2.6, 2.2, 2.1, 1.8, 1.1, 0.2, 0.7, 1.85, MAT.hideDark),
+      taperedBox(2.6, 2.2, 2.1, 1.8, 1.1, 0.55, 0.7, -1.85, MAT.hideDark)
+    ]));
+    const spearRot = new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.18);
+    body.push(Object.assign(cyl(0.22, 0.28, 13.2, 6, 6.4, 10.4, -2.05, MAT.barkLit, spearRot), { surf: SURF.hide }));
+    body.push(Object.assign(pyr(0.42, 2.6, 5, 12.8, 11.55, -2.05, MAT.boneIvory, spearRot), { surf: SURF.stone }));
+    return {
+      body: body,
+      glow: []
+    };
+  },
+
+  tamer: function () {
+    // 驯兽师：羽披 + 兽骨杖，不是法袍法球。
+    const cloak = [
+      [0.0, -6.2], [1.0, -6.2], [0.96, -4.6], [0.82, -0.6],
+      [0.70, 3.4], [0.48, 5.8], [0.0, 6.2]
+    ];
+    const body = surfaced(SURF.hide, [
+      profiledVolume(cloak, 4.15, 3.55, 12, -0.4, 7.4, 0, MAT.hideDark),
+      ellipsoid(3.4, 0.70, 3.8, 0, 13.1, 0, 0.92),
+      ellipsoid(3.2, 0.38, 3.3, -1.8, 11.2, 0, 0.84),
+      sph(1.70, 10, 0, 16.05, 0, MAT.sandArmor),
+      torus(1.85, 0.18, 6, 10, 0, 15.35, 0, MAT.boneIvory, ROT_X90),
+      pyr(0.55, 2.2, 5, 0.6, 18.2, 0.85, MAT.thatch),
+      pyr(0.55, 2.2, 5, 0.6, 18.2, -0.85, MAT.thatch),
+      pyr(0.48, 1.8, 5, -0.3, 18.0, 0, MAT.thatchDark),
+      limb(0.82, 0.66, 0.1, 13.0, 3.1, 1.6, 10.4, 3.4, MAT.hideTan),
+      limb(0.66, 0.52, 1.6, 10.4, 3.4, 4.2, 9.2, 2.6, MAT.sandArmor),
+      limb(0.82, 0.66, 0.1, 13.0, -3.1, 1.2, 10.2, -3.0, MAT.hideTan),
+      cyl(0.32, 0.38, 15.2, 6, 5.0, 9.4, 2.6, MAT.bark, ROT_Z90),
+      sph(1.15, 8, 12.2, 9.4, 2.6, MAT.boneIvory),
+      pyr(0.42, 1.4, 5, 13.2, 10.4, 2.6, MAT.boneIvory),
+      pyr(0.28, 1.1, 4, 12.8, 8.5, 2.15, MAT.boneIvory),
+      pyr(0.28, 1.1, 4, 12.8, 8.5, 3.05, MAT.boneIvory)
+    ]);
+    return {
+      body: body,
+      glow: [
+        sph(0.28, 5, 12.55, 9.55, 2.85, MAT.spiritFire),
+        sph(0.22, 5, 0.7, 16.45, 0.55, GLOW_SOFT)
+      ]
+    };
+  },
+
+  wolf: function () {
+    // 战狼：长吻、尖耳、蓬尾四足，不要军犬背心和发光项圈。
+    const tailRot = new THREE.Matrix4().makeRotationZ(-0.62);
+    const body = surfaced(SURF.hide, [
+      ellipsoid(9.2, 3.15, 3.2, 0.2, 6.7, 0, MAT.furTan),
+      ellipsoid(5.6, 1.20, 3.1, -1.6, 9.0, 0, MAT.furDark),
+      ellipsoid(3.4, 2.55, 2.35, 8.8, 8.3, 0, MAT.furTan),
+      ellipsoid(3.6, 1.05, 1.15, 13.4, 7.35, 0, MAT.furDark),
+      pyr(1.10, 3.6, 5, 7.8, 12.1, 1.35, MAT.furDark),
+      pyr(1.10, 3.6, 5, 7.8, 12.1, -1.35, MAT.furDark),
+      cyl(1.45, 0.28, 8.8, 6, -11.4, 8.2, 0, MAT.furDark, tailRot),
+      ellipsoid(2.4, 1.35, 1.7, -15.2, 10.0, 0, MAT.furTan),
+      ellipsoid(2.8, 0.55, 3.1, 0.4, 8.7, 0, 0.90)
+    ]);
+    [5.4, -4.8].forEach(function (px) {
+      [2.05, -2.05].forEach(function (pz) {
+        body.push(Object.assign(
+          limb(0.82, 0.58, px, 5.4, pz, px + 0.55, 0.55, pz, MAT.furDark),
+          { surf: SURF.hide }));
+      });
+    });
+    return {
+      body: body,
+      glow: [
+        sph(0.42, 5, 11.4, 8.85, 1.15, MAT.spiritFire),
+        sph(0.42, 5, 11.4, 8.85, -1.15, MAT.spiritFire)
+      ]
+    };
+  },
+
+  tharvester: function () {
+    // 驮兽：有角驮畜 + 两侧筐，有机轮廓，不是轮式矿车。
+    const body = surfaced(SURF.hide, [
+      ellipsoid(14.5, 6.4, 5.8, -1.2, 10.4, 0, MAT.hideTan),
+      ellipsoid(6.2, 5.2, 4.6, 11.2, 11.6, 0, MAT.hideTan),
+      ellipsoid(3.4, 2.2, 2.4, 16.4, 10.2, 0, MAT.hideDark),
+      pyr(0.85, 4.6, 5, 13.6, 16.2, 1.6, MAT.boneIvory),
+      pyr(0.85, 4.6, 5, 13.6, 16.2, -1.6, MAT.boneIvory),
+      taperedBox(8.4, 7.2, 7.2, 6.2, 1.6, -1.0, 15.6, 0, 0.92),
+      box(6.4, 5.2, 4.2, -2.2, 13.4, 6.4, MAT.bark),
+      box(6.4, 5.2, 4.2, -2.2, 13.4, -6.4, MAT.bark),
+      box(5.6, 4.4, 3.4, -2.2, 13.6, 6.4, MAT.hideDark),
+      box(5.6, 4.4, 3.4, -2.2, 13.6, -6.4, MAT.hideDark)
+    ]);
+    [8.2, -7.6].forEach(function (px) {
+      [3.2, -3.2].forEach(function (pz) {
+        body.push(Object.assign(
+          limb(1.35, 1.05, px, 8.6, pz, px + 0.6, 0.8, pz, MAT.hideDark),
+          { surf: SURF.hide }));
+      });
+    });
+    return {
+      body: body,
+      glow: [
+        sph(1.6, 6, -2.2, 14.8, 6.4, MAT.oreGlow),
+        sph(1.6, 6, -2.2, 14.8, -6.4, MAT.oreGlow),
+        sph(0.45, 5, 15.6, 11.6, 1.35, GLOW_SOFT),
+        sph(0.45, 5, 15.6, 11.6, -1.35, GLOW_SOFT)
+      ]
+    };
+  },
+
+  tmcv: function () {
+    // 迁徙驮队：兽拉兽皮篷车 / 雪橇，不是履带基地车。
+    const cover = [
+      [0.0, -7.2], [1.0, -7.2], [0.98, -4.8], [0.72, 1.6],
+      [0.42, 6.2], [0.0, 7.2]
+    ];
+    const body = surfaced(SURF.hide, [
+      profiledVolume(cover, 11.5, 16.5, 10, -4.0, 18.4, 0, MAT.hideTan),
+      taperedBox(22, 28, 20, 26, 3.2, -4.0, 9.2, 0, MAT.barkLit),
+      box(26, 1.4, 2.2, -4.0, 7.4, 12.4, MAT.bark),
+      box(26, 1.4, 2.2, -4.0, 7.4, -12.4, MAT.bark),
+      ellipsoid(3.6, 0.55, 8.4, -4.0, 22.6, 0, 0.92),
+      box(0.6, 6.2, 4.8, 8.6, 16.4, 0, MAT.bark),
+      ellipsoid(7.4, 4.4, 3.8, 16.4, 9.6, 3.6, MAT.hideTan),
+      ellipsoid(7.4, 4.4, 3.8, 16.4, 9.6, -3.6, MAT.hideTan),
+      ellipsoid(3.4, 2.8, 2.6, 22.6, 10.8, 3.6, MAT.hideDark),
+      ellipsoid(3.4, 2.8, 2.6, 22.6, 10.8, -3.6, MAT.hideDark)
+    ]).concat(surfaced(SURF.cloth, [
+      box(5.2, 6.4, 0.35, -14.2, 18.8, 10.6, 1.0),
+      box(5.2, 6.4, 0.35, -14.2, 18.8, -10.6, 1.0)
+    ]));
+    [18.4, 13.2].forEach(function (px) {
+      [3.6, -3.6].forEach(function (pz) {
+        body.push(Object.assign(
+          limb(1.05, 0.82, px, 7.4, pz, px + 0.5, 0.7, pz, MAT.hideDark),
+          { surf: SURF.hide }));
+      });
+    });
+    return {
+      body: body,
+      glow: [
+        sph(1.1, 6, -4.0, 24.2, 0, MAT.spiritFire),
+        sph(0.4, 5, 24.6, 11.6, 4.4, GLOW_SOFT),
+        sph(0.4, 5, 24.6, 11.6, -4.4, GLOW_SOFT)
+      ]
+    };
+  }
 };
 
 /* ------------------------------------------------------------------ *
@@ -2054,6 +2242,19 @@ function partCollector() {
 function addStructureFoundation(c, kind, s) {
   const add = c.add;
   const taper = c.taper;
+  if (TRIBE_STRUCTURE_KINDS[kind]) {
+    // 夯土台 + 木桩圈，不要钢板甲板也不要青符金台。
+    taper(HULL, s * 1.16, s * 1.16, s * 1.02, s * 1.02, 2.4, 0, 1.2, 0, MAT.earthPack);
+    add(HULL, new THREE.TorusGeometry(s * 0.78, s * 0.055, 5, 14),
+      0, 0.85, 0, MAT.bark, ROT_X90);
+    [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
+      add(HULL, new THREE.CylinderGeometry(s * 0.035, s * 0.045, s * 0.34, 6),
+        q[0] * s * 0.74, 1.55, q[1] * s * 0.74, MAT.bark);
+      add(HULL, new THREE.SphereGeometry(s * 0.04, 6, 5),
+        q[0] * s * 0.74, 1.78, q[1] * s * 0.74, MAT.moss);
+    });
+    return;
+  }
   if (MAGIC_STRUCTURE_KINDS[kind]) {
     // 奥术塔的高瘦轮廓需要更稳的视觉底座；只放大水平尺寸，零件数不变。
     const footprint = (kind === 'mtower' || kind === 'mstorm') ? s * 1.10 : s;
@@ -2096,7 +2297,7 @@ function structureParts(kind, size) {
   const s = size;
   addStructureFoundation(c, kind, s);
 
-  if (kind === 'hq' || kind === 'thq') {
+  if (kind === 'hq') {
     // 指挥中心：矮宽地堡 + 两侧翼楼 + 收束主塔，不再是三层灰方块。
     // 正面闸门朝 +Z（默认相机从南往北看），主塔加四棱斜顶，翼楼是独立碉堡。
     taper(HULL, s * 1.46, s * 1.22, s * 1.28, s * 1.04, s * 0.38, 0, s * 0.19 + 3.4, 0, MAT.concrete);
@@ -2135,7 +2336,7 @@ function structureParts(kind, size) {
     });
     add(HULL, new THREE.CylinderGeometry(s * 0.045, s * 0.07, s * 0.62, 8), 0, s * 1.92, 0, MAT.steel);
     add(HULL, new THREE.BoxGeometry(s * 0.28, s * 0.04, s * 0.04), s * 0.16, s * 2.16, 0, MAT.darkSteel);
-  } else if (kind === 'power' || kind === 'tpower') {
+  } else if (kind === 'power') {
     taper(HULL, s * 1.46, s * 1.16, s * 1.30, s * 1.02, s * 0.38, 0, s * 0.19 + 3.4, 0, MAT.concrete);
     add(HULL, new THREE.BoxGeometry(s * 0.72, s * 0.28, s * 0.70), 0, s * 0.38 + 3.4, s * 0.42, MAT.darkSteel);
     [-1, 1].forEach(function (side) {
@@ -2160,7 +2361,7 @@ function structureParts(kind, size) {
     add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.22, s * 0.28), 0, s * 0.36 + 3.4, s * 0.58, MAT.rivet);
     add(HULL, new THREE.CylinderGeometry(s * 0.04, s * 0.04, s * 0.40, 6),
       0, s * 0.48 + 3.4, s * 0.38, MAT.copper, ROT_Z90);
-  } else if (kind === 'refinery' || kind === 'trefinery') {
+  } else if (kind === 'refinery') {
     taper(HULL, s * 1.48, s * 1.18, s * 1.34, s * 1.06, s * 0.42, 0, s * 0.21 + 3.4, 0, MAT.concrete);
     add(TEAM, new THREE.CylinderGeometry(s * 0.40, s * 0.48, s * 1.05, 12), s * 0.40, s * 0.88, 0);
     add(HULL, new THREE.ConeGeometry(s * 0.44, s * 0.48, 12), s * 0.40, s * 1.64, 0, MAT.rust);
@@ -2174,7 +2375,7 @@ function structureParts(kind, size) {
     add(HULL, new THREE.CylinderGeometry(s * 0.07, s * 0.07, s * 0.64, 6), s * 0.86, s * 0.72, -s * 0.38, MAT.steel);
     add(HULL, new THREE.CylinderGeometry(s * 0.05, s * 0.05, s * 0.50, 6),
       s * 0.18, s * 0.70, -s * 0.36, MAT.darkSteel, ROT_Z90);
-  } else if (kind === 'barracks' || kind === 'tcamp') {
+  } else if (kind === 'barracks') {
     taper(HULL, s * 1.42, s * 1.12, s * 1.28, s * 1.00, s * 0.40, 0, s * 0.20 + 3.4, 0, MAT.concrete);
     add(TEAM, new THREE.BoxGeometry(s * 1.22, s * 0.36, s * 0.92), 0, s * 0.42 + 3.4, 0, 1.0);
     add(HULL, new THREE.CylinderGeometry(s * 0.62, s * 0.62, s * 1.36, 3), 0, s * 0.72, 0, MAT.olive,
@@ -2186,7 +2387,7 @@ function structureParts(kind, size) {
     add(GLOW, new THREE.BoxGeometry(s * 1.10, s * 0.05, s * 0.96), 0, s * 0.50, 0, GLOW_SOFT);
     add(HULL, new THREE.CylinderGeometry(s * 0.025, s * 0.03, s * 0.72, 6), -s * 0.58, s * 1.18, 0, MAT.steel);
     add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.12, s * 0.02), -s * 0.46, s * 1.42, 0, MAT.hazard);
-  } else if (kind === 'factory' || kind === 'tpen') {
+  } else if (kind === 'factory') {
     taper(HULL, s * 1.52, s * 1.32, s * 1.38, s * 1.18, s * 0.52, 0, s * 0.26 + 3.4, 0, MAT.concrete);
     add(TEAM, new THREE.BoxGeometry(s * 1.28, s * 0.12, s * 1.10), 0, s * 0.78, 0, 1.0);
     add(HULL, new THREE.CylinderGeometry(s * 0.58, s * 0.58, s * 1.28, 8, 1, false, 0, Math.PI),
@@ -2202,7 +2403,7 @@ function structureParts(kind, size) {
     }
     add(GLOW, new THREE.BoxGeometry(s * 1.22, s * 0.05, s * 0.07), 0, s * 0.58, s * 0.58, GLOW_SOFT);
     add(GLOW, new THREE.BoxGeometry(s * 1.22, s * 0.05, s * 0.07), 0, s * 0.58, -s * 0.58, GLOW_SOFT);
-  } else if (kind === 'repair' || kind === 'taltar') {
+  } else if (kind === 'repair') {
     taper(HULL, s * 1.42, s * 1.24, s * 1.32, s * 1.14, s * 0.28, 0, s * 0.14 + 3.4, 0, MAT.concrete);
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (q) {
       add(HULL, new THREE.BoxGeometry(s * 0.13, s * 0.98, s * 0.13),
@@ -2364,6 +2565,135 @@ function structureParts(kind, size) {
     });
     add(GLOW, new THREE.BoxGeometry(s * 0.76, s * 0.03, s * 0.03), 0, s * 0.96 + 3.4, 0, MAT.arcaneGlow);
     add(HULL, new THREE.TorusGeometry(s * 0.22, s * 0.028, 6, 12), 0, s * 0.48 + 3.4, 0, MAT.goldTrim, ROT_X90);
+    /* ---------------- 原始部落建筑 ----------------
+     * 茅草、树皮、兽皮、兽骨。每种必须有 50m 相机下认得出的独立剪影，
+     * 不能再是钢铁方堡或秘法金塔换一层皮。团队色留给旗帜/兽皮条。
+     */
+  } else if (kind === 'thq') {
+    // 部落大营：纵深木墙长屋 + 茅草人字顶 + 烟孔，不是混凝土指挥塔。
+    taper(HULL, s * 1.08, s * 1.62, s * 0.98, s * 1.50, s * 0.40, 0, s * 0.20 + 3.4, 0, MAT.barkLit);
+    taper(HULL, s * 1.18, s * 1.72, s * 0.18, s * 1.78, s * 0.40, 0, s * 0.56 + 3.4, 0, MAT.thatch);
+    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.08, s * 1.70), 0, s * 0.78 + 3.4, 0, MAT.thatchDark);
+    add(HULL, new THREE.CylinderGeometry(s * 0.03, s * 0.03, s * 1.76, 6),
+      0, s * 0.82 + 3.4, 0, MAT.bark, ROT_X90);
+    add(HULL, new THREE.CylinderGeometry(s * 0.10, s * 0.14, s * 0.12, 8),
+      0, s * 0.88 + 3.4, 0, MAT.thatchDark);
+    add(GLOW, new THREE.SphereGeometry(s * 0.06, 8, 6), 0, s * 1.02 + 3.4, 0, MAT.spiritFire);
+    add(HULL, new THREE.BoxGeometry(s * 0.24, s * 0.30, s * 0.06), 0, s * 0.22 + 3.4, s * 0.78, MAT.hideDark);
+    add(HULL, new THREE.BoxGeometry(s * 0.18, s * 0.14, s * 0.04), 0, s * 0.34 + 3.4, s * 0.80, MAT.hideTan);
+    [-1, 1].forEach(function (side) {
+      add(HULL, new THREE.CylinderGeometry(s * 0.045, s * 0.055, s * 0.78, 6),
+        side * s * 0.48, s * 0.38 + 3.4, s * 0.72, MAT.bark);
+      add(HULL, new THREE.CylinderGeometry(s * 0.045, s * 0.055, s * 0.78, 6),
+        side * s * 0.48, s * 0.38 + 3.4, -s * 0.72, MAT.bark);
+      add(TEAM, new THREE.BoxGeometry(s * 0.20, s * 0.32, s * 0.03),
+        side * s * 0.58, s * 0.54 + 3.4, s * 0.20, 1.0);
+      add(HULL, new THREE.CylinderGeometry(s * 0.018, s * 0.018, s * 0.20, 5),
+        side * s * 0.58, s * 0.72 + 3.4, s * 0.20, MAT.bark);
+    });
+    add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.08, s * 0.16), 0, s * 0.10 + 3.4, s * 0.84, MAT.moss);
+  } else if (kind === 'tpower') {
+    // 图腾柱：叠脸木柱 + 横翼 + 顶上火碗。单柱剪影，暖橙火，不是磁能双塔也不是晶针。
+    taper(HULL, s * 0.92, s * 0.92, s * 0.70, s * 0.70, s * 0.16, 0, s * 0.08 + 3.4, 0, MAT.earthPack);
+    add(HULL, new THREE.CylinderGeometry(s * 0.15, s * 0.20, s * 1.58, 8), 0, s * 0.90 + 3.4, 0, MAT.bark);
+    [0.42, 0.78, 1.16].forEach(function (h, i) {
+      add(HULL, new THREE.BoxGeometry(s * 0.30, s * 0.22, s * 0.14),
+        0, s * h + 3.4, s * 0.16, i === 1 ? MAT.boneIvory : MAT.barkLit);
+      add(HULL, new THREE.SphereGeometry(s * 0.035, 6, 5),
+        s * 0.07, s * h + 3.48, s * 0.24, MAT.hideDark);
+      add(HULL, new THREE.SphereGeometry(s * 0.035, 6, 5),
+        -s * 0.07, s * h + 3.48, s * 0.24, MAT.hideDark);
+      add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.06, s * 0.10),
+        0, s * (h - 0.08) + 3.4, s * 0.24, MAT.boneIvory);
+    });
+    add(HULL, new THREE.BoxGeometry(s * 0.72, s * 0.08, s * 0.10), 0, s * 1.00 + 3.4, 0, MAT.barkLit);
+    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.24, s * 0.08), s * 0.34, s * 0.92 + 3.4, 0, MAT.boneIvory);
+    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.24, s * 0.08), -s * 0.34, s * 0.92 + 3.4, 0, MAT.boneIvory);
+    add(TEAM, new THREE.BoxGeometry(s * 0.22, s * 0.32, s * 0.03), s * 0.24, s * 0.72 + 3.4, 0, 1.0);
+    add(TEAM, new THREE.BoxGeometry(s * 0.22, s * 0.32, s * 0.03), -s * 0.24, s * 0.72 + 3.4, 0, 1.0);
+    add(HULL, new THREE.CylinderGeometry(s * 0.18, s * 0.12, s * 0.10, 8), 0, s * 1.74 + 3.4, 0, MAT.barkLit);
+    add(GLOW, new THREE.SphereGeometry(s * 0.10, 8, 6), 0, s * 1.88 + 3.4, 0, MAT.spiritFire);
+    add(GLOW, new THREE.CylinderGeometry(s * 0.03, s * 0.08, s * 0.22, 6), 0, s * 2.02 + 3.4, 0, MAT.spiritFire);
+  } else if (kind === 'trefinery') {
+    // 兽骨精炼棚：斜顶窝棚 + 骨架晾架 + 兽皮 + 矿堆，横扁剪影，不是立式储罐。
+    taper(HULL, s * 1.28, s * 1.02, s * 1.12, s * 0.88, s * 0.16, 0, s * 0.08 + 3.4, 0, MAT.earthPack);
+    const lean = new THREE.Matrix4().makeRotationZ(-0.38);
+    add(HULL, new THREE.BoxGeometry(s * 1.22, s * 0.08, s * 0.80), -s * 0.02, s * 0.46 + 3.4, 0, MAT.thatch, lean);
+    add(HULL, new THREE.BoxGeometry(s * 1.10, s * 0.04, s * 0.70), 0, s * 0.52 + 3.4, 0, MAT.thatchDark, lean);
+    [-1, 1].forEach(function (side) {
+      add(HULL, new THREE.CylinderGeometry(s * 0.04, s * 0.05, s * 0.62, 6),
+        side * s * 0.42, s * 0.30 + 3.4, s * 0.28, MAT.bark);
+      add(HULL, new THREE.CylinderGeometry(s * 0.04, s * 0.05, s * 0.38, 6),
+        side * s * 0.42, s * 0.20 + 3.4, -s * 0.28, MAT.bark);
+    });
+    add(HULL, new THREE.CylinderGeometry(s * 0.035, s * 0.035, s * 0.96, 6),
+      s * 0.40, s * 0.64 + 3.4, 0, MAT.boneIvory);
+    add(HULL, new THREE.CylinderGeometry(s * 0.03, s * 0.03, s * 0.72, 6),
+      s * 0.40, s * 0.60 + 3.4, s * 0.16, MAT.boneIvory, ROT_Z90);
+    add(HULL, new THREE.CylinderGeometry(s * 0.03, s * 0.03, s * 0.58, 6),
+      s * 0.40, s * 0.52 + 3.4, -s * 0.14, MAT.boneIvory, ROT_Z90);
+    add(TEAM, new THREE.BoxGeometry(s * 0.20, s * 0.28, s * 0.02), s * 0.18, s * 0.42 + 3.4, s * 0.32, 0.94);
+    add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.24, s * 0.02), -s * 0.16, s * 0.40 + 3.4, s * 0.30, 0.90);
+    add(HULL, new THREE.SphereGeometry(s * 0.16, 8, 6), -s * 0.36, s * 0.22 + 3.4, s * 0.10, MAT.earthPack);
+    add(HULL, new THREE.SphereGeometry(s * 0.12, 7, 5), -s * 0.22, s * 0.18 + 3.4, -s * 0.08, MAT.boneIvory);
+    add(GLOW, new THREE.SphereGeometry(s * 0.055, 6, 5), -s * 0.30, s * 0.18 + 3.4, 0.04, MAT.spiritFire);
+  } else if (kind === 'tcamp') {
+    // 猎手营地：两三座锥顶帐篷 + 矛架，矮簇剪影，不是三角厂房。
+    function tent(x, z, scale) {
+      add(HULL, new THREE.ConeGeometry(s * 0.28 * scale, s * 0.52 * scale, 7),
+        x, s * 0.32 * scale + 3.4, z, MAT.hideTan);
+      add(HULL, new THREE.CylinderGeometry(s * 0.025, s * 0.03, s * 0.58 * scale, 5),
+        x, s * 0.34 * scale + 3.4, z, MAT.bark);
+      add(TEAM, new THREE.BoxGeometry(s * 0.10 * scale, s * 0.16 * scale, s * 0.02),
+        x, s * 0.20 * scale + 3.4, z + s * 0.22 * scale, 1.0);
+    }
+    tent(-s * 0.22, s * 0.08, 1.0);
+    tent(s * 0.28, -s * 0.12, 0.78);
+    tent(s * 0.02, s * 0.32, 0.62);
+    add(HULL, new THREE.BoxGeometry(s * 0.46, s * 0.04, s * 0.08), s * 0.36, s * 0.22 + 3.4, s * 0.28, MAT.bark);
+    for (let i = -2; i <= 2; i++) {
+      add(HULL, new THREE.CylinderGeometry(s * 0.012, s * 0.012, s * 0.36, 5),
+        s * 0.36 + i * s * 0.05, s * 0.36 + 3.4, s * 0.28, MAT.boneIvory);
+    }
+    add(GLOW, new THREE.SphereGeometry(s * 0.055, 7, 5), -s * 0.02, s * 0.16 + 3.4, -s * 0.22, MAT.spiritFire);
+    add(HULL, new THREE.CylinderGeometry(s * 0.08, s * 0.10, s * 0.06, 7),
+      -s * 0.02, s * 0.10 + 3.4, -s * 0.22, MAT.earthPack);
+  } else if (kind === 'tpen') {
+    // 驯兽围栏：木栅圈 + 双横杆 + 门 + 食槽，空心院子，不是厂房方块。
+    const posts = 14;
+    for (let i = 0; i < posts; i++) {
+      const a = (i / posts) * TAU;
+      if (i === 0 || i === 1) continue; // +X 方向留门
+      add(HULL, new THREE.CylinderGeometry(s * 0.032, s * 0.04, s * 0.62, 6),
+        Math.cos(a) * s * 0.64, s * 0.31 + 3.4, Math.sin(a) * s * 0.56, MAT.bark);
+    }
+    add(HULL, new THREE.TorusGeometry(s * 0.60, s * 0.024, 5, 18, Math.PI * 1.62),
+      0, s * 0.22 + 3.4, 0, MAT.barkLit, ROT_X90);
+    add(HULL, new THREE.TorusGeometry(s * 0.60, s * 0.024, 5, 18, Math.PI * 1.62),
+      0, s * 0.42 + 3.4, 0, MAT.barkLit, ROT_X90);
+    add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.56, s * 0.06), s * 0.60, s * 0.30 + 3.4, s * 0.16, MAT.bark);
+    add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.56, s * 0.06), s * 0.60, s * 0.30 + 3.4, -s * 0.16, MAT.bark);
+    add(TEAM, new THREE.BoxGeometry(s * 0.04, s * 0.24, s * 0.20), s * 0.64, s * 0.44 + 3.4, 0, 1.0);
+    add(HULL, new THREE.BoxGeometry(s * 0.38, s * 0.10, s * 0.16), -s * 0.16, s * 0.14 + 3.4, 0, MAT.barkLit);
+    add(HULL, new THREE.BoxGeometry(s * 0.34, s * 0.06, s * 0.12), -s * 0.16, s * 0.20 + 3.4, 0, MAT.hideDark);
+    add(HULL, new THREE.CylinderGeometry(s * 0.04, s * 0.04, s * 0.48, 5),
+      -s * 0.50, s * 0.38 + 3.4, s * 0.22, MAT.bark);
+    add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.20, s * 0.02), -s * 0.50, s * 0.54 + 3.4, s * 0.22, 0.94);
+  } else if (kind === 'taltar') {
+    // 血祭坛：石圈平坛 + 骨桩 + 血布，仪式台，不是维修龙门。
+    add(HULL, new THREE.CylinderGeometry(s * 0.48, s * 0.56, s * 0.16, 12), 0, s * 0.16 + 3.4, 0, MAT.slate);
+    add(HULL, new THREE.CylinderGeometry(s * 0.36, s * 0.40, s * 0.10, 10), 0, s * 0.26 + 3.4, 0, MAT.marble);
+    add(HULL, new THREE.BoxGeometry(s * 0.42, s * 0.08, s * 0.28), 0, s * 0.32 + 3.4, 0, MAT.boneIvory);
+    add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.03, s * 0.22), 0, s * 0.37 + 3.4, 0, MAT.bloodCloth);
+    [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
+      add(HULL, new THREE.CylinderGeometry(s * 0.03, s * 0.045, s * 0.52, 5),
+        q[0] * s * 0.46, s * 0.30 + 3.4, q[1] * s * 0.40, MAT.boneIvory);
+      add(HULL, new THREE.SphereGeometry(s * 0.04, 6, 5),
+        q[0] * s * 0.46, s * 0.58 + 3.4, q[1] * s * 0.40, MAT.boneIvory);
+    });
+    add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.22, s * 0.02), s * 0.22, s * 0.48 + 3.4, s * 0.18, 0.94);
+    add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.22, s * 0.02), -s * 0.22, s * 0.48 + 3.4, s * 0.18, 0.94);
+    add(GLOW, new THREE.SphereGeometry(s * 0.07, 8, 6), 0, s * 0.44 + 3.4, 0, MAT.spiritFire);
   }
   return c.parts;
 }
@@ -2519,6 +2849,22 @@ function spinnerParts(kind, size) {
     c.add(HULL, new THREE.ConeGeometry(s * 0.06, s * 0.12, 5), s * 0.20, 0, 0, MAT.goldTrim);
     c.add(GLOW, new THREE.SphereGeometry(s * 0.045, 7, 5), s * 0.20, 0, 0, MAT.arcaneGlow);
     return { parts: c.parts, y: size * 1.48 + 3.4, speed: 2.2 };
+  }
+  if (kind === 'thq') {
+    const c = partCollector();
+    c.add(GLOW, new THREE.SphereGeometry(s * 0.04, 6, 5), 0, 0, 0, MAT.spiritFire);
+    return { parts: c.parts, y: size * 1.04 + 3.4, speed: 0.9 };
+  }
+  if (kind === 'tpower') {
+    const c = partCollector();
+    c.add(GLOW, new THREE.TorusGeometry(s * 0.10, s * 0.018, 5, 10), 0, 0, 0, MAT.spiritFire,
+      new THREE.Matrix4().makeRotationX(1.15));
+    return { parts: c.parts, y: size * 1.94 + 3.4, speed: -1.8 };
+  }
+  if (kind === 'taltar') {
+    const c = partCollector();
+    c.add(GLOW, new THREE.TorusGeometry(s * 0.16, s * 0.016, 5, 10), 0, 0, 0, MAT.spiritFire, ROT_X90);
+    return { parts: c.parts, y: size * 0.46 + 3.4, speed: 1.1 };
   }
   return null;
 }
@@ -5545,11 +5891,6 @@ export function createRenderer(canvas) {
    * 出现所有兵种都是同一只小盒子的情况。
    */
   function simpleUnitParts(kind) {
-    if (kind === 'spear') kind = 'rifle';
-    if (kind === 'tamer') kind = 'mage';
-    if (kind === 'wolf') kind = 'dog';
-    if (kind === 'tharvester') kind = 'harvester';
-    if (kind === 'tmcv') kind = 'mcv';
     // 远处只有几像素大，保留 12 面方盒即可；近景才使用倒角轮廓。
     const box = plainBox;
     const taperedBox = plainTaperedBox;
@@ -5864,6 +6205,56 @@ export function createRenderer(canvas) {
         cyl(3.6, 3.6, 0.22, 10, 0, 6.4, 0, MAT.fireGlow)
       ], 1.20, 1.20, 1.20);
     }
+    /* ---- 原始部落 LOD：兽皮短褂、羽披、狼身、驮畜、篷车 ---- */
+    if (kind === 'spear') {
+      return [
+        taperedBox(7.0, 5.0, 5.2, 4.0, 8.0, 0.2, 8.0, 0, MAT.hideTan),
+        box(5.4, 0.7, 6.2, -0.2, 12.4, 0, 0.92),
+        sph(2.4, 6, 0.3, 16.0, 0, MAT.sandArmor),
+        box(13, 0.7, 0.7, 6.2, 10.2, -2.0, MAT.boneIvory)
+      ];
+    }
+    if (kind === 'tamer') {
+      return [
+        taperedBox(8.4, 7.2, 3.8, 3.4, 12.0, -0.2, 7.0, 0, MAT.hideDark),
+        box(6.2, 1.2, 6.8, 0, 13.0, 0, 0.92),
+        sph(2.0, 6, 0, 16.0, 0, MAT.sandArmor),
+        cyl(0.32, 0.32, 14, 6, 5.0, 9.2, 2.4, MAT.bark, ROT_Z90),
+        sph(1.3, 6, 12.0, 9.2, 2.4, MAT.boneIvory)
+      ];
+    }
+    if (kind === 'wolf') {
+      const quad = [
+        box(18, 6.2, 6.2, 0.4, 6.4, 0, MAT.furTan),
+        box(8, 4.4, 4.0, 10.6, 8.2, 0, MAT.furTan),
+        box(6.4, 2.2, 2.2, 15.2, 7.2, 0, MAT.furDark),
+        box(8, 1.2, 5.6, 0.4, 8.8, 0, 0.90)
+      ];
+      [5.2, -5.0].forEach(function (px) {
+        [2.0, -2.0].forEach(function (pz) {
+          quad.push(box(1.5, 5.2, 1.5, px, 2.4, pz, MAT.furDark));
+        });
+      });
+      return quad;
+    }
+    if (kind === 'tharvester') {
+      return [
+        box(28, 12, 12, -1, 10, 0, MAT.hideTan),
+        box(10, 8, 8, 13, 12, 0, MAT.hideTan),
+        box(7, 5, 4.4, -2, 14, 6.4, MAT.bark),
+        box(7, 5, 4.4, -2, 14, -6.4, MAT.bark),
+        box(10, 1.4, 8, -1, 16, 0, 0.92)
+      ];
+    }
+    if (kind === 'tmcv') {
+      return [
+        taperedBox(22, 28, 12, 16, 14, -4, 16, 0, MAT.hideTan),
+        box(24, 3, 26, -4, 8.4, 0, MAT.bark),
+        box(12, 8, 7, 16, 10, 3.6, MAT.hideTan),
+        box(12, 8, 7, 16, 10, -3.6, MAT.hideTan),
+        box(5.2, 6.4, 0.4, -14, 18, 10, 1.0)
+      ];
+    }
     return infantry;
   }
 
@@ -5933,11 +6324,11 @@ export function createRenderer(canvas) {
       pool[key] = mesh;
     };
     let unitMaterial = CLOTH_UNIT_KINDS[kind] ? unitClothMaterial :
-      (HIDE_UNIT_KINDS[kind] ? unitHideMaterial :
+      (HIDE_UNIT_KINDS[kind] || kind === 'tharvester' || kind === 'tmcv' ? unitHideMaterial :
         (MAGIC_UNIT_KINDS[kind] ? unitStoneMaterial : unitMetalMaterial));
     const originalMaterial=unitMaterial;
     if(state.artSample) {
-      const family=CLOTH_UNIT_KINDS[kind]?'cloth':HIDE_UNIT_KINDS[kind]?'hide':MAGIC_UNIT_KINDS[kind]?'stone':'metal';
+      const family=unitSurfaceFamily(kind);
       if(!riverUnitMaterials.has(family)) riverUnitMaterials.set(family,makeRiverMaterial(family));
       unitMaterial=riverUnitMaterials.get(family);
     }
@@ -6269,15 +6660,15 @@ export function createRenderer(canvas) {
     if (node) disposeStructure(structure.id);
     // vertexColors 让合并后的几何体仍能按零件明暗分层
     // 单一材质：零件的固有色/团队色由顶点属性区分
-    const teamMat = state.artSample ? makeRiverMaterial(MAGIC_STRUCTURE_KINDS[structure.kind]?'stone':'metal') : applyEmissiveByVertexColor(
+    const teamMat = state.artSample ? makeRiverMaterial(structureSurfaceFamily(structure.kind)) : applyEmissiveByVertexColor(
       new THREE.MeshPhongMaterial({ color: 0xffffff, vertexColors: true }),
-      MAGIC_STRUCTURE_KINDS[structure.kind] ? 'stone' : 'metal');
+      structureSurfaceFamily(structure.kind));
     const group = structureGroup(structure.kind, structure.size, teamMat,!!state.artSample);
     // Separate death program: intact buildings keep the original vertex path.
     // Both are created with the building, and both programs are prewarmed.
-    const breakMat=applyBuildingCollapse(state.artSample ? makeRiverMaterial(MAGIC_STRUCTURE_KINDS[structure.kind]?'stone':'metal') :
+    const breakMat=applyBuildingCollapse(state.artSample ? makeRiverMaterial(structureSurfaceFamily(structure.kind)) :
       applyEmissiveByVertexColor(new THREE.MeshPhongMaterial({color:0xffffff,vertexColors:true}),
-        MAGIC_STRUCTURE_KINDS[structure.kind]?'stone':'metal'));
+        structureSurfaceFamily(structure.kind)));
     if (!buildingPadMat) {
       buildingPadMat = applyFogMask(new THREE.MeshLambertMaterial({
         color: displayTheme(state.terrain && state.terrain.theme).pad,
@@ -9083,7 +9474,7 @@ export function createRenderer(canvas) {
         warmAssetKeys.add(key);
         tasks.push(()=>{
           const geo=unitGeometry(kind,sample);
-          const family=CLOTH_UNIT_KINDS[kind]?'cloth':HIDE_UNIT_KINDS[kind]?'hide':MAGIC_UNIT_KINDS[kind]?'stone':'metal';
+          const family=unitSurfaceFamily(kind);
           const material=warmMaterial(family,sample);
           warmMesh(root,geo.body,material,true);
           warmMesh(root,geo.simple,warmMaterial(family,false),true);
@@ -9099,8 +9490,8 @@ export function createRenderer(canvas) {
         warmAssetKeys.add(key);
         tasks.push(()=>{
           const geo=structureGeometries(kind,def.size,sample);
-          const material=warmMaterial(MAGIC_STRUCTURE_KINDS[kind]?'stone':'metal',sample,true);
-          const intactMaterial=warmMaterial(MAGIC_STRUCTURE_KINDS[kind]?'stone':'metal',sample);
+          const material=warmMaterial(structureSurfaceFamily(kind),sample,true);
+          const intactMaterial=warmMaterial(structureSurfaceFamily(kind),sample);
           const visit=entry=>{for(const value of Object.values(entry)) {
             if(value?.isBufferGeometry) {
               warmMesh(root,value,material,false);warmMesh(root,value,intactMaterial,false);
