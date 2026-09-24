@@ -396,6 +396,30 @@ UNIT_TYPES = {
         "projectile": "bite", "projectileSpeed": 1000.0, "splash": 0.0,
         "sight": 420.0, "armor": "beast", "damageType": "bite",
     },
+    # 蛛网巨蛛：围栏进阶控制兽。血祭坛后才许驯养，对位冰霜女巫的单目标锁腿。
+    # 中距吐丝，直伤一般；命中挂定身（slow.mult 0）+ 可复用的毒丝 DoT。
+    # 刷新只续时，不叠乘。兽甲、非载具、无自爆。比战狼慢、比女巫厚。
+    "spider": {
+        "name": "蛛网巨蛛", "cost": 720, "hp": 340, "speed": 108.0,
+        "damage": 18.0, "range": 170.0, "cooldown": 1.45,
+        "size": 14.0, "build": 8.0, "producer": "tpen",
+        "requires": ["taltar"],
+        "projectile": "web", "projectileSpeed": 520.0, "splash": 0.0,
+        "sight": 400.0, "armor": "beast", "damageType": "venom",
+        "slow": {"mult": 0.0, "duration": 2.2},
+        "dot": {"dps": 14.0, "duration": 3.0, "damageType": "venom"},
+    },
+    # 穿甲巨蝎：围栏进阶玻璃大炮。血祭坛后才许驯养，对位歼击车的兽甲短距穿甲手。
+    # 中短距尾刺，伤种复用 ap（重甲 ×2.10），无溅射、无定身、无 DoT。
+    # 造价低于歼击车，血更薄，射程更短。兽甲、非载具、无自爆。
+    "scorpion": {
+        "name": "穿甲巨蝎", "cost": 820, "hp": 165, "speed": 100.0,
+        "damage": 82.0, "range": 145.0, "cooldown": 1.80,
+        "size": 13.0, "build": 7.5, "producer": "tpen",
+        "requires": ["taltar"],
+        "projectile": "sting", "projectileSpeed": 640.0, "splash": 0.0,
+        "sight": 390.0, "armor": "beast", "damageType": "ap",
+    },
 }
 
 
@@ -596,7 +620,7 @@ TRIBE_STRUCTURES = frozenset((
     "thq", "tpower", "trefinery", "tcamp", "tpen", "taltar",
 ))
 TRIBE_UNITS = frozenset((
-    "tharvester", "tmcv", "spear", "tamer", "wolf",
+    "tharvester", "tmcv", "spear", "tamer", "wolf", "spider", "scorpion",
 ))
 VALID_FACTIONS = frozenset(("tech", "magic", "tribe"))
 

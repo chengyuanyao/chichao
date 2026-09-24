@@ -298,6 +298,19 @@ def main():
     assert catalog["units"]["behemoth"]["producer"] == "mcircle"
     assert catalog["units"]["behemoth"]["faction"] == "magic"
     assert catalog["units"]["behemoth"]["cost"] == 1520
+    assert catalog["units"]["spider"]["name"] == "蛛网巨蛛"
+    assert catalog["units"]["spider"]["requires"] == ["taltar"]
+    assert catalog["units"]["spider"]["producer"] == "tpen"
+    assert catalog["units"]["spider"]["faction"] == "tribe"
+    assert catalog["units"]["spider"]["repairable"] is False
+    assert catalog["units"]["spider"]["canVeteran"] is True
+    assert catalog["units"]["scorpion"]["name"] == "穿甲巨蝎"
+    assert catalog["units"]["scorpion"]["requires"] == ["taltar"]
+    assert catalog["units"]["scorpion"]["producer"] == "tpen"
+    assert catalog["units"]["scorpion"]["faction"] == "tribe"
+    assert catalog["units"]["scorpion"]["repairable"] is False
+    assert catalog["units"]["scorpion"]["canVeteran"] is True
+    assert catalog["units"]["scorpion"]["damageType"] == "ap"
     assert catalog["buildings"]["mstorm"]["name"] == "雷暴塔"
     assert catalog["buildings"]["mstorm"]["faction"] == "magic"
     assert catalog["buildings"]["mstorm"]["role"] == "defense"
@@ -632,7 +645,7 @@ def main():
     assert "surfaced(SURF.crystal, [" in builder_block
     assert "surfaced(SURF.metal, [" in builder_block
     # 巨龙从兽皮改成金属材质，否则皮毛粗糙度会把甲板和铬边的折角一起照哑
-    assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1 };" in render
+    assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1, scorpion: 1 };" in render
     # 攻击特效跟模型一起换紫青：火球是巨龙独有弹道，不能残留橙火或玉绿。
     # projectile 键仍是 fireball（服务端目录约定），只换表现。
     assert server.UNIT_TYPES["dragon"]["projectile"] == "fireball"
@@ -702,6 +715,28 @@ def main():
     assert "spear: function () { return infantryParts('rifle'); }" not in render
     assert "tamer: function () { return UNIT_BUILDERS.mage(); }" not in render
     assert "wolf: function () { return UNIT_BUILDERS.dog(); }" not in render
+    assert "spider: function () { return UNIT_BUILDERS.wolf(); }" not in render
+    assert "spider: function () { return UNIT_BUILDERS.dog(); }" not in render
+    assert "spider: function () { return UNIT_BUILDERS.panther(); }" not in render
+    assert "scorpion: function () { return UNIT_BUILDERS.spider(); }" not in render
+    assert "scorpion: function () { return UNIT_BUILDERS.wolf(); }" not in render
+    assert "scorpion: function () { return UNIT_BUILDERS.dog(); }" not in render
+    assert "蛛网巨蛛：八足蛛形" in render
+    assert "蛛网巨蛛：八足 + 头胸腹 + 骨螯" in app
+    assert "穿甲巨蝎：大螯钳 + 弓起毒尾刺" in render
+    assert "穿甲巨蝎：螯钳 + 弓起毒尾刺，不要八足蛛或四足狼剪影" in app
+    assert "spider: 1.72" in render
+    assert "scorpion: 1.82" in render
+    assert "MAT.chitin" in render
+    assert "look: 'web'" in render
+    assert "look: 'sting'" in render
+    assert "function emitStatusAura" in render
+    assert "u.producer === 'tcamp'" in app
+    assert "u.producer === 'tpen'" in app
+    assert "蛛网巨蛛" in hud
+    assert "蛛网巨蛛" in readme
+    assert "穿甲巨蝎" in hud
+    assert "穿甲巨蝎" in readme
     assert "tharvester: function () { return UNIT_BUILDERS.harvester(); }" not in render
     assert "tmcv: function () { return UNIT_BUILDERS.mcv(); }" not in render
     tribe_buildings = render[render.index("} else if (kind === 'thq')"):
