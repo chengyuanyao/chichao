@@ -440,6 +440,8 @@ def main():
     assert "圣泉：石碗泉盆 + 上升泉光" in render
     assert "奥术塔：扭转尖塔 + 武器晶碟" in render
     assert "雷暴塔：哥特风暴尖碑" in render
+    assert "远距可读" in render
+    assert "MAT.stormCrown" in render
     assert "teamOrOwn9-local-lit-" in render
     assert "armyTimeUniform" in render
     # 顶点烘焙遮蔽 + 逐零件表面通道：两条通道必须一直写进合并几何体，

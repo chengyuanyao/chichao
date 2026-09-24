@@ -552,9 +552,11 @@ const MAT = {
   goldTrim: [0.86, 0.66, 0.22],     // 奥术金饰
   slate: [0.32, 0.28, 0.24],        // 暖青灰岩
   // 雷暴塔专用：风暴炭岩 + 白青电弧。只给 mstorm 用，避免把奥术塔也染成冷灰。
-  stormSlate: [0.16, 0.18, 0.22],
-  stormSlateDark: [0.10, 0.11, 0.14],
-  stormBolt: [1.85, 2.20, 2.55],
+  // 炭岩略抬亮，避免远距和草地糊成一团；晶冠单独走更热的白青，给辉光余量。
+  stormSlate: [0.22, 0.25, 0.32],
+  stormSlateDark: [0.14, 0.16, 0.21],
+  stormBolt: [2.15, 2.45, 2.85],
+  stormCrown: [2.55, 2.85, 3.20],
   marble: [0.62, 0.54, 0.40],       // 暖色石面
   bronze: [0.72, 0.52, 0.20],       // 金铜饰，跟建筑金饰一家
   robe: [0.16, 0.10, 0.28],         // 法师深紫袍（不跟团队色走）
@@ -2271,12 +2273,12 @@ function addStructureFoundation(c, kind, s) {
     if (kind === 'mstorm') {
       // 雷暴塔：圆形炭岩祭坛台，和其他秘法金砂石方台分开。
       const footprint = s * 1.12;
-      add(HULL, new THREE.CylinderGeometry(footprint * 0.62, footprint * 0.70, 3.0, 16),
+      add(HULL, new THREE.CylinderGeometry(footprint * 0.64, footprint * 0.72, 3.0, 16),
         0, 1.5, 0, MAT.stormSlateDark);
-      add(HULL, new THREE.TorusGeometry(footprint * 0.64, footprint * 0.055, 6, 20),
+      add(HULL, new THREE.TorusGeometry(footprint * 0.66, footprint * 0.068, 6, 20),
         0, 1.15, 0, MAT.goldTrim, ROT_X90);
-      add(GLOW, new THREE.TorusGeometry(footprint * 0.50, footprint * 0.02, 6, 20),
-        0, 1.55, 0, MAT.runeCyan, ROT_X90);
+      add(GLOW, new THREE.TorusGeometry(footprint * 0.52, footprint * 0.032, 6, 20),
+        0, 1.55, 0, MAT.stormBolt, ROT_X90);
       return;
     }
     // 奥术塔的高瘦轮廓需要更稳的视觉底座；只放大水平尺寸，零件数不变。
@@ -2570,63 +2572,65 @@ function structureParts(kind, size) {
   } else if (kind === 'mstorm') {
     // 雷暴塔：哥特风暴尖碑。多层炭岩塔身 + 金饰肋 + 环绕符环 + 晶冠电弧，
     // 不是奥术塔扭转单尖，也不是钢铁磁暴双侧线圈。
-    add(HULL, new THREE.CylinderGeometry(s * 0.58, s * 0.64, s * 0.16, 16),
+    // 远距可读：加粗主轮廓、晶冠与符环，避免 RTS 拉远后糊成细灰棍。
+    add(HULL, new THREE.CylinderGeometry(s * 0.60, s * 0.66, s * 0.16, 16),
       0, s * 0.08 + 3.4, 0, MAT.stormSlate);
-    add(HULL, new THREE.CylinderGeometry(s * 0.40, s * 0.48, s * 0.10, 14),
+    add(HULL, new THREE.CylinderGeometry(s * 0.44, s * 0.52, s * 0.10, 14),
       0, s * 0.20 + 3.4, 0, MAT.stormSlateDark);
-    add(HULL, new THREE.TorusGeometry(s * 0.60, s * 0.05, 6, 18),
+    add(HULL, new THREE.TorusGeometry(s * 0.62, s * 0.058, 6, 18),
       0, s * 0.16 + 3.4, 0, MAT.goldTrim, ROT_X90);
-    add(TEAM, new THREE.TorusGeometry(s * 0.48, s * 0.045, 6, 16),
+    add(TEAM, new THREE.TorusGeometry(s * 0.50, s * 0.052, 6, 16),
       0, s * 0.22 + 3.4, 0, 0.96, ROT_X90);
-    add(GLOW, new THREE.TorusGeometry(s * 0.34, s * 0.022, 6, 16),
-      0, s * 0.24 + 3.4, 0, MAT.runeCyan, ROT_X90);
+    add(GLOW, new THREE.TorusGeometry(s * 0.38, s * 0.032, 6, 16),
+      0, s * 0.24 + 3.4, 0, MAT.stormBolt, ROT_X90);
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * TAU;
-      add(HULL, new THREE.ConeGeometry(s * 0.07, s * 0.32, 5),
-        Math.cos(a) * s * 0.56, s * 0.34 + 3.4, Math.sin(a) * s * 0.56, MAT.goldTrim);
-      add(GLOW, new THREE.ConeGeometry(s * 0.028, s * 0.10, 5),
-        Math.cos(a) * s * 0.56, s * 0.50 + 3.4, Math.sin(a) * s * 0.56, MAT.frostGlow);
+      add(HULL, new THREE.ConeGeometry(s * 0.085, s * 0.34, 5),
+        Math.cos(a) * s * 0.58, s * 0.34 + 3.4, Math.sin(a) * s * 0.58, MAT.goldTrim);
+      add(GLOW, new THREE.ConeGeometry(s * 0.036, s * 0.12, 5),
+        Math.cos(a) * s * 0.58, s * 0.52 + 3.4, Math.sin(a) * s * 0.58, MAT.frostGlow);
     }
     [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (q) {
-      add(HULL, new THREE.ConeGeometry(s * 0.08, s * 0.52, 6),
-        q[0] * s * 0.34, s * 0.48 + 3.4, q[1] * s * 0.34, MAT.goldTrim);
+      add(HULL, new THREE.ConeGeometry(s * 0.10, s * 0.56, 6),
+        q[0] * s * 0.36, s * 0.50 + 3.4, q[1] * s * 0.36, MAT.goldTrim);
     });
-    add(HULL, new THREE.CylinderGeometry(s * 0.22, s * 0.30, s * 0.52, 8),
+    add(HULL, new THREE.CylinderGeometry(s * 0.28, s * 0.36, s * 0.52, 8),
       0, s * 0.54 + 3.4, 0, MAT.stormSlate);
-    add(HULL, new THREE.CylinderGeometry(s * 0.26, s * 0.26, s * 0.08, 8),
+    add(HULL, new THREE.CylinderGeometry(s * 0.32, s * 0.32, s * 0.09, 8),
       0, s * 0.80 + 3.4, 0, MAT.goldTrim);
-    add(HULL, new THREE.CylinderGeometry(s * 0.15, s * 0.21, s * 0.46, 8),
+    add(HULL, new THREE.CylinderGeometry(s * 0.20, s * 0.27, s * 0.46, 8),
       0, s * 1.06 + 3.4, 0, MAT.stormSlateDark);
-    add(HULL, new THREE.CylinderGeometry(s * 0.19, s * 0.19, s * 0.07, 8),
+    add(HULL, new THREE.CylinderGeometry(s * 0.24, s * 0.24, s * 0.08, 8),
       0, s * 1.30 + 3.4, 0, MAT.goldTrim);
-    add(HULL, new THREE.CylinderGeometry(s * 0.08, s * 0.14, s * 0.44, 8),
+    add(HULL, new THREE.CylinderGeometry(s * 0.13, s * 0.19, s * 0.44, 8),
       0, s * 1.54 + 3.4, 0, MAT.stormSlate);
-    add(HULL, new THREE.CylinderGeometry(s * 0.12, s * 0.12, s * 0.06, 8),
+    add(HULL, new THREE.CylinderGeometry(s * 0.16, s * 0.16, s * 0.07, 8),
       0, s * 1.76 + 3.4, 0, MAT.goldTrim);
-    add(GLOW, new THREE.CylinderGeometry(s * 0.032, s * 0.022, s * 1.48, 6),
-      0, s * 1.10 + 3.4, 0, MAT.runeCyan);
-    add(TEAM, new THREE.TorusGeometry(s * 0.20, s * 0.032, 5, 12),
+    add(GLOW, new THREE.CylinderGeometry(s * 0.058, s * 0.042, s * 1.52, 6),
+      0, s * 1.10 + 3.4, 0, MAT.stormBolt);
+    add(TEAM, new THREE.TorusGeometry(s * 0.26, s * 0.040, 5, 12),
       0, s * 0.80 + 3.4, 0, 0.94, ROT_X90);
+    add(GLOW, new THREE.TorusGeometry(s * 0.24, s * 0.030, 6, 14),
+      0, s * 1.08 + 3.4, 0, MAT.stormCrown, ROT_X90);
     [0.54, 1.06, 1.54].forEach(function (h, tier) {
-      const radius = [0.24, 0.17, 0.11][tier] * s;
+      const radius = [0.30, 0.22, 0.15][tier] * s;
       for (let i = 0; i < 4; i++) {
         const a = (i / 4) * TAU + tier * 0.4;
-        add(GLOW, new THREE.IcosahedronGeometry(s * (0.045 - tier * 0.006), 0),
-          Math.cos(a) * radius, s * h + 3.4, Math.sin(a) * radius, MAT.frostGlow);
+        add(GLOW, new THREE.IcosahedronGeometry(s * (0.062 - tier * 0.008), 0),
+          Math.cos(a) * radius, s * h + 3.4, Math.sin(a) * radius,
+          tier ? MAT.frostGlow : MAT.stormCrown);
       }
     });
     [0, 1, 2, 3].forEach(function (i) {
       const a = i * Math.PI * 0.5 + 0.35;
-      add(HULL, new THREE.CylinderGeometry(s * 0.016, s * 0.02, s * 1.22, 5),
-        Math.cos(a) * s * 0.18, s * 0.96 + 3.4, Math.sin(a) * s * 0.18, MAT.goldTrim);
+      add(HULL, new THREE.CylinderGeometry(s * 0.026, s * 0.032, s * 1.22, 5),
+        Math.cos(a) * s * 0.22, s * 0.96 + 3.4, Math.sin(a) * s * 0.22, MAT.goldTrim);
     });
-    addStormBolt(c, s * 0.12, s * 0.72 + 3.4, s * 0.04, s * 0.32, s * 1.04 + 3.4, -s * 0.08, s * 0.022);
-    addStormBolt(c, s * 0.32, s * 1.04 + 3.4, -s * 0.08, s * 0.20, s * 1.32 + 3.4, s * 0.18, s * 0.016, MAT.frostGlow);
-    addStormBolt(c, -s * 0.10, s * 0.90 + 3.4, s * 0.08, -s * 0.30, s * 1.22 + 3.4, s * 0.20, s * 0.02);
-    addStormBolt(c, -s * 0.30, s * 1.22 + 3.4, s * 0.20, -s * 0.14, s * 1.50 + 3.4, -s * 0.12, s * 0.015, MAT.frostGlow);
-    addStormBolt(c, s * 0.05, s * 1.24 + 3.4, -s * 0.12, -s * 0.24, s * 1.52 + 3.4, -s * 0.24, s * 0.018);
-    addStormBolt(c, -s * 0.06, s * 1.58 + 3.4, s * 0.06, s * 0.18, s * 1.84 + 3.4, s * 0.16, s * 0.016, MAT.stormBolt);
-    add(HULL, new THREE.CylinderGeometry(s * 0.09, s * 0.13, s * 0.10, 8),
+    addStormBolt(c, s * 0.16, s * 0.70 + 3.4, s * 0.06, s * 0.38, s * 1.12 + 3.4, -s * 0.10, s * 0.034);
+    addStormBolt(c, s * 0.38, s * 1.12 + 3.4, -s * 0.10, s * 0.18, s * 1.52 + 3.4, s * 0.20, s * 0.028, MAT.stormCrown);
+    addStormBolt(c, -s * 0.14, s * 0.86 + 3.4, s * 0.10, -s * 0.34, s * 1.30 + 3.4, s * 0.22, s * 0.032);
+    addStormBolt(c, -s * 0.08, s * 1.48 + 3.4, s * 0.08, s * 0.16, s * 1.86 + 3.4, s * 0.14, s * 0.028, MAT.stormCrown);
+    add(HULL, new THREE.CylinderGeometry(s * 0.11, s * 0.15, s * 0.10, 8),
       0, s * 1.86 + 3.4, 0, MAT.goldTrim);
     /* ---------------- 原始部落建筑 ----------------
      * 茅草、树皮、兽皮、兽骨。每种必须有 50m 相机下认得出的独立剪影，
@@ -2816,21 +2820,22 @@ function stormHeadParts(size) {
   const c = partCollector();
   const s = size;
   const ROT_X180 = new THREE.Matrix4().makeRotationX(Math.PI);
-  c.add(HULL, new THREE.CylinderGeometry(s * 0.09, s * 0.13, s * 0.10, 8),
+  c.add(HULL, new THREE.CylinderGeometry(s * 0.11, s * 0.15, s * 0.10, 8),
     0, 0, 0, MAT.goldTrim);
-  c.add(TEAM, new THREE.TorusGeometry(s * 0.14, s * 0.032, 5, 12),
+  c.add(TEAM, new THREE.TorusGeometry(s * 0.17, s * 0.040, 5, 12),
     0, 0, 0, 0.96, ROT_X90);
-  c.add(GLOW, new THREE.IcosahedronGeometry(s * 0.14, 0), 0, s * 0.12, 0, MAT.frostGlow);
-  c.add(GLOW, new THREE.ConeGeometry(s * 0.07, s * 0.28, 5), 0, s * 0.30, 0, MAT.runeCyan);
-  c.add(GLOW, new THREE.ConeGeometry(s * 0.06, s * 0.14, 5), 0, -s * 0.04, 0, MAT.frostGlow, ROT_X180);
-  c.add(GLOW, new THREE.IcosahedronGeometry(s * 0.055, 0), s * 0.10, s * 0.05, s * 0.05, MAT.runeCyan);
-  c.add(GLOW, new THREE.IcosahedronGeometry(s * 0.048, 0), -s * 0.09, s * 0.08, -s * 0.04, MAT.frostGlow);
-  c.add(GLOW, new THREE.SphereGeometry(s * 0.06, 8, 6), s * 0.04, s * 0.10, 0, MAT.stormBolt);
-  c.add(GLOW, new THREE.CylinderGeometry(s * 0.02, s * 0.01, s * 0.46, 5),
-    s * 0.30, s * 0.05, 0, MAT.stormBolt, ROT_Z90);
-  c.add(GLOW, new THREE.SphereGeometry(s * 0.05, 7, 5), s * 0.54, s * 0.05, 0, MAT.frostGlow);
-  addStormBolt(c, s * 0.12, s * 0.18, 0, s * 0.36, s * 0.32, s * 0.12, s * 0.016);
-  addStormBolt(c, s * 0.12, s * 0.02, 0, s * 0.30, -s * 0.10, -s * 0.14, s * 0.013, MAT.frostGlow);
+  c.add(GLOW, new THREE.IcosahedronGeometry(s * 0.20, 0), 0, s * 0.14, 0, MAT.stormCrown);
+  c.add(GLOW, new THREE.SphereGeometry(s * 0.16, 8, 6), 0, s * 0.14, 0, MAT.frostGlow);
+  c.add(GLOW, new THREE.ConeGeometry(s * 0.09, s * 0.36, 5), 0, s * 0.38, 0, MAT.stormCrown);
+  c.add(GLOW, new THREE.ConeGeometry(s * 0.07, s * 0.16, 5), 0, -s * 0.05, 0, MAT.frostGlow, ROT_X180);
+  c.add(GLOW, new THREE.IcosahedronGeometry(s * 0.070, 0), s * 0.13, s * 0.06, s * 0.06, MAT.runeCyan);
+  c.add(GLOW, new THREE.IcosahedronGeometry(s * 0.060, 0), -s * 0.11, s * 0.10, -s * 0.05, MAT.frostGlow);
+  c.add(GLOW, new THREE.SphereGeometry(s * 0.085, 8, 6), s * 0.04, s * 0.12, 0, MAT.stormBolt);
+  c.add(GLOW, new THREE.CylinderGeometry(s * 0.028, s * 0.014, s * 0.52, 5),
+    s * 0.34, s * 0.06, 0, MAT.stormBolt, ROT_Z90);
+  c.add(GLOW, new THREE.SphereGeometry(s * 0.065, 7, 5), s * 0.60, s * 0.06, 0, MAT.stormCrown);
+  addStormBolt(c, s * 0.14, s * 0.22, 0, s * 0.40, s * 0.38, s * 0.14, s * 0.024);
+  addStormBolt(c, s * 0.14, s * 0.02, 0, s * 0.34, -s * 0.12, -s * 0.16, s * 0.020, MAT.frostGlow);
   return c.parts;
 }
 
@@ -2915,23 +2920,24 @@ function spinnerParts(kind, size) {
     const c = partCollector();
     // 三层水平符环绕轴转；电弧贴在环上，远看是哥特尖碑外的光环而不是线圈柱。
     // 组原点取中环高度，倒塌时整组会随附件下落。
+    // 远距可读：环管加粗、辉光加亮，拉远后仍能看出三道符环。
     const spinY = s * 1.08 + 3.4;
-    [[0.50, 0.58], [0.38, 1.08], [0.27, 1.50]].forEach(function (ring, i) {
+    [[0.56, 0.58], [0.44, 1.08], [0.34, 1.50]].forEach(function (ring, i) {
       const y = s * ring[1] + 3.4 - spinY;
-      c.add(HULL, new THREE.TorusGeometry(s * ring[0], s * 0.02, 5, 18),
+      c.add(HULL, new THREE.TorusGeometry(s * ring[0], s * 0.030, 5, 18),
         0, y, 0, MAT.goldTrim, ROT_X90);
-      c.add(GLOW, new THREE.TorusGeometry(s * (ring[0] - 0.01), s * 0.016, 5, 18),
-        0, y, 0, i === 1 ? MAT.stormBolt : MAT.runeCyan, ROT_X90);
+      c.add(GLOW, new THREE.TorusGeometry(s * (ring[0] - 0.012), s * 0.026, 5, 18),
+        0, y, 0, i === 1 ? MAT.stormCrown : MAT.stormBolt, ROT_X90);
       for (let k = 0; k < 4; k++) {
         const a = (k / 4) * TAU + i * 0.5;
-        c.add(GLOW, new THREE.BoxGeometry(s * 0.06, s * 0.022, s * 0.022),
+        c.add(GLOW, new THREE.BoxGeometry(s * 0.09, s * 0.034, s * 0.034),
           Math.cos(a) * s * ring[0], y, Math.sin(a) * s * ring[0], MAT.frostGlow);
       }
       const a0 = i * 1.1;
       addStormBolt(c,
-        Math.cos(a0) * s * 0.08, y - s * 0.04, Math.sin(a0) * s * 0.08,
-        Math.cos(a0) * s * ring[0], y + s * 0.03, Math.sin(a0) * s * ring[0],
-        s * 0.018, i ? MAT.frostGlow : MAT.stormBolt);
+        Math.cos(a0) * s * 0.10, y - s * 0.04, Math.sin(a0) * s * 0.10,
+        Math.cos(a0) * s * ring[0], y + s * 0.04, Math.sin(a0) * s * ring[0],
+        s * 0.028, i ? MAT.frostGlow : MAT.stormCrown);
     });
     return { parts: c.parts, y: spinY, speed: 0.62 };
   }
@@ -9151,20 +9157,22 @@ export function createRenderer(canvas) {
         node.spinner.rotation.y += dt * node.spinner.userData.speed * spinMul;
       }
       // 雷暴塔空闲电弧：少量白青火花绕尖碑，不改开火逻辑。
-      if (s.kind === 'mstorm' && s.active && state.feedbackDensity > 0.35
+      // 远距可读：阈值放宽、粒子加大并偏向上方晶冠，拉远后仍能看见电弧。
+      if (s.kind === 'mstorm' && s.active && state.feedbackDensity > 0.20
           && fireLayer.list.length < state.particleBudget * 0.42
-          && Math.random() < dt * 7) {
+          && Math.random() < dt * 5) {
         const a = Math.random() * TAU;
-        const r = s.size * (0.12 + Math.random() * 0.42);
+        const r = s.size * (0.08 + Math.random() * 0.38);
+        const along = 0.55 + Math.random() * 0.55;
         emit(fireLayer, {
           x: s.x + Math.cos(a) * r,
-          y: (node.groundY || 0) + 10 + Math.random() * s.size * 1.85,
+          y: (node.groundY || 0) + 12 + along * s.size * 1.95,
           z: s.y + Math.sin(a) * r,
-          vx: (Math.random() - 0.5) * 22, vy: 10 + Math.random() * 22,
-          vz: (Math.random() - 0.5) * 22,
-          life: 0.12 + Math.random() * 0.14, maxLife: 0.26,
-          size: 2.2 + Math.random() * 2.6,
-          r: 1.45, g: 2.1, b: 2.55
+          vx: (Math.random() - 0.5) * 18, vy: 8 + Math.random() * 20,
+          vz: (Math.random() - 0.5) * 18,
+          life: 0.16 + Math.random() * 0.16, maxLife: 0.32,
+          size: 5.2 + Math.random() * 4.4,
+          r: 1.70, g: 2.25, b: 2.85
         });
       }
       // 残血建筑冒烟

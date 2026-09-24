@@ -139,7 +139,9 @@ def main():
     assert "function stormHeadParts" in render
     assert "function addStormBolt" in render
     assert "MAT.stormSlate" in render
+    assert "MAT.stormCrown" in render
     assert "哥特风暴尖碑" in render
+    assert "远距可读" in render
     assert "双侧雷线圈" not in render
     assert "type === 'tether'" in render
     assert "storm: { len:" in render
