@@ -2243,37 +2243,39 @@ const UNIT_BUILDERS = {
 
   mammoth: function () {
     // 猛犸战象：厚躯、弓背、长牙、兽皮鞍甲。俯视也能分出牙和鼓身，不是驮兽。
-    const tuskRot = new THREE.Matrix4().makeRotationZ(0.85);
     const body = surfaced(SURF.hide, [
-      ellipsoid(16.4, 8.2, 7.2, -1.2, 12.4, 0, MAT.hideTan),
-      ellipsoid(8.8, 6.6, 6.0, 12.4, 13.6, 0, MAT.hideTan),
-      ellipsoid(4.6, 3.4, 3.6, 18.8, 11.8, 0, MAT.hideDark),
-      ellipsoid(5.4, 2.4, 3.2, -16.2, 14.8, 0, MAT.hideDark),
-      ellipsoid(6.8, 1.1, 5.8, -0.6, 19.2, 0, 0.92),
-      taperedBox(10.4, 8.8, 9.2, 7.6, 2.2, -1.4, 18.4, 0, 0.90),
-      box(8.4, 3.4, 6.2, -2.0, 16.8, 0, MAT.hideDark),
-      box(6.8, 1.4, 5.2, -2.0, 19.0, 0, MAT.bloodCloth),
-      pyr(1.15, 9.2, 5, 20.4, 9.4, 2.4, MAT.boneIvory, tuskRot),
-      pyr(1.15, 9.2, 5, 20.4, 9.4, -2.4, MAT.boneIvory, tuskRot),
-      ellipsoid(2.4, 1.6, 1.4, 14.6, 17.8, 3.4, MAT.hideDark),
-      ellipsoid(2.4, 1.6, 1.4, 14.6, 17.8, -3.4, MAT.hideDark)
+      ellipsoid(15.6, 8.6, 8.0, -2.4, 13.2, 0, MAT.hideTan),
+      ellipsoid(7.8, 6.4, 6.6, -12.4, 17.2, 0, MAT.hideDark),
+      ellipsoid(8.4, 6.8, 6.4, 11.6, 14.4, 0, MAT.hideTan),
+      ellipsoid(4.2, 3.6, 3.8, 17.6, 12.8, 0, MAT.hideDark),
+      ellipsoid(5.8, 2.6, 3.4, -17.4, 15.8, 0, MAT.hideDark),
+      ellipsoid(5.4, 3.2, 0.7, 12.8, 16.2, 6.6, MAT.hideDark),
+      ellipsoid(5.4, 3.2, 0.7, 12.8, 16.2, -6.6, MAT.hideDark),
+      taperedBox(11.2, 9.6, 9.8, 8.2, 2.4, -3.2, 20.2, 0, 0.90),
+      box(9.2, 3.8, 6.8, -3.4, 18.4, 0, MAT.hideDark),
+      box(7.4, 1.6, 5.6, -3.4, 20.8, 0, MAT.bloodCloth),
+      box(10.4, 0.7, 1.1, -3.4, 19.4, 3.6, MAT.boneIvory),
+      box(10.4, 0.7, 1.1, -3.4, 19.4, -3.6, MAT.boneIvory),
+      limb(1.55, 1.15, 16.8, 10.8, 2.6, 25.4, 6.4, 7.2, MAT.boneIvory),
+      limb(1.15, 0.42, 25.4, 6.4, 7.2, 29.2, 3.2, 6.0, MAT.boneIvory),
+      limb(1.55, 1.15, 16.8, 10.8, -2.6, 25.4, 6.4, -7.2, MAT.boneIvory),
+      limb(1.15, 0.42, 25.4, 6.4, -7.2, 29.2, 3.2, -6.0, MAT.boneIvory),
+      limb(1.65, 1.28, 18.4, 11.4, 0, 21.6, 6.6, 0.3, MAT.hideDark),
+      limb(1.28, 0.92, 21.6, 6.6, 0.3, 20.2, 2.2, 0.8, MAT.hideTan)
     ]);
-    [8.4, -8.8].forEach(function (px) {
-      [3.6, -3.6].forEach(function (pz) {
+    [8.8, -9.2].forEach(function (px) {
+      [4.0, -4.0].forEach(function (pz) {
         body.push(Object.assign(
-          limb(1.85, 1.45, px, 9.2, pz, px + 0.5, 0.8, pz, MAT.hideDark),
+          limb(2.15, 1.65, px, 10.4, pz, px + 0.4, 0.8, pz, MAT.hideDark),
           { surf: SURF.hide }));
       });
     });
-    body.push(Object.assign(
-      limb(1.15, 0.72, 18.2, 10.6, 0, 20.6, 3.2, 0, MAT.hideDark),
-      { surf: SURF.hide }));
     return {
       body: body,
       glow: [
-        sph(0.55, 5, 19.6, 13.2, 1.6, MAT.spiritFire),
-        sph(0.55, 5, 19.6, 13.2, -1.6, MAT.spiritFire),
-        sph(0.9, 6, -2.0, 19.4, 0, MAT.spiritFire)
+        sph(0.62, 5, 18.8, 14.2, 1.8, MAT.spiritFire),
+        sph(0.62, 5, 18.8, 14.2, -1.8, MAT.spiritFire),
+        sph(1.05, 6, -3.4, 21.2, 0, MAT.spiritFire)
       ]
     };
   },
@@ -2930,57 +2932,70 @@ function structureParts(kind, size) {
     // 棘矛哨塔：四柱木台 + 兽皮围栏，矮于毒矢高台。旋转头是骨矛束。
     [-1, 1].forEach(function (sx) {
       [-1, 1].forEach(function (sz) {
-        add(HULL, new THREE.CylinderGeometry(s * 0.045, s * 0.055, s * 0.92, 6),
-          sx * s * 0.28, s * 0.46 + 3.4, sz * s * 0.28, MAT.bark);
+        add(HULL, new THREE.CylinderGeometry(s * 0.058, s * 0.072, s * 1.02, 6),
+          sx * s * 0.30, s * 0.52 + 3.4, sz * s * 0.30, MAT.bark);
       });
     });
-    taper(HULL, s * 0.78, s * 0.78, s * 0.70, s * 0.70, s * 0.12, 0, s * 0.94 + 3.4, 0, MAT.barkLit);
-    add(HULL, new THREE.BoxGeometry(s * 0.72, s * 0.18, s * 0.06), 0, s * 1.08 + 3.4, s * 0.32, MAT.hideTan);
-    add(HULL, new THREE.BoxGeometry(s * 0.72, s * 0.18, s * 0.06), 0, s * 1.08 + 3.4, -s * 0.32, MAT.hideTan);
-    add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.22, s * 0.03), s * 0.22, s * 1.16 + 3.4, s * 0.34, 1.0);
-    add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.22, s * 0.03), -s * 0.22, s * 1.16 + 3.4, s * 0.34, 1.0);
-    add(HULL, new THREE.CylinderGeometry(s * 0.08, s * 0.10, s * 0.16, 8), 0, s * 1.08 + 3.4, 0, MAT.boneIvory);
+    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.72, s * 0.06), s * 0.30, s * 0.46 + 3.4, 0, MAT.barkLit);
+    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.72, s * 0.06), -s * 0.30, s * 0.46 + 3.4, 0, MAT.barkLit);
+    taper(HULL, s * 0.86, s * 0.86, s * 0.76, s * 0.76, s * 0.16, 0, s * 1.02 + 3.4, 0, MAT.barkLit);
+    add(HULL, new THREE.BoxGeometry(s * 0.80, s * 0.24, s * 0.08), 0, s * 1.16 + 3.4, s * 0.36, MAT.hideTan);
+    add(HULL, new THREE.BoxGeometry(s * 0.80, s * 0.24, s * 0.08), 0, s * 1.16 + 3.4, -s * 0.36, MAT.hideTan);
+    add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.24, s * 0.72), s * 0.36, s * 1.16 + 3.4, 0, MAT.hideDark);
+    add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.24, s * 0.72), -s * 0.36, s * 1.16 + 3.4, 0, MAT.hideDark);
+    add(HULL, new THREE.SphereGeometry(s * 0.08, 6, 5), s * 0.30, s * 1.08 + 3.4, s * 0.30, MAT.boneIvory);
+    add(TEAM, new THREE.BoxGeometry(s * 0.18, s * 0.26, s * 0.04), s * 0.24, s * 1.28 + 3.4, s * 0.38, 1.0);
+    add(TEAM, new THREE.BoxGeometry(s * 0.18, s * 0.26, s * 0.04), -s * 0.24, s * 1.28 + 3.4, s * 0.38, 1.0);
+    add(HULL, new THREE.CylinderGeometry(s * 0.10, s * 0.13, s * 0.18, 8), 0, s * 1.16 + 3.4, 0, MAT.boneIvory);
   } else if (kind === 'ttoxtower') {
     // 毒矢高台：更高骨木脚手架 + 毒壶，一眼比棘矛哨塔细高。
     [-1, 1].forEach(function (sx) {
       [-1, 1].forEach(function (sz) {
-        add(HULL, new THREE.CylinderGeometry(s * 0.038, s * 0.048, s * 1.28, 6),
-          sx * s * 0.22, s * 0.64 + 3.4, sz * s * 0.22, MAT.bark);
+        add(HULL, new THREE.CylinderGeometry(s * 0.048, s * 0.062, s * 1.42, 6),
+          sx * s * 0.24, s * 0.72 + 3.4, sz * s * 0.24, MAT.bark);
       });
     });
-    add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.04, s * 0.52), 0, s * 0.72 + 3.4, 0, MAT.boneIvory);
-    add(HULL, new THREE.BoxGeometry(s * 0.52, s * 0.04, s * 0.08), 0, s * 1.02 + 3.4, 0, MAT.boneIvory);
-    taper(HULL, s * 0.62, s * 0.62, s * 0.48, s * 0.48, s * 0.14, 0, s * 1.32 + 3.4, 0, MAT.barkLit);
-    add(HULL, new THREE.CylinderGeometry(s * 0.16, s * 0.20, s * 0.22, 8), 0, s * 1.48 + 3.4, 0, MAT.hideDark);
-    add(GLOW, new THREE.SphereGeometry(s * 0.12, 8, 6), 0, s * 1.58 + 3.4, 0, MAT.venomGlow);
-    add(TEAM, new THREE.BoxGeometry(s * 0.14, s * 0.26, s * 0.03), s * 0.18, s * 1.18 + 3.4, s * 0.26, 1.0);
-    add(TEAM, new THREE.BoxGeometry(s * 0.14, s * 0.26, s * 0.03), -s * 0.18, s * 1.18 + 3.4, s * 0.26, 1.0);
+    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.05, s * 0.58), 0, s * 0.64 + 3.4, 0, MAT.boneIvory);
+    add(HULL, new THREE.BoxGeometry(s * 0.58, s * 0.05, s * 0.10), 0, s * 0.96 + 3.4, 0, MAT.boneIvory);
+    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.05, s * 0.58), 0, s * 1.22 + 3.4, 0, MAT.barkLit);
+    taper(HULL, s * 0.70, s * 0.70, s * 0.52, s * 0.52, s * 0.16, 0, s * 1.44 + 3.4, 0, MAT.barkLit);
+    add(HULL, new THREE.CylinderGeometry(s * 0.20, s * 0.26, s * 0.28, 8), 0, s * 1.62 + 3.4, 0, MAT.hideDark);
+    add(GLOW, new THREE.SphereGeometry(s * 0.16, 8, 6), 0, s * 1.74 + 3.4, 0, MAT.venomGlow);
+    add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.36, s * 0.22), s * 0.26, s * 1.28 + 3.4, 0, MAT.hideTan);
+    add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.36, s * 0.22), -s * 0.26, s * 1.28 + 3.4, 0, MAT.hideTan);
+    add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.30, s * 0.04), s * 0.20, s * 1.28 + 3.4, s * 0.28, 1.0);
+    add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.30, s * 0.04), -s * 0.20, s * 1.28 + 3.4, s * 0.28, 1.0);
   } else if (kind === 'ttrap') {
     // 兽夹陷阱：贴地木框 + 对开骨颚，不是塔也不是井。
-    add(HULL, new THREE.BoxGeometry(s * 0.92, s * 0.08, s * 0.16), 0, s * 0.10 + 3.4, s * 0.28, MAT.bark);
-    add(HULL, new THREE.BoxGeometry(s * 0.92, s * 0.08, s * 0.16), 0, s * 0.10 + 3.4, -s * 0.28, MAT.bark);
-    add(HULL, new THREE.BoxGeometry(s * 0.16, s * 0.08, s * 0.72), s * 0.38, s * 0.10 + 3.4, 0, MAT.bark);
-    add(HULL, new THREE.BoxGeometry(s * 0.16, s * 0.08, s * 0.72), -s * 0.38, s * 0.10 + 3.4, 0, MAT.bark);
-    add(HULL, new THREE.BoxGeometry(s * 0.42, s * 0.06, s * 0.18), s * 0.16, s * 0.18 + 3.4, 0, MAT.boneIvory);
-    add(HULL, new THREE.BoxGeometry(s * 0.42, s * 0.06, s * 0.18), -s * 0.16, s * 0.18 + 3.4, 0, MAT.boneIvory);
-    add(HULL, new THREE.ConeGeometry(s * 0.10, s * 0.28, 5), s * 0.30, s * 0.28 + 3.4, s * 0.08, MAT.boneIvory);
-    add(HULL, new THREE.ConeGeometry(s * 0.10, s * 0.28, 5), s * 0.30, s * 0.28 + 3.4, -s * 0.08, MAT.boneIvory);
-    add(HULL, new THREE.ConeGeometry(s * 0.10, s * 0.28, 5), -s * 0.30, s * 0.28 + 3.4, s * 0.08, MAT.boneIvory);
-    add(HULL, new THREE.ConeGeometry(s * 0.10, s * 0.28, 5), -s * 0.30, s * 0.28 + 3.4, -s * 0.08, MAT.boneIvory);
-    add(TEAM, new THREE.BoxGeometry(s * 0.18, s * 0.04, s * 0.10), 0, s * 0.16 + 3.4, 0, 1.0);
+    add(HULL, new THREE.BoxGeometry(s * 1.35, s * 0.12, s * 0.22), 0, s * 0.12 + 3.4, s * 0.42, MAT.bark);
+    add(HULL, new THREE.BoxGeometry(s * 1.35, s * 0.12, s * 0.22), 0, s * 0.12 + 3.4, -s * 0.42, MAT.bark);
+    add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.12, s * 1.05), s * 0.56, s * 0.12 + 3.4, 0, MAT.bark);
+    add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.12, s * 1.05), -s * 0.56, s * 0.12 + 3.4, 0, MAT.bark);
+    add(HULL, new THREE.BoxGeometry(s * 0.62, s * 0.10, s * 0.26), s * 0.22, s * 0.26 + 3.4, 0, MAT.boneIvory);
+    add(HULL, new THREE.BoxGeometry(s * 0.62, s * 0.10, s * 0.26), -s * 0.22, s * 0.26 + 3.4, 0, MAT.boneIvory);
+    [[0.48, 0.18], [0.48, -0.18], [0.22, 0.28], [0.22, -0.28]].forEach(function (p) {
+      add(HULL, new THREE.ConeGeometry(s * 0.12, s * 0.46, 5),
+        s * p[0], s * 0.42 + 3.4, s * p[1], MAT.boneIvory);
+      add(HULL, new THREE.ConeGeometry(s * 0.12, s * 0.46, 5),
+        -s * p[0], s * 0.42 + 3.4, s * p[1], MAT.boneIvory);
+    });
+    add(HULL, new THREE.TorusGeometry(s * 0.22, s * 0.05, 5, 10), 0, s * 0.18 + 3.4, 0, MAT.hideDark, ROT_X90);
+    add(TEAM, new THREE.BoxGeometry(s * 0.28, s * 0.06, s * 0.16), 0, s * 0.20 + 3.4, 0, 1.0);
   } else if (kind === 'tpit') {
     // 毒雾坑：挖开的石骨圈 + 绿雾，贴地拒止，不是井栏炮座。
-    add(HULL, new THREE.CylinderGeometry(s * 0.52, s * 0.62, s * 0.16, 12), 0, s * 0.10 + 3.4, 0, MAT.slate);
-    add(HULL, new THREE.CylinderGeometry(s * 0.28, s * 0.36, s * 0.10, 10), 0, s * 0.08 + 3.4, 0, MAT.earthPack);
-    add(HULL, new THREE.TorusGeometry(s * 0.46, s * 0.05, 5, 14), 0, s * 0.16 + 3.4, 0, MAT.boneIvory, ROT_X90);
+    add(HULL, new THREE.CylinderGeometry(s * 0.62, s * 0.78, s * 0.20, 12), 0, s * 0.12 + 3.4, 0, MAT.slate);
+    add(HULL, new THREE.CylinderGeometry(s * 0.32, s * 0.44, s * 0.12, 10), 0, s * 0.10 + 3.4, 0, MAT.earthPack);
+    add(HULL, new THREE.TorusGeometry(s * 0.58, s * 0.07, 5, 14), 0, s * 0.20 + 3.4, 0, MAT.boneIvory, ROT_X90);
     [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
-      add(HULL, new THREE.CylinderGeometry(s * 0.028, s * 0.04, s * 0.36, 5),
-        q[0] * s * 0.42, s * 0.22 + 3.4, q[1] * s * 0.36, MAT.boneIvory);
+      add(HULL, new THREE.CylinderGeometry(s * 0.036, s * 0.05, s * 0.48, 5),
+        q[0] * s * 0.50, s * 0.30 + 3.4, q[1] * s * 0.42, MAT.boneIvory);
+      add(HULL, new THREE.SphereGeometry(s * 0.055, 6, 5),
+        q[0] * s * 0.50, s * 0.56 + 3.4, q[1] * s * 0.42, MAT.boneIvory);
     });
-    add(GLOW, new THREE.CylinderGeometry(s * 0.22, s * 0.30, s * 0.10, 10), 0, s * 0.14 + 3.4, 0, MAT.venomGlow);
-    add(GLOW, new THREE.SphereGeometry(s * 0.14, 8, 6), 0, s * 0.22 + 3.4, 0, MAT.venomGlow);
-    add(TEAM, new THREE.BoxGeometry(s * 0.12, s * 0.16, s * 0.02), s * 0.36, s * 0.28 + 3.4, s * 0.20, 0.94);
-    add(TEAM, new THREE.BoxGeometry(s * 0.12, s * 0.16, s * 0.02), -s * 0.36, s * 0.28 + 3.4, s * 0.20, 0.94);
+    add(GLOW, new THREE.CylinderGeometry(s * 0.26, s * 0.38, s * 0.18, 10), 0, s * 0.18 + 3.4, 0, MAT.venomGlow);
+    add(GLOW, new THREE.SphereGeometry(s * 0.20, 8, 6), 0, s * 0.32 + 3.4, 0, MAT.venomGlow);
+    add(TEAM, new THREE.BoxGeometry(s * 0.14, s * 0.20, s * 0.03), s * 0.42, s * 0.36 + 3.4, s * 0.24, 0.94);
+    add(TEAM, new THREE.BoxGeometry(s * 0.14, s * 0.20, s * 0.03), -s * 0.42, s * 0.36 + 3.4, s * 0.24, 0.94);
   }
   return c.parts;
 }
@@ -3062,18 +3077,18 @@ function stormHeadParts(size) {
 function spikeHeadParts(size) {
   const c = partCollector();
   const s = size;
-  c.add(HULL, new THREE.CylinderGeometry(s * 0.10, s * 0.12, s * 0.16, 7),
+  c.add(HULL, new THREE.CylinderGeometry(s * 0.12, s * 0.15, s * 0.20, 7),
     0, 0, 0, MAT.barkLit);
-  c.add(TEAM, new THREE.TorusGeometry(s * 0.14, s * 0.028, 5, 10),
+  c.add(TEAM, new THREE.TorusGeometry(s * 0.18, s * 0.032, 5, 10),
     0, 0.02, 0, 0.96, ROT_X90);
-  [-0.08, 0, 0.08].forEach(function (z, i) {
-    c.add(HULL, new THREE.CylinderGeometry(s * 0.018, s * 0.022, s * 0.72, 5),
-      s * 0.28, s * (0.04 + i * 0.02), z * s, MAT.boneIvory, ROT_Z90);
-    c.add(HULL, new THREE.ConeGeometry(s * 0.04, s * 0.14, 5),
-      s * 0.66, s * (0.04 + i * 0.02), z * s, MAT.boneIvory, ROT_Z90);
+  [-0.10, 0, 0.10].forEach(function (z, i) {
+    c.add(HULL, new THREE.CylinderGeometry(s * 0.026, s * 0.032, s * 0.92, 5),
+      s * 0.36, s * (0.05 + i * 0.03), z * s, MAT.boneIvory, ROT_Z90);
+    c.add(HULL, new THREE.ConeGeometry(s * 0.055, s * 0.18, 5),
+      s * 0.84, s * (0.05 + i * 0.03), z * s, MAT.boneIvory, ROT_Z90);
   });
-  c.add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.08, s * 0.22),
-    s * 0.08, s * 0.06, 0, MAT.hideTan);
+  c.add(HULL, new THREE.BoxGeometry(s * 0.14, s * 0.10, s * 0.28),
+    s * 0.10, s * 0.08, 0, MAT.hideTan);
   return c.parts;
 }
 
@@ -3081,16 +3096,16 @@ function spikeHeadParts(size) {
 function toxHeadParts(size) {
   const c = partCollector();
   const s = size;
-  c.add(HULL, new THREE.CylinderGeometry(s * 0.11, s * 0.14, s * 0.16, 7),
+  c.add(HULL, new THREE.CylinderGeometry(s * 0.13, s * 0.17, s * 0.20, 7),
     0, 0, 0, MAT.bark);
-  c.add(HULL, new THREE.SphereGeometry(s * 0.12, 8, 6), s * 0.02, s * 0.10, 0, MAT.hideDark);
-  c.add(GLOW, new THREE.SphereGeometry(s * 0.07, 7, 5), s * 0.02, s * 0.12, 0, MAT.venomGlow);
-  c.add(HULL, new THREE.CylinderGeometry(s * 0.028, s * 0.036, s * 0.70, 6),
-    s * 0.38, s * 0.08, 0, MAT.boneIvory, ROT_Z90);
-  c.add(GLOW, new THREE.CylinderGeometry(s * 0.016, s * 0.010, s * 0.18, 5),
-    s * 0.72, s * 0.08, 0, MAT.venomGlow, ROT_Z90);
-  c.add(TEAM, new THREE.BoxGeometry(s * 0.08, s * 0.12, s * 0.03),
-    -s * 0.08, s * 0.10, s * 0.10, 1.0);
+  c.add(HULL, new THREE.SphereGeometry(s * 0.16, 8, 6), s * 0.02, s * 0.14, 0, MAT.hideDark);
+  c.add(GLOW, new THREE.SphereGeometry(s * 0.10, 7, 5), s * 0.02, s * 0.16, 0, MAT.venomGlow);
+  c.add(HULL, new THREE.CylinderGeometry(s * 0.036, s * 0.046, s * 0.88, 6),
+    s * 0.46, s * 0.10, 0, MAT.boneIvory, ROT_Z90);
+  c.add(GLOW, new THREE.CylinderGeometry(s * 0.022, s * 0.014, s * 0.24, 5),
+    s * 0.90, s * 0.10, 0, MAT.venomGlow, ROT_Z90);
+  c.add(TEAM, new THREE.BoxGeometry(s * 0.10, s * 0.16, s * 0.04),
+    -s * 0.10, s * 0.12, s * 0.12, 1.0);
   return c.parts;
 }
 
@@ -3544,7 +3559,7 @@ const UNIT_VISUAL_SCALE = {
   warden: 1.55, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30,
   spear: 2.15, tamer: 2.15, wolf: 1.85, spider: 1.72, scorpion: 1.82,
-  mammoth: 1.48, tharvester: 1.16, tmcv: 1.30
+  mammoth: 1.62, tharvester: 1.16, tmcv: 1.30
 };
 
 /* 共享的哈希值噪声：天空的云、水面的泡沫、地形的细节法线都用同一套，
@@ -6624,11 +6639,13 @@ export function createRenderer(canvas) {
     }
     if (kind === 'mammoth') {
       return [
-        box(28, 14, 14, -2, 12, 0, MAT.hideTan),
-        box(12, 10, 10, 14, 14, 0, MAT.hideTan),
-        box(10, 1.6, 8, -2, 20, 0, 0.92),
-        box(14, 1.6, 1.6, 20, 8, 3.2, MAT.boneIvory),
-        box(14, 1.6, 1.6, 20, 8, -3.2, MAT.boneIvory)
+        box(30, 16, 16, -3, 13, 0, MAT.hideTan),
+        box(14, 12, 12, 13, 15, 0, MAT.hideTan),
+        box(10, 6, 6, 20, 12, 0, MAT.hideDark),
+        box(12, 2.2, 9, -4, 22, 0, 0.92),
+        box(18, 2.2, 2.2, 22, 8, 6.4, MAT.boneIvory),
+        box(18, 2.2, 2.2, 22, 8, -6.4, MAT.boneIvory),
+        box(5, 10, 4, 20, 8, 0, MAT.hideDark)
       ];
     }
     if (kind === 'scorpion') {
