@@ -216,7 +216,7 @@ export function renderBattleReport(report, playerId) {
   const players = Object.fromEntries(report.players.map(row => [row.id, row]));
   const rows = report.players.map(row => '<tr' + (row.id === playerId ? ' class="report-self"' : '') + '><th scope="row">' +
     '<div class="report-player">' + playerLabel(row, row.id === playerId) + '</div><small>' +
-    (row.faction === 'magic' ? '秘法会' : '钢铁军团') + ' · ' + status(row) +
+    (row.faction === 'magic' ? '秘法会' : row.faction === 'tribe' ? '原始部落' : '钢铁军团') + ' · ' + status(row) +
     (row.team ? ' · 第' + number(row.team) + '队' : '') + '</small></th><td>' + money(row.harvested) +
     '<small>战利 +' + money(row.combatRewardsEarned) + '</small></td><td>' + count(row.unitsDestroyed) + ' / ' + count(row.structuresDestroyed) +
     '</td><td>' + count(row.unitsLost) + ' / ' + count(row.structuresLost) + '</td><td>' + money(row.destroyedValue) +
@@ -263,7 +263,7 @@ export function reportCsv(report) {
     ['统计口径', '价值按原价；损失含自爆/环境，不含出售/折叠/淘汰撤离/退场后遗留建筑；采集不含初始/补给/奖励；军力不含矿车/基地车/建筑'],
     ['玩家', '阵营', '最终队伍', '结果', '采集资金', '战斗奖励', '击毁单位', '击毁建筑', '损失单位', '损失建筑',
       '摧毁价值', '损失价值', '自爆消耗', '交换比', '采样军力峰值', '终局军力', '首次交战', '退场时间']];
-  report.players.forEach(p => rows.push([p.name, p.faction === 'magic' ? '秘法会' : '钢铁军团', p.team, status(p),
+  report.players.forEach(p => rows.push([p.name, p.faction === 'magic' ? '秘法会' : p.faction === 'tribe' ? '原始部落' : '钢铁军团', p.team, status(p),
     p.harvested, p.combatRewardsEarned, p.unitsDestroyed, p.structuresDestroyed, p.unitsLost, p.structuresLost,
     p.destroyedValue, p.lostValue, p.selfConsumedValue, exchangeLabel(p), p.peakArmyValue, p.endingArmyValue,
     battleTime(p.firstCombatAt), p.eliminatedAt == null ? '存活至终局' : battleTime(p.eliminatedAt)]));

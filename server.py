@@ -36,14 +36,18 @@ from catalog import (
     PUBLIC_CATALOG,
     STRUCTURE_TYPES,
     SUICIDE_KINDS,
+    TRIBE_STRUCTURES,
+    TRIBE_UNITS,
     UNIT_TYPES,
     UNIT_SIGHT_RANGE_MULTIPLIER,
+    VALID_FACTIONS,
     VEHICLE_KINDS,
     VETERAN_RANKS,
     VETERAN_REGEN_DELAY,
     VETERAN_PROJECTILES,
     faction_buildings,
     faction_loadout,
+    kind_faction,
     public_catalog,
     structure_role,
     unit_sight_radius,
@@ -676,38 +680,39 @@ CRATE_TYPES = {
 
 # Armor types and damage multiplier table for unit-counter system.
 # 查表缺省 1.0（apply_damage 里 .get(armor, 1.0)），所以新增的 arcane(魔导)
-# 护甲只需在它加成的行里写出系数，其余行自动按 1.0 中性处理。
+# / beast(兽甲) 护甲只需在它加成的行里写出系数，其余行自动按 1.0 中性处理。
 # 单位 armor 可以是字符串，或 (heavy, light) 这类混甲：系数取各片平均。
 DAMAGE_MULTIPLIER = {
-    #                                                        arcane=魔导(法师/傀儡等魔法单位)
-    "bullet":  {"infantry": 1.0, "light": 0.65, "heavy": 0.35, "structure": 0.30, "arcane": 1.50},
-    "rocket":  {"infantry": 0.75, "light": 1.30, "heavy": 1.50, "structure": 0.85},
-    "shell":   {"infantry": 0.55, "light": 1.00, "heavy": 1.00, "structure": 1.20, "arcane": 0.80},
+    #                                                        arcane=魔导  beast=兽甲(战狼)
+    "bullet":  {"infantry": 1.0, "light": 0.65, "heavy": 0.35, "structure": 0.30, "arcane": 1.50, "beast": 0.80},
+    "rocket":  {"infantry": 0.75, "light": 1.30, "heavy": 1.50, "structure": 0.85, "beast": 1.10},
+    "shell":   {"infantry": 0.55, "light": 1.00, "heavy": 1.00, "structure": 1.20, "arcane": 0.80, "beast": 0.85},
     # 狙击：专点步兵 ×2.20。对魔导 2.00→1.60，160 血法师/女巫两枪才死，不再一枪清后排。
     # 爆裂魔仆改轻甲：55×0.4=22 / 发。
-    "sniper":  {"infantry": 2.20, "light": 0.40, "heavy": 0.15, "structure": 0.10, "arcane": 1.60},
-    "siege":   {"infantry": 0.25, "light": 0.30, "heavy": 0.25, "structure": 1.80},
-    "ap":      {"infantry": 0.25, "light": 0.65, "heavy": 2.10, "structure": 0.70},
+    "sniper":  {"infantry": 2.20, "light": 0.40, "heavy": 0.15, "structure": 0.10, "arcane": 1.60, "beast": 0.90},
+    "siege":   {"infantry": 0.25, "light": 0.30, "heavy": 0.25, "structure": 1.80, "beast": 0.30},
+    "ap":      {"infantry": 0.25, "light": 0.65, "heavy": 2.10, "structure": 0.70, "beast": 0.55},
     # 超级武器：对全甲种都致命，清场用。siege 对步兵只有 0.25，清不动人。
-    "super":   {"infantry": 1.50, "light": 1.30, "heavy": 1.10, "structure": 1.40},
+    "super":   {"infantry": 1.50, "light": 1.30, "heavy": 1.10, "structure": 1.40, "beast": 1.20},
     # V3 / 坠星台 远程曲射：拆建筑，溅射清阵，弹速慢能被看见躲
-    "missile": {"infantry": 0.50, "light": 0.70, "heavy": 0.65, "structure": 1.50},
+    "missile": {"infantry": 0.50, "light": 0.70, "heavy": 0.65, "structure": 1.50, "beast": 0.65},
     # 磁暴步兵的电弧：快脉冲专电载具，对建筑和步兵都一般；电磁干扰魔力场，是科技杀法师的关键。
     # 对魔导 2.00→1.60：仍明显高于对步兵 0.80 / 对轻甲 1.40，不当成中性。
-    "tesla":   {"infantry": 0.80, "light": 1.40, "heavy": 1.30, "structure": 0.50, "arcane": 1.60},
+    "tesla":   {"infantry": 0.80, "light": 1.40, "heavy": 1.30, "structure": 0.50, "arcane": 1.60, "beast": 1.15},
     # 光棱坦克的聚焦光束：精准点杀伤，克轻型与建筑，打不动重甲与人群；也能切开魔导护甲
-    "laser":   {"infantry": 0.45, "light": 1.50, "heavy": 0.85, "structure": 1.70, "arcane": 1.50},
+    "laser":   {"infantry": 0.45, "light": 1.50, "heavy": 0.85, "structure": 1.70, "arcane": 1.50, "beast": 1.00},
     # 军犬扑咬：一口一个步兵，对装甲和建筑完全无从下口（×0）。
     # 对魔导仍 ×1.50（咬 90）；法师/女巫 160 血一口剩 70，两口仍死。
     # 爆裂魔仆/影豹改轻甲：bite ×0，不当猎物；仍非载具，不进 VEHICLE_KINDS。
     # 秘法巨龙甲种仍是 arcane，但算载具：apply_damage 里 bite 对 VEHICLE_KINDS 再乘 ×0。
-    "bite":    {"infantry": 4.00, "light": 0.00, "heavy": 0.00, "structure": 0.00, "arcane": 1.50},
+    # 兽甲：狗能咬狼，但不是 ×4 一口死。
+    "bite":    {"infantry": 4.00, "light": 0.00, "heavy": 0.00, "structure": 0.00, "arcane": 1.50, "beast": 1.50},
     # 奥术魔法：无视钢铁装甲熔重甲（法师是反坦克答案），但法术拆不动建筑
-    "magic":   {"infantry": 1.20, "light": 1.30, "heavy": 1.60, "structure": 0.60, "arcane": 1.00},
+    "magic":   {"infantry": 1.20, "light": 1.30, "heavy": 1.60, "structure": 0.60, "arcane": 1.00, "beast": 1.20},
     # 爆破本身对所有护甲中性。卡车/魔仆对建筑与采矿单位的 ×1.5、对其余单位的
     # ×0.8 属于具体兵种的 targetMultipliers，在 trigger_death_explosion 里按目标
     # kind 结算。
-    "explosive": {"infantry": 1.00, "light": 1.00, "heavy": 1.00, "structure": 1.00, "arcane": 1.00},
+    "explosive": {"infantry": 1.00, "light": 1.00, "heavy": 1.00, "structure": 1.00, "arcane": 1.00, "beast": 1.00},
 }
 
 DEFAULT_MAP = "gold_crater_small"
@@ -945,6 +950,9 @@ def public_unit(unit):
         result["repairing"] = True
     if unit.get("order") in ("hold", "scatter"):
         result["tacticalOrder"] = unit["order"]
+    if unit.get("order") == "tame":
+        result["taming"] = True
+        result["tameProgress"] = round(float(unit.get("tameProgress", 0.0) or 0.0), 2)
     return result
 
 
@@ -2503,7 +2511,8 @@ def start_game(room):
         toward_y = 1 if y < center_y else -1
         # 五车争霸只发一辆折叠基地车；没有预建建筑、矿车或作战单位。
         # 其他地图继续按阵营发完整出生装备：科技(指挥中心/电站/精炼厂/采矿车 + 突击兵/坦克)，
-        # 魔法(主堡/法力塔/精炼所/浮游晶簇 + 法师/傀儡)。kind 全部取自阵营装备表。
+        # 魔法(主堡/法力塔/精炼所/浮游晶簇 + 法师/傀儡)，
+        # 部落(大营/图腾柱/精炼棚/驮兽 + 骨矛猎手/战狼)。kind 全部取自阵营装备表。
         loadout = faction_loadout(player.get("faction", "tech"))
         if room_map.get("packedStart"):
             command = make_unit(loadout["mcv"], player["id"], x, y)
@@ -2780,7 +2789,7 @@ def queue_structure(room, player_id, kind):
     definition = STRUCTURE_TYPES.get(kind)
     if not definition or structure_role(kind) == "hq":
         raise ValueError("未知建筑")
-    # 阵营校验：科技/魔法各有独立建筑树，跨阵营不能建造
+    # 阵营校验：科技/魔法/部落各有独立建筑树，跨阵营不能建造
     if definition.get("faction", "tech") != player.get("faction", "tech"):
         raise ValueError("你的阵营无法建造该建筑")
     if not player_has_construction_authority(room, player_id):
@@ -2843,7 +2852,7 @@ def queue_unit(room, player_id, kind):
     definition = UNIT_TYPES.get(kind)
     if not definition:
         raise ValueError("未知单位")
-    # 阵营校验：科技/魔法各有独立兵种树，跨阵营不能生产
+    # 阵营校验：科技/魔法/部落各有独立兵种树，跨阵营不能生产
     if definition.get("faction", "tech") != player.get("faction", "tech"):
         raise ValueError("你的阵营无法生产该单位")
     producer_kind = definition["producer"]
@@ -2905,6 +2914,144 @@ def clear_repair_order(unit):
     unit["repairing"] = False
 
 
+def is_tameable_combat_unit(entity):
+    """活着的中立作战单位才能驯。建筑、采矿单位和基地车不行。"""
+    if not entity or entity.get("hp", 0) <= 0:
+        return False
+    if not str(entity.get("id", "")).startswith("u"):
+        return False
+    kind = entity.get("kind")
+    if kind not in UNIT_TYPES:
+        return False
+    if unit_role(kind) in ("harvester", "mcv"):
+        return False
+    return unit_can_attack(kind)
+
+
+def aggro_failed_tame(game, tamer, target_id):
+    """驯化失败或被打断：该中立单位敌对驯兽师一侧。"""
+    target = find_entity(game, target_id)
+    if (not target or target.get("hp", 0) <= 0
+            or target.get("owner") != NEUTRAL_OWNER):
+        return
+    if tamer and tamer.get("hp", 0) > 0:
+        target["targetId"] = tamer["id"]
+        target["order"] = "attack"
+        target["destX"] = None
+        target["destY"] = None
+        target["scan"] = 0.0
+    else:
+        target["targetId"] = None
+        target["scan"] = 0.0
+        if target.get("order") != "neutralReturn":
+            target["order"] = "guard"
+
+
+def abort_tame_order(game, unit, failed=True):
+    target_id = unit.get("tameTargetId")
+    was_taming = unit.get("order") == "tame" or bool(target_id)
+    unit["tameTargetId"] = None
+    unit["tameProgress"] = 0.0
+    if failed and was_taming:
+        aggro_failed_tame(game, unit, target_id)
+
+
+def issue_tame(room, player_id, unit_ids, target_id):
+    """派遣己方驯兽师招降一个活着的中立作战单位。"""
+    game = room["game"]
+    if not neutrals_enabled(room, game):
+        raise ValueError("当前对局未开启中立单位，无法驯化")
+    target = find_entity(game, target_id)
+    if not target or target.get("hp", 0) <= 0:
+        raise ValueError("无效目标")
+    if target.get("owner") != NEUTRAL_OWNER:
+        raise ValueError("只能驯化中立单位")
+    if not is_tameable_combat_unit(target):
+        raise ValueError("只能驯化中立作战单位")
+    tamers = [
+        unit for unit in game["units"]
+        if unit["owner"] == player_id and unit["id"] in unit_ids
+        and unit.get("hp", 0) > 0
+        and UNIT_TYPES.get(unit["kind"], {}).get("canTame")
+    ]
+    if not tamers:
+        raise ValueError("请选择驯兽师")
+    player = room["players"][player_id]
+    cost = max(int(UNIT_TYPES[unit["kind"]].get("tameCost", 150)) for unit in tamers)
+    if player["cash"] < cost:
+        raise ValueError("资金不足，无法驯化")
+    for unit in tamers:
+        abort_tame_order(game, unit, failed=False)
+        clear_repair_order(unit)
+        clear_patrol_order(unit)
+        unit["tameTargetId"] = target["id"]
+        unit["tameProgress"] = 0.0
+        unit["targetId"] = None
+        unit["destX"] = None
+        unit["destY"] = None
+        unit["order"] = "tame"
+        unit["_path"] = None
+        unit["_pathDest"] = None
+        unit["_pathEnd"] = None
+    return len(tamers)
+
+
+def complete_tame(room, tamer, target):
+    player = room["players"].get(tamer["owner"])
+    cost = int(UNIT_TYPES.get(tamer["kind"], {}).get("tameCost", 150))
+    if not player or player.get("cash", 0) < cost:
+        abort_tame_order(room["game"], tamer, failed=True)
+        tamer["order"] = "guard"
+        return False
+    player["cash"] -= cost
+    battle_report.cash_flow(room, tamer["owner"], "unitSpend", cost)
+    keep_hp = target["hp"]
+    keep_kind = target["kind"]
+    target["owner"] = tamer["owner"]
+    target["kind"] = keep_kind
+    target["hp"] = keep_hp
+    target["neutralCampId"] = None
+    for key in ("guardPostX", "guardPostY", "guardCenterX", "guardCenterY"):
+        target.pop(key, None)
+    target["order"] = "guard"
+    target["targetId"] = None
+    target["destX"] = None
+    target["destY"] = None
+    tamer["tameTargetId"] = None
+    tamer["tameProgress"] = 0.0
+    tamer["order"] = "guard"
+    tamer["destX"] = None
+    tamer["destY"] = None
+    return True
+
+
+def tick_tame(room, unit, dt, entity_index, terrain):
+    definition = UNIT_TYPES[unit["kind"]]
+    game = room["game"]
+    target = find_entity(game, unit.get("tameTargetId"), entity_index)
+    if (not target or target.get("hp", 0) <= 0
+            or target.get("owner") != NEUTRAL_OWNER
+            or not is_tameable_combat_unit(target)):
+        still_hostile = bool(target and target.get("hp", 0) > 0
+                             and target.get("owner") == NEUTRAL_OWNER)
+        abort_tame_order(game, unit, failed=still_hostile)
+        unit["order"] = "guard"
+        return
+    reach = (float(definition.get("tameRange", 48.0))
+             + float(target.get("size", 0) or 0) * 0.35)
+    dist = math.hypot(target["x"] - unit["x"], target["y"] - unit["y"])
+    if dist > reach:
+        move_toward(
+            terrain, unit, target["x"], target["y"],
+            definition["speed"] * float(unit.get("slowMult", 1.0) or 1.0), dt)
+        return
+    unit["destX"] = None
+    unit["destY"] = None
+    unit["tameProgress"] = float(unit.get("tameProgress", 0.0) or 0.0) + dt
+    if unit["tameProgress"] >= float(definition.get("tameTime", 4.0)):
+        complete_tame(room, unit, target)
+
+
 def clear_patrol_order(unit):
     for key in ("_patrolPoints", "_patrolIndex", "_patrolStall"):
         unit.pop(key, None)
@@ -2956,6 +3103,7 @@ def issue_patrol(game, player_id, unit_ids, x, y):
             continue  # Repeated clicks must not create zero-length legs.
         points.append((dest_x, dest_y))
         unit["_patrolPoints"] = points
+        abort_tame_order(game, unit)
         clear_repair_order(unit)
         if not continuing:
             unit["order"] = "patrol"
@@ -3020,6 +3168,7 @@ def issue_move(game, player_id, unit_ids, x, y, attack_move=False, formation=Non
         unit["destX"] = dest_x
         unit["destY"] = dest_y
         unit["targetId"] = None
+        abort_tame_order(game, unit)
         clear_repair_order(unit)
         clear_patrol_order(unit)
         unit["order"] = "attackMove" if attack_move else "move"
@@ -3052,6 +3201,7 @@ def issue_stop(game, player_id, unit_ids):
         unit["destX"] = None
         unit["destY"] = None
         unit["targetId"] = None
+        abort_tame_order(game, unit)
         clear_repair_order(unit)
         clear_patrol_order(unit)
         unit["order"] = "guard"
@@ -3084,6 +3234,7 @@ def issue_harvest(game, player_id, unit_ids, resource_id):
         unit["destX"] = None
         unit["destY"] = None
         unit["targetId"] = None
+        abort_tame_order(game, unit)
         clear_repair_order(unit)
         clear_patrol_order(unit)
         unit["harvestPaused"] = False
@@ -3136,7 +3287,7 @@ def hold_target_valid(game, unit, target):
     definition = UNIT_TYPES[unit["kind"]]
     if math.hypot(target["x"]-unit["x"], target["y"]-unit["y"]) > definition["range"]+target["size"]*.35:
         return False
-    if unit["kind"] == "dog":
+    if unit["kind"] in ("dog", "wolf"):
         target_def = UNIT_TYPES.get(target["kind"], STRUCTURE_TYPES.get(target["kind"], {}))
         if target["kind"] in VEHICLE_KINDS or damage_armor_multiplier("bite", target_def.get("armor", "structure")) <= 0:
             return False
@@ -3172,6 +3323,7 @@ def issue_attack(game, player_id, unit_ids, target_id):
                 unit["targetId"] = target_id
                 unit["destX"] = None
                 unit["destY"] = None
+                abort_tame_order(game, unit)
                 clear_repair_order(unit)
                 clear_patrol_order(unit)
                 unit["order"] = "attack"
@@ -3225,6 +3377,7 @@ def issue_repair(game, player_id, unit_ids, structure_id):
         approach_angle = math.atan2(
             unit["y"] - repair_bay["y"], unit["x"] - repair_bay["x"])
         fan_offset = (slot - (REPAIR_DOCKS_PER_RING - 1) / 2.0) * 0.08
+        abort_tame_order(game, unit)
         unit["repairTargetId"] = repair_bay["id"]
         unit["repairAngle"] = approach_angle + fan_offset + ring * 0.11
         unit["repairRing"] = ring
@@ -3280,7 +3433,7 @@ def issue_deploy(game, player_id, unit_ids):
             raise ValueError("此处无法展开：空间不足")
         if game_terrain(game).blocked(unit["x"], unit["y"], 30):
             raise ValueError("不能在水中或山地展开")
-        # 基地车展开为该阵营的主堡（科技→指挥中心 / 魔法→魔法主堡）
+        # 基地车展开为该阵营的主堡（科技→指挥中心 / 魔法→魔法主堡 / 部落→部落大营）
         hq_kind = UNIT_TYPES[unit["kind"]].get("deploysInto", "hq")
         new_hq = make_structure(hq_kind, player_id, unit["x"], unit["y"], True)
         new_hq["packable"] = True
@@ -3376,6 +3529,25 @@ def issue_strike(room, player_id, x, y):
     queue_strike(room, x, y, owner=player_id,
                  radius=STRIKE_RADIUS, splash=STRIKE_SPLASH, system=False)
     add_chat(room, "作战系统", "%s 呼叫了轨道打击！" % player.get("name", "指挥官"), True)
+
+
+def set_faction(room, player, faction, target_id=None):
+    """玩家改自己的阵营；AI 的阵营由房主指定。"""
+    if room.get("status") != "lobby":
+        raise ValueError("战斗已经开始")
+    faction = str(faction or "tech")
+    if faction not in VALID_FACTIONS:
+        raise ValueError("未知阵营")
+    target_id = target_id or player["id"]
+    target = room["players"].get(target_id)
+    if not target:
+        raise ValueError("玩家不存在")
+    is_self = target["id"] == player["id"]
+    host_sets_bot = target.get("isBot") and room.get("hostId") == player["id"]
+    if not (is_self or host_sets_bot):
+        raise ValueError("只能设置自己的阵营")
+    target["faction"] = faction
+    return faction
 
 
 def set_neutrals(room, player, enabled):
@@ -4005,14 +4177,14 @@ def tick_orbital_rain(room):
 AGENT_ALLOWED_COMMANDS = frozenset((
     "move", "attackMove", "patrol", "attack", "structureAttack", "repair",
     "structureRepair",
-    "deploy", "undeploy", "stop", "hold", "scatter", "harvest", "train", "prepareBuild", "placeBuild",
+    "deploy", "undeploy", "stop", "hold", "scatter", "harvest", "tame", "train", "prepareBuild", "placeBuild",
     "cancelBuild", "cancelTrain", "sell", "setRally",
 ))
 
 
 SEQUENCED_UNIT_COMMANDS = frozenset((
     "move", "attackMove", "patrol", "attack", "stop", "hold", "scatter",
-    "harvest", "repair", "deploy",
+    "harvest", "repair", "deploy", "tame",
 ))
 
 
@@ -4116,6 +4288,10 @@ def handle_game_command(room, player, payload, role="commander"):
         issue_harvest(
             game, player["id"], command_unit_ids(payload),
             payload.get("resourceId"))
+    elif command == "tame":
+        issue_tame(
+            room, player["id"], command_unit_ids(payload),
+            payload.get("targetId"))
     elif command == "train":
         queue_unit(room, player["id"], str(payload.get("unitType", "")))
     elif command == "prepareBuild":
@@ -5858,6 +6034,9 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
         if unit.get("order") == "repair":
             tick_repair_unit(room, unit, dt, entity_index, repair_power_cache, terrain)
             continue
+        if unit.get("order") == "tame":
+            tick_tame(room, unit, dt, entity_index, terrain)
+            continue
         if unit.get("order") == "patrol":
             tick_patrol(unit, terrain, definition["speed"] * spd_mult, dt)
             continue
@@ -5921,7 +6100,7 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                         target = building
                 # 军犬只扑步兵/法师：对载具/建筑/巨龙零伤害，追上去等于送死。
                 # 覆盖自动索敌结果；玩家手点的目标（上面 find_entity）不受影响。
-                if unit["kind"] == "dog":
+                if unit["kind"] in ("dog", "wolf"):
                     target = nearest_enemy_infantry(
                         game, unit["owner"], unit["x"], unit["y"], aggro,
                         combat_spatial)
@@ -6159,20 +6338,25 @@ BOT_CHEAP_KINDS = frozenset((
 ))
 BOT_INFANTRY_KINDS = frozenset((
     "rifle", "rocket", "sniper", "tesla", "mage", "frost", "imp", "oracle",
+    "spear",
 ))
 BOT_MAGE_KINDS = frozenset(("mage", "frost"))
 BOT_LATE_UNITS = frozenset((
     "overlord", "prism", "v3", "dragon", "colossus", "comet",
     "behemoth",
 ))
-BOT_LATE_STRUCTURES = frozenset(("repair", "mspring"))
+BOT_LATE_STRUCTURES = frozenset(("repair", "mspring", "taltar"))
 BOT_SCOUT_VEHICLES = VEHICLE_KINDS - frozenset((
-    "harvester", "mharvester", "mcv", "mmcv", "bomb_truck",
+    "harvester", "mharvester", "tharvester", "mcv", "mmcv", "tmcv", "bomb_truck",
 ))
 
 
 def bot_suicide_kind(faction):
-    return "hexling" if faction == "magic" else "bomb_truck"
+    if faction == "magic":
+        return "hexling"
+    if faction == "tech":
+        return "bomb_truck"
+    return None
 
 
 def bot_suicide_count(game, bot_id, kind):
@@ -6255,6 +6439,8 @@ def bot_needs_defense(game, bot_id):
 def bot_should_train_suicide(game, bot, kind):
     """工厂/法阵一立就出自爆，不必等 8 个野战或 5 座敌建。场上+队列最多 5。
     总部掉血或家矿有敌军时取消下一波，先练守军。"""
+    if not kind:
+        return False
     if bot_suicide_count(game, bot["id"], kind) >= BOT_SUICIDE_CAP:
         return False
     if bot_needs_defense(game, bot["id"]):
@@ -6465,10 +6651,11 @@ def bot_update_scout(game, bot_id, field, mem):
 def bot_refresh_memory(game, bot, roles, scout):
     mem = bot_ai_state(bot)
     kind = bot_suicide_kind(bot.get("faction", "tech"))
-    live = bot_live_suicide_count(game, bot["id"], kind)
     focus = bot_focus_hq(game, bot["id"])
-    if mem.get("waves_sent", 0) >= 1 and live == 0 and focus is not None:
-        mem["wave_failed"] = True
+    if kind:
+        live = bot_live_suicide_count(game, bot["id"], kind)
+        if mem.get("waves_sent", 0) >= 1 and live == 0 and focus is not None:
+            mem["wave_failed"] = True
     elapsed = game.get("elapsed", 0.0)
     if (elapsed >= BOT_OPENING_SECONDS and "factory" in roles
             and focus is not None):
@@ -6506,7 +6693,16 @@ def bot_power_surplus(room, bot):
 def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
     """开局默认混编：前两分钟军犬/步枪或法师/影豹。克制表另走 bot_unit_choices。"""
     magic = faction == "magic"
+    tribe = faction == "tribe"
     choices = []
+    if tribe:
+        if "barracks" in roles:
+            choices.extend(("spear", "spear", "tamer") if not opening else ("spear", "spear"))
+        if "factory" in roles:
+            choices.append("wolf")
+            if rich and harvester_n < 2:
+                choices.append("tharvester")
+        return choices
     if magic:
         if "barracks" in roles:
             if opening:
@@ -6546,7 +6742,9 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
                      inbound):
     """按看见的编制选兵，不用随机权重。开局没情报时仍走军犬/法师。"""
     magic = faction == "magic"
-    harvester_kind = "mharvester" if magic else "harvester"
+    tribe = faction == "tribe"
+    harvester_kind = (
+        "mharvester" if magic else ("tharvester" if tribe else "harvester"))
     dogs = scout.get("dogs", 0)
     infantry = scout.get("infantry", 0)
     mages = scout.get("mages", 0)
@@ -6559,6 +6757,10 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         return [harvester_kind]
 
     if inbound:
+        if tribe:
+            if "barracks" in roles:
+                return ["spear", "tamer"]
+            return ["wolf"] if "factory" in roles else []
         if magic:
             if "barracks" in roles:
                 choices = ["frost", "mage"]
@@ -6574,6 +6776,8 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         return ["scout"] if "factory" in roles else []
 
     if dogs >= 4:
+        if tribe:
+            return ["wolf"] if "factory" in roles else (["spear"] if "barracks" in roles else [])
         if magic:
             return ["golem"] if "factory" in roles else []
         choices = []
@@ -6584,6 +6788,10 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         return choices
 
     if infantry >= 5 or mages >= 3:
+        if tribe:
+            if "factory" in roles:
+                return ["wolf"]
+            return ["spear"] if "barracks" in roles else []
         if magic:
             choices = []
             if "barracks" in roles:
@@ -6594,6 +6802,13 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         return ["dog", "dog", "dog"] if "barracks" in roles else []
 
     if vehicles >= 3:
+        if tribe:
+            choices = []
+            if "barracks" in roles:
+                choices.append("spear")
+            if "factory" in roles:
+                choices.append("wolf")
+            return choices
         if magic:
             choices = []
             if "barracks" in roles:
@@ -6615,6 +6830,13 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         return choices
 
     if defend:
+        if tribe:
+            choices = []
+            if "barracks" in roles:
+                choices.extend(("spear", "tamer"))
+            if "factory" in roles:
+                choices.append("wolf")
+            return choices
         if magic:
             choices = []
             if "factory" in roles:
@@ -6635,6 +6857,13 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         return choices
 
     if late and "repair" in roles:
+        if tribe:
+            choices = []
+            if "factory" in roles:
+                choices.append("wolf")
+            if "barracks" in roles:
+                choices.extend(("spear", "tamer"))
+            return choices
         if magic:
             choices = ["colossus", "dragon", "behemoth"]
             if "barracks" in roles:
@@ -6710,8 +6939,9 @@ def bot_queue_building(room, bot, fb, roles, own_structures, supply, usage,
 def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
     """工厂/法阵一就绪就排自爆；看见编制后改克制，不再掷骰。"""
     suicide_kind = bot_suicide_kind(faction)
-    suicide_n = bot_suicide_count(room["game"], bot["id"], suicide_kind)
-    want_suicide = "factory" in roles and bot_should_train_suicide(
+    suicide_n = (bot_suicide_count(room["game"], bot["id"], suicide_kind)
+                 if suicide_kind else 0)
+    want_suicide = bool(suicide_kind) and "factory" in roles and bot_should_train_suicide(
         room["game"], bot, suicide_kind)
     suicide_q, other_q = bot_factory_queue_mix(
         room["game"], bot["id"], suicide_kind)
@@ -6719,7 +6949,8 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
     harvester_n = bot_harvester_count(room["game"], bot["id"])
     inbound = bool(scout.get("suicide_inbound"))
     if defend:
-        bot_cancel_queued_kind(room, bot, suicide_kind)
+        if suicide_kind:
+            bot_cancel_queued_kind(room, bot, suicide_kind)
         want_suicide = False
     force_support = want_suicide and suicide_q >= 2 and other_q == 0
     rush_suicide = (
@@ -6730,11 +6961,14 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
         return
     if ("repair" in roles and phase == BOT_PHASE_CLOSE
             and not defend and not inbound):
-        late_choices = (
-            (("colossus", "dragon", "comet", "behemoth") +
-             (("warden",) if "barracks" in roles else ()))
-            if faction == "magic"
-            else ("overlord", "prism", "artillery"))
+        if faction == "magic":
+            late_choices = (("colossus", "dragon", "comet", "behemoth") +
+                            (("warden",) if "barracks" in roles else ()))
+        elif faction == "tribe":
+            late_choices = (("wolf",) if "factory" in roles else ()) + (
+                ("spear", "tamer") if "barracks" in roles else ())
+        else:
+            late_choices = ("overlord", "prism", "artillery")
         if bot_try_choices(room, bot, late_choices):
             return
     if (want_suicide and not force_support
@@ -6747,7 +6981,12 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
     choices = bot_unit_choices(
         faction, roles, phase, scout, defend, rich, harvester_n, inbound)
     if not choices and "factory" in roles:
-        choices = ["panther" if faction == "magic" else "scout"]
+        if faction == "magic":
+            choices = ["panther"]
+        elif faction == "tribe":
+            choices = ["wolf"]
+        else:
+            choices = ["scout"]
     if choices:
         bot_try_choices(room, bot, choices)
 
@@ -7068,6 +7307,9 @@ def remove_destroyed(room):
     destroyed_structures = [s for s in game["structures"] if s["hp"] <= 0]
     if not destroyed_units and not destroyed_structures:
         return
+    for unit in destroyed_units:
+        if unit.get("order") == "tame" or unit.get("tameTargetId"):
+            abort_tame_order(game, unit, failed=True)
     for entity in destroyed_units + destroyed_structures:
         if entity.get("_silentRemoval"):
             continue
@@ -7815,21 +8057,7 @@ class GameHandler(BaseHTTPRequestHandler):
                     raise ValueError("玩家不存在")
                 target["team"] = clamp_team(payload.get("team", 0))
             elif action == "setFaction":
-                if room["status"] != "lobby":
-                    raise ValueError("战斗已经开始")
-                faction = str(payload.get("faction", "tech"))
-                if faction not in ("tech", "magic"):
-                    raise ValueError("未知阵营")
-                # 玩家改自己的阵营；AI 的阵营由房主指定
-                target_id = payload.get("playerId") or player["id"]
-                target = room["players"].get(target_id)
-                if not target:
-                    raise ValueError("玩家不存在")
-                is_self = target["id"] == player["id"]
-                host_sets_bot = target["isBot"] and room["hostId"] == player["id"]
-                if not (is_self or host_sets_bot):
-                    raise ValueError("只能设置自己的阵营")
-                target["faction"] = faction
+                set_faction(room, player, payload.get("faction"), payload.get("playerId"))
             elif action == "setSpawn":
                 if room["hostId"] != player["id"] or room["status"] != "lobby":
                     raise ValueError("只有房主可以设置出生地")

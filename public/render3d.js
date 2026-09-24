@@ -596,11 +596,12 @@ const MAGIC_UNIT_KINDS = {
 // 不再把军服照成钢板；其余车辆、石构和兽类分别复用 metal/stone/hide。
 const CLOTH_UNIT_KINDS = {
   rifle: 1, rocket: 1, sniper: 1, tesla: 1,
-  mage: 1, frost: 1, oracle: 1
+  mage: 1, frost: 1, oracle: 1,
+  spear: 1, tamer: 1
 };
 // 巨龙从兽皮改成金属：奥德赛那版是硬表面构装体，皮毛粗糙度会把甲板和铬边
 // 一起照哑，硬表面的折角就读不出来了。
-const HIDE_UNIT_KINDS = { dog: 1, panther: 1 };
+const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1 };
 
 const ROT_X90 = new THREE.Matrix4().makeRotationX(Math.PI / 2);
 const ROT_Y90 = new THREE.Matrix4().makeRotationY(Math.PI / 2);
@@ -1987,7 +1988,14 @@ const UNIT_BUILDERS = {
         sph(2.2, 8, -14, 58, 0, GLOW_HOT)
       ]
     };
-  }
+  },
+
+  /* ---- 原始部落 P0：复用钢铁/秘法网格，目录名分开 ---- */
+  spear: function () { return infantryParts('rifle'); },
+  tamer: function () { return UNIT_BUILDERS.mage(); },
+  wolf: function () { return UNIT_BUILDERS.dog(); },
+  tharvester: function () { return UNIT_BUILDERS.harvester(); },
+  tmcv: function () { return UNIT_BUILDERS.mcv(); }
 };
 
 /* ------------------------------------------------------------------ *
@@ -2088,7 +2096,7 @@ function structureParts(kind, size) {
   const s = size;
   addStructureFoundation(c, kind, s);
 
-  if (kind === 'hq') {
+  if (kind === 'hq' || kind === 'thq') {
     // 指挥中心：矮宽地堡 + 两侧翼楼 + 收束主塔，不再是三层灰方块。
     // 正面闸门朝 +Z（默认相机从南往北看），主塔加四棱斜顶，翼楼是独立碉堡。
     taper(HULL, s * 1.46, s * 1.22, s * 1.28, s * 1.04, s * 0.38, 0, s * 0.19 + 3.4, 0, MAT.concrete);
@@ -2127,7 +2135,7 @@ function structureParts(kind, size) {
     });
     add(HULL, new THREE.CylinderGeometry(s * 0.045, s * 0.07, s * 0.62, 8), 0, s * 1.92, 0, MAT.steel);
     add(HULL, new THREE.BoxGeometry(s * 0.28, s * 0.04, s * 0.04), s * 0.16, s * 2.16, 0, MAT.darkSteel);
-  } else if (kind === 'power') {
+  } else if (kind === 'power' || kind === 'tpower') {
     taper(HULL, s * 1.46, s * 1.16, s * 1.30, s * 1.02, s * 0.38, 0, s * 0.19 + 3.4, 0, MAT.concrete);
     add(HULL, new THREE.BoxGeometry(s * 0.72, s * 0.28, s * 0.70), 0, s * 0.38 + 3.4, s * 0.42, MAT.darkSteel);
     [-1, 1].forEach(function (side) {
@@ -2152,7 +2160,7 @@ function structureParts(kind, size) {
     add(HULL, new THREE.BoxGeometry(s * 0.36, s * 0.22, s * 0.28), 0, s * 0.36 + 3.4, s * 0.58, MAT.rivet);
     add(HULL, new THREE.CylinderGeometry(s * 0.04, s * 0.04, s * 0.40, 6),
       0, s * 0.48 + 3.4, s * 0.38, MAT.copper, ROT_Z90);
-  } else if (kind === 'refinery') {
+  } else if (kind === 'refinery' || kind === 'trefinery') {
     taper(HULL, s * 1.48, s * 1.18, s * 1.34, s * 1.06, s * 0.42, 0, s * 0.21 + 3.4, 0, MAT.concrete);
     add(TEAM, new THREE.CylinderGeometry(s * 0.40, s * 0.48, s * 1.05, 12), s * 0.40, s * 0.88, 0);
     add(HULL, new THREE.ConeGeometry(s * 0.44, s * 0.48, 12), s * 0.40, s * 1.64, 0, MAT.rust);
@@ -2166,7 +2174,7 @@ function structureParts(kind, size) {
     add(HULL, new THREE.CylinderGeometry(s * 0.07, s * 0.07, s * 0.64, 6), s * 0.86, s * 0.72, -s * 0.38, MAT.steel);
     add(HULL, new THREE.CylinderGeometry(s * 0.05, s * 0.05, s * 0.50, 6),
       s * 0.18, s * 0.70, -s * 0.36, MAT.darkSteel, ROT_Z90);
-  } else if (kind === 'barracks') {
+  } else if (kind === 'barracks' || kind === 'tcamp') {
     taper(HULL, s * 1.42, s * 1.12, s * 1.28, s * 1.00, s * 0.40, 0, s * 0.20 + 3.4, 0, MAT.concrete);
     add(TEAM, new THREE.BoxGeometry(s * 1.22, s * 0.36, s * 0.92), 0, s * 0.42 + 3.4, 0, 1.0);
     add(HULL, new THREE.CylinderGeometry(s * 0.62, s * 0.62, s * 1.36, 3), 0, s * 0.72, 0, MAT.olive,
@@ -2178,7 +2186,7 @@ function structureParts(kind, size) {
     add(GLOW, new THREE.BoxGeometry(s * 1.10, s * 0.05, s * 0.96), 0, s * 0.50, 0, GLOW_SOFT);
     add(HULL, new THREE.CylinderGeometry(s * 0.025, s * 0.03, s * 0.72, 6), -s * 0.58, s * 1.18, 0, MAT.steel);
     add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.12, s * 0.02), -s * 0.46, s * 1.42, 0, MAT.hazard);
-  } else if (kind === 'factory') {
+  } else if (kind === 'factory' || kind === 'tpen') {
     taper(HULL, s * 1.52, s * 1.32, s * 1.38, s * 1.18, s * 0.52, 0, s * 0.26 + 3.4, 0, MAT.concrete);
     add(TEAM, new THREE.BoxGeometry(s * 1.28, s * 0.12, s * 1.10), 0, s * 0.78, 0, 1.0);
     add(HULL, new THREE.CylinderGeometry(s * 0.58, s * 0.58, s * 1.28, 8, 1, false, 0, Math.PI),
@@ -2194,7 +2202,7 @@ function structureParts(kind, size) {
     }
     add(GLOW, new THREE.BoxGeometry(s * 1.22, s * 0.05, s * 0.07), 0, s * 0.58, s * 0.58, GLOW_SOFT);
     add(GLOW, new THREE.BoxGeometry(s * 1.22, s * 0.05, s * 0.07), 0, s * 0.58, -s * 0.58, GLOW_SOFT);
-  } else if (kind === 'repair') {
+  } else if (kind === 'repair' || kind === 'taltar') {
     taper(HULL, s * 1.42, s * 1.24, s * 1.32, s * 1.14, s * 0.28, 0, s * 0.14 + 3.4, 0, MAT.concrete);
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (q) {
       add(HULL, new THREE.BoxGeometry(s * 0.13, s * 0.98, s * 0.13),
@@ -2816,7 +2824,9 @@ const UNIT_VISUAL_SCALE = {
   prism: 1.28, bomb_truck: 1.32,
   mage: 2.15, frost: 2.15, imp: 2.05, oracle: 2.15, golem: 1.42, behemoth: 1.62, panther: 1.7, dragon: 1.34,
   warden: 1.55, colossus: 1.38, comet: 1.28, hexling: 2.05,
-  mharvester: 1.16, mmcv: 1.30
+  mharvester: 1.16, mmcv: 1.30,
+  spear: 2.15, tamer: 2.15, wolf: 1.85,
+  tharvester: 1.16, tmcv: 1.30
 };
 
 /* 共享的哈希值噪声：天空的云、水面的泡沫、地形的细节法线都用同一套，
@@ -5535,6 +5545,11 @@ export function createRenderer(canvas) {
    * 出现所有兵种都是同一只小盒子的情况。
    */
   function simpleUnitParts(kind) {
+    if (kind === 'spear') kind = 'rifle';
+    if (kind === 'tamer') kind = 'mage';
+    if (kind === 'wolf') kind = 'dog';
+    if (kind === 'tharvester') kind = 'harvester';
+    if (kind === 'tmcv') kind = 'mcv';
     // 远处只有几像素大，保留 12 面方盒即可；近景才使用倒角轮廓。
     const box = plainBox;
     const taperedBox = plainTaperedBox;

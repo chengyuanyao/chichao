@@ -1,6 +1,6 @@
 // Input-only work: no frame/tick callbacks, no automatic command replay.
 export const ORDERED_UNIT_COMMANDS = new Set([
-  'move', 'attackMove', 'patrol', 'attack', 'stop', 'hold', 'scatter', 'harvest', 'repair', 'deploy'
+  'move', 'attackMove', 'patrol', 'attack', 'stop', 'hold', 'scatter', 'harvest', 'repair', 'deploy', 'tame'
 ]);
 
 export function createUnitCommandQueue({open, send, isCurrent, timeoutMs = 3000, maxInFlight = 4}) {

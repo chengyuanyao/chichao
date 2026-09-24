@@ -630,7 +630,7 @@ def main():
     assert "surfaced(SURF.crystal, [" in builder_block
     assert "surfaced(SURF.metal, [" in builder_block
     # 巨龙从兽皮改成金属材质，否则皮毛粗糙度会把甲板和铬边的折角一起照哑
-    assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1 };" in render
+    assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1 };" in render
     # 攻击特效跟模型一起换紫青：火球是巨龙独有弹道，不能残留橙火或玉绿。
     # projectile 键仍是 fireball（服务端目录约定），只换表现。
     assert server.UNIT_TYPES["dragon"]["projectile"] == "fireball"
