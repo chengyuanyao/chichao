@@ -143,7 +143,7 @@ def test_templates():
               or codex.effective_dps(kind, "mage") > 0)
 
     every = []
-    for faction in ("tech", "magic"):
+    for faction in ("tech", "magic", "tribe"):
         for bucket in templates.ARMOR_BUCKETS:
             for phase in templates.PHASES:
                 entry = templates.lookup(faction, bucket, phase)
@@ -151,7 +151,7 @@ def test_templates():
                     spec = server.UNIT_TYPES.get(kind)
                     every.append(bool(spec)
                                  and spec.get("faction", "tech") == faction)
-    check("36 个模板格子里的兵种全部存在且阵营正确", all(every) and len(every) > 60)
+    check("54 个模板格子里的兵种全部存在且阵营正确", all(every) and len(every) > 80)
 
 
 # ---------------------------------------------------------------- 3. 安全过滤

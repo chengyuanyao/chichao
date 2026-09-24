@@ -42,8 +42,12 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     tpower: { icon: '↟', desc: '提供 120 图腾之力' },
     trefinery: { icon: '◆', desc: '接收驮兽运回的兽骨矿' },
     tcamp: { icon: '♟', desc: '训练猎手与驯兽师' },
-    tpen: { icon: '▰', desc: '驯养驮兽、战狼、蛛网巨蛛与穿甲巨蝎' },
-    taltar: { icon: '✚', desc: '修复驮兽与迁徙驮队；需围栏与图腾柱' }
+    tpen: { icon: '▰', desc: '驯养驮兽、战狼、蛛网巨蛛、穿甲巨蝎与猛犸战象' },
+    taltar: { icon: '✚', desc: '修复驮兽与迁徙驮队；需围栏与图腾柱' },
+    tspiketower: { icon: '↟', desc: '短距骨矛防空，早期基地守卫 · 需营地' },
+    ttoxtower: { icon: '☠', desc: '远距毒矢，命中挂毒 · 需血祭坛' },
+    ttrap: { icon: '⋈', desc: '上膛后夹住敌军，定身并爆发一次 · 需营地' },
+    tpit: { icon: '◌', desc: '持续喷毒雾，拒止敌军地面单位 · 需血祭坛' }
   };
   var UNIT_VFX = {
     rifle: { icon: '♟', desc: '灵活的基础步兵' },
@@ -80,6 +84,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     wolf: { icon: '♞', desc: '围栏战狼，扑咬步兵；兽甲，无自爆' },
     spider: { icon: '🕷', desc: '吐丝定身并造成持续毒伤 · 需血祭坛' },
     scorpion: { icon: '🦂', desc: '穿甲尾刺点杀重甲，玻璃大炮 · 需血祭坛' },
+    mammoth: { icon: '🐘', desc: '后期重兽前排，短距砸击拆建筑 · 需血祭坛' },
     tharvester: { icon: '▣', desc: '自动采集矿石的驮兽' },
     tmcv: { icon: '⬢', desc: '可展开为新的部落大营' }
   };
@@ -274,7 +279,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   var STRUCTURE_ICONS = {
     hq: '★', power: 'ϟ', refinery: '◆', barracks: '♟', factory: '▰', repair: '✚', turret: '⌖', missile: '⊿',
     mhq: '★', mpower: '✦', mrefinery: '◈', mtemple: '✠', mcircle: '⬡', mspring: '✚', mtower: '✵', mstorm: '⚡',
-    thq: '★', tpower: '↟', trefinery: '◆', tcamp: '♟', tpen: '▰', taltar: '✚'
+    thq: '★', tpower: '↟', trefinery: '◆', tcamp: '♟', tpen: '▰', taltar: '✚',
+    tspiketower: '↟', ttoxtower: '☠', ttrap: '⋈', tpit: '◌'
   };
 
   /* -------------------- 肖像绘制器 --------------------
@@ -333,7 +339,9 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   };
   var TRIBE_KINDS = {
     thq: 1, tpower: 1, trefinery: 1, tcamp: 1, tpen: 1, taltar: 1,
-    spear: 1, tamer: 1, wolf: 1, spider: 1, scorpion: 1, tharvester: 1, tmcv: 1
+    tspiketower: 1, ttoxtower: 1, ttrap: 1, tpit: 1,
+    spear: 1, tamer: 1, wolf: 1, spider: 1, scorpion: 1, mammoth: 1,
+    tharvester: 1, tmcv: 1
   };
 
   function pRect(c, x, y, w, h, fill) {
@@ -1219,6 +1227,51 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       pLine(c, 68, 56, 68, 30, 2.4, P_BONE);
       pCirc(c, 48, 40, 3, P_FIRE);
     },
+    tspiketower: function (c) {
+      // 棘矛哨塔：木台 + 骨矛束，不要钢铁炮塔剪影
+      pShadow(c, 48, 60, 20);
+      pRect(c, 32, 48, 6, 12, P_BARK);
+      pRect(c, 58, 48, 6, 12, P_BARK);
+      pRect(c, 28, 40, 40, 10, P_HIDE);
+      pRect(c, 34, 28, 28, 14, P_BARK);
+      pLine(c, 40, 26, 40, 10, 2.2, P_BONE);
+      pLine(c, 48, 26, 48, 6, 2.4, P_BONE);
+      pLine(c, 56, 26, 56, 12, 2.2, P_BONE);
+      pPoly(c, [[46, 4], [50, 4], [48, 0]], P_BONE);
+      pRect(c, 38, 30, 8, 8, P_THATCH);
+    },
+    ttoxtower: function (c) {
+      // 毒矢高台：更高骨架 + 毒壶，一眼比棘矛哨塔高
+      pShadow(c, 48, 60, 18);
+      pRect(c, 36, 44, 5, 16, P_BARK);
+      pRect(c, 55, 44, 5, 16, P_BARK);
+      pRect(c, 32, 36, 32, 10, P_HIDE);
+      pRect(c, 40, 16, 16, 22, P_BARK);
+      pCirc(c, 48, 18, 7, P_MOSS);
+      pCirc(c, 48, 18, 3.2, '#7ad060');
+      pLine(c, 50, 16, 78, 8, 2.4, P_BONE);
+      pPoly(c, [[76, 4], [84, 10], [78, 14]], P_BONE);
+      pRect(c, 42, 28, 12, 6, P_BLOOD);
+    },
+    ttrap: function (c) {
+      // 兽夹：地面骨颚，不要塔楼
+      pShadow(c, 48, 60, 22);
+      pRect(c, 22, 50, 52, 6, P_BARK);
+      pPoly(c, [[24, 50], [48, 28], [44, 50]], P_BONE);
+      pPoly(c, [[72, 50], [48, 28], [52, 50]], P_BONE);
+      pLine(c, 30, 46, 66, 46, 2, P_HIDE);
+      pCirc(c, 48, 48, 3, P_FIRE);
+    },
+    tpit: function (c) {
+      // 毒雾坑：石圈 + 绿雾，不要井栏或炮座
+      pShadow(c, 48, 60, 24);
+      pCirc(c, 48, 48, 18, P_STONE);
+      pCirc(c, 48, 48, 12, P_BARK);
+      pCirc(c, 48, 46, 8, '#2a5018');
+      pCirc(c, 48, 44, 4.5, '#7ad060');
+      pLine(c, 32, 36, 32, 22, 2.2, P_BONE);
+      pLine(c, 64, 36, 64, 22, 2.2, P_BONE);
+    },
     spear: function (c) {
       pBust(c, P_HIDE);
       pCirc(c, 48, 30, 9.2, P_HIDE);
@@ -1266,6 +1319,20 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       pCirc(c, 74, 34, 1.3, P_FIRE);
       pCirc(c, 76, 37, 1.1, P_FIRE);
       pLine(c, 22, 28, 38, 22, 1.4, P_BONE);
+    },
+    mammoth: function (c) {
+      // 猛犸战象：厚躯 + 长牙 + 兽皮鞍，不要狼或驮兽剪影
+      pShadow(c, 48, 60, 28);
+      pPoly(c, [[16, 54], [70, 52], [66, 30], [22, 34]], P_HIDE);
+      pCirc(c, 70, 36, 10, P_HIDE);
+      pPoly(c, [[64, 28], [60, 10], [68, 28]], P_BARK);
+      pPoly(c, [[72, 28], [78, 8], [76, 30]], P_BARK);
+      pLine(c, 76, 40, 90, 54, 2.6, P_BONE);
+      pLine(c, 72, 42, 86, 56, 2.2, P_BONE);
+      pRect(c, 30, 26, 22, 10, P_THATCH);
+      pRect(c, 34, 24, 14, 4, P_BLOOD);
+      pRect(c, 20, 50, 6, 10, P_BARK);
+      pRect(c, 52, 50, 6, 10, P_BARK);
     },
     scorpion: function (c) {
       // 穿甲巨蝎：螯钳 + 弓起毒尾刺，不要八足蛛或四足狼剪影

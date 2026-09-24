@@ -715,6 +715,8 @@ DAMAGE_MULTIPLIER = {
     "explosive": {"infantry": 1.00, "light": 1.00, "heavy": 1.00, "structure": 1.00, "arcane": 1.00, "beast": 1.00},
     # 毒丝 / 可复用 DoT：略克步兵，打甲偏弱。缺省 1.0 的甲种保持中性。
     "venom":   {"infantry": 1.15, "light": 0.85, "heavy": 0.55, "structure": 0.40, "arcane": 1.00, "beast": 1.00},
+    # 猛犸砸击：拆建筑 ×1.50，对单位中性偏强，不当攻城炮那种对人 ×0.25。
+    "smash":   {"infantry": 0.80, "light": 1.00, "heavy": 1.10, "structure": 1.50, "arcane": 0.90, "beast": 1.00},
 }
 
 DEFAULT_MAP = "gold_crater_small"
@@ -977,6 +979,8 @@ def public_structure(structure):
     }
     if structure_role(structure["kind"]) == "defense":
         result["dir"] = round(structure["dir"], 3)
+    if STRUCTURE_TYPES.get(structure["kind"], {}).get("trapRadius"):
+        result["armed"] = bool(structure.get("armed"))
     if structure.get("packable"):
         result["packable"] = True
     if structure.get("rally"):
@@ -1864,6 +1868,9 @@ def make_structure(kind, owner, x, y, active=True):
         "repairing": False,
         # 防御建筑默认自动索敌；玩家右键点名时才暂存手动目标。
         "targetId": None,
+        "armed": False,
+        "armTimer": float(definition.get("trapArm", 0.0) or 0.0),
+        "auraTimer": 0.0,
     }
 
 
@@ -6325,6 +6332,100 @@ def tick_structure_repair(room, structure, dt, power_cache):
         structure["repairing"] = False
 
 
+def trap_enemy_units(game, owner, x, y, radius):
+    """圈内敌军地面单位。陷阱/毒坑不打建筑、不打友军。"""
+    found = []
+    if radius <= 0:
+        return found
+    for unit in game.get("units") or []:
+        if unit.get("hp", 0) <= 0:
+            continue
+        if is_friendly(game, unit.get("owner"), owner):
+            continue
+        dist = math.hypot(unit["x"] - x, unit["y"] - y)
+        if dist <= radius + float(unit.get("size", 0.0) or 0.0) * 0.35:
+            found.append(unit)
+    return found
+
+
+def tick_trap_structure(room, structure, dt):
+    """兽夹：上膛后一次定身+爆发然后拆除。毒坑：脉冲给敌军挂毒。"""
+    game = room["game"]
+    definition = STRUCTURE_TYPES.get(structure.get("kind"), {})
+    trap_radius = float(definition.get("trapRadius") or 0.0)
+    if trap_radius > 0:
+        if not structure.get("armed"):
+            remain = float(structure.get("armTimer", definition.get("trapArm", 0.0)) or 0.0)
+            remain = max(0.0, remain - dt)
+            structure["armTimer"] = remain
+            if remain <= 0.0:
+                structure["armed"] = True
+                game["effects"].append({
+                    "id": new_id("e"), "type": "arm", "kind": structure["kind"],
+                    "x": structure["x"], "y": structure["y"], "ttl": 0.35,
+                    "entityId": structure["id"], "entityKind": structure["kind"],
+                })
+            return
+        victims = trap_enemy_units(
+            game, structure["owner"], structure["x"], structure["y"], trap_radius)
+        if not victims:
+            return
+        combat_mult = fielded_combat_multiplier(room, structure["owner"])
+        damage = float(definition.get("trapDamage") or 0.0) * combat_mult
+        payload = {
+            "slow": definition.get("slow"),
+            "owner": structure["owner"],
+            "sourceId": structure["id"],
+            "sourceKind": structure["kind"],
+        }
+        for victim in victims:
+            if damage > 0:
+                apply_damage(
+                    room, victim, damage, structure["owner"],
+                    definition.get("damageType", "shell"), game,
+                    structure["id"], None, structure["kind"])
+            apply_slow(payload, victim)
+        game["effects"].append({
+            "id": new_id("e"), "type": "snap", "kind": structure["kind"],
+            "x": structure["x"], "y": structure["y"], "ttl": 0.55,
+            "entityId": structure["id"], "entityKind": structure["kind"],
+            "size": structure.get("size", 16.0),
+        })
+        if definition.get("trapExpire"):
+            structure["hp"] = 0.0
+            structure["_combatDestroyed"] = True
+            structure["_silentRemoval"] = True
+        else:
+            structure["armed"] = False
+            structure["armTimer"] = float(definition.get("trapCooldown") or 12.0)
+        return
+
+    aura_radius = float(definition.get("auraRadius") or 0.0)
+    if aura_radius <= 0:
+        return
+    timer = float(structure.get("auraTimer", 0.0) or 0.0) - dt
+    if timer > 0.0:
+        structure["auraTimer"] = timer
+        return
+    structure["auraTimer"] = float(definition.get("auraPulse") or 1.0)
+    victims = trap_enemy_units(
+        game, structure["owner"], structure["x"], structure["y"], aura_radius)
+    payload = {
+        "dot": definition.get("dot"),
+        "owner": structure["owner"],
+        "sourceId": structure["id"],
+        "sourceKind": structure["kind"],
+    }
+    for victim in victims:
+        apply_dot(payload, victim)
+    game["effects"].append({
+        "id": new_id("e"), "type": "haze", "kind": structure["kind"],
+        "x": structure["x"], "y": structure["y"], "ttl": 0.75,
+        "entityId": structure["id"], "entityKind": structure["kind"],
+        "size": aura_radius,
+    })
+
+
 def tick_structures(room, dt, combat_spatial=None, entity_index=None):
     game = room["game"]
     terrain = game_terrain(game)
@@ -6416,6 +6517,8 @@ def tick_structures(room, dt, combat_spatial=None, entity_index=None):
                         game, structure, definition, combat_mult)
                     launch_projectile(game, structure, target, definition, shot_mult)
                     structure["cooldown"] = definition["cooldown"]
+        elif structure_role(structure["kind"]) == "trap":
+            tick_trap_structure(room, structure, dt)
 
 
 # 大师 AI：开局仍是拆家速胜，读得见的编制再转克制，不龟缩也不一条兵单练到死。
@@ -6442,6 +6545,7 @@ BOT_SUICIDE_BLAST = UNIT_TYPES["bomb_truck"]["deathExplosion"]
 BOT_CHEAP_KINDS = frozenset((
     "rifle", "rocket", "sniper", "dog", "tesla",
     "mage", "frost", "imp", "oracle", "panther", "scout", "warden",
+    "spear", "tamer", "wolf",
 ))
 BOT_INFANTRY_KINDS = frozenset((
     "rifle", "rocket", "sniper", "tesla", "mage", "frost", "imp", "oracle",
@@ -6450,7 +6554,7 @@ BOT_INFANTRY_KINDS = frozenset((
 BOT_MAGE_KINDS = frozenset(("mage", "frost"))
 BOT_LATE_UNITS = frozenset((
     "overlord", "prism", "v3", "dragon", "colossus", "comet",
-    "behemoth",
+    "behemoth", "mammoth", "spider", "scorpion",
 ))
 BOT_LATE_STRUCTURES = frozenset(("repair", "mspring", "taltar"))
 BOT_SCOUT_VEHICLES = VEHICLE_KINDS - frozenset((
@@ -6632,7 +6736,7 @@ def bot_try_queue_structure(room, bot, kind):
 
 def bot_unit_is_factory(kind):
     producer = UNIT_TYPES.get(kind, {}).get("producer")
-    return producer in ("factory", "mcircle")
+    return producer in ("factory", "mcircle", "tpen")
 
 
 def bot_try_queue_unit(room, bot, kind):
@@ -6808,7 +6912,7 @@ def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
         if "factory" in roles:
             choices.append("wolf")
             if "repair" in roles:
-                choices.extend(("spider", "scorpion"))
+                choices.extend(("spider", "scorpion", "mammoth"))
             if rich and harvester_n < 2:
                 choices.append("tharvester")
         return choices
@@ -6869,7 +6973,9 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         if tribe:
             if "barracks" in roles:
                 return ["spear", "tamer"]
-            return ["wolf"] if "factory" in roles else []
+            if "factory" in roles:
+                return ["wolf", "mammoth"] if "repair" in roles else ["wolf"]
+            return []
         if magic:
             if "barracks" in roles:
                 choices = ["frost", "mage"]
@@ -6899,7 +7005,7 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
     if infantry >= 5 or mages >= 3:
         if tribe:
             if "factory" in roles:
-                return ["wolf"]
+                return ["wolf", "spider"] if "repair" in roles else ["wolf"]
             return ["spear"] if "barracks" in roles else []
         if magic:
             choices = []
@@ -6913,10 +7019,12 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
     if vehicles >= 3:
         if tribe:
             choices = []
+            if "factory" in roles:
+                if "repair" in roles:
+                    choices.extend(("scorpion", "mammoth"))
+                choices.append("wolf")
             if "barracks" in roles:
                 choices.append("spear")
-            if "factory" in roles:
-                choices.append("wolf")
             return choices
         if magic:
             choices = []
@@ -6945,6 +7053,8 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
                 choices.extend(("spear", "tamer"))
             if "factory" in roles:
                 choices.append("wolf")
+                if "repair" in roles:
+                    choices.extend(("spider", "mammoth"))
             return choices
         if magic:
             choices = []
@@ -6969,7 +7079,7 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         if tribe:
             choices = []
             if "factory" in roles:
-                choices.extend(("spider", "scorpion", "wolf"))
+                choices.extend(("spider", "scorpion", "mammoth", "wolf"))
             if "barracks" in roles:
                 choices.extend(("spear", "tamer"))
             return choices
@@ -7074,7 +7184,7 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
             late_choices = (("colossus", "dragon", "comet", "behemoth") +
                             (("warden",) if "barracks" in roles else ()))
         elif faction == "tribe":
-            late_choices = (("spider", "scorpion", "wolf") if "factory" in roles else ()) + (
+            late_choices = (("spider", "scorpion", "mammoth", "wolf") if "factory" in roles else ()) + (
                 ("spear", "tamer") if "barracks" in roles else ())
         else:
             late_choices = ("overlord", "prism", "artillery")
@@ -7102,7 +7212,7 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
 
 def bot_place_prepared(room, bot, kind):
     game = room["game"]
-    if structure_role(kind) == "defense":
+    if structure_role(kind) in ("defense", "trap"):
         hq = bot_own_hq(game, bot["id"])
         scout = (bot.get("_ai") or {}).get("scout") or {}
         threat = scout.get("inbound")
@@ -7116,7 +7226,9 @@ def bot_place_prepared(room, bot, kind):
                 dx, dy = 1.0, 0.0
             dist = math.hypot(dx, dy) or 1.0
             heading = math.atan2(dy, dx)
-            for radius in (130, 160, 190, 220):
+            radii = ((90, 120, 150, 190) if structure_role(kind) == "trap"
+                     else (130, 160, 190, 220))
+            for radius in radii:
                 for side in (0.0, 0.32, -0.32, 0.64, -0.64):
                     angle = heading + side
                     x = hq["x"] + math.cos(angle) * radius
@@ -7144,6 +7256,70 @@ def bot_place_prepared(room, bot, kind):
             except ValueError:
                 pass
     return False
+
+
+def bot_kind_structure_count(structures, kind):
+    return sum(1 for structure in structures if structure.get("kind") == kind)
+
+
+def bot_queue_traps(room, bot, fb, roles, own_structures, phase):
+    """营地后铺兽夹，祭坛后补毒坑。只在经济队列空闲时插，不挡工厂。"""
+    if "barracks" not in roles:
+        return False
+    trap_kind = fb.get("trap")
+    pit_kind = fb.get("pit")
+    queued = [item.get("kind") for item in bot.get("buildQueue") or []]
+    if trap_kind:
+        want = 3 if phase in (BOT_PHASE_STABILIZE, BOT_PHASE_CLOSE) else 2
+        have = bot_kind_structure_count(own_structures, trap_kind) + queued.count(trap_kind)
+        if have < want and bot_try_queue_structure(room, bot, trap_kind):
+            return True
+    if pit_kind and "repair" in roles:
+        want = 2 if phase == BOT_PHASE_CLOSE else 1
+        have = bot_kind_structure_count(own_structures, pit_kind) + queued.count(pit_kind)
+        if have < want and bot_try_queue_structure(room, bot, pit_kind):
+            return True
+    return False
+
+
+def bot_try_tame_neutrals(room, bot):
+    """开启中立时，空闲驯兽师去招降看得见的最近中立作战单位。"""
+    game = room["game"]
+    if not neutrals_enabled(room, game):
+        return False
+    cost = int(UNIT_TYPES.get("tamer", {}).get("tameCost", 150))
+    if bot.get("cash", 0) < cost + 80:
+        return False
+    tamers = [
+        unit for unit in game["units"]
+        if unit["owner"] == bot["id"] and unit["kind"] == "tamer"
+        and unit["hp"] > 0 and unit.get("order") != "tame"
+    ]
+    if not tamers:
+        return False
+    field = vision_field(game, bot["id"])
+    best = None
+    best_dist = None
+    for unit in game["units"]:
+        if unit.get("owner") != NEUTRAL_OWNER or unit.get("hp", 0) <= 0:
+            continue
+        if not is_tameable_combat_unit(unit):
+            continue
+        if field is not None and not field.visible(
+                unit["x"], unit["y"], unit.get("size", 0)):
+            continue
+        origin_x, origin_y = bot_own_origin(game, bot["id"])
+        dist = math.hypot(unit["x"] - origin_x, unit["y"] - origin_y)
+        if best is None or dist < best_dist:
+            best = unit
+            best_dist = dist
+    if best is None or best_dist > 640.0:
+        return False
+    try:
+        issue_tame(room, bot["id"], set(unit["id"] for unit in tamers[:1]), best["id"])
+        return True
+    except ValueError:
+        return False
 
 
 def bot_nearest_invader(game, bot_id):
@@ -7304,8 +7480,11 @@ def tick_bots(room):
             bot_queue_building(
                 room, bot, fb, roles, own_structures, supply, usage,
                 threatened, phase, inbound is not None)
+            if not bot.get("buildQueue"):
+                bot_queue_traps(room, bot, fb, roles, own_structures, phase)
 
         bot_queue_unit(room, bot, faction, roles, phase, scout, threatened)
+        bot_try_tame_neutrals(room, bot)
 
         repair_bays = [
             structure for structure in own_structures
