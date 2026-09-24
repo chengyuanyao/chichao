@@ -262,6 +262,7 @@ def main():
     game = room["game"]
     rifle = server.make_unit("rifle", b["id"], 4000, 4000)
     tank = server.make_unit("tank", b["id"], 4100, 4000)
+    rifle["hp"] = tank["hp"] = 1000.0
     game["units"].extend((rifle, tank))
     before = rifle["hp"]
     server.apply_damage(room, rifle, 100, a["id"], "venom", game)
