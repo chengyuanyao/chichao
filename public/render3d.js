@@ -594,6 +594,7 @@ const MAT = {
   moss: [0.28, 0.38, 0.18],         // 苔藓点缀
   bloodCloth: [0.48, 0.10, 0.10],   // 祭坛血布（固有色，不是团队色）
   spiritFire: [2.35, 1.05, 0.28],   // 图腾火碗：暖橙，不是奥术紫
+  venomGlow: [0.55, 2.05, 0.42],    // 毒雾/毒矢：骨绿辉光，不是奥术紫
   chitin: [0.16, 0.10, 0.08],       // 蛛甲：暗几丁质，不是钢板
   chitinDark: [0.10, 0.07, 0.06],   // 腹甲阴影
   chitinLit: [0.28, 0.16, 0.10],    // 受光甲壳
@@ -611,7 +612,8 @@ const MAGIC_STRUCTURE_KINDS = {
   mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1, mstorm: 1
 };
 const TRIBE_STRUCTURE_KINDS = {
-  thq: 1, tpower: 1, trefinery: 1, tcamp: 1, tpen: 1, taltar: 1
+  thq: 1, tpower: 1, trefinery: 1, tcamp: 1, tpen: 1, taltar: 1,
+  tspiketower: 1, ttoxtower: 1, ttrap: 1, tpit: 1
 };
 
 function structureSurfaceFamily(kind) {
@@ -632,7 +634,7 @@ const CLOTH_UNIT_KINDS = {
 };
 // 巨龙从兽皮改成金属：奥德赛那版是硬表面构装体，皮毛粗糙度会把甲板和铬边
 // 一起照哑，硬表面的折角就读不出来了。
-const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1, scorpion: 1 };
+const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1, scorpion: 1, mammoth: 1 };
 
 function unitSurfaceFamily(kind) {
   if (CLOTH_UNIT_KINDS[kind]) return 'cloth';
@@ -2239,6 +2241,45 @@ const UNIT_BUILDERS = {
     };
   },
 
+  mammoth: function () {
+    // 猛犸战象：厚躯、弓背、长牙、兽皮鞍甲。俯视也能分出牙和鼓身，不是驮兽。
+    const body = surfaced(SURF.hide, [
+      ellipsoid(15.6, 8.6, 8.0, -2.4, 13.2, 0, MAT.hideTan),
+      ellipsoid(7.8, 6.4, 6.6, -12.4, 17.2, 0, MAT.hideDark),
+      ellipsoid(8.4, 6.8, 6.4, 11.6, 14.4, 0, MAT.hideTan),
+      ellipsoid(4.2, 3.6, 3.8, 17.6, 12.8, 0, MAT.hideDark),
+      ellipsoid(5.8, 2.6, 3.4, -17.4, 15.8, 0, MAT.hideDark),
+      ellipsoid(5.4, 3.2, 0.7, 12.8, 16.2, 6.6, MAT.hideDark),
+      ellipsoid(5.4, 3.2, 0.7, 12.8, 16.2, -6.6, MAT.hideDark),
+      taperedBox(11.2, 9.6, 9.8, 8.2, 2.4, -3.2, 20.2, 0, 0.90),
+      box(9.2, 3.8, 6.8, -3.4, 18.4, 0, MAT.hideDark),
+      box(7.4, 1.6, 5.6, -3.4, 20.8, 0, MAT.bloodCloth),
+      box(10.4, 0.7, 1.1, -3.4, 19.4, 3.6, MAT.boneIvory),
+      box(10.4, 0.7, 1.1, -3.4, 19.4, -3.6, MAT.boneIvory),
+      limb(1.55, 1.15, 16.8, 10.8, 2.6, 25.4, 6.4, 7.2, MAT.boneIvory),
+      limb(1.15, 0.42, 25.4, 6.4, 7.2, 29.2, 3.2, 6.0, MAT.boneIvory),
+      limb(1.55, 1.15, 16.8, 10.8, -2.6, 25.4, 6.4, -7.2, MAT.boneIvory),
+      limb(1.15, 0.42, 25.4, 6.4, -7.2, 29.2, 3.2, -6.0, MAT.boneIvory),
+      limb(1.65, 1.28, 18.4, 11.4, 0, 21.6, 6.6, 0.3, MAT.hideDark),
+      limb(1.28, 0.92, 21.6, 6.6, 0.3, 20.2, 2.2, 0.8, MAT.hideTan)
+    ]);
+    [8.8, -9.2].forEach(function (px) {
+      [4.0, -4.0].forEach(function (pz) {
+        body.push(Object.assign(
+          limb(2.15, 1.65, px, 10.4, pz, px + 0.4, 0.8, pz, MAT.hideDark),
+          { surf: SURF.hide }));
+      });
+    });
+    return {
+      body: body,
+      glow: [
+        sph(0.62, 5, 18.8, 14.2, 1.8, MAT.spiritFire),
+        sph(0.62, 5, 18.8, 14.2, -1.8, MAT.spiritFire),
+        sph(1.05, 6, -3.4, 21.2, 0, MAT.spiritFire)
+      ]
+    };
+  },
+
   tharvester: function () {
     // 驮兽：有角驮畜 + 两侧筐，有机轮廓，不是轮式矿车。
     const body = surfaced(SURF.hide, [
@@ -2375,6 +2416,13 @@ function addStructureFoundation(c, kind, s) {
   const add = c.add;
   const taper = c.taper;
   if (TRIBE_STRUCTURE_KINDS[kind]) {
+    if (kind === 'ttrap' || kind === 'tpit') {
+      // 陷阱贴地：浅土圈，不要哨塔那种夯土高台。
+      taper(HULL, s * 1.08, s * 1.08, s * 0.92, s * 0.92, 1.4, 0, 0.7, 0, MAT.earthPack);
+      add(HULL, new THREE.TorusGeometry(s * 0.62, s * 0.04, 5, 12),
+        0, 0.55, 0, MAT.bark, ROT_X90);
+      return;
+    }
     // 夯土台 + 木桩圈，不要钢板甲板也不要青符金台。
     taper(HULL, s * 1.16, s * 1.16, s * 1.02, s * 1.02, 2.4, 0, 1.2, 0, MAT.earthPack);
     add(HULL, new THREE.TorusGeometry(s * 0.78, s * 0.055, 5, 14),
@@ -2880,6 +2928,74 @@ function structureParts(kind, size) {
     add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.22, s * 0.02), s * 0.22, s * 0.48 + 3.4, s * 0.18, 0.94);
     add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.22, s * 0.02), -s * 0.22, s * 0.48 + 3.4, s * 0.18, 0.94);
     add(GLOW, new THREE.SphereGeometry(s * 0.07, 8, 6), 0, s * 0.44 + 3.4, 0, MAT.spiritFire);
+  } else if (kind === 'tspiketower') {
+    // 棘矛哨塔：四柱木台 + 兽皮围栏，矮于毒矢高台。旋转头是骨矛束。
+    [-1, 1].forEach(function (sx) {
+      [-1, 1].forEach(function (sz) {
+        add(HULL, new THREE.CylinderGeometry(s * 0.058, s * 0.072, s * 1.02, 6),
+          sx * s * 0.30, s * 0.52 + 3.4, sz * s * 0.30, MAT.bark);
+      });
+    });
+    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.72, s * 0.06), s * 0.30, s * 0.46 + 3.4, 0, MAT.barkLit);
+    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.72, s * 0.06), -s * 0.30, s * 0.46 + 3.4, 0, MAT.barkLit);
+    taper(HULL, s * 0.86, s * 0.86, s * 0.76, s * 0.76, s * 0.16, 0, s * 1.02 + 3.4, 0, MAT.barkLit);
+    add(HULL, new THREE.BoxGeometry(s * 0.80, s * 0.24, s * 0.08), 0, s * 1.16 + 3.4, s * 0.36, MAT.hideTan);
+    add(HULL, new THREE.BoxGeometry(s * 0.80, s * 0.24, s * 0.08), 0, s * 1.16 + 3.4, -s * 0.36, MAT.hideTan);
+    add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.24, s * 0.72), s * 0.36, s * 1.16 + 3.4, 0, MAT.hideDark);
+    add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.24, s * 0.72), -s * 0.36, s * 1.16 + 3.4, 0, MAT.hideDark);
+    add(HULL, new THREE.SphereGeometry(s * 0.08, 6, 5), s * 0.30, s * 1.08 + 3.4, s * 0.30, MAT.boneIvory);
+    add(TEAM, new THREE.BoxGeometry(s * 0.18, s * 0.26, s * 0.04), s * 0.24, s * 1.28 + 3.4, s * 0.38, 1.0);
+    add(TEAM, new THREE.BoxGeometry(s * 0.18, s * 0.26, s * 0.04), -s * 0.24, s * 1.28 + 3.4, s * 0.38, 1.0);
+    add(HULL, new THREE.CylinderGeometry(s * 0.10, s * 0.13, s * 0.18, 8), 0, s * 1.16 + 3.4, 0, MAT.boneIvory);
+  } else if (kind === 'ttoxtower') {
+    // 毒矢高台：更高骨木脚手架 + 毒壶，一眼比棘矛哨塔细高。
+    [-1, 1].forEach(function (sx) {
+      [-1, 1].forEach(function (sz) {
+        add(HULL, new THREE.CylinderGeometry(s * 0.048, s * 0.062, s * 1.42, 6),
+          sx * s * 0.24, s * 0.72 + 3.4, sz * s * 0.24, MAT.bark);
+      });
+    });
+    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.05, s * 0.58), 0, s * 0.64 + 3.4, 0, MAT.boneIvory);
+    add(HULL, new THREE.BoxGeometry(s * 0.58, s * 0.05, s * 0.10), 0, s * 0.96 + 3.4, 0, MAT.boneIvory);
+    add(HULL, new THREE.BoxGeometry(s * 0.10, s * 0.05, s * 0.58), 0, s * 1.22 + 3.4, 0, MAT.barkLit);
+    taper(HULL, s * 0.70, s * 0.70, s * 0.52, s * 0.52, s * 0.16, 0, s * 1.44 + 3.4, 0, MAT.barkLit);
+    add(HULL, new THREE.CylinderGeometry(s * 0.20, s * 0.26, s * 0.28, 8), 0, s * 1.62 + 3.4, 0, MAT.hideDark);
+    add(GLOW, new THREE.SphereGeometry(s * 0.16, 8, 6), 0, s * 1.74 + 3.4, 0, MAT.venomGlow);
+    add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.36, s * 0.22), s * 0.26, s * 1.28 + 3.4, 0, MAT.hideTan);
+    add(HULL, new THREE.BoxGeometry(s * 0.08, s * 0.36, s * 0.22), -s * 0.26, s * 1.28 + 3.4, 0, MAT.hideTan);
+    add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.30, s * 0.04), s * 0.20, s * 1.28 + 3.4, s * 0.28, 1.0);
+    add(TEAM, new THREE.BoxGeometry(s * 0.16, s * 0.30, s * 0.04), -s * 0.20, s * 1.28 + 3.4, s * 0.28, 1.0);
+  } else if (kind === 'ttrap') {
+    // 兽夹陷阱：贴地木框 + 对开骨颚，不是塔也不是井。
+    add(HULL, new THREE.BoxGeometry(s * 1.35, s * 0.12, s * 0.22), 0, s * 0.12 + 3.4, s * 0.42, MAT.bark);
+    add(HULL, new THREE.BoxGeometry(s * 1.35, s * 0.12, s * 0.22), 0, s * 0.12 + 3.4, -s * 0.42, MAT.bark);
+    add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.12, s * 1.05), s * 0.56, s * 0.12 + 3.4, 0, MAT.bark);
+    add(HULL, new THREE.BoxGeometry(s * 0.22, s * 0.12, s * 1.05), -s * 0.56, s * 0.12 + 3.4, 0, MAT.bark);
+    add(HULL, new THREE.BoxGeometry(s * 0.62, s * 0.10, s * 0.26), s * 0.22, s * 0.26 + 3.4, 0, MAT.boneIvory);
+    add(HULL, new THREE.BoxGeometry(s * 0.62, s * 0.10, s * 0.26), -s * 0.22, s * 0.26 + 3.4, 0, MAT.boneIvory);
+    [[0.48, 0.18], [0.48, -0.18], [0.22, 0.28], [0.22, -0.28]].forEach(function (p) {
+      add(HULL, new THREE.ConeGeometry(s * 0.12, s * 0.46, 5),
+        s * p[0], s * 0.42 + 3.4, s * p[1], MAT.boneIvory);
+      add(HULL, new THREE.ConeGeometry(s * 0.12, s * 0.46, 5),
+        -s * p[0], s * 0.42 + 3.4, s * p[1], MAT.boneIvory);
+    });
+    add(HULL, new THREE.TorusGeometry(s * 0.22, s * 0.05, 5, 10), 0, s * 0.18 + 3.4, 0, MAT.hideDark, ROT_X90);
+    add(TEAM, new THREE.BoxGeometry(s * 0.28, s * 0.06, s * 0.16), 0, s * 0.20 + 3.4, 0, 1.0);
+  } else if (kind === 'tpit') {
+    // 毒雾坑：挖开的石骨圈 + 绿雾，贴地拒止，不是井栏炮座。
+    add(HULL, new THREE.CylinderGeometry(s * 0.62, s * 0.78, s * 0.20, 12), 0, s * 0.12 + 3.4, 0, MAT.slate);
+    add(HULL, new THREE.CylinderGeometry(s * 0.32, s * 0.44, s * 0.12, 10), 0, s * 0.10 + 3.4, 0, MAT.earthPack);
+    add(HULL, new THREE.TorusGeometry(s * 0.58, s * 0.07, 5, 14), 0, s * 0.20 + 3.4, 0, MAT.boneIvory, ROT_X90);
+    [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(function (q) {
+      add(HULL, new THREE.CylinderGeometry(s * 0.036, s * 0.05, s * 0.48, 5),
+        q[0] * s * 0.50, s * 0.30 + 3.4, q[1] * s * 0.42, MAT.boneIvory);
+      add(HULL, new THREE.SphereGeometry(s * 0.055, 6, 5),
+        q[0] * s * 0.50, s * 0.56 + 3.4, q[1] * s * 0.42, MAT.boneIvory);
+    });
+    add(GLOW, new THREE.CylinderGeometry(s * 0.26, s * 0.38, s * 0.18, 10), 0, s * 0.18 + 3.4, 0, MAT.venomGlow);
+    add(GLOW, new THREE.SphereGeometry(s * 0.20, 8, 6), 0, s * 0.32 + 3.4, 0, MAT.venomGlow);
+    add(TEAM, new THREE.BoxGeometry(s * 0.14, s * 0.20, s * 0.03), s * 0.42, s * 0.36 + 3.4, s * 0.24, 0.94);
+    add(TEAM, new THREE.BoxGeometry(s * 0.14, s * 0.20, s * 0.03), -s * 0.42, s * 0.36 + 3.4, s * 0.24, 0.94);
   }
   return c.parts;
 }
@@ -2954,6 +3070,42 @@ function stormHeadParts(size) {
   c.add(GLOW, new THREE.SphereGeometry(s * 0.065, 7, 5), s * 0.60, s * 0.06, 0, MAT.stormCrown);
   addStormBolt(c, s * 0.14, s * 0.22, 0, s * 0.40, s * 0.38, s * 0.14, s * 0.024);
   addStormBolt(c, s * 0.14, s * 0.02, 0, s * 0.34, -s * 0.12, -s * 0.16, s * 0.020, MAT.frostGlow);
+  return c.parts;
+}
+
+/** 棘矛哨塔旋转头：骨矛束指向开火方向（+X）。 */
+function spikeHeadParts(size) {
+  const c = partCollector();
+  const s = size;
+  c.add(HULL, new THREE.CylinderGeometry(s * 0.12, s * 0.15, s * 0.20, 7),
+    0, 0, 0, MAT.barkLit);
+  c.add(TEAM, new THREE.TorusGeometry(s * 0.18, s * 0.032, 5, 10),
+    0, 0.02, 0, 0.96, ROT_X90);
+  [-0.10, 0, 0.10].forEach(function (z, i) {
+    c.add(HULL, new THREE.CylinderGeometry(s * 0.026, s * 0.032, s * 0.92, 5),
+      s * 0.36, s * (0.05 + i * 0.03), z * s, MAT.boneIvory, ROT_Z90);
+    c.add(HULL, new THREE.ConeGeometry(s * 0.055, s * 0.18, 5),
+      s * 0.84, s * (0.05 + i * 0.03), z * s, MAT.boneIvory, ROT_Z90);
+  });
+  c.add(HULL, new THREE.BoxGeometry(s * 0.14, s * 0.10, s * 0.28),
+    s * 0.10, s * 0.08, 0, MAT.hideTan);
+  return c.parts;
+}
+
+/** 毒矢高台旋转头：毒壶 + 骨管指向开火方向（+X）。 */
+function toxHeadParts(size) {
+  const c = partCollector();
+  const s = size;
+  c.add(HULL, new THREE.CylinderGeometry(s * 0.13, s * 0.17, s * 0.20, 7),
+    0, 0, 0, MAT.bark);
+  c.add(HULL, new THREE.SphereGeometry(s * 0.16, 8, 6), s * 0.02, s * 0.14, 0, MAT.hideDark);
+  c.add(GLOW, new THREE.SphereGeometry(s * 0.10, 7, 5), s * 0.02, s * 0.16, 0, MAT.venomGlow);
+  c.add(HULL, new THREE.CylinderGeometry(s * 0.036, s * 0.046, s * 0.88, 6),
+    s * 0.46, s * 0.10, 0, MAT.boneIvory, ROT_Z90);
+  c.add(GLOW, new THREE.CylinderGeometry(s * 0.022, s * 0.014, s * 0.24, 5),
+    s * 0.90, s * 0.10, 0, MAT.venomGlow, ROT_Z90);
+  c.add(TEAM, new THREE.BoxGeometry(s * 0.10, s * 0.16, s * 0.04),
+    -s * 0.10, s * 0.12, s * 0.12, 1.0);
   return c.parts;
 }
 
@@ -3075,6 +3227,16 @@ function spinnerParts(kind, size) {
     c.add(GLOW, new THREE.TorusGeometry(s * 0.16, s * 0.016, 5, 10), 0, 0, 0, MAT.spiritFire, ROT_X90);
     return { parts: c.parts, y: size * 0.46 + 3.4, speed: 1.1 };
   }
+  if (kind === 'ttoxtower') {
+    const c = partCollector();
+    c.add(GLOW, new THREE.TorusGeometry(s * 0.10, s * 0.016, 5, 10), 0, 0, 0, MAT.venomGlow, ROT_X90);
+    return { parts: c.parts, y: size * 1.58 + 3.4, speed: 1.4 };
+  }
+  if (kind === 'tpit') {
+    const c = partCollector();
+    c.add(GLOW, new THREE.TorusGeometry(s * 0.22, s * 0.018, 5, 12), 0, 0, 0, MAT.venomGlow, ROT_X90);
+    return { parts: c.parts, y: size * 0.24 + 3.4, speed: 0.9 };
+  }
   return null;
 }
 
@@ -3128,6 +3290,22 @@ function structureGeometries(kind, size, artSample = false) {
       team: head.length ? mergeParts(head,{fracture:true}) : null,
       hull: null,
       y: size * 1.90 + 3.4
+    };
+  }
+  if (kind === 'tspiketower') {
+    const head = spikeHeadParts(size);
+    entry.head = {
+      team: head.length ? mergeParts(head,{fracture:true}) : null,
+      hull: null,
+      y: size * 1.12 + 3.4
+    };
+  }
+  if (kind === 'ttoxtower') {
+    const head = toxHeadParts(size);
+    entry.head = {
+      team: head.length ? mergeParts(head,{fracture:true}) : null,
+      hull: null,
+      y: size * 1.62 + 3.4
     };
   }
   const spin = spinnerParts(kind, size);
@@ -3381,7 +3559,7 @@ const UNIT_VISUAL_SCALE = {
   warden: 1.55, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30,
   spear: 2.15, tamer: 2.15, wolf: 1.85, spider: 1.72, scorpion: 1.82,
-  tharvester: 1.16, tmcv: 1.30
+  mammoth: 1.62, tharvester: 1.16, tmcv: 1.30
 };
 
 /* 共享的哈希值噪声：天空的云、水面的泡沫、地形的细节法线都用同一套，
@@ -6459,6 +6637,17 @@ export function createRenderer(canvas) {
       });
       return legs;
     }
+    if (kind === 'mammoth') {
+      return [
+        box(30, 16, 16, -3, 13, 0, MAT.hideTan),
+        box(14, 12, 12, 13, 15, 0, MAT.hideTan),
+        box(10, 6, 6, 20, 12, 0, MAT.hideDark),
+        box(12, 2.2, 9, -4, 22, 0, 0.92),
+        box(18, 2.2, 2.2, 22, 8, 6.4, MAT.boneIvory),
+        box(18, 2.2, 2.2, 22, 8, -6.4, MAT.boneIvory),
+        box(5, 10, 4, 20, 8, 0, MAT.hideDark)
+      ];
+    }
     if (kind === 'scorpion') {
       const parts = [
         box(14.8, 4.8, 7.2, -1.2, 6.2, 0, MAT.chitinDark),
@@ -7004,7 +7193,13 @@ export function createRenderer(canvas) {
     // 蛛网：骨色丝团，低弧，一眼不是冰棱也不是奥术弹
     web: { len: 16, thick: 1.8, color: 0xe8d4a0, arc: 18, look: 'web' },
     // 蝎刺：骨琥珀短矢，一眼不是钢铁青白穿甲弹，也不是蛛丝团
-    sting: { len: 18, thick: 1.15, color: 0xe8c070, arc: 10, look: 'sting' }
+    sting: { len: 18, thick: 1.15, color: 0xe8c070, arc: 10, look: 'sting' },
+    // 棘矛：骨白色短矢，低弧，不是钢铁炮弹
+    spike: { len: 20, thick: 1.05, color: 0xf0e0b8, arc: 12, look: 'spike' },
+    // 毒矢：骨绿细矢
+    dart: { len: 22, thick: 0.85, color: 0x8ee070, arc: 16, look: 'dart' },
+    // 猛犸砸击：近距尘爆，几乎不飞
+    smash: { len: 10, thick: 2.4, color: 0xc4a070, arc: 4, look: 'smash' }
   };
 
   function ensureStyledMesh(existing, geo, needed) {
@@ -7367,7 +7562,7 @@ export function createRenderer(canvas) {
   const emitAbsoluteParticle = emit;
   function spawnEffect(type, x, y, kind, metadata) {
     if (!inViewportBounds(x,y)) return;
-    if (type==='muzzle' && (kind==='bite'||kind==='claw')) return;
+    if (type==='muzzle' && (kind==='bite'||kind==='claw'||kind==='smash')) return;
     const baseY = groundHeight(x,y), density = state.feedbackDensity || 1;
     const destructionScale=(type==='explosion'||type==='blast') && Number.isFinite(metadata?.size) && metadata.size>0
       ? Math.max(.65,Math.min(2.2,Math.sqrt(metadata.size/22))) : 1;
@@ -7385,7 +7580,7 @@ export function createRenderer(canvas) {
       p.floor = baseY + 1.5;
       if (metadata && metadata.height != null && type === 'muzzle' && relativeHeight>=9) {
         const authored=kind==='plasmalance'?30:kind==='plasma'?20:kind==='fireball'?18:
-          kind==='comet'?22:kind==='rune_boulder'?18:['meteor','arcane','frost','crystal','iris','boulder','web','sting'].includes(kind)?16:11;
+          kind==='comet'?22:kind==='rune_boulder'?18:['meteor','arcane','frost','crystal','iris','boulder','web','sting','spike','dart'].includes(kind)?16:11;
         p.y += metadata.height-authored;
       }
       if (layer === smokeLayer && p.opacity == null) p.opacity = .48;
@@ -7533,6 +7728,44 @@ export function createRenderer(canvas) {
         x: x, y: y, radius: 40 + rand() * 12, growth: 0, alpha: 0.58,
         life: 16, maxLife: 16, hold: true, r: 0.05, g: 0.04, b: 0.03
       });
+    } else if (type === 'snap') {
+      burst(smokeLayer, 8, function () {
+        const a = rand() * TAU;
+        const sp = 28 + rand() * 50;
+        return {
+          x: x, y: 2, z: y,
+          vx: Math.cos(a) * sp, vy: 8 + rand() * 14, vz: Math.sin(a) * sp,
+          life: 0.4 + rand() * 0.25, maxLife: 0.65,
+          size: 10 + rand() * 8, grow: true,
+          r: 0.48, g: 0.36, b: 0.22
+        };
+      });
+      burst(fireLayer, 6, function () {
+        const a = rand() * TAU;
+        return {
+          x: x, y: 3, z: y,
+          vx: Math.cos(a) * 22, vy: 12, vz: Math.sin(a) * 22,
+          life: 0.22, maxLife: 0.22, size: 3.2,
+          r: 1.7, g: 1.4, b: 0.7
+        };
+      });
+      shockLayer.spawn({
+        x: x, y: y, radius: 8, growth: 36, alpha: 0.5,
+        life: 0.28, maxLife: 0.28, r: 0.82, g: 0.66, b: 0.38
+      });
+    } else if (type === 'haze' || type === 'arm') {
+      burst(fireLayer, type === 'haze' ? 10 : 5, function () {
+        const a = rand() * TAU;
+        const r0 = 8 + rand() * 22;
+        return {
+          x: x + Math.cos(a) * r0, y: 2 + rand() * 6, z: y + Math.sin(a) * r0,
+          vx: Math.cos(a) * 6, vy: 8 + rand() * 10, vz: Math.sin(a) * 6,
+          life: 0.55 + rand() * 0.3, maxLife: 0.85,
+          size: 4 + rand() * 4,
+          r: type === 'haze' ? 0.45 : 1.6, g: type === 'haze' ? 1.45 : 1.2,
+          b: type === 'haze' ? 0.38 : 0.55
+        };
+      });
     } else if (type === 'impact') {
       if (kind === 'dog_arcane') {
         // 军犬咬法师：牙印金星 + 袍子紫屑。视觉彩蛋，不改扑咬数值。
@@ -7652,6 +7885,65 @@ export function createRenderer(canvas) {
           life: 0.28, maxLife: 0.28, r: 0.92, g: 0.62, b: 0.28
         });
         flashAt(x, y, 0xe8c070);
+      } else if (kind === 'spike') {
+        burst(fireLayer, 7, function () {
+          const a = rand() * TAU;
+          const sp = 40 + rand() * 70;
+          return {
+            x: x, y: 5, z: y,
+            vx: Math.cos(a) * sp, vy: 18 + rand() * 32, vz: Math.sin(a) * sp,
+            life: 0.22 + rand() * 0.16, maxLife: 0.38,
+            size: 2.4 + rand() * 2.0,
+            r: 1.8, g: 1.55, b: 0.95
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 5, growth: 28, alpha: 0.36,
+          life: 0.22, maxLife: 0.22, r: 0.86, g: 0.72, b: 0.46
+        });
+        flashAt(x, y, 0xf0e0b8);
+      } else if (kind === 'dart') {
+        burst(fireLayer, 8, function () {
+          const a = rand() * TAU;
+          const sp = 36 + rand() * 60;
+          return {
+            x: x, y: 5, z: y,
+            vx: Math.cos(a) * sp, vy: 16 + rand() * 28, vz: Math.sin(a) * sp,
+            life: 0.28 + rand() * 0.18, maxLife: 0.46,
+            size: 2.8 + rand() * 2.2,
+            r: 0.55, g: 1.6, b: 0.42
+          };
+        });
+        scorchLayer.spawn({
+          x: x, y: y, radius: 14, growth: 6, alpha: 0.28,
+          life: 1.6, maxLife: 1.6, hold: true, r: 0.22, g: 0.42, b: 0.16
+        });
+        flashAt(x, y, 0x8ee070);
+      } else if (kind === 'smash') {
+        burst(smokeLayer, 8, function () {
+          const a = rand() * TAU;
+          const sp = 40 + rand() * 70;
+          return {
+            x: x, y: 3, z: y,
+            vx: Math.cos(a) * sp, vy: 10 + rand() * 18, vz: Math.sin(a) * sp,
+            life: 0.5 + rand() * 0.3, maxLife: 0.8,
+            size: 12 + rand() * 10, grow: true,
+            r: 0.52, g: 0.40, b: 0.24
+          };
+        });
+        burst(fireLayer, 5, function () {
+          const a = rand() * TAU;
+          return {
+            x: x, y: 4, z: y,
+            vx: Math.cos(a) * 30, vy: 20, vz: Math.sin(a) * 30,
+            life: 0.18, maxLife: 0.18, size: 3.4,
+            r: 1.6, g: 1.2, b: 0.55
+          };
+        });
+        shockLayer.spawn({
+          x: x, y: y, radius: 10, growth: 48, alpha: 0.42,
+          life: 0.28, maxLife: 0.28, r: 0.7, g: 0.55, b: 0.32
+        });
       } else if (kind === 'fireball') {
         // 龙息炸点：外圈奥术紫、内芯青白。亮度量级和上一版玉息一致，
         // 只换色相，不改爆点大小与存续，命中反馈的可读性保持不变。
@@ -8703,6 +8995,20 @@ export function createRenderer(canvas) {
         life: 0.18, maxLife: 0.18, size: 2.4 + Math.random() * 1.8,
         r: 1.9, g: 1.2, b: 0.38
       });
+    } else if (look === 'spike') {
+      emit(fireLayer, {
+        x: x, y: height, z: y,
+        vx: (Math.random() - 0.5) * 6, vy: 3, vz: (Math.random() - 0.5) * 6,
+        life: 0.16, maxLife: 0.16, size: 2.2,
+        r: 1.75, g: 1.5, b: 0.85
+      });
+    } else if (look === 'dart') {
+      emit(fireLayer, {
+        x: x, y: height, z: y,
+        vx: (Math.random() - 0.5) * 5, vy: 4, vz: (Math.random() - 0.5) * 5,
+        life: 0.2, maxLife: 0.2, size: 2.4,
+        r: 0.5, g: 1.55, b: 0.4
+      });
     }
   }
 
@@ -8718,14 +9024,14 @@ export function createRenderer(canvas) {
         && kind !== 'behemoth'
         && kind !== 'bomb_truck' && kind !== 'hexling'
         && kind !== 'imp' && kind !== 'oracle' && kind !== 'spider'
-        && kind !== 'scorpion') return;
+        && kind !== 'scorpion' && kind !== 'mammoth') return;
     if (fireLayer.list.length > state.particleBudget * 0.5) return;
     const rate = kind === 'dragon' ? 8 : kind === 'frost' ? 6
       : kind === 'bomb_truck' ? 7 : kind === 'hexling' ? 6
       : kind === 'colossus' ? 7 : kind === 'comet' ? 6 : kind === 'behemoth' ? 7
       : kind === 'warden' ? 4
       : kind === 'oracle' ? 4 : kind === 'imp' ? 3 : kind === 'spider' ? 4
-      : kind === 'scorpion' ? 3
+      : kind === 'scorpion' ? 3 : kind === 'mammoth' ? 4
       : apocTitan ? 4 : 3.5;
     if (Math.random() > dt * rate) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
@@ -8772,6 +9078,15 @@ export function createRenderer(canvas) {
         vx: (Math.random() - 0.5) * 4, vy: 5 + Math.random() * 6, vz: (Math.random() - 0.5) * 4,
         life: 0.28, maxLife: 0.28, size: 2.2 + Math.random() * 1.6,
         r: 1.9, g: 1.15, b: 0.35
+      });
+    } else if (kind === 'mammoth') {
+      emit(smokeLayer, {
+        x: vis.x + (Math.random() - 0.5) * 10,
+        y: gy + 2 + Math.random() * 4,
+        z: vis.y + (Math.random() - 0.5) * 10,
+        vx: (Math.random() - 0.5) * 4, vy: 6 + Math.random() * 6, vz: (Math.random() - 0.5) * 4,
+        life: 0.4, maxLife: 0.4, size: 5 + Math.random() * 3,
+        r: 0.5, g: 0.38, b: 0.22
       });
     } else if (kind === 'dragon') {
       // 待机时炮口的余能。这里过去还留着最早那版西方龙的橙火（2.2/1.0/0.28），
@@ -9612,6 +9927,17 @@ export function createRenderer(canvas) {
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len, style.thick, style.thick, style.color);
           writeTracer(shards, shardCount++, p.x, height, p.y, yaw, 10.4, 1.05, 1.05, 0xf0c45a);
+        } else if (look === 'spike') {
+          writeTracer(shards, shardCount++, p.x, height, p.y, yaw, 12.0, 1.15, 1.15, 0xf2e6c4);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+        } else if (look === 'dart') {
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 1.8, 1.8, 1.8, 0xb8f080);
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
+            style.len, style.thick, style.thick, style.color);
+          writeTracer(shards, shardCount++, p.x, height, p.y, yaw, 9.2, 0.9, 0.9, 0x7ad060);
+        } else if (look === 'smash') {
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 3.6, 3.6, 3.6, 0xc4a070);
         } else {
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len, style.thick, style.thick, style.color);

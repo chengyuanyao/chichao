@@ -4,7 +4,7 @@
 
 局势由三个离散量决定，都能在一 tick 内从战场状态直接读出来：
 
-    我方阵营(tech/magic) × 敌方主护甲(unknown/infantry/light/heavy/arcane/mixed) × 阶段(open/mid/late)
+    我方阵营(tech/magic/tribe) × 敌方主护甲(unknown/infantry/light/heavy/arcane/mixed) × 阶段(open/mid/late)
 
 表是手写的，因为它要能被人读懂和改。`planner.py` 会在应用模板前做一次
 安全过滤：对当前实际看到的敌军零伤害的兵会被替换掉（军犬撞上一队构装体
@@ -18,8 +18,8 @@ from __future__ import print_function
 # 建造顺序用 role 写，faction_buildings() 会翻译成两个阵营各自的建筑 kind。
 # 这样一张表同时服务钢铁军团和秘法会。
 OPENING_BUILD = [
-    "power", "refinery", "barracks", "factory",
-    "power", "refinery", "factory", "repair", "defense",
+    "power", "refinery", "barracks", "trap", "factory",
+    "power", "refinery", "factory", "repair", "defense", "pit",
 ]
 
 # 阶段 -> (矿车目标, 出击门槛, 炮塔上限)
@@ -129,6 +129,45 @@ TEMPLATES = {
             "mid": _t({"mage": 3, "golem": 3, "imp": 2}, "法师 + 傀儡的通用组合"),
             "late": _t({"dragon": 3, "warden": 2, "behemoth": 2, "mage": 2},
                        "玄岩巨像对位天启地面 + 晶铠反甲脉冲覆盖轻重甲"),
+        },
+    },
+    # 原始部落：无自爆。早期战狼/骨矛，祭坛后巨蛛控场、巨蝎反甲、猛犸砸家。
+    "tribe": {
+        "unknown": {
+            "open": _t({"spear": 4, "wolf": 2}, "没情报，骨矛铺场，战狼咬步兵"),
+            "mid": _t({"wolf": 3, "spear": 3, "tamer": 1}, "战狼主战，驯兽师招降中立"),
+            "late": _t({"mammoth": 2, "spider": 2, "scorpion": 2, "wolf": 2},
+                       "猛犸抗线砸家，巨蛛控场，巨蝎点重甲"),
+        },
+        "infantry": {
+            "open": _t({"wolf": 4, "spear": 2}, "战狼扑咬步兵，比骨矛更吃人海"),
+            "mid": _t({"wolf": 4, "spider": 2, "spear": 2}, "狼清人，巨蛛定身锁腿"),
+            "late": _t({"spider": 3, "wolf": 3, "mammoth": 2},
+                       "毒丝定身 + 狼群收割，猛犸顶线"),
+        },
+        "light": {
+            "open": _t({"spear": 3, "wolf": 2}, "骨矛对轻甲尚可，战狼抢先手"),
+            "mid": _t({"scorpion": 2, "wolf": 3, "spear": 2}, "巨蝎穿甲点轻甲载具"),
+            "late": _t({"scorpion": 3, "mammoth": 2, "spider": 2},
+                       "巨蝎点杀，猛犸砸车，巨蛛拖住"),
+        },
+        "heavy": {
+            "open": _t({"spear": 4, "wolf": 2}, "早期没有穿甲兽，先顶住"),
+            "mid": _t({"scorpion": 3, "wolf": 2, "spear": 2}, "巨蝎 ap 对重甲 ×2.10"),
+            "late": _t({"scorpion": 3, "mammoth": 3, "spider": 2},
+                       "巨蝎拆坦克，猛犸砸家，巨蛛锁腿"),
+        },
+        "arcane": {
+            "open": _t({"wolf": 3, "spear": 3}, "战狼咬法师，骨矛对魔导 ×1.50"),
+            "mid": _t({"wolf": 3, "spider": 2, "spear": 2}, "毒丝锁法师，狼收割"),
+            "late": _t({"mammoth": 2, "spider": 3, "scorpion": 2, "wolf": 2},
+                       "猛犸换血，巨蛛控场，巨蝎点构装"),
+        },
+        "mixed": {
+            "open": _t({"spear": 3, "wolf": 3}, "混编先铺便宜营地/围栏兵"),
+            "mid": _t({"wolf": 3, "scorpion": 2, "spider": 2}, "狼 + 蝎 + 蛛覆盖混甲"),
+            "late": _t({"mammoth": 2, "spider": 2, "scorpion": 2, "wolf": 2},
+                       "猛犸前排，蛛蝎后排，无自爆"),
         },
     },
 }

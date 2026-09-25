@@ -311,6 +311,16 @@ def main():
     assert catalog["units"]["scorpion"]["repairable"] is False
     assert catalog["units"]["scorpion"]["canVeteran"] is True
     assert catalog["units"]["scorpion"]["damageType"] == "ap"
+    assert catalog["units"]["mammoth"]["name"] == "猛犸战象"
+    assert catalog["units"]["mammoth"]["requires"] == ["taltar"]
+    assert catalog["units"]["mammoth"]["producer"] == "tpen"
+    assert catalog["units"]["mammoth"]["faction"] == "tribe"
+    assert catalog["units"]["mammoth"]["repairable"] is False
+    assert catalog["units"]["mammoth"]["canVeteran"] is True
+    assert catalog["buildings"]["tspiketower"]["role"] == "defense"
+    assert catalog["buildings"]["ttoxtower"]["role"] == "defense"
+    assert catalog["buildings"]["ttrap"]["role"] == "trap"
+    assert catalog["buildings"]["tpit"]["role"] == "trap"
     assert catalog["buildings"]["mstorm"]["name"] == "雷暴塔"
     assert catalog["buildings"]["mstorm"]["faction"] == "magic"
     assert catalog["buildings"]["mstorm"]["role"] == "defense"
@@ -645,7 +655,7 @@ def main():
     assert "surfaced(SURF.crystal, [" in builder_block
     assert "surfaced(SURF.metal, [" in builder_block
     # 巨龙从兽皮改成金属材质，否则皮毛粗糙度会把甲板和铬边的折角一起照哑
-    assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1, scorpion: 1 };" in render
+    assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1, scorpion: 1, mammoth: 1 };" in render
     # 攻击特效跟模型一起换紫青：火球是巨龙独有弹道，不能残留橙火或玉绿。
     # projectile 键仍是 fireball（服务端目录约定），只换表现。
     assert server.UNIT_TYPES["dragon"]["projectile"] == "fireball"
@@ -721,6 +731,9 @@ def main():
     assert "scorpion: function () { return UNIT_BUILDERS.spider(); }" not in render
     assert "scorpion: function () { return UNIT_BUILDERS.wolf(); }" not in render
     assert "scorpion: function () { return UNIT_BUILDERS.dog(); }" not in render
+    assert "mammoth: function () { return UNIT_BUILDERS.wolf(); }" not in render
+    assert "mammoth: function () { return UNIT_BUILDERS.tharvester(); }" not in render
+    assert "mammoth: function () { return UNIT_BUILDERS.behemoth(); }" not in render
     assert "蛛网巨蛛：八足蛛形" in render
     assert "蛛网巨蛛：八足 + 头胸腹 + 骨螯" in app
     assert "穿甲巨蝎：大螯钳 + 弓起毒尾刺" in render
@@ -737,11 +750,28 @@ def main():
     assert "蛛网巨蛛" in readme
     assert "穿甲巨蝎" in hud
     assert "穿甲巨蝎" in readme
+    assert "猛犸战象" in hud
+    assert "猛犸战象" in readme
+    assert "棘矛哨塔" in hud
+    assert "毒矢高台" in hud
+    assert "兽夹陷阱" in hud
+    assert "毒雾坑" in hud
+    assert "function spikeHeadParts" in render
+    assert "function toxHeadParts" in render
+    assert "棘矛哨塔：四柱木台" in render
+    assert "毒矢高台：更高骨木脚手架" in render
+    assert "兽夹陷阱：贴地木框" in render
+    assert "毒雾坑：挖开的石骨圈" in render
+    assert "猛犸战象：厚躯、弓背、长牙" in render
+    assert "look: 'spike'" in render
+    assert "look: 'dart'" in render
+    assert "look: 'smash'" in render
     assert "tharvester: function () { return UNIT_BUILDERS.harvester(); }" not in render
     assert "tmcv: function () { return UNIT_BUILDERS.mcv(); }" not in render
     tribe_buildings = render[render.index("} else if (kind === 'thq')"):
                              render.index("return c.parts;", render.index("} else if (kind === 'thq')"))]
-    for kind in ("thq", "tpower", "trefinery", "tcamp", "tpen", "taltar"):
+    for kind in ("thq", "tpower", "trefinery", "tcamp", "tpen", "taltar",
+                 "tspiketower", "ttoxtower", "ttrap", "tpit"):
         start = tribe_buildings.index("kind === '%s'" % kind)
         next_start = tribe_buildings.find("kind === '", start + 10)
         branch = tribe_buildings[start:next_start if next_start >= 0 else len(tribe_buildings)]

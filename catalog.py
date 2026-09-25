@@ -420,6 +420,17 @@ UNIT_TYPES = {
         "projectile": "sting", "projectileSpeed": 640.0, "splash": 0.0,
         "sight": 390.0, "armor": "beast", "damageType": "ap",
     },
+    # 猛犸战象：围栏后期重兽。血祭坛后才许驯养，对位玄岩巨像 / 钢铁重甲的
+    # 地面砸家前排。慢、厚、短距砸击，溅射拆建筑；兽甲、非载具、无自爆。
+    # smash 伤种：建筑 ×1.50，对单位中性偏强，不当攻城炮那种对人 ×0.25。
+    "mammoth": {
+        "name": "猛犸战象", "cost": 1500, "hp": 1280, "speed": 76.0,
+        "damage": 80.0, "range": 52.0, "cooldown": 1.35,
+        "size": 24.0, "build": 13.0, "producer": "tpen",
+        "requires": ["taltar"],
+        "projectile": "smash", "projectileSpeed": 1000.0, "splash": 28.0,
+        "sight": 380.0, "armor": "beast", "damageType": "smash",
+    },
 }
 
 
@@ -566,8 +577,8 @@ STRUCTURE_TYPES = {
     },
     # ==================== 部落阵营「原始部落」建筑（faction=tribe）P0 ====================
     # 与科技/秘法对位：大营=hq / 图腾柱=power / 精炼棚=refinery / 营地=barracks /
-    # 围栏=factory / 血祭坛=repair。P0 不建塔。血祭坛门槛严格镜像圣泉/维修厂：
-    # 必须先有工厂角色（驯兽围栏）+ 电力角色（图腾柱）。
+    # 围栏=factory / 血祭坛=repair。P1 补棘矛哨塔/毒矢高台与陷阱毒坑，仍无自爆。
+    # 血祭坛门槛严格镜像圣泉/维修厂：必须先有工厂角色（驯兽围栏）+ 电力角色（图腾柱）。
     "thq": {
         "name": "部落大营", "cost": 0, "hp": 2400, "size": 58.0,
         "build": 0.0, "deploy": 0.0, "power": 35, "requires": [], "sight": 650.0,
@@ -599,6 +610,49 @@ STRUCTURE_TYPES = {
         "requires": ["tpen", "tpower"], "sight": 440.0,
         "armor": "structure",
     },
+    # ==================== 部落 P1：哨塔 / 陷阱毒 / 不引入自爆 ====================
+    # 棘矛哨塔：早期基地通用防空档，对位钢铁哨戒 / 秘法奥术塔，更便宜更脆更短。
+    # 骨矛弹走 bullet，中距点射 + 小溅射，营地+图腾即可。填 bot defense。
+    "tspiketower": {
+        "name": "棘矛哨塔", "cost": 720, "hp": 820, "size": 28.0,
+        "build": 10.0, "deploy": 2.6, "power": -20,
+        "requires": ["tcamp", "tpower"], "sight": 420.0,
+        "damage": 40.0, "range": 195.0, "cooldown": 0.72,
+        "projectile": "spike", "projectileSpeed": 540.0, "splash": 16.0,
+        "armor": "structure", "damageType": "bullet",
+    },
+    # 毒矢高台：后期远程支援塔，对位导弹炮塔 / 雷暴塔档，但不做联网。
+    # 单发更低，射程更长，命中挂毒 DoT（复用蛛网毒丝刷新规则）。祭坛+图腾。
+    "ttoxtower": {
+        "name": "毒矢高台", "cost": 1000, "hp": 880, "size": 32.0,
+        "build": 14.0, "deploy": 3.2, "power": -25,
+        "requires": ["taltar", "tpower"], "sight": 500.0,
+        "damage": 24.0, "range": 275.0, "cooldown": 1.30,
+        "projectile": "dart", "projectileSpeed": 500.0, "splash": 0.0,
+        "armor": "structure", "damageType": "venom",
+        "dot": {"dps": 12.0, "duration": 3.2, "damageType": "venom"},
+    },
+    # 兽夹陷阱：便宜地面夹。建成后短延时上膛，敌军地面单位进圈一次
+    # 定身+爆发，然后拆除。走 buildQueue（role=trap），不是炮塔。
+    "ttrap": {
+        "name": "兽夹陷阱", "cost": 320, "hp": 140, "size": 16.0,
+        "build": 5.0, "deploy": 1.2, "power": -4,
+        "requires": ["tcamp"], "sight": 160.0,
+        "armor": "structure", "damageType": "shell",
+        "trapRadius": 44.0, "trapDamage": 75.0, "trapArm": 2.2,
+        "trapExpire": True,
+        "slow": {"mult": 0.0, "duration": 2.0},
+    },
+    # 毒雾坑：区域拒止。脉冲给圈内敌军挂毒 DoT，不伤友军、不伤建筑。
+    # 低血中价，血祭坛门槛。
+    "tpit": {
+        "name": "毒雾坑", "cost": 580, "hp": 260, "size": 22.0,
+        "build": 8.0, "deploy": 2.0, "power": -8,
+        "requires": ["taltar"], "sight": 200.0,
+        "armor": "structure", "damageType": "venom",
+        "auraRadius": 88.0, "auraPulse": 0.90,
+        "dot": {"dps": 16.0, "duration": 1.6, "damageType": "venom"},
+    },
 }
 
 # ---- 阵营与角色分类 ----
@@ -618,9 +672,11 @@ MAGIC_UNITS = frozenset((
 ))
 TRIBE_STRUCTURES = frozenset((
     "thq", "tpower", "trefinery", "tcamp", "tpen", "taltar",
+    "tspiketower", "ttoxtower", "ttrap", "tpit",
 ))
 TRIBE_UNITS = frozenset((
     "tharvester", "tmcv", "spear", "tamer", "wolf", "spider", "scorpion",
+    "mammoth",
 ))
 VALID_FACTIONS = frozenset(("tech", "magic", "tribe"))
 
@@ -633,6 +689,8 @@ _STRUCTURE_ROLES = {
     "repair": "repair", "mspring": "repair", "taltar": "repair",
     "turret": "defense", "missile": "defense", "mtower": "defense",
     "mstorm": "defense",
+    "tspiketower": "defense", "ttoxtower": "defense",
+    "ttrap": "trap", "tpit": "trap",
 }
 _UNIT_ROLES = {
     "harvester": "harvester", "mharvester": "harvester", "tharvester": "harvester",
@@ -734,9 +792,11 @@ FACTION_BUILDINGS = {
     "magic": {"power": "mpower", "barracks": "mtemple", "refinery": "mrefinery",
               "factory": "mcircle", "repair": "mspring", "defense": "mtower",
               "defense_long": "mstorm"},
-    # P0 不建塔：没有 defense / defense_long，bot 取不到键就不会排防御。
+    # P1 补齐近距/远程塔，以及陷阱/毒坑。defense_long 仍走后期补塔。
     "tribe": {"power": "tpower", "barracks": "tcamp", "refinery": "trefinery",
-              "factory": "tpen", "repair": "taltar"},
+              "factory": "tpen", "repair": "taltar",
+              "defense": "tspiketower", "defense_long": "ttoxtower",
+              "trap": "ttrap", "pit": "tpit"},
 }
 
 

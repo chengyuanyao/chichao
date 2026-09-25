@@ -76,7 +76,10 @@ def main():
     assert buildings["factory"] == "tpen"
     assert buildings["barracks"] == "tcamp"
     assert buildings["repair"] == "taltar"
-    assert "defense" not in buildings
+    assert buildings["defense"] == "tspiketower"
+    assert buildings["defense_long"] == "ttoxtower"
+    assert buildings["trap"] == "ttrap"
+    assert buildings["pit"] == "tpit"
     assert server.structure_role("thq") == "hq"
     assert server.structure_role("tpower") == "power"
     assert server.structure_role("trefinery") == "refinery"
@@ -85,10 +88,12 @@ def main():
     assert server.structure_role("taltar") == "repair"
     assert server.unit_role("tharvester") == "harvester"
     assert server.unit_role("tmcv") == "mcv"
-    for kind in ("thq", "tpower", "trefinery", "tcamp", "tpen", "taltar"):
+    for kind in ("thq", "tpower", "trefinery", "tcamp", "tpen", "taltar",
+                 "tspiketower", "ttoxtower", "ttrap", "tpit"):
         assert kind in server.TRIBE_STRUCTURES
         assert server.STRUCTURE_TYPES[kind]["faction"] == "tribe"
-    for kind in ("tharvester", "tmcv", "spear", "tamer", "wolf", "spider", "scorpion"):
+    for kind in ("tharvester", "tmcv", "spear", "tamer", "wolf", "spider",
+                 "scorpion", "mammoth"):
         assert kind in server.TRIBE_UNITS
         assert server.UNIT_TYPES[kind]["faction"] == "tribe"
     assert server.UNIT_TYPES["tmcv"]["deploysInto"] == "thq"
@@ -97,6 +102,8 @@ def main():
     assert server.UNIT_TYPES["tharvester"]["harvestRate"] == server.UNIT_TYPES["harvester"]["harvestRate"]
     assert server.UNIT_TYPES["wolf"]["armor"] == "beast"
     assert "wolf" not in server.SUICIDE_KINDS
+    assert "mammoth" not in server.SUICIDE_KINDS
+    assert server.bot_suicide_kind("tribe") is None
     catalog = server.public_catalog()
     assert catalog["units"]["tamer"]["canTame"] is True
     assert catalog["units"]["wolf"]["canTame"] is False

@@ -83,9 +83,9 @@ def main():
 
     # Units and buildings are both valid point targets for all defense kinds.
     enemy_building = server.make_structure(
-        "power", beta["id"], 1240, 1000, True)
+        "power", beta["id"], 1160, 1000, True)
     game["structures"].append(enemy_building)
-    for kind in ("turret", "missile", "mtower", "mstorm"):
+    for kind in ("turret", "missile", "mtower", "mstorm", "tspiketower", "ttoxtower"):
         defense = server.make_structure(kind, alpha["id"], 1000, 1000, True)
         game["structures"].append(defense)
         command(room, alpha, defense, enemy_building)

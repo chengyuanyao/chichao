@@ -26,4 +26,6 @@ fixture.destroyFixtureStructures(15);assert.equal(fixture.syntheticEffects.lengt
 assert.match(source,/fixedFrame===120\) destroyFixtureStructures/);
 assert.match(source,/\[121,150,180,300\]/,'observe active, finishing and retired states');
 assert.match(source,/fixedFrame>=121&&fixedFrame<=180/,'separate death-window timing');
+assert.match(source,/scenario === 'tribe_p1'/,'P1 lineup scene exists');
+assert.match(source,/def.faction === 'tribe' \? 'tribe'/,'tribe buildings keep tribe owner color');
 console.log('Visual benchmark: exact destruction events, unchanged army, fixed trigger and bounded death-window sampling passed.');
