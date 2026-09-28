@@ -10061,13 +10061,6 @@ export function createRenderer(canvas) {
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len, style.thick, style.thick, style.color);
           writeTracer(shards, shardCount++, p.x, height, p.y, yaw, 9.2, 0.9, 0.9, 0x7ad060);
-        } else if (look === 'rock') {
-      emit(smokeLayer, {
-        x: x + (Math.random() - 0.5) * 3, y: height, z: y + (Math.random() - 0.5) * 3,
-        vx: (Math.random() - 0.5) * 6, vy: 2 + Math.random() * 5, vz: (Math.random() - 0.5) * 6,
-        life: 0.22, maxLife: 0.22, size: 2.6 + Math.random() * 1.8,
-        r: 0.62, g: 0.52, b: 0.36
-      });
         } else if (look === 'smash') {
           writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 3.6, 3.6, 3.6, 0xc4a070);
         } else if (look === 'rock') {
