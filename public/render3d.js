@@ -602,7 +602,7 @@ const MAT = {
   pandaWhite: [0.97, 0.97, 0.95],   // 熊猫白毛：略提亮，远距不洗成米灰
   pandaBlack: [0.06, 0.05, 0.05],   // 耳/肢/眼斑：纯黑在远距会糊成洞
   pandaCream: [0.93, 0.90, 0.84],   // 吻部/耳窝，近距才分得出
-  sashRust: [0.62, 0.20, 0.12],     // 功夫腰封：部落土红，不盖过黑白
+  sashRust: [0.74, 0.24, 0.12],     // 功夫腰封：部落土红，不盖过黑白
   bamboo: [0.46, 0.70, 0.18],       // 旧竹甲色，熊猫不再用
   bambooDark: [0.26, 0.42, 0.10],
   // 自发光（分量 > 1）
@@ -2290,72 +2290,72 @@ const UNIT_BUILDERS = {
     // 竹甲熊猫：圆滚黑白功夫熊猫，软肚 + 眼斑 + 腰封，不要竹甲板也不要狼/猛犸剪影。
     // 白毛/黑斑走布料通道，避免兽皮着色把熊猫洗成米黄假人。
     const bellyProfile = [
-      [0.00, -6.4], [0.78, -6.0], [1.00, -2.6], [0.96, 0.4],
-      [0.80, 3.6], [0.50, 5.8], [0.00, 6.2]
+      [0.00, -5.2], [0.90, -4.8], [1.00, -1.4], [0.98, 1.2],
+      [0.84, 3.4], [0.50, 4.8], [0.00, 5.2]
     ];
-    const headTilt = new THREE.Matrix4().makeRotationZ(-0.16);
+    const headTilt = new THREE.Matrix4().makeRotationZ(-0.18);
     const body = surfaced(SURF.cloth, [
-      profiledVolume(bellyProfile, 7.2, 7.0, 12, 0.6, 8.6, 0, MAT.pandaWhite),
-      ellipsoid(5.2, 4.0, 5.4, 1.8, 13.8, 0, MAT.pandaWhite),
-      sph(6.4, 12, 3.6, 17.6, 0, MAT.pandaWhite),
-      ellipsoid(2.8, 2.3, 2.5, 9.2, 16.6, 0, MAT.pandaCream, headTilt),
-      ellipsoid(2.7, 2.9, 2.15, 7.0, 18.2, 2.55, MAT.pandaBlack),
-      ellipsoid(2.7, 2.9, 2.15, 7.0, 18.2, -2.55, MAT.pandaBlack),
-      ellipsoid(2.15, 2.45, 1.65, 1.4, 22.6, 3.55, MAT.pandaBlack),
-      ellipsoid(2.15, 2.45, 1.65, 1.4, 22.6, -3.55, MAT.pandaBlack),
-      ellipsoid(1.05, 1.15, 0.55, 2.15, 22.2, 3.55, MAT.pandaCream),
-      ellipsoid(1.05, 1.15, 0.55, 2.15, 22.2, -3.55, MAT.pandaCream),
-      ellipsoid(1.05, 0.72, 0.92, 11.2, 16.5, 0, MAT.pandaBlack),
-      ellipsoid(0.70, 0.78, 0.50, 8.35, 18.05, 2.55, MAT.pandaCream),
-      ellipsoid(0.70, 0.78, 0.50, 8.35, 18.05, -2.55, MAT.pandaCream),
-      ellipsoid(3.8, 3.5, 3.1, 2.2, 14.0, 4.7, MAT.pandaBlack),
-      ellipsoid(3.8, 3.5, 3.1, 2.2, 14.0, -4.7, MAT.pandaBlack),
-      ellipsoid(2.5, 2.1, 2.3, -6.4, 8.2, 0, MAT.pandaWhite),
-      ellipsoid(1.35, 1.15, 1.15, -8.2, 7.8, 0, MAT.pandaBlack)
+      profiledVolume(bellyProfile, 8.2, 7.6, 12, 0.5, 7.6, 0, MAT.pandaWhite),
+      ellipsoid(5.6, 3.6, 5.8, 1.6, 12.4, 0, MAT.pandaWhite),
+      sph(5.8, 12, 4.2, 16.6, 0, MAT.pandaWhite),
+      ellipsoid(2.9, 2.2, 2.6, 9.4, 15.6, 0, MAT.pandaCream, headTilt),
+      ellipsoid(3.05, 3.15, 2.35, 7.4, 17.2, 2.65, MAT.pandaBlack),
+      ellipsoid(3.05, 3.15, 2.35, 7.4, 17.2, -2.65, MAT.pandaBlack),
+      ellipsoid(2.05, 2.35, 1.55, 2.2, 21.2, 3.45, MAT.pandaBlack),
+      ellipsoid(2.05, 2.35, 1.55, 2.2, 21.2, -3.45, MAT.pandaBlack),
+      ellipsoid(1.00, 1.10, 0.50, 2.9, 20.8, 3.45, MAT.pandaCream),
+      ellipsoid(1.00, 1.10, 0.50, 2.9, 20.8, -3.45, MAT.pandaCream),
+      ellipsoid(1.10, 0.70, 0.95, 11.4, 15.5, 0, MAT.pandaBlack),
+      ellipsoid(0.72, 0.80, 0.48, 8.7, 17.05, 2.65, MAT.pandaCream),
+      ellipsoid(0.72, 0.80, 0.48, 8.7, 17.05, -2.65, MAT.pandaCream),
+      ellipsoid(3.6, 3.2, 3.0, 2.0, 12.8, 5.2, MAT.pandaBlack),
+      ellipsoid(3.6, 3.2, 3.0, 2.0, 12.8, -5.2, MAT.pandaBlack),
+      ellipsoid(2.4, 2.0, 2.2, -7.0, 7.4, 0, MAT.pandaWhite),
+      ellipsoid(1.25, 1.10, 1.10, -8.6, 7.0, 0, MAT.pandaBlack)
     ]).concat(surfaced(SURF.cloth, [
-      torus(7.05, 0.62, 8, 16, 0.55, 9.15, 0, MAT.sashRust, ROT_X90),
-      torus(7.05, 0.22, 6, 14, 0.55, 9.85, 0, 0.90, ROT_X90),
-      box(2.2, 5.6, 1.15, -1.6, 6.6, 3.8, MAT.sashRust),
-      sph(0.85, 8, 6.6, 9.2, 0.15, MAT.boneIvory)
+      ellipsoid(8.05, 1.85, 7.55, 0.5, 8.05, 0, MAT.sashRust),
+      ellipsoid(8.2, 0.48, 7.7, 0.5, 9.15, 0, 0.90),
+      box(1.9, 3.8, 1.25, -1.8, 6.2, 5.1, MAT.sashRust),
+      sph(0.72, 8, 7.2, 8.1, 0.15, MAT.boneIvory)
     ]));
-    [[-1.4, 3.15], [-1.4, -3.15]].forEach(function (sock) {
+    [[-1.8, 4.4], [-1.8, -4.4]].forEach(function (sock) {
       body.push(Object.assign(
-        limb(2.15, 1.85, sock[0], 6.8, sock[1], sock[0] + 0.7, 3.5, sock[1] + (sock[1] > 0 ? 0.25 : -0.25), MAT.pandaBlack),
+        limb(2.25, 1.90, sock[0], 6.2, sock[1] * 0.72, sock[0] + 0.5, 3.2, sock[1], MAT.pandaBlack),
         { surf: SURF.cloth }));
       body.push(Object.assign(
-        limb(1.70, 1.45, sock[0] + 0.7, 3.5, sock[1] + (sock[1] > 0 ? 0.25 : -0.25), sock[0] + 0.35, 0.7, sock[1], MAT.pandaBlack),
+        limb(1.75, 1.50, sock[0] + 0.5, 3.2, sock[1], sock[0] + 0.15, 0.65, sock[1], MAT.pandaBlack),
         { surf: SURF.cloth }));
       body.push(Object.assign(
-        ellipsoid(1.85, 0.85, 1.55, sock[0] + 0.55, 0.7, sock[1], MAT.pandaBlack),
+        ellipsoid(2.05, 0.85, 1.65, sock[0] + 0.35, 0.65, sock[1], MAT.pandaBlack),
         { surf: SURF.cloth }));
     });
-    // 左臂护体、右掌抬起拍击：功夫架势，不是四足贴地走兽。
+    // 左臂护体、右掌侧抬拍击：功夫架势，拳不挡脸。
     body.push(Object.assign(
-      limb(1.85, 1.55, 2.2, 13.8, -4.7, 5.4, 11.0, -6.2, MAT.pandaBlack),
+      limb(1.90, 1.55, 2.0, 12.8, -5.2, 4.8, 9.6, -7.4, MAT.pandaBlack),
       { surf: SURF.cloth }));
     body.push(Object.assign(
-      limb(1.45, 1.25, 5.4, 11.0, -6.2, 8.2, 12.2, -5.2, MAT.pandaBlack),
+      limb(1.45, 1.25, 4.8, 9.6, -7.4, 7.6, 10.4, -6.2, MAT.pandaBlack),
       { surf: SURF.cloth }));
     body.push(Object.assign(
-      sph(1.85, 8, 8.6, 12.4, -5.0, MAT.pandaBlack),
+      sph(1.85, 8, 8.0, 10.6, -5.8, MAT.pandaBlack),
       { surf: SURF.cloth }));
     body.push(Object.assign(
-      limb(1.90, 1.60, 2.2, 13.8, 4.7, 5.8, 16.6, 6.2, MAT.pandaBlack),
+      limb(1.95, 1.60, 2.0, 12.8, 5.2, 3.8, 14.6, 8.6, MAT.pandaBlack),
       { surf: SURF.cloth }));
     body.push(Object.assign(
-      limb(1.50, 1.28, 5.8, 16.6, 6.2, 9.2, 18.2, 5.4, MAT.pandaBlack),
+      limb(1.50, 1.28, 3.8, 14.6, 8.6, 6.4, 13.2, 10.2, MAT.pandaBlack),
       { surf: SURF.cloth }));
     body.push(Object.assign(
-      sph(1.95, 8, 9.6, 18.4, 5.2, MAT.pandaBlack),
+      sph(1.95, 8, 7.0, 12.8, 10.4, MAT.pandaBlack),
       { surf: SURF.cloth }));
     body.push(Object.assign(
-      ellipsoid(1.15, 0.55, 1.15, 7.5, 17.4, 5.8, MAT.hideTan),
+      ellipsoid(1.15, 0.55, 1.15, 5.2, 13.8, 9.4, MAT.hideTan),
       { surf: SURF.hide }));
     return {
       body: body,
       glow: [
-        sph(0.38, 5, 8.7, 18.0, 2.55, MAT.spiritFire),
-        sph(0.38, 5, 8.7, 18.0, -2.55, MAT.spiritFire)
+        sph(0.40, 5, 9.0, 17.05, 2.65, MAT.spiritFire),
+        sph(0.40, 5, 9.0, 17.05, -2.65, MAT.spiritFire)
       ]
     };
   },
@@ -6766,17 +6766,17 @@ export function createRenderer(canvas) {
     }
     if (kind === 'panda') {
       return [
-        box(16, 16, 15, 0.6, 9.0, 0, MAT.pandaWhite),
-        box(12, 11, 12, 3.6, 17.6, 0, MAT.pandaWhite),
-        box(4.4, 5.0, 3.2, 1.6, 22.4, 3.4, MAT.pandaBlack),
-        box(4.4, 5.0, 3.2, 1.6, 22.4, -3.4, MAT.pandaBlack),
-        box(5.2, 5.2, 4.0, 7.2, 18.2, 2.6, MAT.pandaBlack),
-        box(5.2, 5.2, 4.0, 7.2, 18.2, -2.6, MAT.pandaBlack),
-        box(14, 1.8, 15, 0.6, 9.2, 0, MAT.sashRust),
-        box(14, 0.8, 15, 0.6, 10.0, 0, 0.90),
-        box(4.2, 7.2, 4.0, -1.2, 3.4, 3.2, MAT.pandaBlack),
-        box(4.2, 7.2, 4.0, -1.2, 3.4, -3.2, MAT.pandaBlack),
-        box(8.4, 3.2, 3.2, 6.4, 17.4, 5.4, MAT.pandaBlack)
+        box(17, 14, 16, 0.5, 7.8, 0, MAT.pandaWhite),
+        box(11, 10, 11, 4.2, 16.6, 0, MAT.pandaWhite),
+        box(4.2, 4.8, 3.0, 2.4, 21.0, 3.3, MAT.pandaBlack),
+        box(4.2, 4.8, 3.0, 2.4, 21.0, -3.3, MAT.pandaBlack),
+        box(5.6, 5.6, 4.2, 7.6, 17.2, 2.6, MAT.pandaBlack),
+        box(5.6, 5.6, 4.2, 7.6, 17.2, -2.6, MAT.pandaBlack),
+        box(16, 2.4, 15, 0.5, 8.2, 0, MAT.sashRust),
+        box(16, 0.8, 15, 0.5, 9.1, 0, 0.90),
+        box(4.4, 7.0, 4.0, -1.6, 3.2, 4.2, MAT.pandaBlack),
+        box(4.4, 7.0, 4.0, -1.6, 3.2, -4.2, MAT.pandaBlack),
+        box(6.4, 3.2, 3.2, 4.8, 13.4, 8.8, MAT.pandaBlack)
       ];
     }
     if (kind === 'slinger') {
