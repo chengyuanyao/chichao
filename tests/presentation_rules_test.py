@@ -317,6 +317,20 @@ def main():
     assert catalog["units"]["mammoth"]["faction"] == "tribe"
     assert catalog["units"]["mammoth"]["repairable"] is False
     assert catalog["units"]["mammoth"]["canVeteran"] is True
+    assert catalog["units"]["panda"]["name"] == "竹甲熊猫"
+    assert catalog["units"]["panda"]["requires"] == ["taltar"]
+    assert catalog["units"]["panda"]["producer"] == "tpen"
+    assert catalog["units"]["panda"]["faction"] == "tribe"
+    assert catalog["units"]["panda"]["repairable"] is False
+    assert catalog["units"]["panda"]["canVeteran"] is True
+    assert catalog["units"]["panda"]["cost"] == 980
+    assert catalog["units"]["slinger"]["name"] == "投石猎手"
+    assert catalog["units"]["slinger"]["requires"] == []
+    assert catalog["units"]["slinger"]["producer"] == "tcamp"
+    assert catalog["units"]["slinger"]["faction"] == "tribe"
+    assert catalog["units"]["slinger"]["repairable"] is False
+    assert catalog["units"]["slinger"]["canVeteran"] is True
+    assert catalog["units"]["slinger"]["cost"] == 300
     assert catalog["buildings"]["tspiketower"]["role"] == "defense"
     assert catalog["buildings"]["ttoxtower"]["role"] == "defense"
     assert catalog["buildings"]["ttrap"]["role"] == "trap"
@@ -655,7 +669,7 @@ def main():
     assert "surfaced(SURF.crystal, [" in builder_block
     assert "surfaced(SURF.metal, [" in builder_block
     # 巨龙从兽皮改成金属材质，否则皮毛粗糙度会把甲板和铬边的折角一起照哑
-    assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1, scorpion: 1, mammoth: 1 };" in render
+    assert "const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1, scorpion: 1, mammoth: 1, panda: 1 };" in render
     # 攻击特效跟模型一起换紫青：火球是巨龙独有弹道，不能残留橙火或玉绿。
     # projectile 键仍是 fireball（服务端目录约定），只换表现。
     assert server.UNIT_TYPES["dragon"]["projectile"] == "fireball"
@@ -734,6 +748,10 @@ def main():
     assert "mammoth: function () { return UNIT_BUILDERS.wolf(); }" not in render
     assert "mammoth: function () { return UNIT_BUILDERS.tharvester(); }" not in render
     assert "mammoth: function () { return UNIT_BUILDERS.behemoth(); }" not in render
+    assert "panda: function () { return UNIT_BUILDERS.wolf(); }" not in render
+    assert "panda: function () { return UNIT_BUILDERS.mammoth(); }" not in render
+    assert "slinger: function () { return infantryParts('rifle'); }" not in render
+    assert "slinger: function () { return UNIT_BUILDERS.spear(); }" not in render
     assert "蛛网巨蛛：八足蛛形" in render
     assert "蛛网巨蛛：八足 + 头胸腹 + 骨螯" in app
     assert "穿甲巨蝎：大螯钳 + 弓起毒尾刺" in render
@@ -752,6 +770,15 @@ def main():
     assert "穿甲巨蝎" in readme
     assert "猛犸战象" in hud
     assert "猛犸战象" in readme
+    assert "竹甲熊猫" in hud
+    assert "竹甲熊猫" in readme
+    assert "投石猎手" in hud
+    assert "投石猎手" in readme
+    assert "竹甲熊猫：圆滚黑白兽 + 肩上竹甲" in render
+    assert "投石猎手：兽皮短褂 + 骨环 + 投石索" in render
+    assert "look: 'rock'" in render
+    assert "panda: 1.72" in render
+    assert "slinger: 2.15" in render
     assert "棘矛哨塔" in hud
     assert "毒矢高台" in hud
     assert "兽夹陷阱" in hud

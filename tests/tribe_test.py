@@ -93,7 +93,7 @@ def main():
         assert kind in server.TRIBE_STRUCTURES
         assert server.STRUCTURE_TYPES[kind]["faction"] == "tribe"
     for kind in ("tharvester", "tmcv", "spear", "tamer", "wolf", "spider",
-                 "scorpion", "mammoth"):
+                 "scorpion", "mammoth", "panda", "slinger"):
         assert kind in server.TRIBE_UNITS
         assert server.UNIT_TYPES[kind]["faction"] == "tribe"
     assert server.UNIT_TYPES["tmcv"]["deploysInto"] == "thq"

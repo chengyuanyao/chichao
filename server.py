@@ -33,6 +33,9 @@ from catalog import (
     FACTION_LOADOUT,
     MAGIC_STRUCTURES,
     MAGIC_UNITS,
+    PANDA_RAGE_DAMAGE,
+    PANDA_RAGE_ENTER,
+    PANDA_RAGE_EXIT,
     PUBLIC_CATALOG,
     STRUCTURE_TYPES,
     SUICIDE_KINDS,
@@ -954,6 +957,8 @@ def public_unit(unit):
             result["rooted"] = True
     if float(unit.get("dotTimer", 0.0) or 0.0) > 0.0:
         result["dot"] = True
+    if unit.get("rage"):
+        result["rage"] = True
     if unit.get("repairing"):
         result["repairing"] = True
     if unit.get("order") in ("hold", "scatter"):
@@ -1894,6 +1899,7 @@ def make_unit(kind, owner, x, y):
         "dotDps": 0.0, "dotTimer": 0.0,
         "dotOwner": None, "dotSourceId": None, "dotSourceKind": None,
         "dotDamageType": None,
+        "rage": False,
         "_path": None, "_pathDest": None, "kills": 0,
         # 内部作战时间戳不下发给客户端，只用于判定脱战回血。
         "_lastCombatAt": -VETERAN_REGEN_DELAY,
@@ -5448,6 +5454,29 @@ def apply_hit_status(projectile, target):
     apply_dot(projectile, target)
 
 
+def update_panda_rage(unit):
+    """竹甲熊猫低血狂暴：HP 比 <0.40 进入，>0.60 才解除。
+
+    这是攻击方自身状态，挂在 unit['rage'] 上，不走命中 slow/DoT。
+    进入后下一次开火起输出 ×PANDA_RAGE_DAMAGE；血线回升过阈值才关掉。
+    非熊猫单位一律清掉 rage，避免残留。
+    """
+    if unit.get("kind") != "panda":
+        if unit.get("rage"):
+            unit["rage"] = False
+        return False
+    max_hp = float(unit.get("maxHp") or 0.0) or 1.0
+    ratio = float(unit.get("hp") or 0.0) / max_hp
+    raging = bool(unit.get("rage"))
+    if not raging and ratio < PANDA_RAGE_ENTER:
+        unit["rage"] = True
+        return True
+    if raging and ratio > PANDA_RAGE_EXIT:
+        unit["rage"] = False
+        return False
+    return raging
+
+
 def tick_dot(room, unit, dt, entity_index=None):
     """按目录 dps 结算持续伤害，击杀记给挂状态时的来源。"""
     timer = float(unit.get("dotTimer") or 0.0)
@@ -6127,6 +6156,8 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
             unit["hp"] = min(
                 unit["maxHp"],
                 unit["hp"] + unit["maxHp"] * regen_fraction * dt)
+        if update_panda_rage(unit):
+            dam_mult *= PANDA_RAGE_DAMAGE
         unit["repairing"] = False
         unit["cooldown"] = max(0.0, unit["cooldown"] - dt * (1.0 / cd_mult))
         unit["scan"] = max(0.0, unit["scan"] - dt)
@@ -6908,11 +6939,14 @@ def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
     choices = []
     if tribe:
         if "barracks" in roles:
-            choices.extend(("spear", "spear", "tamer") if not opening else ("spear", "spear"))
+            if opening:
+                choices.extend(("spear", "spear"))
+            else:
+                choices.extend(("spear", "spear", "slinger", "tamer"))
         if "factory" in roles:
             choices.append("wolf")
             if "repair" in roles:
-                choices.extend(("spider", "scorpion", "mammoth"))
+                choices.extend(("spider", "scorpion", "panda", "mammoth"))
             if rich and harvester_n < 2:
                 choices.append("tharvester")
         return choices
@@ -6972,9 +7006,10 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
     if inbound:
         if tribe:
             if "barracks" in roles:
-                return ["spear", "tamer"]
+                return ["spear", "slinger", "tamer"]
             if "factory" in roles:
-                return ["wolf", "mammoth"] if "repair" in roles else ["wolf"]
+                return (["wolf", "panda", "mammoth"]
+                        if "repair" in roles else ["wolf"])
             return []
         if magic:
             if "barracks" in roles:
@@ -7004,9 +7039,14 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
 
     if infantry >= 5 or mages >= 3:
         if tribe:
+            choices = []
+            if "barracks" in roles:
+                choices.extend(("slinger", "spear"))
             if "factory" in roles:
-                return ["wolf", "spider"] if "repair" in roles else ["wolf"]
-            return ["spear"] if "barracks" in roles else []
+                choices.append("wolf")
+                if "repair" in roles:
+                    choices.extend(("spider", "panda"))
+            return choices
         if magic:
             choices = []
             if "barracks" in roles:
@@ -7021,10 +7061,10 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
             choices = []
             if "factory" in roles:
                 if "repair" in roles:
-                    choices.extend(("scorpion", "mammoth"))
+                    choices.extend(("scorpion", "panda", "mammoth"))
                 choices.append("wolf")
             if "barracks" in roles:
-                choices.append("spear")
+                choices.extend(("slinger", "spear"))
             return choices
         if magic:
             choices = []
@@ -7050,11 +7090,11 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         if tribe:
             choices = []
             if "barracks" in roles:
-                choices.extend(("spear", "tamer"))
+                choices.extend(("spear", "slinger", "tamer"))
             if "factory" in roles:
                 choices.append("wolf")
                 if "repair" in roles:
-                    choices.extend(("spider", "mammoth"))
+                    choices.extend(("spider", "panda", "mammoth"))
             return choices
         if magic:
             choices = []
@@ -7079,9 +7119,9 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         if tribe:
             choices = []
             if "factory" in roles:
-                choices.extend(("spider", "scorpion", "mammoth", "wolf"))
+                choices.extend(("spider", "scorpion", "panda", "mammoth", "wolf"))
             if "barracks" in roles:
-                choices.extend(("spear", "tamer"))
+                choices.extend(("slinger", "spear", "tamer"))
             return choices
         if magic:
             choices = ["colossus", "dragon", "behemoth"]
@@ -7184,8 +7224,8 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
             late_choices = (("colossus", "dragon", "comet", "behemoth") +
                             (("warden",) if "barracks" in roles else ()))
         elif faction == "tribe":
-            late_choices = (("spider", "scorpion", "mammoth", "wolf") if "factory" in roles else ()) + (
-                ("spear", "tamer") if "barracks" in roles else ())
+            late_choices = (("spider", "scorpion", "panda", "mammoth", "wolf") if "factory" in roles else ()) + (
+                ("slinger", "spear", "tamer") if "barracks" in roles else ())
         else:
             late_choices = ("overlord", "prism", "artillery")
         if bot_try_choices(room, bot, late_choices):
