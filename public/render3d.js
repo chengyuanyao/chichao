@@ -599,10 +599,10 @@ const MAT = {
   chitinDark: [0.10, 0.07, 0.06],   // 腹甲阴影
   chitinLit: [0.28, 0.16, 0.10],    // 受光甲壳
   webSilk: [0.86, 0.78, 0.58],      // 骨色蛛丝
-  pandaWhite: [0.88, 0.88, 0.84],   // 竹甲熊猫白毛
-  pandaBlack: [0.10, 0.09, 0.08],   // 熊猫耳/肢/眼斑
-  bamboo: [0.42, 0.58, 0.22],       // 肩上竹甲
-  bambooDark: [0.28, 0.40, 0.14],   // 竹甲阴影
+  pandaWhite: [0.96, 0.96, 0.93],   // 竹甲熊猫白毛
+  pandaBlack: [0.04, 0.03, 0.03],   // 熊猫耳/肢/眼斑
+  bamboo: [0.46, 0.70, 0.18],       // 肩上竹甲
+  bambooDark: [0.26, 0.42, 0.10],   // 竹甲阴影
   // 自发光（分量 > 1）
   exhaust: [2.4, 0.95, 0.28],
   furnace: [2.6, 1.35, 0.35],
@@ -2286,37 +2286,44 @@ const UNIT_BUILDERS = {
 
   panda: function () {
     // 竹甲熊猫：圆滚黑白兽 + 肩上竹甲，拍击前排。俯视也能分出圆耳和竹甲，不是狼也不是猛犸。
-    const body = surfaced(SURF.hide, [
-      ellipsoid(10.4, 6.8, 7.2, -0.6, 9.6, 0, MAT.pandaWhite),
-      ellipsoid(5.6, 5.4, 5.4, 9.2, 11.2, 0, MAT.pandaWhite),
-      ellipsoid(2.2, 2.0, 2.0, 13.6, 10.4, 0, MAT.pandaWhite),
-      ellipsoid(2.4, 2.2, 1.6, 8.4, 12.2, 2.15, MAT.pandaBlack),
-      ellipsoid(2.4, 2.2, 1.6, 8.4, 12.2, -2.15, MAT.pandaBlack),
-      ellipsoid(1.8, 2.4, 1.4, 7.6, 16.0, 2.6, MAT.pandaBlack),
-      ellipsoid(1.8, 2.4, 1.4, 7.6, 16.0, -2.6, MAT.pandaBlack),
-      ellipsoid(4.6, 2.4, 5.2, -8.8, 10.2, 0, MAT.pandaWhite),
-      ellipsoid(2.2, 1.4, 1.4, -12.4, 10.8, 0, MAT.pandaBlack),
-      ellipsoid(4.8, 0.7, 6.4, -0.4, 14.4, 0, 0.90),
-      cyl(1.15, 1.15, 8.4, 6, 2.2, 13.6, 3.6, MAT.bamboo, ROT_Z90),
-      cyl(1.15, 1.15, 8.4, 6, 2.2, 13.6, -3.6, MAT.bamboo, ROT_Z90),
-      cyl(0.85, 0.85, 6.2, 6, 1.4, 14.8, 3.2, MAT.bambooDark, ROT_Z90),
-      cyl(0.85, 0.85, 6.2, 6, 1.4, 14.8, -3.2, MAT.bambooDark, ROT_Z90),
-      box(5.6, 0.7, 8.8, 1.6, 13.2, 0, MAT.bamboo),
-      box(4.2, 0.45, 3.4, 3.4, 14.2, 4.0, MAT.boneIvory),
-      box(4.2, 0.45, 3.4, 3.4, 14.2, -4.0, MAT.boneIvory)
-    ]);
-    [5.2, -5.6].forEach(function (px) {
-      [3.2, -3.2].forEach(function (pz) {
-        body.push(Object.assign(
-          limb(1.55, 1.25, px, 7.4, pz, px + 0.25, 0.7, pz, MAT.pandaBlack),
-          { surf: SURF.hide }));
-      });
+    // 白毛/黑斑走布料通道，避免兽皮着色把熊猫洗成米黄假人。
+    const body = surfaced(SURF.cloth, [
+      ellipsoid(11.2, 7.6, 8.0, -0.8, 10.0, 0, MAT.pandaWhite),
+      ellipsoid(6.4, 6.0, 6.0, 10.2, 12.0, 0, MAT.pandaWhite),
+      ellipsoid(2.6, 2.2, 2.2, 15.2, 11.0, 0, MAT.pandaWhite),
+      ellipsoid(3.4, 2.8, 2.2, 9.0, 13.2, 2.55, MAT.pandaBlack),
+      ellipsoid(3.4, 2.8, 2.2, 9.0, 13.2, -2.55, MAT.pandaBlack),
+      ellipsoid(2.6, 3.2, 1.9, 8.0, 17.6, 3.4, MAT.pandaBlack),
+      ellipsoid(2.6, 3.2, 1.9, 8.0, 17.6, -3.4, MAT.pandaBlack),
+      ellipsoid(5.2, 2.8, 5.8, -10.0, 10.6, 0, MAT.pandaWhite),
+      ellipsoid(2.6, 1.6, 1.6, -14.0, 11.2, 0, MAT.pandaBlack)
+    ]).concat(surfaced(SURF.stone, [
+      ellipsoid(5.4, 0.8, 7.2, -0.2, 15.2, 0, 0.90),
+      cyl(1.35, 1.35, 9.2, 6, 2.0, 14.4, 4.2, MAT.bamboo, ROT_Z90),
+      cyl(1.35, 1.35, 9.2, 6, 2.0, 14.4, -4.2, MAT.bamboo, ROT_Z90),
+      cyl(1.00, 1.00, 7.0, 6, 1.2, 15.6, 3.6, MAT.bambooDark, ROT_Z90),
+      cyl(1.00, 1.00, 7.0, 6, 1.2, 15.6, -3.6, MAT.bambooDark, ROT_Z90),
+      box(6.4, 0.9, 10.2, 1.4, 14.0, 0, MAT.bamboo),
+      box(4.6, 0.5, 3.8, 3.6, 15.0, 4.6, MAT.boneIvory),
+      box(4.6, 0.5, 3.8, 3.6, 15.0, -4.6, MAT.boneIvory)
+    ]));
+    [[5.6, 3.4], [5.6, -3.4], [-6.0, 3.4], [-6.0, -3.4]].forEach(function (sock) {
+      body.push(Object.assign(
+        limb(1.85, 1.45, sock[0], 8.0, sock[1], sock[0] + 0.2, 0.7, sock[1], MAT.pandaBlack),
+        { surf: SURF.cloth }));
     });
+    // 抬起的拍击前掌：近战剪影，不是四足贴地走兽。
+    body.push(Object.assign(
+      limb(1.70, 1.35, 6.4, 10.2, 4.2, 12.6, 14.8, 6.4, MAT.pandaBlack),
+      { surf: SURF.cloth }));
+    body.push(Object.assign(
+      ellipsoid(2.4, 1.6, 2.2, 14.2, 15.6, 6.8, MAT.pandaBlack),
+      { surf: SURF.cloth }));
     return {
       body: body,
       glow: [
-        sph(0.38, 5, 10.6, 12.4, 2.15, MAT.spiritFire),
-        sph(0.38, 5, 10.6, 12.4, -2.15, MAT.spiritFire)
+        sph(0.42, 5, 11.4, 13.2, 2.55, MAT.spiritFire),
+        sph(0.42, 5, 11.4, 13.2, -2.55, MAT.spiritFire)
       ]
     };
   },
@@ -2327,29 +2334,30 @@ const UNIT_BUILDERS = {
       [0.0, -5.6], [1.0, -5.6], [0.94, -3.4], [0.72, 1.6],
       [0.80, 4.8], [0.54, 6.0], [0.0, 6.2]
     ];
-    const slingRot = new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.35);
+    const slingRot = new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.55);
     const body = surfaced(SURF.hide, [
       profiledVolume(hideProfile, 2.25, 2.45, 10, 0, 7.7, 0, MAT.hideTan),
-      taperedBox(3.5, 3.7, 3.7, 4.1, 1.9, 0, 7.3, 0, MAT.hideDark),
-      ellipsoid(1.50, 1.72, 1.52, 0.25, 16.4, 0, MAT.sandArmor),
-      torus(1.60, 0.16, 6, 10, 0.2, 17.35, 0, MAT.boneIvory, ROT_X90),
+      taperedBox(3.6, 3.8, 3.8, 4.2, 2.0, 0, 7.4, 0, MAT.hideDark),
+      ellipsoid(1.55, 1.78, 1.56, 0.25, 16.5, 0, MAT.sandArmor),
+      torus(1.68, 0.20, 6, 10, 0.2, 17.5, 0, MAT.boneIvory, ROT_X90),
       limb(0.95, 0.78, -0.2, 7.5, 1.55, 0.55, 4.3, 1.75, MAT.sandArmor),
       limb(0.78, 0.62, 0.55, 4.3, 1.75, 0.05, 1.35, 1.85, MAT.sandArmor),
       limb(0.95, 0.78, -0.2, 7.5, -1.55, -0.45, 4.2, -1.7, MAT.sandArmor),
       limb(0.78, 0.62, -0.45, 4.2, -1.7, 0.25, 1.35, -1.85, MAT.sandArmor),
-      limb(0.88, 0.70, 0.1, 13.1, 2.5, 1.6, 10.7, 2.8, MAT.hideTan),
-      limb(0.70, 0.56, 1.6, 10.7, 2.8, 4.8, 10.2, -1.4, MAT.sandArmor),
-      limb(0.88, 0.70, 0.1, 13.1, -2.5, 1.4, 10.6, -2.6, MAT.hideTan),
-      limb(0.70, 0.56, 1.4, 10.6, -2.6, 3.6, 12.4, -2.4, MAT.sandArmor)
+      limb(0.90, 0.72, 0.1, 13.2, 2.6, 1.8, 11.0, 3.4, MAT.hideTan),
+      limb(0.72, 0.58, 1.8, 11.0, 3.4, 3.2, 9.4, 4.2, MAT.sandArmor),
+      limb(0.90, 0.72, 0.1, 13.2, -2.6, 2.2, 14.6, -3.8, MAT.hideTan),
+      limb(0.72, 0.58, 2.2, 14.6, -3.8, 6.4, 16.8, -3.2, MAT.sandArmor)
     ]).concat(surfaced(SURF.cloth, [
-      ellipsoid(2.9, 0.42, 3.3, -0.2, 12.5, 0, 0.92),
+      ellipsoid(3.1, 0.48, 3.5, -0.2, 12.6, 0, 0.92),
       taperedBox(2.6, 2.2, 2.1, 1.8, 1.1, 0.2, 0.7, 1.85, MAT.hideDark),
       taperedBox(2.6, 2.2, 2.1, 1.8, 1.1, 0.55, 0.7, -1.85, MAT.hideDark)
     ]));
-    body.push(Object.assign(cyl(0.12, 0.12, 7.2, 6, 5.2, 11.2, -2.2, MAT.hideDark, slingRot), { surf: SURF.hide }));
-    body.push(Object.assign(cyl(0.12, 0.12, 4.6, 6, 8.4, 13.6, -2.0, MAT.hideDark, slingRot), { surf: SURF.hide }));
-    body.push(Object.assign(sph(1.15, 8, 10.2, 14.4, -2.0, MAT.earthPack), { surf: SURF.stone }));
-    body.push(Object.assign(sph(0.55, 6, 4.6, 8.6, 2.4, MAT.earthPack), { surf: SURF.stone }));
+    body.push(Object.assign(cyl(0.16, 0.16, 8.4, 6, 5.8, 13.8, -2.8, MAT.hideDark, slingRot), { surf: SURF.hide }));
+    body.push(Object.assign(cyl(0.16, 0.16, 5.6, 6, 9.2, 16.2, -3.0, MAT.hideDark, slingRot), { surf: SURF.hide }));
+    body.push(Object.assign(sph(1.55, 8, 11.6, 17.4, -3.0, MAT.earthPack), { surf: SURF.stone }));
+    body.push(Object.assign(sph(0.85, 6, 4.4, 8.8, 2.6, MAT.earthPack), { surf: SURF.stone }));
+    body.push(Object.assign(sph(0.62, 6, 3.6, 8.4, 3.4, MAT.earthPack), { surf: SURF.stone }));
     return {
       body: body,
       glow: []
@@ -6726,13 +6734,15 @@ export function createRenderer(canvas) {
     }
     if (kind === 'panda') {
       return [
-        box(20, 13, 14, -1, 10, 0, MAT.pandaWhite),
-        box(10, 10, 10, 10, 12, 0, MAT.pandaWhite),
-        box(4, 5, 3.2, 8, 16.4, 2.6, MAT.pandaBlack),
-        box(4, 5, 3.2, 8, 16.4, -2.6, MAT.pandaBlack),
-        box(10, 2.2, 12, 1.2, 15, 0, 0.92),
-        box(12, 1.6, 3.2, 2.4, 14.2, 4.2, MAT.bamboo),
-        box(12, 1.6, 3.2, 2.4, 14.2, -4.2, MAT.bamboo)
+        box(22, 15, 16, -1, 10, 0, MAT.pandaWhite),
+        box(12, 11, 11, 11, 12.4, 0, MAT.pandaWhite),
+        box(5.2, 6.2, 4.0, 8.4, 17.2, 3.2, MAT.pandaBlack),
+        box(5.2, 6.2, 4.0, 8.4, 17.2, -3.2, MAT.pandaBlack),
+        box(6.4, 5.2, 5.0, 8.8, 13.6, 2.8, MAT.pandaBlack),
+        box(6.4, 5.2, 5.0, 8.8, 13.6, -2.8, MAT.pandaBlack),
+        box(11, 2.4, 13, 1.2, 16, 0, 0.92),
+        box(14, 2.0, 3.6, 2.4, 15.0, 5.0, MAT.bamboo),
+        box(14, 2.0, 3.6, 2.4, 15.0, -5.0, MAT.bamboo)
       ];
     }
     if (kind === 'slinger') {
@@ -6740,7 +6750,7 @@ export function createRenderer(canvas) {
         taperedBox(7.2, 5.2, 5.4, 4.1, 8.0, 0.2, 8.1, 0, MAT.hideTan),
         box(5.6, 0.7, 6.4, -0.2, 12.5, 0, 0.92),
         sph(2.4, 6, 0.3, 16.2, 0, MAT.sandArmor),
-        sph(1.4, 6, 8.8, 14.0, -2.0, MAT.earthPack)
+        sph(2.0, 6, 10.4, 16.4, -2.4, MAT.earthPack)
       ];
     }
     if (kind === 'scorpion') {

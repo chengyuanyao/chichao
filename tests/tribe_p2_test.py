@@ -221,9 +221,15 @@ def main():
     panda_u["targetId"] = rifle["id"]
     panda_u["cooldown"] = 0.0
     rifle["hp"] = 10000.0
+    rifle["order"] = "hold"
+    rifle["targetId"] = None
+    rifle["cooldown"] = 99.0
+    rifle["scan"] = 99.0
     server.tick_units(room, 0.05)
-    assert game["projectiles"], "狂暴熊猫应开火"
-    raging_shot = game["projectiles"][-1]
+    panda_shots = [shot for shot in game["projectiles"]
+                   if shot.get("sourceKind") == "panda"]
+    assert panda_shots, "狂暴熊猫应开火"
+    raging_shot = panda_shots[-1]
     assert raging_shot["kind"] == "smash"
     assert abs(raging_shot["damage"] - panda["damage"] * 1.25) < 1e-6
     game["projectiles"] = []
@@ -231,7 +237,10 @@ def main():
     panda_u["rage"] = True
     panda_u["cooldown"] = 0.0
     server.tick_units(room, 0.05)
-    calm_shot = game["projectiles"][-1]
+    calm_shots = [shot for shot in game["projectiles"]
+                  if shot.get("sourceKind") == "panda"]
+    assert calm_shots, "满血熊猫应仍能开火"
+    calm_shot = calm_shots[-1]
     assert abs(calm_shot["damage"] - panda["damage"]) < 1e-6
     print("  迟滞开关 / 开火 ×1.25: PASS")
 

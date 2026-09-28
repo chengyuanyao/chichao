@@ -220,24 +220,37 @@ function loadScenario(options={}) {
       {type:'haze',x:focus.x+210,y:focus.y-6,kind:'tpit'}
     );
   } else if (scenario === 'tribe_p2') {
-    const bruiser = unit('panda', 0, focus.x - 70, focus.y + 8);
+    const solo = query.get('solo');
+    const bruiser = unit('panda', 0, focus.x - (solo ? 0 : 70), focus.y + (solo ? 0 : 8));
     bruiser.dir = 0.28;
     bruiser.hp = Math.round(bruiser.maxHp * 0.32);
     bruiser.rage = true;
-    const thrower = unit('slinger', 0, focus.x + 86, focus.y - 18);
+    const thrower = unit('slinger', 0, focus.x + (solo ? 0 : 86), focus.y - (solo ? 0 : 18));
     thrower.dir = -0.22;
     const prey = unit('rifle', 1, focus.x + 24, focus.y + 36);
     prey.hp = Math.round(prey.maxHp * 0.58);
-    game.units.push(bruiser, thrower, prey);
-    syntheticEffects.push(
-      {type:'muzzle',x:bruiser.x,y:bruiser.y,kind:'smash',entityId:bruiser.id,entityKind:'panda',dir:bruiser.dir},
-      {type:'impact',x:prey.x,y:prey.y,kind:'smash'},
-      {type:'muzzle',x:thrower.x,y:thrower.y,kind:'rock',entityId:thrower.id,entityKind:'slinger',dir:thrower.dir},
-      {type:'impact',x:prey.x + 6,y:prey.y - 8,kind:'rock'}
-    );
-    game.projectiles.push(
-      {id:'q-rock',x:thrower.x-18,y:thrower.y+12,targetX:prey.x,targetY:prey.y,kind:'rock',owner:0,t:0.42}
-    );
+    if (solo === 'panda') game.units.push(bruiser);
+    else if (solo === 'slinger') game.units.push(thrower);
+    else game.units.push(bruiser, thrower, prey);
+    if (solo !== 'slinger') {
+      syntheticEffects.push(
+        {type:'muzzle',x:bruiser.x,y:bruiser.y,kind:'smash',entityId:bruiser.id,entityKind:'panda',dir:bruiser.dir}
+      );
+    }
+    if (solo !== 'panda') {
+      syntheticEffects.push(
+        {type:'muzzle',x:thrower.x,y:thrower.y,kind:'rock',entityId:thrower.id,entityKind:'slinger',dir:thrower.dir}
+      );
+      game.projectiles.push(
+        {id:'q-rock',x:thrower.x-18,y:thrower.y+12,targetX:thrower.x+40,targetY:thrower.y+20,kind:'rock',owner:0,t:0.42}
+      );
+    }
+    if (!solo) {
+      syntheticEffects.push(
+        {type:'impact',x:prey.x,y:prey.y,kind:'smash'},
+        {type:'impact',x:prey.x + 6,y:prey.y - 8,kind:'rock'}
+      );
+    }
   } else if (scenario === 'placement') {
     const kind = query.get('building') || 'turret';
     const definition = catalog.structures[kind];
