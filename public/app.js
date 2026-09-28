@@ -41,8 +41,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     mspring: { icon: '✚', desc: '修复受损构装、巨龙与晶簇；解锁进阶召唤' },
     tpower: { icon: '↟', desc: '提供 120 图腾之力' },
     trefinery: { icon: '◆', desc: '接收驮兽运回的兽骨矿' },
-    tcamp: { icon: '♟', desc: '训练猎手与驯兽师' },
-    tpen: { icon: '▰', desc: '驯养驮兽、战狼、蛛网巨蛛、穿甲巨蝎与猛犸战象' },
+    tcamp: { icon: '♟', desc: '训练骨矛猎手、投石猎手与驯兽师' },
+    tpen: { icon: '▰', desc: '驯养驮兽、战狼、蛛网巨蛛、穿甲巨蝎、竹甲熊猫与猛犸战象' },
     taltar: { icon: '✚', desc: '修复驮兽与迁徙驮队；需围栏与图腾柱' },
     tspiketower: { icon: '↟', desc: '短距骨矛防空，早期基地守卫 · 需营地' },
     ttoxtower: { icon: '☠', desc: '远距毒矢，命中挂毒 · 需血祭坛' },
@@ -85,6 +85,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     spider: { icon: '🕷', desc: '吐丝定身并造成持续毒伤 · 需血祭坛' },
     scorpion: { icon: '🦂', desc: '穿甲尾刺点杀重甲，玻璃大炮 · 需血祭坛' },
     mammoth: { icon: '🐘', desc: '后期重兽前排，短距砸击拆建筑 · 需血祭坛' },
+    panda: { icon: '🐼', desc: '中坚前排，低血狂暴砸击 · 需血祭坛' },
+    slinger: { icon: '◉', desc: '营地中距投石，溅射压步兵' },
     tharvester: { icon: '▣', desc: '自动采集矿石的驮兽' },
     tmcv: { icon: '⬢', desc: '可展开为新的部落大营' }
   };
@@ -331,6 +333,9 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   var P_HIDE = '#b8895a';
   var P_MOSS = '#4a6a38';
   var P_BLOOD = '#8a2020';
+  var P_PANDA_W = '#e8e4d8';
+  var P_PANDA_B = '#1a1816';
+  var P_BAMBOO = '#6a8a38';
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1, mstorm: 1,
@@ -341,6 +346,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     thq: 1, tpower: 1, trefinery: 1, tcamp: 1, tpen: 1, taltar: 1,
     tspiketower: 1, ttoxtower: 1, ttrap: 1, tpit: 1,
     spear: 1, tamer: 1, wolf: 1, spider: 1, scorpion: 1, mammoth: 1,
+    panda: 1, slinger: 1,
     tharvester: 1, tmcv: 1
   };
 
@@ -1333,6 +1339,32 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       pRect(c, 34, 24, 14, 4, P_BLOOD);
       pRect(c, 20, 50, 6, 10, P_BARK);
       pRect(c, 52, 50, 6, 10, P_BARK);
+    },
+    panda: function (c) {
+      // 竹甲熊猫：圆耳黑眼斑 + 肩上竹甲，不要狼或猛犸剪影
+      pShadow(c, 48, 60, 24);
+      pCirc(c, 46, 46, 16, P_PANDA_W);
+      pCirc(c, 62, 36, 11, P_PANDA_W);
+      pCirc(c, 56, 28, 5.2, P_PANDA_B);
+      pCirc(c, 70, 28, 5.2, P_PANDA_B);
+      pCirc(c, 58, 36, 3.6, P_PANDA_B);
+      pCirc(c, 68, 36, 3.6, P_PANDA_B);
+      pCirc(c, 70, 38, 1.3, P_FIRE);
+      pRect(c, 28, 34, 22, 7, P_BAMBOO);
+      pRect(c, 30, 32, 18, 3, P_BONE);
+      pRect(c, 34, 52, 6, 8, P_PANDA_B);
+      pRect(c, 50, 52, 6, 8, P_PANDA_B);
+    },
+    slinger: function (c) {
+      // 投石猎手：兽皮短褂 + 投石索，不要骨矛剪影
+      pBust(c, P_HIDE);
+      pCirc(c, 48, 30, 9.2, P_HIDE);
+      c.strokeStyle = P_BONE; c.lineWidth = 2;
+      c.beginPath(); c.arc(48, 28, 10, Math.PI * 1.05, Math.PI * 1.95); c.stroke();
+      pRect(c, 40, 46, 16, 5, P_BARK);
+      pLine(c, 58, 50, 78, 22, 2.2, P_HIDE);
+      pCirc(c, 78, 20, 5.2, P_STONE);
+      pCirc(c, 76, 18, 1.6, P_BONE);
     },
     scorpion: function (c) {
       // 穿甲巨蝎：螯钳 + 弓起毒尾刺，不要八足蛛或四足狼剪影
@@ -3746,6 +3778,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
         (one.harvestPaused ? '已停止采矿 · ' : '') +
           '载矿 ' + Math.floor(one.cargo) + ' / ' + Math.floor(one.capacity) :
         (one ? '生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) + rankLabel : sameKind ? '同型编队' : '混合编队')));
+      if (one && one.rage) { detail += ' · 狂暴'; }
       var patrols = (roomState.game.patrols || []).filter(function (route) { return selectedUnits.has(route.unitId); });
       if (patrols.length) {
         detail += one ? ' · 巡逻节点 ' + (patrols[0].next + 1) + '/' + patrols[0].points.length
@@ -3772,7 +3805,8 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
         return unit.id + ':' + Math.ceil(unit.hp) + ':' + Math.floor(unit.cargo || 0) + ':' +
           (unit.kills || 0) + ':' + (unit.repairing ? 1 : 0) + ':' +
           (unit.taming ? 1 : 0) + ':' +
-          (unit.harvestPaused ? 1 : 0) + ':' + (unit.tacticalOrder || '');
+          (unit.harvestPaused ? 1 : 0) + ':' + (unit.tacticalOrder || '') + ':' +
+          (unit.rage ? 1 : 0);
       }).join(',') + '|patrol:' + patrols.map(function (route) {
         return route.unitId + ':' + route.next + ':' + route.points.length;
       }).join(',');

@@ -63,6 +63,13 @@ VEHICLE_KINDS = frozenset((
 # 死亡/贴脸引爆的玻璃大炮。钢铁是轻甲载具，秘法会对位是轻甲活体（非载具）。
 SUICIDE_KINDS = frozenset(("bomb_truck", "hexling"))
 
+# 竹甲熊猫低血狂暴：迟滞开关，避免血线附近抖开关。
+# HP/maxHP < 0.40 进入，回升超过 0.60 才解除；期间输出伤害 ×1.25。
+# 这是攻击方自身状态，不是命中挂到目标上的 slow/DoT。
+PANDA_RAGE_ENTER = 0.40
+PANDA_RAGE_EXIT = 0.60
+PANDA_RAGE_DAMAGE = 1.25
+
 UNIT_TYPES = {
     "rifle": {
         "name": "突击兵", "cost": 180, "hp": 110, "speed": 110.4,
@@ -431,6 +438,26 @@ UNIT_TYPES = {
         "projectile": "smash", "projectileSpeed": 1000.0, "splash": 28.0,
         "sight": 380.0, "armor": "beast", "damageType": "smash",
     },
+    # 竹甲熊猫：围栏中坚前排，填战狼↔猛犸空档。血祭坛后才许驯养。
+    # 短距砸击复用 smash（建筑 ×1.50）。低血狂暴见 PANDA_RAGE_*。
+    # 兽甲、非载具、无自爆。
+    "panda": {
+        "name": "竹甲熊猫", "cost": 980, "hp": 860, "speed": 88.0,
+        "damage": 58.0, "range": 42.0, "cooldown": 1.05,
+        "size": 16.0, "build": 9.0, "producer": "tpen",
+        "requires": ["taltar"],
+        "projectile": "smash", "projectileSpeed": 1000.0, "splash": 22.0,
+        "sight": 380.0, "armor": "beast", "damageType": "smash",
+    },
+    # 投石猎手：营地中距步兵，填部落缺的中程火力。营地建成即可训，
+    # 不需血祭坛。投石弹种 rock，伤种复用子弹。轻甲步兵、非载具、无自爆。
+    "slinger": {
+        "name": "投石猎手", "cost": 300, "hp": 100, "speed": 100.0,
+        "damage": 26.0, "range": 185.0, "cooldown": 1.15,
+        "size": 10.5, "build": 4.5, "producer": "tcamp",
+        "projectile": "rock", "projectileSpeed": 420.0, "splash": 18.0,
+        "sight": 390.0, "armor": "infantry", "damageType": "bullet",
+    },
 }
 
 
@@ -676,7 +703,7 @@ TRIBE_STRUCTURES = frozenset((
 ))
 TRIBE_UNITS = frozenset((
     "tharvester", "tmcv", "spear", "tamer", "wolf", "spider", "scorpion",
-    "mammoth",
+    "mammoth", "panda", "slinger",
 ))
 VALID_FACTIONS = frozenset(("tech", "magic", "tribe"))
 

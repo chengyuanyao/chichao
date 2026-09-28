@@ -7,7 +7,7 @@ export const RECOIL = Object.freeze({tank:2.6,scout:1.0,artillery:4.2,tank_destr
 export const MUZZLE_POINTS = Object.freeze({dragon:[31,14],overlord_v2:[17,36],
   mage:[12,9],frost:[12,9],oracle:[13,11],rifle:[12,9],rocket:[8,11],sniper:[15,10],
   tesla:[12,9],prism:[4,32],v3:[1,52],golem:[8,16],behemoth:[10,22],warden:[18,13],colossus:[21,27],comet:[9,27],
-  spider:[10,7],scorpion:[12,16],mammoth:[14,16]});
+  spider:[10,7],scorpion:[12,16],mammoth:[14,16],panda:[12,10],slinger:[10,12]});
 
 export function recoilDistance(kind, age) {
   if (!Number.isFinite(age) || age < 0 || age >= .34) return 0;
@@ -43,7 +43,7 @@ export function weaponFamily(kind) {
   if (['smash'].includes(kind)) return 'melee';
   if (['fireball','meteor','comet','hexling','rune_boulder'].includes(kind)) return 'arcaneHeavy';
   if (['tesla','laser','plasma','plasmalance','storm'].includes(kind)) return 'electric';
-  if (['siege','missile','boulder'].includes(kind)) return 'heavy';
+  if (['siege','missile','boulder','rock'].includes(kind)) return 'heavy';
   if (['shell','ap','rocket'].includes(kind)) return 'cannon';
   if (['bite','claw','dog_arcane'].includes(kind)) return 'melee';
   return 'rifle';
