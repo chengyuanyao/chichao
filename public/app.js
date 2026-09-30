@@ -333,9 +333,9 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   var P_HIDE = '#b8895a';
   var P_MOSS = '#4a6a38';
   var P_BLOOD = '#8a2020';
-  var P_PANDA_W = '#e8e4d8';
-  var P_PANDA_B = '#1a1816';
-  var P_BAMBOO = '#6a8a38';
+  var P_PANDA_W = '#f2f0ea';
+  var P_PANDA_B = '#161412';
+  var P_SASH = '#9a3420';
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1, mstorm: 1,
@@ -1341,19 +1341,25 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       pRect(c, 52, 50, 6, 10, P_BARK);
     },
     panda: function (c) {
-      // 竹甲熊猫：圆耳黑眼斑 + 肩上竹甲，不要狼或猛犸剪影
-      pShadow(c, 48, 60, 24);
-      pCirc(c, 46, 46, 16, P_PANDA_W);
-      pCirc(c, 62, 36, 11, P_PANDA_W);
-      pCirc(c, 56, 28, 5.2, P_PANDA_B);
-      pCirc(c, 70, 28, 5.2, P_PANDA_B);
-      pCirc(c, 58, 36, 3.6, P_PANDA_B);
-      pCirc(c, 68, 36, 3.6, P_PANDA_B);
-      pCirc(c, 70, 38, 1.3, P_FIRE);
-      pRect(c, 28, 34, 22, 7, P_BAMBOO);
-      pRect(c, 30, 32, 18, 3, P_BONE);
-      pRect(c, 34, 52, 6, 8, P_PANDA_B);
-      pRect(c, 50, 52, 6, 8, P_PANDA_B);
+      // 竹甲熊猫：圆耳黑眼斑 + 腰封，功夫熊猫剪影，不要狼或猛犸
+      pShadow(c, 48, 64, 24);
+      pCirc(c, 46, 52, 17, P_PANDA_W);
+      pCirc(c, 54, 30, 13, P_PANDA_W);
+      pCirc(c, 46, 18, 5.4, P_PANDA_B);
+      pCirc(c, 64, 18, 5.4, P_PANDA_B);
+      pCirc(c, 47, 19, 2.1, P_PANDA_W);
+      pCirc(c, 63, 19, 2.1, P_PANDA_W);
+      pCirc(c, 50, 30, 4.6, P_PANDA_B);
+      pCirc(c, 62, 30, 4.6, P_PANDA_B);
+      pCirc(c, 51, 30, 1.35, P_FIRE);
+      pCirc(c, 61, 30, 1.35, P_FIRE);
+      pCirc(c, 56, 36, 1.8, P_PANDA_B);
+      pRect(c, 30, 50, 32, 6, P_SASH);
+      pRect(c, 32, 49, 28, 2, P_THATCH);
+      pCirc(c, 38, 64, 6.2, P_PANDA_B);
+      pCirc(c, 54, 64, 6.2, P_PANDA_B);
+      pLine(c, 60, 44, 72, 30, 5.6, P_PANDA_B);
+      pCirc(c, 74, 26, 5.4, P_PANDA_B);
     },
     slinger: function (c) {
       // 投石猎手：兽皮短褂 + 投石索，不要骨矛剪影

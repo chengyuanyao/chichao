@@ -774,7 +774,10 @@ def main():
     assert "竹甲熊猫" in readme
     assert "投石猎手" in hud
     assert "投石猎手" in readme
-    assert "竹甲熊猫：圆滚黑白兽 + 肩上竹甲" in render
+    assert "竹甲熊猫：圆滚黑白功夫熊猫，软肚 + 眼斑 + 腰封" in render
+    assert "肩上竹甲" not in render
+    assert "MAT.sashRust" in render
+    assert "圆耳黑眼斑 + 腰封，功夫熊猫剪影" in app
     assert "投石猎手：兽皮短褂 + 骨环 + 投石索" in render
     assert "look: 'rock'" in render
     assert "panda: 1.72" in render
