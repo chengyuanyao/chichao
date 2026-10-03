@@ -87,7 +87,7 @@ export function oreReserveTier(amount) {
  * -1 表示「跟随材质默认」，老零件不写这个字段就是这个值。
  */
 const SURF = Object.freeze({
-  metal: 0, stone: 1, cloth: 2, hide: 3, crystal: 4
+  metal: 0, stone: 1, cloth: 2, hide: 3, fur: 3.25, crystal: 4
 });
 
 /** 给一批零件打上表面通道，返回原数组，方便直接拼进 body 列表。 */
@@ -636,7 +636,7 @@ const MAGIC_UNIT_KINDS = {
 const CLOTH_UNIT_KINDS = {
   rifle: 1, rocket: 1, sniper: 1, tesla: 1,
   mage: 1, frost: 1, oracle: 1,
-  spear: 1, tamer: 1, slinger: 1
+  spear: 1, tamer: 1, slinger: 1, javelin: 1
 };
 // 巨龙从兽皮改成金属：奥德赛那版是硬表面构装体，皮毛粗糙度会把甲板和铬边
 // 一起照哑，硬表面的折角就读不出来了。
@@ -644,7 +644,7 @@ const HIDE_UNIT_KINDS = { dog: 1, panther: 1, wolf: 1, spider: 1, scorpion: 1, m
 
 function unitSurfaceFamily(kind) {
   if (CLOTH_UNIT_KINDS[kind]) return 'cloth';
-  if (HIDE_UNIT_KINDS[kind] || kind === 'tharvester' || kind === 'tmcv') return 'hide';
+  if (HIDE_UNIT_KINDS[kind] || kind === 'tharvester' || kind === 'tmcv' || kind === 'catapult') return 'hide';
   if (MAGIC_UNIT_KINDS[kind]) return 'stone';
   return 'metal';
 }
@@ -2396,6 +2396,47 @@ const UNIT_BUILDERS = {
     };
   },
 
+  javelin: function () {
+    // 燧石标枪手：后举长标枪、肩后三支短枪、前指左臂与骨环头箍。
+    const body = surfaced(SURF.stone, [
+      ellipsoid(2.2, 4.8, 2.8, 0, 10, 0, MAT.hideTan),
+      sph(2, 10, 0, 17, 0, MAT.sandArmor),
+      torus(2.05, .18, 6, 10, 0, 17.5, 0, MAT.boneIvory, ROT_X90),
+      limb(.9, .65, 0, 7, 1.8, 1, 1.2, 1.8, MAT.hideDark),
+      limb(.9, .65, 0, 7, -1.8, -1, 1.2, -1.8, MAT.hideDark),
+      limb(.9, .65, 0, 13, 2.5, 7, 13, 2.5, MAT.sandArmor),
+      limb(.9, .65, 0, 13, -2.5, -4, 18, -2.5, MAT.sandArmor),
+      limb(.25, .2, -8, 20, -2.5, 7, 22, -2.5, MAT.bark),
+      pyr(.65, 2.8, 5, 8, 22, -2.5, MAT.boneIvory, ROT_Z90)
+    ]);
+    body.push(Object.assign(box(5, 2.5, 6.2, 0, 7.2, 0, .90), {surf: SURF.cloth}));
+    for (let i = 0; i < 3; i++) {
+      body.push(limb(.18, .18, -2, 8, i - 1, -3, 20 + i, i - 1, MAT.bark));
+      body.push(pyr(.4, 1.4, 4, -3, 21 + i, i - 1, .90));
+    }
+    return {body, glow: []};
+  },
+
+  catapult: function () {
+    // 巨石投石车：两只实心木轮、A 字框、扭绳束、抛臂与皮兜巨石。
+    const body = surfaced(SURF.stone, [
+      box(30, 3, 17, -2, 7, 0, MAT.bark),
+      cyl(4, 4, 3, 12, 0, 4.5, 10, MAT.barkLit, ROT_X90),
+      cyl(4, 4, 3, 12, 0, 4.5, -10, MAT.barkLit, ROT_X90),
+      cyl(1.3, 1.3, 24, 8, 0, 4.5, 0, MAT.boneIvory, ROT_X90),
+      limb(1.4, 1.1, -10, 8, 7, 0, 24, 7, MAT.bark),
+      limb(1.4, 1.1, 10, 8, 7, 0, 24, 7, MAT.bark),
+      limb(1.4, 1.1, -10, 8, -7, 0, 24, -7, MAT.bark),
+      limb(1.4, 1.1, 10, 8, -7, 0, 24, -7, MAT.bark),
+      cyl(2, 2, 16, 8, 0, 16, 0, MAT.hideTan, ROT_X90),
+      limb(1.4, 1, 6, 10, 0, -4, 34, 0, MAT.barkLit),
+      ellipsoid(4.5, 3.8, 4, -4, 34, 0, [.46,.42,.34])
+    ]);
+    body.push(Object.assign(box(8, 1, 9, -4, 30, 0, .90), {surf: SURF.cloth}));
+    body.push(Object.assign(box(7, 5, .5, 3, 25, 7.5, .90), {surf: SURF.cloth}));
+    return {body, glow: []};
+  },
+
   tharvester: function () {
     // 驮兽：有角驮畜 + 两侧筐，有机轮廓，不是轮式矿车。
     const body = surfaced(SURF.hide, [
@@ -3363,7 +3404,7 @@ function structureGeometries(kind, size, artSample = false) {
   const key = kind + ':' + size + (artSample ? ':river-art' : '');
   let entry = STRUCTURE_GEOMETRY_CACHE.get(key);
   if (entry) return entry;
-  const authored = artSample ? riverStructureDetails(kind,size,{box,cyl,MAT,ROT_Z90}) : [];
+  const authored = artSample ? riverStructureDetails(kind,size,{box,cyl,sph,ellipsoid,limb,pyr,torus,MAT,SURF,ROT_X90,ROT_Z90}) : [];
   const parts = authored.length ? authored : structureParts(kind, size);
   // 三个通道全部并进一个几何体：HULL 现在带固有色、GLOW 的顶点系数 > 1，
   // 着色器靠 aTeam 与色值量级就能区分，不再需要分材质。一座建筑因此只占
@@ -3652,6 +3693,10 @@ function resolveTerrainDetail(map, terrain) {
 // 硬切低模：InstancedMesh 的绘制调用本来就按兵种合批，数量阈值只会造成
 // 模型突然一起变成盒子，却没有省下任何 draw call。
 const UNIT_LOD_DISTANCE = 900;
+// 带号令光环的完整场景超出批次预算：中景合并静止关节，近景保留完整动画。
+function unitDetailLevel(pool,simpleKind,camDist) {
+  return simpleKind?'simple':pool.staticBody&&camDist>600?'staticBody':'mesh';
+}
 // 巨龙和高阶天启的轮廓在普通单位已很小时仍占几十像素，延后一级简化。
 const HERO_LOD_DISTANCE = UNIT_LOD_DISTANCE * 1.5;
 // 渲染出来的通道比碰撞尺寸长这么多倍，用来跨过做了抖动加宽的林带
@@ -3675,7 +3720,8 @@ const UNIT_VISUAL_SCALE = {
   warden: 1.55, colossus: 1.38, comet: 1.28, hexling: 2.05,
   mharvester: 1.16, mmcv: 1.30,
   spear: 2.15, tamer: 2.15, slinger: 2.15, wolf: 1.85, spider: 1.72, scorpion: 1.82,
-  mammoth: 1.62, panda: 1.72, tharvester: 1.16, tmcv: 1.30
+  mammoth: 1.62, panda: 1.72, tharvester: 1.16, tmcv: 1.30,
+  javelin: 2.15, catapult: 1.28
 };
 
 /* 共享的哈希值噪声：天空的云、水面的泡沫、地形的细节法线都用同一套，
@@ -6709,6 +6755,17 @@ export function createRenderer(canvas) {
       ], 1.20, 1.20, 1.20);
     }
     /* ---- 原始部落 LOD：兽皮短褂、羽披、狼身、驮畜、篷车 ---- */
+    if (kind === 'javelin') {
+      return [box(5, 9, 6, 0, 9, 0, MAT.hideTan), box(4, 4, 4, 0, 17, 0, MAT.sandArmor),
+        box(5.5, 2, 6.5, 0, 6, 0, .90), box(17, .6, .6, -2, 21, -3, MAT.boneIvory),
+        box(1.5, 12, 3, -3, 15, 0, MAT.bark)];
+    }
+    if (kind === 'catapult') {
+      return [box(30, 4, 18, 0, 7, 0, MAT.bark), box(8, 8, 3, 0, 4, 10, MAT.barkLit),
+        box(8, 8, 3, 0, 4, -10, MAT.barkLit), box(3, 19, 15, 0, 17, 0, MAT.bark),
+        box(3, 24, 3, -4, 23, 0, MAT.barkLit), box(8, 6, 8, -4, 35, 0, [.46,.42,.34]),
+        box(8, 4, .6, 3, 26, 8, .90)];
+    }
     if (kind === 'spear') {
       return [
         taperedBox(7.0, 5.0, 5.2, 4.0, 8.0, 0.2, 8.0, 0, MAT.hideTan),
@@ -6832,7 +6889,7 @@ export function createRenderer(canvas) {
     const builder = UNIT_BUILDERS[kind] || UNIT_BUILDERS.rifle;
     const base = builder();
     const parts = artSample ? riverUnitModel(kind,base,
-      {box,cyl,sph,ellipsoid,limb,trackedHull,recoiling,MAT,ROT_Z90,ROT_X90}) : base;
+      {box,cyl,sph,ellipsoid,limb,trackedHull,recoiling,pyr,torus,taperedBox,profiledVolume,MAT,SURF,ROT_Z90,ROT_X90}) : base;
     // 所有兵种近景在首次缓存时烘焙关节/甲片间的遮蔽；后续实例直接共享 aOcc，
     // 不进入每帧渲染或服务端模拟。远景不支付烘焙成本。
     // 肩轴为原点的天启手臂、巨龙核球等独立挂件仍在各自工厂中普通合并，
@@ -6847,6 +6904,15 @@ export function createRenderer(canvas) {
     };
     if (barrels.length) entry.barrel = mergeParts(barrels, { occlusion: true });
     if (parts.rigs) entry.rigs = parts.rigs.map(rig => ({...rig,geometry:mergeParts(rig.parts)}));
+    if(parts.tribe && parts.rigs) {
+      const staticParts=allParts.slice();
+      for(const rig of parts.rigs) {
+        if(rig.mode==='strike') continue;
+        for(const p of rig.parts) staticParts.push({...p,matrix:
+          new THREE.Matrix4().makeTranslation(...rig.pivot).multiply(p.matrix)});
+      }
+      entry.staticBody=mergeParts(staticParts,{occlusion:true});
+    }
     UNIT_GEOMETRY_CACHE.set(cacheKey, entry);
     return entry;
   }
@@ -6871,6 +6937,8 @@ export function createRenderer(canvas) {
       feedback.setUsage(THREE.DynamicDrawUsage);
       geometry.setAttribute('aFeedback', feedback);
       const mesh = new THREE.InstancedMesh(geometry, material, capacity);
+      // 未进入当前景别的池也会参与预热，先建立队色属性以复用同一着色器。
+      mesh.setColorAt(0,new THREE.Color(0xffffff));
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.castShadow = casts && state.shadows === 'all';
       mesh.receiveShadow = state.shadows !== 'off';
@@ -6891,7 +6959,7 @@ export function createRenderer(canvas) {
       pool[key] = mesh;
     };
     let unitMaterial = CLOTH_UNIT_KINDS[kind] ? unitClothMaterial :
-      (HIDE_UNIT_KINDS[kind] || kind === 'tharvester' || kind === 'tmcv' ? unitHideMaterial :
+      (HIDE_UNIT_KINDS[kind] || kind === 'tharvester' || kind === 'tmcv' || kind === 'catapult' ? unitHideMaterial :
         (MAGIC_UNIT_KINDS[kind] ? unitStoneMaterial : unitMetalMaterial));
     const originalMaterial=unitMaterial;
     if(state.artSample) {
@@ -6900,6 +6968,7 @@ export function createRenderer(canvas) {
       unitMaterial=riverUnitMaterials.get(family);
     }
     build('mesh', geo.body, unitMaterial, true);
+    build('staticBody', geo.staticBody, unitMaterial, true);
     build('simple', geo.simple, originalMaterial, false);
     build('barrel', geo.barrel, unitMaterial, true);
     for(let i=0;i<Math.max(pool.rigs?.length||0,geo.rigs?.length||0);i++) {
@@ -7340,6 +7409,8 @@ export function createRenderer(canvas) {
     // 猛犸砸击：近距尘爆，几乎不飞
     smash: { len: 10, thick: 2.4, color: 0xc4a070, arc: 4, look: 'smash' },
     // 投石：营地猎手抛出的卵石，中弧，不是傀儡巨石
+    javelin: { len: 22, thick: 0.9, color: 0xc89a5a, arc: 26, look: 'javelin' },
+    megalith: { len: 14, thick: 4.2, color: 0x9a8a70, arc: 150, look: 'megalith' },
     rock: { len: 12, thick: 2.0, color: 0x9a8a6a, arc: 36, look: 'rock' }
   };
 
@@ -7721,7 +7792,7 @@ export function createRenderer(canvas) {
       p.floor = baseY + 1.5;
       if (metadata && metadata.height != null && type === 'muzzle' && relativeHeight>=9) {
         const authored=kind==='plasmalance'?30:kind==='plasma'?20:kind==='fireball'?18:
-          kind==='comet'?22:kind==='rune_boulder'?18:['meteor','arcane','frost','crystal','iris','boulder','web','sting','spike','dart','rock'].includes(kind)?16:11;
+          kind==='comet'?22:kind==='rune_boulder'?18:['meteor','arcane','frost','crystal','iris','boulder','web','sting','spike','dart','rock','javelin','megalith'].includes(kind)?16:11;
         p.y += metadata.height-authored;
       }
       if (layer === smokeLayer && p.opacity == null) p.opacity = .48;
@@ -8350,7 +8421,7 @@ export function createRenderer(canvas) {
           life: 0.14, maxLife: 0.14, r: 0.7, g: 1.15, b: 1.25
         });
       } else {
-        const heavy=kind==='siege'||kind==='missile'||kind==='boulder';
+        const heavy=kind==='siege'||kind==='missile'||kind==='boulder'||kind==='megalith';
         const light=kind==='bullet'||kind==='sniper'||kind==='bite'||kind==='claw';
         burst(fireLayer, heavy?10:(light?3:6), function () {
           const a = rand() * TAU;
@@ -8709,11 +8780,15 @@ export function createRenderer(canvas) {
     depthWrite:false,side:THREE.DoubleSide,toneMapped:false});
   const riverOwnerMaterial=markerMaterial.clone();
   riverOwnerMaterial.opacity=.30;
-  let ownerMarks=null,dangerMarks=null;
-  function markerMesh(existing,geo,needed) {
+  const huntMarkGeo=mergeParts([-1,0,1].map(i=>({
+    geo:new THREE.PlaneGeometry(.12,1.1,1,2).rotateX(-Math.PI/2).rotateY(-.38).translate(i*.35,0,0),shade:1})));
+  const commandAuraGeo=mergeParts([{geo:new THREE.RingGeometry(.985,1,64).rotateX(-Math.PI/2),shade:1}]);
+  const commandAuraMaterial=markerMaterial.clone();commandAuraMaterial.opacity=.20;
+  let ownerMarks=null,dangerMarks=null,huntMarks=null,commandAuras=null;
+  function markerMesh(existing,geo,needed,maxCount=Infinity) {
     if(existing && existing.instanceMatrix.count>=needed) return existing;
     if(existing) {worldRoot.remove(existing);existing.dispose();}
-    const mesh=new THREE.InstancedMesh(geo,markerMaterial,Math.max(32,Math.ceil(needed*1.4)));
+    const mesh=new THREE.InstancedMesh(geo,markerMaterial,Math.min(maxCount,Math.max(32,Math.ceil(needed*1.4))));
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.count=0;
     worldRoot.add(mesh);return mesh;
   }
@@ -8721,7 +8796,10 @@ export function createRenderer(canvas) {
     ownerMarks=markerMesh(ownerMarks,ownerMarkGeo,state.renderedUnits);
     ownerMarks.material=state.artSample?riverOwnerMaterial:markerMaterial;
     dangerMarks=markerMesh(dangerMarks,dangerMarkGeo,Math.min(128,state.renderedUnits));
-    let count=0,dangers=0;
+    huntMarks=markerMesh(huntMarks,huntMarkGeo,128,128);
+    commandAuras=markerMesh(commandAuras,commandAuraGeo,32,32);
+    commandAuras.material=commandAuraMaterial;
+    let count=0,dangers=0,markedCount=0,auraCount=0;
     function mark(x,y,height,r,color) {
       matrix.compose(vecPos.set(x,height+2,y),quatIdentity,vecScale.set(r,1,r));
       ownerMarks.setMatrixAt(count,matrix);tmpColor.set(color);ownerMarks.setColorAt(count++,tmpColor);
@@ -8730,6 +8808,20 @@ export function createRenderer(canvas) {
       if(!vis.inRenderRange) continue;
       const u=vis.unit,r=u.size*1.1+2,gy=vis.groundY??groundHeight(vis.x,vis.y);
       mark(vis.x,vis.y,gy,r,colorOf(u.owner));
+      if(u.marked && markedCount<128) {
+        const size=u.size*1.25+2;
+        matrix.compose(vecPos.set(vis.x,gy+2.6,vis.y),quatIdentity,vecScale.set(size,1,size));
+        huntMarks.setMatrixAt(markedCount,matrix);
+        const pulse=.86+.14*Math.sin(time*.002);
+        tmpColor.setRGB(pulse,.42*pulse,.12*pulse);
+        huntMarks.setColorAt(markedCount++,tmpColor);
+      }
+      const auraRadius=Number((state.catalog?.units?.[u.kind]||{}).commandAuraRadius)||0;
+      if(auraRadius>0 && auraCount<32) {
+        matrix.compose(vecPos.set(vis.x,gy+2.1,vis.y),quatIdentity,vecScale.set(auraRadius,1,auraRadius));
+        commandAuras.setMatrixAt(auraCount,matrix);tmpColor.set(colorOf(u.owner));
+        commandAuras.setColorAt(auraCount++,tmpColor);
+      }
       // Amber broken triangles signify explosive cargo, not an attack radius.
       if((u.kind==='bomb_truck'||u.kind==='hexling')&&dangers<128) {
         const size=r*(1.45+.08*Math.sin(time*.007));
@@ -8740,7 +8832,7 @@ export function createRenderer(canvas) {
     }
     // Buildings retain owner paint on their models, not permanent ground arcs.
     // The selectedStructureId path below draws the sole building selection ring.
-    for(const [mesh,n] of [[ownerMarks,count],[dangerMarks,dangers]]) {
+    for(const [mesh,n] of [[ownerMarks,count],[dangerMarks,dangers],[huntMarks,markedCount],[commandAuras,auraCount]]) {
       mesh.count=n;mesh.visible=n>0;
       if(n) {mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;}
     }
@@ -8934,7 +9026,7 @@ export function createRenderer(canvas) {
     const units = new Map(game.units.filter(u => u.hp > 0 &&
       (unitOwner == null || u.owner === unitOwner)).map(u => [u.id, u]));
     unitPools.forEach(pool => {
-      for (const mesh of [pool.mesh, pool.simple, pool.barrel].concat((pool.rigs||[]).map((_,i)=>pool['rig'+i]))) {
+      for (const mesh of [pool.mesh, pool.simple, pool.barrel, pool.staticBody].concat((pool.rigs||[]).map((_,i)=>pool['rig'+i]))) {
         if (mesh) modelPicker.addInstances(mesh, i => units.get(mesh.userData.instanceIds[i]));
       }
     });
@@ -9056,7 +9148,12 @@ export function createRenderer(canvas) {
 
   function emitProjectileTrail(look, x, height, y) {
     if (fireLayer.list.length > state.particleBudget * 0.62) return;
-    if (look === 'fireball') {
+    if (look === 'javelin' || look === 'megalith') {
+      const stone=look==='megalith';
+      emit(fireLayer,{x,y:height,z:y,vx:0,vy:stone?-6:2,vz:0,
+        life:.24,maxLife:.24,size:stone?5:1.5,opacity:stone?.28:.35,
+        r:.70,g:.52,b:.30});
+    } else if (look === 'fireball') {
       // 龙息拖尾：紫主 + 青副，和 MAT.odyCore / MAT.odySeam 同一色相
       emit(fireLayer, {
         x: x + (Math.random() - 0.5) * 5, y: height, z: y + (Math.random() - 0.5) * 5,
@@ -9363,10 +9460,10 @@ export function createRenderer(canvas) {
 
   function emitStatusAura(vis, dt) {
     const unit = vis.unit;
-    if (!unit || (!unit.rooted && !unit.dot && !unit.rage)) return;
+    if (!unit || (!unit.rooted && !unit.dot && !unit.rage && !(unit.rootResist&&unit.slow) && !unit.repairing)) return;
     if (fireLayer.list.length > state.particleBudget * 0.62) return;
     const gy = vis.groundY == null ? groundHeight(vis.x, vis.y) : vis.groundY;
-    if (unit.rooted && Math.random() < dt * 7) {
+    if ((unit.rooted || (unit.rootResist && unit.slow)) && Math.random() < dt * 7) {
       const a = Math.random() * TAU;
       const r = (unit.size || 12) * 0.9 + Math.random() * 6;
       emit(fireLayer, {
@@ -9375,8 +9472,14 @@ export function createRenderer(canvas) {
         z: vis.y + Math.sin(a) * r,
         vx: -Math.cos(a) * 4, vy: 5 + Math.random() * 6, vz: -Math.sin(a) * 4,
         life: 0.42, maxLife: 0.42, size: 2.6 + Math.random() * 2.2,
-        r: 1.7, g: 1.42, b: 0.78
+        r: unit.rootResist?1.3:1.7, g: unit.rootResist?1.3:1.42, b: unit.rootResist?1.4:.78
       });
+    }
+    if(unit.repairing && (state.catalog?.units?.[unit.kind]||{}).faction==='tribe' && Math.random()<dt*6) {
+      const life=Math.random()<.18;
+      emit(fireLayer,{x:vis.x+(Math.random()-.5)*12,y:gy+2,z:vis.y+(Math.random()-.5)*12,
+        vx:0,vy:16,vz:0,life:.55,maxLife:.55,size:2.5,
+        r:life?.4:1.8,g:life?1.5:.8,b:life?.4:.2});
     }
     if (unit.dot && Math.random() < dt * 5) {
       emit(fireLayer, {
@@ -9593,6 +9696,7 @@ export function createRenderer(canvas) {
     // visible=false，projectObject 在遍历阶段就跳过，这些全部不付。
     unitPools.forEach(function (pool) {
       if (pool.mesh) { pool.mesh.count = 0; pool.mesh.visible = false; }
+      if (pool.staticBody) { pool.staticBody.count = 0; pool.staticBody.visible = false; }
       if (pool.simple) { pool.simple.count = 0; pool.simple.visible = false; }
       if (pool.barrel) { pool.barrel.count = 0; pool.barrel.visible = false; }
       (pool.rigs||[]).forEach((_,i)=>{pool['rig'+i].count=0;pool['rig'+i].visible=false;});
@@ -9604,7 +9708,9 @@ export function createRenderer(canvas) {
       const hero = kind === 'dragon' || kind === 'behemoth'
         || kind === 'overlord_v1' || kind === 'overlord_v2';
       const simpleKind = state.lod && camDist > (hero ? HERO_LOD_DISTANCE : UNIT_LOD_DISTANCE);
-      const mesh = simpleKind ? pool.simple : pool.mesh;
+      const detailLevel=unitDetailLevel(pool,simpleKind,camDist);
+      const staticKind=detailLevel==='staticBody';
+      const mesh = pool[detailLevel];
       const scale = UNIT_VISUAL_SCALE[kind] || 1;
       vecScale.set(scale, scale, scale);
       const ids = mesh.userData.instanceIds;
@@ -9612,6 +9718,7 @@ export function createRenderer(canvas) {
       const ys = mesh.userData.instanceY;
       const dirs = mesh.userData.instanceDir;
       const colors = mesh.userData.instanceColors;
+      const transformVersions=mesh.userData.transformVersions||(mesh.userData.transformVersions=[]);
       let matrixDirty = false;
       let colorDirty = false;
       let feedbackDirty = false;
@@ -9648,6 +9755,7 @@ export function createRenderer(canvas) {
             vis.lastRenderPitch=vis.artPitch||0;
           }
           mesh.setMatrixAt(i, matrix);
+          transformVersions[i]=(transformVersions[i]||0)+1;
           ids[i] = vis.unit.id;
           xs[i] = vis.x;
           ys[i] = vis.y;
@@ -9687,17 +9795,25 @@ export function createRenderer(canvas) {
       mesh.castShadow = doShadows && !simpleKind;
       mesh.receiveShadow = doContactShadows && !simpleKind;
       if(!simpleKind) (pool.rigs||[]).forEach((rig,j)=>{
+        if(staticKind && rig.mode!=='strike') return;
         const rigMesh=pool['rig'+j];
-        let rigColorDirty=false,rigFeedbackDirty=false;
+        let rigColorDirty=false,rigFeedbackDirty=false,rigMatrixDirty=false;
         for(let i=0;i<list.length;i++) {
           const vis=list[i];
-          // 直接继承主模型矩阵：悬浮、俯仰和转弯倾斜不能把翼根撕开。
-          mesh.getMatrixAt(i,matrix);
-          artLocal.makeTranslation(...rig.pivot);matrix.multiply(artLocal);
           const angle=kind==='dragon'?rig.side*vis.flightWing:
-            artJointAngle(rig,payload.time,vis.artTravel||0,vis.artMotion||0);
-          if(rig.axis==='x') artLocal.makeRotationX(angle);else artLocal.makeRotationZ(angle);
-          matrix.multiply(artLocal);rigMesh.setMatrixAt(i,matrix);
+            artJointAngle(rig,payload.time,vis.artTravel||0,vis.artMotion||0,(payload.time-(vis.firedAt??-Infinity))/1000);
+          const rigVersions=rigMesh.userData.rigVersions||(rigMesh.userData.rigVersions=[]);
+          const previous=rigVersions[i],version=transformVersions[i]||0;
+          if(!previous||previous.id!==vis.unit.id||previous.version!==version||Math.abs(previous.angle-angle)>.0001) {
+            // 直接继承主模型矩阵，主体变换与关节角都未变时跳过写入。
+            mesh.getMatrixAt(i,matrix);
+            artLocal.makeTranslation(...rig.pivot);matrix.multiply(artLocal);
+            if(rig.axis==='x') artLocal.makeRotationX(angle);
+            else if(rig.axis==='y') artLocal.makeRotationY(angle);
+            else artLocal.makeRotationZ(angle);
+            matrix.multiply(artLocal);rigMesh.setMatrixAt(i,matrix);rigMatrixDirty=true;
+            rigVersions[i]={id:vis.unit.id,angle,version};
+          }
           rigMesh.userData.instanceIds[i]=vis.unit.id;
           const color=colorOf(vis.unit.owner);
           if(rigMesh.userData.instanceColors[i]!==color) {
@@ -9709,9 +9825,9 @@ export function createRenderer(canvas) {
             attr.setXYZW(i,0,0,vis.hitFlash,vis.condition);rigFeedbackDirty=true;
           }
         }
-        rigMesh.count=list.length;rigMesh.visible=list.length>0;rigMesh.castShadow=doShadows;
+        rigMesh.count=list.length;rigMesh.visible=list.length>0;rigMesh.castShadow=doShadows&&!pool.staticBody;
         rigMesh.receiveShadow=doContactShadows;
-        rigMesh.instanceMatrix.needsUpdate=true;
+        if(rigMatrixDirty) rigMesh.instanceMatrix.needsUpdate=true;
         if(rigColorDirty) rigMesh.instanceColor.needsUpdate=true;
         if(rigFeedbackDirty) rigMesh.geometry.attributes.aFeedback.needsUpdate=true;
       });
@@ -10085,6 +10201,16 @@ export function createRenderer(canvas) {
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
             style.len * 1.12, style.thick * 2.3, style.thick * 2.3, 0xd6a6ff);
           writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 2.3, 2.3, 2.3, 0xf0e8ff);
+        } else if (look === 'javelin') {
+          writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw, style.len, .9, .9, style.color);
+          writeTracer(shards, shardCount++, p.x + Math.cos(yaw)*10, height,
+            p.y + Math.sin(yaw)*10, yaw, 4.2, 1.3, 1.3, 0xd8c6a2);
+          writeTracer(orbs, orbCount++, p.x - Math.cos(yaw)*10, height,
+            p.y - Math.sin(yaw)*10, yaw, 2, 1.4, 1.4, colorOf(p.owner));
+        } else if (look === 'megalith') {
+          writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 7, 6, 6, style.color);
+          writeTracer(orbs, orbCount++, p.x - Math.cos(yaw)*6, height - 1,
+            p.y - Math.sin(yaw)*6, yaw, 8, 3, 3, 0xb5a48a);
         } else if (look === 'web') {
           writeTracer(orbs, orbCount++, p.x, height, p.y, yaw, 3.4, 3.4, 3.4, 0xf2e6c4);
           writeTracer(tracers, tracerCount++, p.x, height, p.y, yaw,
@@ -10383,6 +10509,7 @@ export function createRenderer(canvas) {
     return shaderWarmup;
   }
   function prepareAssets(catalog) {
+    state.catalog=catalog;
     const tasks=[];
     for(const sample of [false,true]) {
       let root=warmRoots[Number(sample)];
@@ -10397,6 +10524,7 @@ export function createRenderer(canvas) {
           const family=unitSurfaceFamily(kind);
           const material=warmMaterial(family,sample);
           warmMesh(root,geo.body,material,true);
+          warmMesh(root,geo.staticBody,material,true);
           warmMesh(root,geo.simple,warmMaterial(family,false),true);
           warmMesh(root,geo.barrel,material,true);
           for(const rig of geo.rigs||[]) warmMesh(root,rig.geometry,material,true);
@@ -10595,6 +10723,7 @@ export function createRenderer(canvas) {
       oreMeshes.forEach(function (cluster) { if (cluster.visible) visibleOre++; });
       unitPools.forEach(function (pool) {
         if (pool.mesh) detailedUnits += pool.mesh.count;
+        if (pool.staticBody) detailedUnits += pool.staticBody.count;
         if (pool.simple) lodUnits += pool.simple.count;
       });
       instanced = detailedUnits + lodUnits;
@@ -10683,6 +10812,8 @@ export function createRenderer(canvas) {
       trackUpdateAge=0;
       if(ownerMarks) {ownerMarks.count=0;ownerMarks.visible=false;}
       if(dangerMarks) {dangerMarks.count=0;dangerMarks.visible=false;}
+      if(huntMarks) {huntMarks.count=0;huntMarks.visible=false;}
+      if(commandAuras) {commandAuras.count=0;commandAuras.visible=false;}
       for(const flash of flashPool) {flash.life=0;flash.light.visible=false;flash.light.intensity=0;}
       projectileHintPrev = [];
       if (tracerMesh) tracerMesh.count = 0;
@@ -10693,6 +10824,7 @@ export function createRenderer(canvas) {
       ids.forEach(disposeStructure);
       unitPools.forEach(function (pool) {
         if (pool.mesh) pool.mesh.count = 0;
+        if (pool.staticBody) {pool.staticBody.count=0;pool.staticBody.visible=false;}
         if (pool.simple) pool.simple.count = 0;
         if (pool.barrel) {pool.barrel.count=0;pool.barrel.visible=false;}
         (pool.rigs||[]).forEach((_,i)=>{pool['rig'+i].count=0;pool['rig'+i].visible=false;});

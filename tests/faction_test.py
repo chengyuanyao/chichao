@@ -4,7 +4,7 @@
    1) 出生配置按阵营分叉（独立经济：主堡/法力塔/精炼所/浮游晶簇）
    2) 阵营门槛：跨阵营不能建造/生产
    3) 克制矩阵：magic 熔重甲、tesla 干扰魔导甲（×1.6）
-   4) 冰霜减速：命中挂 slow，到期恢复
+   4) 冰霜减速：命中挂 slow，到期恢复；已定身目标被冰霜命中仍定身
    5) 基地车展开/折叠的阵营映射（mmcv <-> mhq）
    6) 独立经济：浮游晶簇把水晶运回精炼所结算资金
    7) 魔法 AI：按 role 决策，只建/产本阵营（圣殿/法阵/法师/傀儡…）
@@ -161,6 +161,19 @@ def main():
     full_step = tank2["x"] - x1
     assert slowed_step < full_step * 0.6, (slowed_step, full_step)
     print("  挂减速后位移≈45%%（%.2f vs %.2f）: PASS" % (slowed_step, full_step))
+    # 控制规则 H：冰霜 0.45 弱于定身，命中已定身目标被忽略，不替对手解定身
+    frost_slow = server.UNIT_TYPES["frost"]["slow"]
+    web = server.UNIT_TYPES["spider"]["slow"]
+    assert web["mult"] == 0.0, web
+    rooted = server.make_unit("tank", b["id"], 9000, 9000)
+    game["units"].append(rooted)
+    server.apply_slow({"slow": web}, rooted)
+    assert rooted["slowMult"] == 0.0 and abs(rooted["slowTimer"] - web["duration"]) < 1e-9
+    server.apply_slow({"slow": frost_slow}, rooted)
+    assert rooted["slowMult"] == 0.0, rooted["slowMult"]
+    assert abs(rooted["slowTimer"] - web["duration"]) < 1e-9, rooted["slowTimer"]
+    assert server.public_unit(rooted).get("rooted") is True
+    print("  已定身目标被冰霜命中仍定身: PASS")
 
     print("\n=== Test 5: 基地车展开/折叠阵营映射 ===")
     assert server.UNIT_TYPES["mmcv"]["deploysInto"] == "mhq"

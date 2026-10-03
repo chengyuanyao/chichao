@@ -93,7 +93,7 @@ def main():
         assert kind in server.TRIBE_STRUCTURES
         assert server.STRUCTURE_TYPES[kind]["faction"] == "tribe"
     for kind in ("tharvester", "tmcv", "spear", "tamer", "wolf", "spider",
-                 "scorpion", "mammoth", "panda", "slinger"):
+                 "scorpion", "mammoth", "panda", "slinger", "javelin", "catapult"):
         assert kind in server.TRIBE_UNITS
         assert server.UNIT_TYPES[kind]["faction"] == "tribe"
     assert server.UNIT_TYPES["tmcv"]["deploysInto"] == "thq"
@@ -116,7 +116,7 @@ def main():
 
     assert owned(a["id"], game["structures"]) == ["thq", "tpower", "trefinery"]
     a_units = owned(a["id"], game["units"])
-    assert a_units.count("spear") == 3 and "wolf" in a_units and "tharvester" in a_units, a_units
+    assert a_units == sorted(["spear"] * 3 + ["javelin", "wolf", "tharvester"]), a_units
     print("  出生配置 / role / 目录: PASS")
 
     print("\n=== Test 2: 血祭坛需要围栏+图腾 ===")
@@ -192,7 +192,7 @@ def main():
     assert server.UNIT_TYPES["spider"]["producer"] == "tpen"
     assert server.UNIT_TYPES["spider"]["requires"] == ["taltar"]
     assert server.UNIT_TYPES["scorpion"]["producer"] == "tpen"
-    assert server.UNIT_TYPES["scorpion"]["requires"] == ["taltar"]
+    assert server.UNIT_TYPES["scorpion"]["requires"] == []
     try:
         server.queue_unit(room, a["id"], "rifle")
         raise AssertionError("部落不该能产突击兵")

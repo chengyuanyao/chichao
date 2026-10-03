@@ -6,3 +6,5 @@ __pycache__/
 artifacts/
 battle_reports/
 
+# Kiro local execution history; keep the authored specs and task plan.
+.kiro/specs/**/tasks.meta.json

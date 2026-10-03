@@ -1,8 +1,9 @@
 import * as THREE from './vendor/three.module.min.js';
+import {TRIBE_ART_KINDS,TRIBE_ART_STRUCTURES,tribeUnitModel,tribeStructureDetails} from './tribe_art_models.js';
 
 // Authored river-sample assets. All coordinates are local model space; simulation
 // footprints stay in the authoritative catalog. Far LOD retains the old assets.
-export const RIVER_ART_KINDS = new Set(['tank','overlord','overlord_v1','overlord_v2','dragon','rifle','mage']);
+export const RIVER_ART_KINDS = new Set(['tank','overlord','overlord_v1','overlord_v2','dragon','rifle','mage',...TRIBE_ART_KINDS]);
 
 function part(geo, x, y, z, paint, surf=0) {
   return {geo,matrix:new THREE.Matrix4().makeTranslation(x,y,z),surf,
@@ -118,6 +119,7 @@ function membrane(side) {
 }
 
 export function riverUnitModel(kind, base, k) {
+  if(TRIBE_ART_KINDS.has(kind)) return {...tribeUnitModel(kind,base,{...k,part,armorShell,organicShell,cable}),tribe:true};
   if(!RIVER_ART_KINDS.has(kind)) return base;
   const {box,cyl,sph,ellipsoid,limb,trackedHull,recoiling,MAT,ROT_Z90,ROT_X90}=k;
   const steel=[.24,.27,.29],dark=[.075,.092,.10],edge=[.43,.44,.40];
@@ -270,6 +272,7 @@ export function riverUnitModel(kind, base, k) {
 }
 
 export function riverStructureDetails(kind,s,k) {
+  if(TRIBE_ART_STRUCTURES.has(kind)) return tribeStructureDetails(kind,s,{...k,part,armorShell,organicShell,cable});
   const {box,cyl}=k,parts=[];
   if(!['hq','mhq','factory'].includes(kind)) return parts;
   const stone=[.48,.46,.40],metal=[.30,.34,.34],dark=[.11,.14,.14],trim=[.57,.59,.55];
@@ -372,7 +375,18 @@ export function riverStructureDetails(kind,s,k) {
   return parts;
 }
 
-export function artJointAngle(rig,time,travel,motion) {
+export function artJointAngle(rig,time,travel,motion,sinceFire=Infinity) {
+  if(rig.axis && !['x','y','z'].includes(rig.axis)) return 0;
   if(rig.mode==='wing') return rig.side*(.035+Math.sin(time*.0015+rig.side*.2)*.055+motion*.05);
-  return rig.side*Math.sin(travel*.25)*Math.min(.42,motion*.45);
+  if(rig.mode==='strike') {
+    const rest=rig.rest||0,swing=rig.swing||0,attack=rig.attack||.1;
+    const duration=Math.max(attack+.05,rig.duration||.6);
+    if(!(sinceFire>=0)||sinceFire>=duration) return rest;
+    const k=sinceFire<attack?1-(1-sinceFire/attack)**2:
+      (1-(sinceFire-attack)/(duration-attack))**2;
+    return rest+swing*k;
+  }
+  if(rig.mode==='roll') return -travel/(rig.radius||4);
+  if(rig.mode&&rig.mode!=='walk') return 0;
+  return (rig.side??1)*Math.sin(travel*(rig.rate??.25)+(rig.phase||0))*Math.min(rig.amp??.42,motion*(rig.gain??.45));
 }

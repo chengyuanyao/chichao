@@ -302,26 +302,26 @@ def main():
     assert catalog["units"]["spider"]["requires"] == ["taltar"]
     assert catalog["units"]["spider"]["producer"] == "tpen"
     assert catalog["units"]["spider"]["faction"] == "tribe"
-    assert catalog["units"]["spider"]["repairable"] is False
+    assert catalog["units"]["spider"]["repairable"] is True
     assert catalog["units"]["spider"]["canVeteran"] is True
     assert catalog["units"]["scorpion"]["name"] == "穿甲巨蝎"
-    assert catalog["units"]["scorpion"]["requires"] == ["taltar"]
+    assert catalog["units"]["scorpion"]["requires"] == []
     assert catalog["units"]["scorpion"]["producer"] == "tpen"
     assert catalog["units"]["scorpion"]["faction"] == "tribe"
-    assert catalog["units"]["scorpion"]["repairable"] is False
+    assert catalog["units"]["scorpion"]["repairable"] is True
     assert catalog["units"]["scorpion"]["canVeteran"] is True
     assert catalog["units"]["scorpion"]["damageType"] == "ap"
     assert catalog["units"]["mammoth"]["name"] == "猛犸战象"
     assert catalog["units"]["mammoth"]["requires"] == ["taltar"]
     assert catalog["units"]["mammoth"]["producer"] == "tpen"
     assert catalog["units"]["mammoth"]["faction"] == "tribe"
-    assert catalog["units"]["mammoth"]["repairable"] is False
+    assert catalog["units"]["mammoth"]["repairable"] is True
     assert catalog["units"]["mammoth"]["canVeteran"] is True
     assert catalog["units"]["panda"]["name"] == "竹甲熊猫"
     assert catalog["units"]["panda"]["requires"] == ["taltar"]
     assert catalog["units"]["panda"]["producer"] == "tpen"
     assert catalog["units"]["panda"]["faction"] == "tribe"
-    assert catalog["units"]["panda"]["repairable"] is False
+    assert catalog["units"]["panda"]["repairable"] is True
     assert catalog["units"]["panda"]["canVeteran"] is True
     assert catalog["units"]["panda"]["cost"] == 980
     assert catalog["units"]["slinger"]["name"] == "投石猎手"
@@ -744,6 +744,16 @@ def main():
     assert "spider: function () { return UNIT_BUILDERS.panther(); }" not in render
     assert "scorpion: function () { return UNIT_BUILDERS.spider(); }" not in render
     assert "scorpion: function () { return UNIT_BUILDERS.wolf(); }" not in render
+    for kind, name in (("javelin", "燧石标枪手"), ("catapult", "巨石投石车")):
+        assert "%s: function () {" % kind in render
+        assert "// %s：" % name in render
+        assert "%s: function (c) {" % kind in app
+        assert name in hud and name in readme
+        assert "look: '%s'" % ("javelin" if kind == "javelin" else "megalith") in render
+    assert "commandAuraRadius" in render
+    assert "命中挂猎印" in app and "猎印 ×1.15" in hud
+    assert "structure.charges" in app and "剩余 " in app
+    assert "unit.marked ? 1 : 0" in app
     assert "scorpion: function () { return UNIT_BUILDERS.dog(); }" not in render
     assert "mammoth: function () { return UNIT_BUILDERS.wolf(); }" not in render
     assert "mammoth: function () { return UNIT_BUILDERS.tharvester(); }" not in render

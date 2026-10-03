@@ -18,7 +18,7 @@ import time
 import server
 from server import (BOT_HOME_RADIUS, BOT_SUICIDE_BLAST, BOT_SUICIDE_WAVE,
                     NEUTRAL_OWNER, STRUCTURE_TYPES, SUICIDE_KINDS, UNIT_TYPES,
-                    VEHICLE_KINDS, clear_repair_order, faction_buildings,
+                    REPAIRABLE_KINDS, clear_repair_order, faction_buildings,
                     has_active_structure, is_friendly, issue_attack, issue_move,
                     issue_repair, player_power, queue_structure, queue_unit,
                     structure_role, unit_role, vision_field)
@@ -644,7 +644,7 @@ class Commander(object):
         if not bays:
             return
         damaged = [unit for unit in game["units"]
-                   if unit["owner"] == bot_id and unit["kind"] in VEHICLE_KINDS
+                   if unit["owner"] == bot_id and unit["kind"] in REPAIRABLE_KINDS
                    and unit["hp"] > 0 and unit["hp"] / unit["maxHp"] < 0.62
                    and unit.get("order") != "repair"
                    and unit_role(unit["kind"]) != "harvester"]

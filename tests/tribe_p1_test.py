@@ -95,23 +95,23 @@ def main():
     assert spike["faction"] == "tribe"
     assert spike["role"] == "defense"
     assert 650 <= spike["cost"] <= 800
-    assert 700 <= spike["hp"] <= 900
-    assert 180 <= spike["range"] <= 210
+    assert spike["hp"] == 1050
+    assert spike["range"] == 270
     assert spike["requires"] == ["tcamp", "tpower"]
     assert spike["projectile"] == "spike"
     assert tox["name"] == "毒矢高台"
     assert tox["role"] == "defense"
     assert 900 <= tox["cost"] <= 1100
     assert 800 <= tox["hp"] <= 1000
-    assert 260 <= tox["range"] <= 300
+    assert tox["range"] == 360
     assert tox["requires"] == ["taltar", "tpower"]
-    assert tox["dot"] == {"dps": 12.0, "duration": 3.2, "damageType": "venom"}
+    assert tox["dot"] == {"dps": 16.0, "duration": 3.2, "damageType": "venom"}
     assert trap["name"] == "兽夹陷阱"
     assert trap["role"] == "trap"
     assert 250 <= trap["cost"] <= 400
     assert trap["requires"] == ["tcamp"]
     assert trap["slow"] == {"mult": 0.0, "duration": 2.0}
-    assert trap["trapExpire"] is True
+    assert trap["trapExpire"] is False
     assert pit["name"] == "毒雾坑"
     assert pit["role"] == "trap"
     assert 500 <= pit["cost"] <= 700
@@ -143,7 +143,7 @@ def main():
     assert buildings["pit"] == "tpit"
     catalog = server.public_catalog()
     assert catalog["buildings"]["tspiketower"]["range"] == spike["range"]
-    assert catalog["units"]["mammoth"]["repairable"] is False
+    assert catalog["units"]["mammoth"]["repairable"] is True
     assert catalog["units"]["mammoth"]["canVeteran"] is True
     print("  定义/队列/bot 键/目录: PASS")
 
@@ -189,7 +189,7 @@ def main():
     assert game["projectiles"], "棘矛哨塔应开火"
     shot = game["projectiles"][-1]
     assert shot["kind"] == "spike"
-    assert shot.get("damageType") == "bullet"
+    assert shot.get("damageType") == "shell"
     print("  棘矛弹: PASS")
 
     print("\n=== Test 4: 毒矢高台挂毒 ===")
@@ -210,7 +210,7 @@ def main():
         server.tick_projectiles(room, 0.05, index)
         if not game["projectiles"]:
             break
-    assert abs(rifle["dotDps"] - 12.0) < 1e-6
+    assert abs(rifle["dotDps"] - 16.0) < 1e-6
     assert rifle["dotSourceKind"] == "ttoxtower"
     assert server.public_unit(rifle).get("dot") is True
     print("  毒矢 DoT: PASS")
@@ -238,7 +238,13 @@ def main():
     assert abs(rifle["slowMult"] - 0.0) < 1e-9
     assert server.public_unit(rifle).get("rooted") is True
     assert abs(ally["hp"] - ally_hp0) < 1e-6
-    assert trap_s["hp"] <= 0
+    assert trap_s["hp"] > 0 and trap_s["charges"] == 1
+    assert trap_s["armed"] is False and trap_s["armTimer"] == 8.0
+    assert server.public_structure(trap_s)["charges"] == 1
+    server.tick_structures(room, 8.0)
+    assert trap_s["armed"] is True
+    server.tick_structures(room, 0.05)
+    assert trap_s["hp"] <= 0 and trap_s["charges"] == 0
     print("  上膛 / 定身爆发 / 友军免疫 / 拆除: PASS")
 
     print("\n=== Test 6: 兽夹不夹建筑 ===")

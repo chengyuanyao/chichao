@@ -59,7 +59,7 @@ assert.ok(start>0&&end>start);
 let builds=0,compiles=0;
 const geometry=new THREE.BoxGeometry(),material=new THREE.MeshPhongMaterial();
 const mesh=()=>new THREE.InstancedMesh(geometry,material,64);
-const fixture={THREE,console,warmAssetTasks,applyBuildingCollapse,scene:new THREE.Scene(),camera:new THREE.PerspectiveCamera(),
+const fixture={THREE,console,warmAssetTasks,applyBuildingCollapse,state:{},scene:new THREE.Scene(),camera:new THREE.PerspectiveCamera(),
   flashPool:[{light:{visible:false}},{light:{visible:true}}],
   makeRiverMaterial:()=>new THREE.MeshStandardMaterial(),applyEmissiveByVertexColor:m=>solidSurface(m),
   CLOTH_UNIT_KINDS:{},HIDE_UNIT_KINDS:{},MAGIC_UNIT_KINDS:{},MAGIC_STRUCTURE_KINDS:{},

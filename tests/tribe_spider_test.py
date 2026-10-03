@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 """原始部落进阶：蛛网巨蛛。
    1) 目录 / 阵营 / 血祭坛门槛
-   2) 吐丝命中定身（slow.mult 0），仍可开火
+   2) 吐丝命中定身（slow.mult 0），仍可开火；控制规则 H：定身中不续时，
+      到期后 1 s 抗性内再中定身降为 ×0.5 减速，冰霜也解不了定身
    3) 可复用 DoT：刷新只续时，击杀记给巨蛛
    4) 建筑免疫；跨阵营不能产
 """
@@ -67,6 +68,20 @@ def queued_kinds(game, pid):
             if structure["owner"] == pid for item in structure["queue"]]
 
 
+def run_out_slow(unit, dt=0.05, limit=10.0):
+    """按固定步长推进状态计时，直到减速/定身计时走完。
+
+    0.05 步长累减可能残留 ~1e-17 的正余量，不能按「时长 / 步长」算步数，
+    所以推进到 slowTimer <= 0 为止。
+    """
+    elapsed = 0.0
+    while unit["slowTimer"] > 0.0:
+        assert elapsed < limit, ("减速计时未走完", unit["slowTimer"])
+        server.tick_status_timers(unit, dt)
+        elapsed += dt
+    return elapsed
+
+
 def main():
     print("=== Test 1: 目录 / 阵营 / 血祭坛门槛字段 ===")
     spider = server.UNIT_TYPES["spider"]
@@ -114,7 +129,7 @@ def main():
     assert entry["faction"] == "tribe"
     assert entry["producer"] == "tpen"
     assert entry["requires"] == ["taltar"]
-    assert entry["repairable"] is False
+    assert entry["repairable"] is True
     assert entry["canVeteran"] is True
     assert server.unit_move_slow({"slowMult": 0.0}) == 0.0
     assert server.unit_move_slow({}) == 1.0
@@ -151,7 +166,7 @@ def main():
             assert "阵营" in str(exc), str(exc)
     print("  钢铁/秘法拦截: PASS")
 
-    print("\n=== Test 4: 定身锁位移，刷新不叠乘，仍可开火 ===")
+    print("\n=== Test 4: 定身锁位移，定身中不续时，仍可开火；到期进入抗性 ===")
     room, a, b = make_room("SPIDER03")
     game = room["game"]
     spider_u = server.make_unit("spider", a["id"], 1000, 1000)
@@ -169,10 +184,11 @@ def main():
     server.move_toward(terrain, rifle, rifle["destX"], rifle["destY"],
                        server.UNIT_TYPES["rifle"]["speed"], 0.05)
     assert abs(rifle["x"] - x0) < 1e-9 and abs(rifle["y"] - y0) < 1e-9
+    # 控制规则 H：定身期间再中定身不续时，剩余时长保持
     rifle["slowTimer"] = 0.4
     server.apply_slow({"slow": spider["slow"]}, rifle)
     assert abs(rifle["slowMult"] - 0.0) < 1e-9
-    assert abs(rifle["slowTimer"] - 2.2) < 1e-9
+    assert abs(rifle["slowTimer"] - 0.4) < 1e-9, rifle["slowTimer"]
     hq = next(structure for structure in game["structures"]
               if structure["owner"] == a["id"]
               and server.structure_role(structure["kind"]) == "hq")
@@ -187,7 +203,20 @@ def main():
     server.tick_units(room, 0.05)
     assert game["projectiles"], "定身单位在射程内仍应开火"
     assert abs(rifle["x"] - x0) < 1e-9
-    print("  定身锁位移 / 刷新 / 建筑免疫 / 仍可开火: PASS")
+    # 定身计时走完：恢复满速，并写入 1.0 s 定身抗性
+    run_out_slow(rifle)
+    assert rifle["slowMult"] == 1.0, rifle["slowMult"]
+    assert abs(rifle["rootResist"] - 1.0) < 1e-9, rifle["rootResist"]
+    pub = server.public_unit(rifle)
+    assert pub.get("rootResist") is True
+    assert pub.get("slow") is None and pub.get("rooted") is None
+    # 抗性期内再中蛛网：定身降为 ×0.5 减速，时长不变
+    server.apply_slow({"slow": spider["slow"]}, rifle)
+    assert abs(rifle["slowMult"] - 0.5) < 1e-9, rifle["slowMult"]
+    assert abs(rifle["slowTimer"] - 2.2) < 1e-9, rifle["slowTimer"]
+    pub = server.public_unit(rifle)
+    assert pub.get("slow") is True and pub.get("rooted") is None
+    print("  定身锁位移 / 定身不续时 / 建筑免疫 / 仍可开火 / 抗性期降为 ×0.5: PASS")
 
     print("\n=== Test 5: 吐丝弹丸挂定身+DoT，刷新只续时 ===")
     room, a, b = make_room("SPIDER04")
@@ -257,7 +286,7 @@ def main():
     assert elapsed <= 1.0
     print("  DoT 击杀掉血/击杀/军衔归属: PASS")
 
-    print("\n=== Test 7: 毒丝克制与冰霜后手刷新 ===")
+    print("\n=== Test 7: 毒丝克制；冰霜解不了定身 ===")
     room, a, b = make_room("SPIDER06")
     game = room["game"]
     rifle = server.make_unit("rifle", b["id"], 4000, 4000)
@@ -270,12 +299,21 @@ def main():
     before = tank["hp"]
     server.apply_damage(room, tank, 100, a["id"], "venom", game)
     assert abs((before - tank["hp"]) - 55.0) < 0.1, before - tank["hp"]
+    # 控制规则 H：冰霜 0.45 弱于定身，命中已定身目标被忽略，定身与剩余时长保持
     server.apply_slow({"slow": spider["slow"]}, tank)
+    server.apply_slow({"slow": frost["slow"]}, tank)
+    assert tank["slowMult"] == 0.0, tank["slowMult"]
+    assert abs(tank["slowTimer"] - 2.2) < 1e-9, tank["slowTimer"]
+    assert server.public_unit(tank).get("rooted") is True
+    # 定身到期后冰霜正常生效：冰霜是普通减速，定身抗性不影响它
+    run_out_slow(tank)
+    assert tank["slowMult"] == 1.0, tank["slowMult"]
+    assert abs(tank["rootResist"] - 1.0) < 1e-9, tank["rootResist"]
     server.apply_slow({"slow": frost["slow"]}, tank)
     assert abs(tank["slowMult"] - 0.45) < 1e-6
     assert abs(tank["slowTimer"] - 2.5) < 1e-6
     assert server.public_unit(tank).get("rooted") is None
-    print("  venom 克制 / 后手冰霜覆盖定身: PASS")
+    print("  venom 克制 / 冰霜命中已定身目标仍定身 / 定身到期后冰霜生效: PASS")
 
     print("\n=== Test 8: 机器人在祭坛后才偏好转巨蛛 ===")
     scout = server.bot_empty_scout()

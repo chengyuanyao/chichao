@@ -6,7 +6,8 @@
    3) 公开目录带射程；客户端是哥特风暴尖碑而不是虹光矛
    4) rush AI 仍先造奥术塔；后期/第一波失败后才补雷暴塔
    5) 开火走 tesla；联网伤害 70+35*extras（上限 3）；奥术塔不支援
-   6) 命中单位挂 0.5×/1.8s 麻痹，刷新不叠乘；建筑不受减速
+   6) 命中单位挂 0.5×/1.8s 麻痹，刷新不叠乘；建筑不受减速；
+      与冰霜强者优先（冰霜 0.45 不被雷暴降级，雷暴中被冰霜覆盖）
 """
 
 from __future__ import print_function
@@ -285,7 +286,7 @@ def main():
     assert ally in supports, supports
     print("  同队友军雷暴塔可联网: PASS")
 
-    print("\n=== Test 8: 命中麻痹，刷新不叠乘，建筑免疫 ===")
+    print("\n=== Test 8: 命中麻痹，刷新不叠乘，建筑免疫；与冰霜取强 ===")
     room, a, b = make_room("STORM07")
     game = room["game"]
     game["terrainCtx"] = server.FLAT_TERRAIN
@@ -312,6 +313,27 @@ def main():
     server.apply_slow({"slow": {"mult": 0.5, "duration": 1.8}}, hq)
     assert hq.get("slowMult", 1.0) == 1.0
     print("  单位 0.5×/1.8s；刷新；建筑不减速: PASS")
+
+    # 控制规则 H（跨阵营强者优先）：冰霜 0.45 比雷暴 0.5 更强
+    frost_slow = server.UNIT_TYPES["frost"]["slow"]
+    assert frost_slow == {"mult": 0.45, "duration": 2.5}
+    # 冰霜中被雷暴命中：更弱的减速被忽略，倍率与原剩余时长都不变。
+    # 先走 1.0 s 让剩余短于雷暴 1.8 s，区分「忽略」与「同强度取较长」。
+    frosted = server.make_unit("tank", a["id"], 1120, 1060)
+    server.apply_slow({"slow": frost_slow}, frosted)
+    for _ in range(20):
+        server.tick_status_timers(frosted, 0.05)
+    remain = frosted["slowTimer"]
+    assert 0.0 < remain < storm["slow"]["duration"], remain
+    server.apply_slow({"slow": storm["slow"]}, frosted)
+    assert abs(frosted["slowMult"] - 0.45) < 1e-6, frosted["slowMult"]
+    assert frosted["slowTimer"] == remain, (frosted["slowTimer"], remain)
+    # 雷暴 0.5 中被冰霜命中：更强的冰霜覆盖为 0.45/2.5
+    assert abs(tank["slowMult"] - 0.5) < 1e-6 and tank["slowTimer"] > 0.0
+    server.apply_slow({"slow": frost_slow}, tank)
+    assert abs(tank["slowMult"] - 0.45) < 1e-6, tank["slowMult"]
+    assert abs(tank["slowTimer"] - 2.5) < 1e-6, tank["slowTimer"]
+    print("  冰霜 0.45 中被雷暴命中仍为 0.45 / 雷暴 0.5 中被冰霜命中变 0.45/2.5: PASS")
 
     print("\n=== 雷暴塔测试全部通过 ===")
 

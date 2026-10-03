@@ -138,7 +138,7 @@ def main():
     assert catalog["units"]["panda"]["cost"] == 980
     assert catalog["units"]["panda"]["producer"] == "tpen"
     assert catalog["units"]["panda"]["requires"] == ["taltar"]
-    assert catalog["units"]["panda"]["repairable"] is False
+    assert catalog["units"]["panda"]["repairable"] is True
     assert catalog["units"]["panda"]["canVeteran"] is True
     assert catalog["units"]["slinger"]["name"] == "投石猎手"
     assert catalog["units"]["slinger"]["cost"] == 300

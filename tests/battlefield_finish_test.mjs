@@ -77,5 +77,5 @@ for(const sample of [false,true]) for(const match of catalogBlock.matchAll(/^\s{
  for(const [geo,before] of positions) assert.deepEqual(geo.attributes.position.array,before,kind+' cached model is not mutated');
  checked++;
 }
-assert.equal(checked,44,'all 22 buildings in both model families');
+assert.equal(checked,52,'all 26 buildings in both model families');
 console.log('Battlefield finish passed: debris families, bounded collapse, disposal, confirmed death, suspension clamp and track reset.');
