@@ -6,6 +6,7 @@ const profiles=vm.runInNewContext('('+source.match(/const profiles=(\{[^]*?\});/
 assert.deepEqual(Array.from(profiles.heroes),['overlord','dragon']);
 assert.equal(profiles.rockets.filter(k=>k==='rocket').length,3);
 assert.ok(profiles.demolition.includes('bomb_truck'));
+assert.deepEqual(Array.from(profiles.tribe),['spear','javelin','slinger','tamer','wolf','spider','scorpion','panda','mammoth','catapult','tharvester','tmcv']);
 assert.match(source,/armyKinds\[i%armyKinds.length\]/,'profiles drive the actual fixture army');
 const helper=source.match(/function destroyFixtureStructures\([^]*?\n}/)[0];
 const structures=Array.from({length:15},(_,i)=>({id:'s'+i,kind:i===8?'mhq':'factory',owner:i<8?'steel':'magic',x:i*100,y:200,size:58}));

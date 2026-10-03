@@ -9,8 +9,8 @@ const mesh=()=>({count:99,visible:true,instanceMatrix:{},instanceColor:{},setMat
 const building={id:'hq1',owner:'blue',size:58,x:150,y:200};
 const node={structure:building,group:{visible:true},groundY:25};
 const context={state:{renderedUnits:0,renderedStructures:1,artSample:false},
-  ownerMarks:mesh(),dangerMarks:mesh(),markerMesh:existing=>existing,
-  ownerMarkGeo:{},dangerMarkGeo:{},markerMaterial:{},riverOwnerMaterial:{},snapshotVisuals:[],
+  ownerMarks:mesh(),dangerMarks:mesh(),huntMarks:mesh(),commandAuras:mesh(),markerMesh:existing=>existing,
+  ownerMarkGeo:{},dangerMarkGeo:{},huntMarkGeo:{},commandAuraGeo:{},commandAuraMaterial:{},markerMaterial:{},riverOwnerMaterial:{},snapshotVisuals:[],
   matrix:new THREE.Matrix4(),vecPos:new THREE.Vector3(),vecScale:new THREE.Vector3(),
   quatIdentity:new THREE.Quaternion(),tmpColor:new THREE.Color(),colorOf:()=> '#44bbff',groundHeight:()=>25,
   structureNodes:new Map([[building.id,node]]),payload:{selectedStructureId:null},

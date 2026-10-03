@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """原始部落进阶：穿甲巨蝎。
-   1) 目录 / 阵营 / 血祭坛门槛
+   1) 目录 / 阵营 / 围栏门槛
    2) 复用 ap 伤种：重甲 ×2.10，步兵 ×0.25
    3) 玻璃血、无溅射、非载具、无自爆
-   4) 跨阵营不能产；机器人祭坛后才偏好
+   4) 跨阵营不能产；机器人围栏阶段即可选用
 """
 
 from __future__ import print_function
@@ -68,7 +68,7 @@ def queued_kinds(game, pid):
 
 
 def main():
-    print("=== Test 1: 目录 / 阵营 / 血祭坛门槛字段 ===")
+    print("=== Test 1: 目录 / 阵营 / 围栏门槛字段 ===")
     scorpion = server.UNIT_TYPES["scorpion"]
     spider = server.UNIT_TYPES["spider"]
     wolf = server.UNIT_TYPES["wolf"]
@@ -83,17 +83,17 @@ def main():
         assert field in scorpion, "scorpion 缺字段 %s" % field
     assert scorpion["name"] == "穿甲巨蝎"
     assert scorpion["producer"] == "tpen"
-    assert scorpion["requires"] == ["taltar"]
+    assert scorpion["requires"] == []
     assert scorpion["faction"] == "tribe"
     assert scorpion["cost"] == 820
     assert 700 <= scorpion["cost"] <= 900
-    assert scorpion["hp"] == 165
-    assert 120 <= scorpion["hp"] <= 200
-    assert scorpion["hp"] < wolf["hp"]
+    assert scorpion["hp"] == 250
+    assert 220 <= scorpion["hp"] <= 280
+    assert scorpion["hp"] > wolf["hp"]
     assert scorpion["hp"] < spider["hp"]
     assert scorpion["speed"] == 100.0
     assert scorpion["damage"] == 82.0
-    assert scorpion["range"] == 145.0
+    assert scorpion["range"] == 165.0
     assert spear["range"] < scorpion["range"] < spider["range"]
     assert scorpion["cooldown"] == 1.80
     assert scorpion["cooldown"] >= 1.5
@@ -118,14 +118,14 @@ def main():
     entry = catalog["units"]["scorpion"]
     assert entry["name"] == "穿甲巨蝎"
     assert entry["producer"] == "tpen"
-    assert entry["requires"] == ["taltar"]
+    assert entry["requires"] == []
     assert entry["faction"] == "tribe"
-    assert entry["repairable"] is False
+    assert entry["repairable"] is True
     assert entry["canVeteran"] is True
     assert entry["damageType"] == "ap"
     print("  目录字段 / 玻璃血 / ap 尾刺: PASS")
 
-    print("\n=== Test 2: 围栏+祭坛才许驯养，跨阵营拒绝 ===")
+    print("\n=== Test 2: 围栏即可驯养，跨阵营拒绝 ===")
     room, a, b = make_room("SCORP01")
     game = room["game"]
     a["cash"] = 99999
@@ -135,11 +135,7 @@ def main():
     except ValueError as exc:
         assert "生产建筑" in str(exc) or "前置" in str(exc), str(exc)
     give(game, a["id"], "tpen")
-    try:
-        server.queue_unit(room, a["id"], "scorpion")
-        raise AssertionError("缺祭坛时不该能排巨蝎")
-    except ValueError as exc:
-        assert "前置" in str(exc), str(exc)
+    server.queue_unit(room, a["id"], "scorpion")
     give(game, a["id"], "taltar")
     server.queue_unit(room, a["id"], "scorpion")
     assert "scorpion" in queued_kinds(game, a["id"])
@@ -153,7 +149,7 @@ def main():
             raise AssertionError("%s 不该能产巨蝎" % pid)
         except ValueError as exc:
             assert "阵营" in str(exc), str(exc)
-    print("  taltar 门槛 / 跨阵营拒绝: PASS")
+    print("  tpen 门槛 / 跨阵营拒绝: PASS")
 
     print("\n=== Test 3: 尾刺弹无溅射、无定身、无 DoT ===")
     room, a, b = make_room("SCORP03")
@@ -221,7 +217,7 @@ def main():
     assert tank_u.get("dotTimer", 0) == 0
     print("  命中坦克 82×2.10: PASS")
 
-    print("\n=== Test 6: 机器人在祭坛后才偏好巨蝎 ===")
+    print("\n=== Test 6: 机器人在围栏阶段即可选择巨蝎 ===")
     scout = server.bot_empty_scout()
     with_altar = server.bot_support_choices(
         "tribe", set(["factory", "repair"]), False, False, True, 2)
@@ -229,12 +225,12 @@ def main():
     assert "spider" in with_altar, with_altar
     no_altar = server.bot_support_choices(
         "tribe", set(["factory"]), False, False, True, 2)
-    assert "scorpion" not in no_altar, no_altar
+    assert "scorpion" in no_altar, no_altar
     late = server.bot_unit_choices(
         "tribe", set(["factory", "repair"]), server.BOT_PHASE_CLOSE,
         scout, False, True, 2, False)
     assert "scorpion" in late, late
-    print("  围栏+祭坛才排巨蝎: PASS")
+    print("  围栏即可排巨蝎: PASS")
 
     print("\n=== 穿甲巨蝎测试全部通过 ===")
 

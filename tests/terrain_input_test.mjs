@@ -107,7 +107,7 @@ const enemy={id:'u-enemy',owner:'enemy',kind:'rifle',hp:100};
 mesh.userData.instanceIds=[own.id];
 const rendererContext={camera,modelPicker:picker,state:{map:{},width:1280,height:720},
   unitPools:new Map([['rifle',{mesh,simple:null}]]),apocArmMesh:null,dragonOrbitMesh:null,
-  apocArmVisuals:[],dragonOrbitVisuals:[],structureNodes:new Map()};
+  apocArmVisuals:[],dragonOrbitVisuals:[],behemothOrbitMesh:null,behemothOrbitVisuals:[],structureNodes:new Map()};
 vm.createContext(rendererContext);vm.runInContext(fn(render,'collectPickModels')+fn(render,'unitsInScreenBox'),rendererContext);
 const center=screen(new THREE.Vector3(500,90,500));
 const game={units:[own,enemy],structures:[]};

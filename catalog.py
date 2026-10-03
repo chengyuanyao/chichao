@@ -50,7 +50,7 @@ def veteran_rank(kills):
     return VETERAN_RANKS[0]
 
 
-# 可进维修厂/圣泉的单位。步兵、法师、影豹不算；构装、巨龙、晶簇与科技载具对位。
+# 载具集合用于扑咬免疫、猎物与侦察分类；维修另读 REPAIRABLE_KINDS。
 # 晶铠卫士是轻甲反甲构装（对位磁暴），仍留在本表：圣泉可修，军犬 bite ×0。
 VEHICLE_KINDS = frozenset((
     "tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv",
@@ -69,6 +69,19 @@ SUICIDE_KINDS = frozenset(("bomb_truck", "hexling"))
 PANDA_RAGE_ENTER = 0.40
 PANDA_RAGE_EXIT = 0.60
 PANDA_RAGE_DAMAGE = 1.25
+
+# 猎印：猎手命中存活单位后挂 HUNT_MARK_SECONDS 秒，重复命中只刷新不叠加；
+# 野兽对带印目标的伤害 ×HUNT_MARK_BONUS。
+# 部落加成封顶：狂暴 × 驯兽号令 × 猎印连乘不超过 TRIBE_BONUS_CAP；
+# 军衔与 fielded_combat_multiplier 在封顶之外另算。
+HUNT_MARK_SECONDS = 4.0
+HUNT_MARK_BONUS = 1.15
+TRIBE_BONUS_CAP = 1.45
+
+# 跨阵营控制规则：定身结束时写入 ROOT_RESIST_SECONDS 秒定身抗性，
+# 抗性期内新施加的定身降为 ×ROOT_RESIST_SLOW_MULT 减速（时长不变）。
+ROOT_RESIST_SECONDS = 1.0
+ROOT_RESIST_SLOW_MULT = 0.5
 
 UNIT_TYPES = {
     "rifle": {
@@ -360,7 +373,7 @@ UNIT_TYPES = {
     },
     # ==================== 部落阵营「原始部落」（faction=tribe）P0 ====================
     # 独立经济：大营/图腾/精炼棚/驮兽/迁徙驮队与钢铁对位，只换皮换名。
-    # 驯兽围栏出驮兽与战狼；猎手营地出骨矛与驯兽师。P0 没有自爆对位。
+    # 围栏出驮兽、战狼与巨蝎；营地出三类猎手与驯兽师。没有自爆对位。
     "tharvester": {
         "name": "驮兽", "cost": 920, "hp": 680, "speed": 63.6,
         "damage": 0.0, "range": 0.0, "cooldown": 0.0,
@@ -384,16 +397,18 @@ UNIT_TYPES = {
         "size": 10.0, "build": 3.0, "producer": "tcamp",
         "projectile": "bullet", "projectileSpeed": 620.0, "splash": 0.0,
         "sight": 350.0, "armor": "infantry", "damageType": "bullet",
+        "huntMark": True,
     },
-    # 驯兽师：营地出的脆弱辅助。只能招降中立作战单位，耗时+矿；
-    # 大厅关闭 neutrals 时动作不可用，围栏战狼不受影响。
+    # 驯兽师：号令 220 内己方/盟友野兽，重复光环不叠加。
+    # 中立开启时另可耗时+矿招降中立作战单位，关闭中立不影响号令。
     "tamer": {
-        "name": "驯兽师", "cost": 260, "hp": 70, "speed": 100.0,
+        "name": "驯兽师", "cost": 260, "hp": 90, "speed": 100.0,
         "damage": 8.0, "range": 80.0, "cooldown": 1.1,
         "size": 10.0, "build": 5.0, "producer": "tcamp",
         "projectile": "bullet", "projectileSpeed": 560.0, "splash": 0.0,
         "sight": 360.0, "armor": "infantry", "damageType": "bullet",
         "canTame": True, "tameCost": 150, "tameTime": 4.0, "tameRange": 48.0,
+        "commandAura": {"radius": 220.0, "mult": 1.10},
     },
     # 战狼：围栏出的轻型野兽，扑咬步兵。兽甲，不算载具，无自爆。
     "wolf": {
@@ -405,7 +420,7 @@ UNIT_TYPES = {
     },
     # 蛛网巨蛛：围栏进阶控制兽。血祭坛后才许驯养，对位冰霜女巫的单目标锁腿。
     # 中距吐丝，直伤一般；命中挂定身（slow.mult 0）+ 可复用的毒丝 DoT。
-    # 刷新只续时，不叠乘。兽甲、非载具、无自爆。比战狼慢、比女巫厚。
+    # 控制按强者优先，定身不续时且结束后有抗性。兽甲、非载具、无自爆。
     "spider": {
         "name": "蛛网巨蛛", "cost": 720, "hp": 340, "speed": 108.0,
         "damage": 18.0, "range": 170.0, "cooldown": 1.45,
@@ -416,14 +431,14 @@ UNIT_TYPES = {
         "slow": {"mult": 0.0, "duration": 2.2},
         "dot": {"dps": 14.0, "duration": 3.0, "damageType": "venom"},
     },
-    # 穿甲巨蝎：围栏进阶玻璃大炮。血祭坛后才许驯养，对位歼击车的兽甲短距穿甲手。
+    # 穿甲巨蝎：围栏即可驯养的玻璃大炮，对位歼击车的兽甲短距穿甲手。
     # 中短距尾刺，伤种复用 ap（重甲 ×2.10），无溅射、无定身、无 DoT。
     # 造价低于歼击车，血更薄，射程更短。兽甲、非载具、无自爆。
     "scorpion": {
-        "name": "穿甲巨蝎", "cost": 820, "hp": 165, "speed": 100.0,
-        "damage": 82.0, "range": 145.0, "cooldown": 1.80,
+        "name": "穿甲巨蝎", "cost": 820, "hp": 250, "speed": 100.0,
+        "damage": 82.0, "range": 165.0, "cooldown": 1.80,
         "size": 13.0, "build": 7.5, "producer": "tpen",
-        "requires": ["taltar"],
+        "requires": [],
         "projectile": "sting", "projectileSpeed": 640.0, "splash": 0.0,
         "sight": 390.0, "armor": "beast", "damageType": "ap",
     },
@@ -457,6 +472,24 @@ UNIT_TYPES = {
         "size": 10.5, "build": 4.5, "producer": "tcamp",
         "projectile": "rock", "projectileSpeed": 420.0, "splash": 18.0,
         "sight": 390.0, "armor": "infantry", "damageType": "bullet",
+        "huntMark": True,
+    },
+    # 燧石标枪手：营地反甲步兵，命中挂猎印，标枪不溅射。
+    "javelin": {
+        "name": "燧石标枪手", "cost": 360, "hp": 110, "speed": 96.0,
+        "damage": 40.0, "range": 200.0, "cooldown": 1.25,
+        "size": 10.5, "build": 5.0, "producer": "tcamp", "requires": [],
+        "projectile": "javelin", "projectileSpeed": 560.0, "splash": 0.0,
+        "sight": 390.0, "armor": "infantry", "damageType": "rocket",
+        "huntMark": True,
+    },
+    # 巨石投石车：祭坛后木制攻城器械；轻甲载具，必须护送。
+    "catapult": {
+        "name": "巨石投石车", "cost": 1000, "hp": 340, "speed": 48.0,
+        "damage": 95.0, "range": 350.0, "cooldown": 2.4,
+        "size": 22.0, "build": 11.0, "producer": "tpen", "requires": ["taltar"],
+        "projectile": "megalith", "projectileSpeed": 240.0, "splash": 60.0,
+        "sight": 300.0, "armor": "light", "damageType": "siege",
     },
 }
 
@@ -638,36 +671,35 @@ STRUCTURE_TYPES = {
         "armor": "structure",
     },
     # ==================== 部落 P1：哨塔 / 陷阱毒 / 不引入自爆 ====================
-    # 棘矛哨塔：早期基地通用防空档，对位钢铁哨戒 / 秘法奥术塔，更便宜更脆更短。
-    # 骨矛弹走 bullet，中距点射 + 小溅射，营地+图腾即可。填 bot defense。
+    # 棘矛哨塔：便宜一档的中距反甲近防，骨矛炮弹走 shell。
     "tspiketower": {
-        "name": "棘矛哨塔", "cost": 720, "hp": 820, "size": 28.0,
+        "name": "棘矛哨塔", "cost": 800, "hp": 1050, "size": 28.0,
         "build": 10.0, "deploy": 2.6, "power": -20,
         "requires": ["tcamp", "tpower"], "sight": 420.0,
-        "damage": 40.0, "range": 195.0, "cooldown": 0.72,
-        "projectile": "spike", "projectileSpeed": 540.0, "splash": 16.0,
-        "armor": "structure", "damageType": "bullet",
+        "damage": 62.0, "range": 270.0, "cooldown": 0.85,
+        "projectile": "spike", "projectileSpeed": 540.0, "splash": 20.0,
+        "armor": "structure", "damageType": "shell",
     },
     # 毒矢高台：后期远程支援塔，对位导弹炮塔 / 雷暴塔档，但不做联网。
-    # 单发更低，射程更长，命中挂毒 DoT（复用蛛网毒丝刷新规则）。祭坛+图腾。
+    # ap 穿甲直伤 + 小范围 venom 毒，持续伤害按强者优先。祭坛+图腾。
     "ttoxtower": {
-        "name": "毒矢高台", "cost": 1000, "hp": 880, "size": 32.0,
+        "name": "毒矢高台", "cost": 1100, "hp": 1000, "size": 32.0,
         "build": 14.0, "deploy": 3.2, "power": -25,
         "requires": ["taltar", "tpower"], "sight": 500.0,
-        "damage": 24.0, "range": 275.0, "cooldown": 1.30,
-        "projectile": "dart", "projectileSpeed": 500.0, "splash": 0.0,
-        "armor": "structure", "damageType": "venom",
-        "dot": {"dps": 12.0, "duration": 3.2, "damageType": "venom"},
+        "damage": 34.0, "range": 360.0, "cooldown": 1.20,
+        "projectile": "dart", "projectileSpeed": 500.0, "splash": 28.0,
+        "armor": "structure", "damageType": "ap",
+        "dot": {"dps": 16.0, "duration": 3.2, "damageType": "venom"},
     },
     # 兽夹陷阱：便宜地面夹。建成后短延时上膛，敌军地面单位进圈一次
-    # 定身+爆发，然后拆除。走 buildQueue（role=trap），不是炮塔。
+    # 定身+爆发，共两次充能，间隔 8 秒，最后一次静默拆除。
     "ttrap": {
         "name": "兽夹陷阱", "cost": 320, "hp": 140, "size": 16.0,
         "build": 5.0, "deploy": 1.2, "power": -4,
         "requires": ["tcamp"], "sight": 160.0,
         "armor": "structure", "damageType": "shell",
         "trapRadius": 44.0, "trapDamage": 75.0, "trapArm": 2.2,
-        "trapExpire": True,
+        "trapExpire": False, "trapCharges": 2, "trapCooldown": 8.0,
         "slow": {"mult": 0.0, "duration": 2.0},
     },
     # 毒雾坑：区域拒止。脉冲给圈内敌军挂毒 DoT，不伤友军、不伤建筑。
@@ -703,8 +735,16 @@ TRIBE_STRUCTURES = frozenset((
 ))
 TRIBE_UNITS = frozenset((
     "tharvester", "tmcv", "spear", "tamer", "wolf", "spider", "scorpion",
-    "mammoth", "panda", "slinger",
+    "mammoth", "panda", "slinger", "javelin", "catapult",
 ))
+# 部落野兽：等于目录中全部 armor == "beast" 的单位。兽甲、非载具、无自爆。
+TRIBE_BEAST_KINDS = frozenset(("wolf", "spider", "scorpion", "mammoth", "panda"))
+# 维修集合 = 载具 + 部落野兽（血祭坛治疗野兽）。只用于维修相关判断；
+# 扑咬 ×0、hold_target_valid、is_dog_prey、BOT_SCOUT_VEHICLES 继续只读 VEHICLE_KINDS。
+REPAIRABLE_KINDS = VEHICLE_KINDS | TRIBE_BEAST_KINDS
+HUNT_MARK_SOURCES = frozenset(k for k, d in UNIT_TYPES.items() if d.get("huntMark"))
+COMMAND_AURA_QUERY = max([float((d.get("commandAura") or {}).get("radius") or 0.0)
+                          for d in UNIT_TYPES.values()] + [0.0])
 VALID_FACTIONS = frozenset(("tech", "magic", "tribe"))
 
 _STRUCTURE_ROLES = {
@@ -762,6 +802,7 @@ def public_catalog():
             "faction": definition.get("faction", "tech"),
             "role": definition.get("role"),
             "range": float(definition.get("range", 0) or 0),
+            "trapCharges": int(definition.get("trapCharges") or 0),
         }
     units = {}
     for kind, definition in UNIT_TYPES.items():
@@ -776,7 +817,9 @@ def public_catalog():
             "role": definition.get("role"),
             "canDeploy": bool(definition.get("canDeploy")),
             "damageType": definition.get("damageType"),
-            "repairable": kind in VEHICLE_KINDS,
+            "repairable": kind in REPAIRABLE_KINDS,
+            "huntMark": bool(definition.get("huntMark")),
+            "commandAuraRadius": float((definition.get("commandAura") or {}).get("radius") or 0.0),
             "canVeteran": float(definition.get("damage", 0.0) or 0.0) > 0.0,
             "canTame": bool(definition.get("canTame")),
         }
@@ -801,12 +844,23 @@ FACTION_LOADOUT = {
     "magic": {"hq": "mhq", "power": "mpower", "refinery": "mrefinery",
               "harvester": "mharvester", "mcv": "mmcv", "infantry": "mage", "armor": "golem"},
     "tribe": {"hq": "thq", "power": "tpower", "refinery": "trefinery",
-              "harvester": "tharvester", "mcv": "tmcv", "infantry": "spear", "armor": "wolf"},
+              "harvester": "tharvester", "mcv": "tmcv", "infantry": "spear", "armor": "wolf",
+              "garrison": ("spear", "spear", "spear", "wolf", "javelin")},
 }
+
+START_GARRISON_OFFSETS = ((75.0, 70.0), (91.0, 70.0), (107.0, 70.0),
+                          (92.0, 112.0), (123.0, 70.0), (124.0, 112.0))
 
 
 def faction_loadout(faction):
     return FACTION_LOADOUT.get(faction, FACTION_LOADOUT["tech"])
+
+
+def faction_start_garrison(faction):
+    """未指定守军时沿用原来的三步兵、一装甲及其创建顺序。"""
+    loadout = faction_loadout(faction)
+    return list(loadout.get("garrison") or
+                ([loadout["infantry"]] * 3 + [loadout["armor"]]))
 
 
 # AI 按 role 取的建造 kind（role→具体建筑）。魔法换皮复用同一套决策：

@@ -155,7 +155,8 @@ picker.clear();assert.equal(pick(small.position),null,'new match drops old candi
 // animated attachment transforms are used, and clearEntities clears the picker.
 const wiring={modelPicker:picker,state:{map:{},width:1280,height:720,viewerId:'me',friendly:()=>false},
   camera,unitPools:new Map([['tank',{mesh:pool,simple:null}]]),structureNodes:new Map(),
-  apocArmMesh:null,dragonOrbitMesh:null,apocArmVisuals:[],dragonOrbitVisuals:[],isVisible:()=>true};
+  apocArmMesh:null,dragonOrbitMesh:null,behemothOrbitMesh:null,
+  apocArmVisuals:[],dragonOrbitVisuals:[],behemothOrbitVisuals:[],isVisible:()=>true};
 pool.userData.instanceIds=['u1'];
 vm.createContext(wiring);vm.runInContext(sourceFunction(source,'collectPickModels')+sourceFunction(source,'pickEntityAt'),wiring);
 let pixel=screen(new THREE.Vector3(120,50,0));
@@ -176,7 +177,7 @@ assert.match(source,/clearEntities: function \(\) \{\s*modelPicker\.clear\(\)/);
 // friendly model hits preserve selection, and no hit sends ordinary movement.
 let hit=building;
 const commands=[];
-const input={roomState:{game:{units:[unit],structures:[building]}},view3d:{pickEntityAt:()=>hit},pointer:{x:100,y:200},
+const input={UNITS:{},roomState:{game:{units:[unit],structures:[building]}},view3d:{pickEntityAt:()=>hit},pointer:{x:100,y:200},
   worldToScreen:(x,y)=>({x,y}),resourceAt:()=>null,selectedUnits:new Set(['u1']),selectedStructureId:null,
   selectedResourceId:null,session:{playerId:'me'},isFriendly:owner=>owner==='me',
   structureRole:kind=>catalog[kind]?.role,selectedUnitIdList:()=>[...input.selectedUnits],

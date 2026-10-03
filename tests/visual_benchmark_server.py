@@ -41,7 +41,8 @@ def fixture_catalog():
     maps["central_rift"]["resources"] = server.rift_map.resource_layout(90241)
     return {
         "maps": maps,
-        "units": server.UNIT_TYPES,
+        "units": {key: dict(value, commandAuraRadius=server.PUBLIC_CATALOG["units"][key]["commandAuraRadius"])
+                  for key, value in server.UNIT_TYPES.items()},
         "structures": server.STRUCTURE_TYPES,
         "sight": {
             "units": {key: server.unit_sight_radius(value)

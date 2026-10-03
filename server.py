@@ -29,16 +29,26 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from catalog import (
+    COMMAND_AURA_QUERY,
     FACTION_BUILDINGS,
     FACTION_LOADOUT,
+    HUNT_MARK_BONUS,
+    HUNT_MARK_SECONDS,
+    HUNT_MARK_SOURCES,
     MAGIC_STRUCTURES,
     MAGIC_UNITS,
     PANDA_RAGE_DAMAGE,
     PANDA_RAGE_ENTER,
     PANDA_RAGE_EXIT,
     PUBLIC_CATALOG,
+    REPAIRABLE_KINDS,
+    ROOT_RESIST_SECONDS,
+    ROOT_RESIST_SLOW_MULT,
+    START_GARRISON_OFFSETS,
     STRUCTURE_TYPES,
     SUICIDE_KINDS,
+    TRIBE_BEAST_KINDS,
+    TRIBE_BONUS_CAP,
     TRIBE_STRUCTURES,
     TRIBE_UNITS,
     UNIT_TYPES,
@@ -50,6 +60,7 @@ from catalog import (
     VETERAN_PROJECTILES,
     faction_buildings,
     faction_loadout,
+    faction_start_garrison,
     kind_faction,
     public_catalog,
     structure_role,
@@ -955,6 +966,10 @@ def public_unit(unit):
         result["slow"] = True
         if float(unit.get("slowMult", 1.0)) <= 0.0:
             result["rooted"] = True
+    if float(unit.get("rootResist") or 0.0) > 0.0:
+        result["rootResist"] = True
+    if float(unit.get("huntMarkTimer") or 0.0) > 0.0:
+        result["marked"] = True
     if float(unit.get("dotTimer", 0.0) or 0.0) > 0.0:
         result["dot"] = True
     if unit.get("rage"):
@@ -986,6 +1001,8 @@ def public_structure(structure):
         result["dir"] = round(structure["dir"], 3)
     if STRUCTURE_TYPES.get(structure["kind"], {}).get("trapRadius"):
         result["armed"] = bool(structure.get("armed"))
+        if "trapCharges" in STRUCTURE_TYPES[structure["kind"]]:
+            result["charges"] = int(structure.get("charges", STRUCTURE_TYPES[structure["kind"]]["trapCharges"]))
     if structure.get("packable"):
         result["packable"] = True
     if structure.get("rally"):
@@ -1875,6 +1892,7 @@ def make_structure(kind, owner, x, y, active=True):
         "targetId": None,
         "armed": False,
         "armTimer": float(definition.get("trapArm", 0.0) or 0.0),
+        "charges": int(definition.get("trapCharges") or 0),
         "auraTimer": 0.0,
     }
 
@@ -1896,6 +1914,9 @@ def make_unit(kind, owner, x, y):
         "repairTargetId": None, "repairAngle": 0.0, "repairRing": 0,
         "repairing": False, "manualUntil": 0.0, "order": "guard",
         "slowMult": 1.0, "slowTimer": 0.0,
+        # 定身结束后的抗性计时：>0 期间新定身降为 ×ROOT_RESIST_SLOW_MULT 减速。
+        "rootResist": 0.0,
+        "huntMarkTimer": 0.0,
         "dotDps": 0.0, "dotTimer": 0.0,
         "dotOwner": None, "dotSourceId": None, "dotSourceKind": None,
         "dotDamageType": None,
@@ -2534,7 +2555,7 @@ def start_game(room):
         # 五车争霸只发一辆折叠基地车；没有预建建筑、矿车或作战单位。
         # 其他地图继续按阵营发完整出生装备：科技(指挥中心/电站/精炼厂/采矿车 + 突击兵/坦克)，
         # 魔法(主堡/法力塔/精炼所/浮游晶簇 + 法师/傀儡)，
-        # 部落(大营/图腾柱/精炼棚/驮兽 + 骨矛猎手/战狼)。kind 全部取自阵营装备表。
+        # 部落(大营/图腾柱/精炼棚/驮兽 + 三骨矛/战狼/标枪)。kind 全部取自阵营装备表。
         loadout = faction_loadout(player.get("faction", "tech"))
         if room_map.get("packedStart"):
             command = make_unit(loadout["mcv"], player["id"], x, y)
@@ -2549,9 +2570,8 @@ def start_game(room):
         game["structures"].append(refinery)
         harvester = make_unit(loadout["harvester"], player["id"], refinery["x"] + toward_x * 70, refinery["y"])
         game["units"].append(harvester)
-        for n in range(3):
-            game["units"].append(make_unit(loadout["infantry"], player["id"], x + toward_x * (75 + n * 16), y + toward_y * 70))
-        game["units"].append(make_unit(loadout["armor"], player["id"], x + toward_x * 92, y + toward_y * 112))
+        for (dx, dy), kind in zip(START_GARRISON_OFFSETS, faction_start_garrison(player.get("faction", "tech"))):
+            game["units"].append(make_unit(kind, player["id"], x + toward_x * dx, y + toward_y * dy))
         # 家矿要跟随出生方向，但不能随着大战场尺寸一起越推越远；否则恢复
         # 9600×6000 后首轮回款会比小地图慢十几秒。普通地图把矿放在朝向
         # 中央的一侧；赤金陨坑可用 homeOreBehind 把矿簇翻到总部后方。
@@ -3419,11 +3439,11 @@ def issue_repair(game, player_id, unit_ids, structure_id):
     selected = [
         unit for unit in game["units"]
         if unit["owner"] == player_id and unit["id"] in unit_ids
-        and unit["hp"] > 0 and unit["kind"] in VEHICLE_KINDS
+        and unit["hp"] > 0 and unit["kind"] in REPAIRABLE_KINDS
         and unit["hp"] < unit["maxHp"] - 0.1
     ]
     if not selected:
-        raise ValueError("请选择受损载具")
+        raise ValueError("请选择受损载具或野兽")
     for index, unit in enumerate(selected):
         ring = index // REPAIR_DOCKS_PER_RING
         slot = index % REPAIR_DOCKS_PER_RING
@@ -5422,17 +5442,71 @@ def unit_move_slow(entity):
         return 1.0
 
 
+def tick_status_timers(unit, dt):
+    """减速/定身与定身抗性计时（控制规则 H）。0 是合法定身，不能用 `or 1.0` 冲掉。
+
+    抗性先衰减、再判定定身到期：定身到期这一帧写入的抗性完整持续
+    ROOT_RESIST_SECONDS 秒。普通减速到期只恢复满速，不进入抗性。
+    """
+    resist = float(unit.get("rootResist") or 0.0)
+    if resist > 0.0:
+        unit["rootResist"] = max(0.0, resist - dt)
+    mark = float(unit.get("huntMarkTimer") or 0.0)
+    if mark > 0.0:
+        unit["huntMarkTimer"] = max(0.0, mark - dt)
+    timer = float(unit.get("slowTimer") or 0.0)
+    if timer > 0.0:
+        unit["slowTimer"] = max(0.0, timer - dt)
+        if unit["slowTimer"] <= 0.0:
+            if unit_move_slow(unit) <= 0.0:
+                # 定身结束才进入抗性
+                unit["rootResist"] = ROOT_RESIST_SECONDS
+            unit["slowMult"] = 1.0
+
+
 def apply_slow(projectile, target):
-    """命中挂减速/定身。只影响单位；重命中刷新时长，不叠乘。"""
+    """命中挂减速/定身（控制规则 H，全阵营通用）。只影响存活单位，不叠乘。
+
+    强度看 slowMult：越小越强，0 为定身。更强的覆盖为新倍率与新时长；
+    同强度计时取 max(剩余, 新时长)；更弱的忽略。定身期间不再续时；
+    定身结束后的 rootResist 抗性期内，新定身降为 ×ROOT_RESIST_SLOW_MULT
+    减速（时长不变），再按同样的强弱规则处理。
+    """
     slow = projectile.get("slow")
     if not slow or not target["id"].startswith("u") or target["hp"] <= 0:
         return
-    target["slowMult"] = float(slow["mult"])
-    target["slowTimer"] = float(slow["duration"])
+    mult = float(slow["mult"])
+    duration = float(slow["duration"])
+    if duration <= 0.0:
+        return
+    current = unit_move_slow(target)
+    remain = float(target.get("slowTimer") or 0.0)
+    active = remain > 0.0 and current < 1.0
+    if mult <= 0.0:
+        if active and current <= 0.0:
+            return  # 定身期间不刷新时长
+        if float(target.get("rootResist") or 0.0) > 0.0:
+            mult = ROOT_RESIST_SLOW_MULT  # 抗性期：定身降为 ×0.5 减速
+        else:
+            target["slowMult"] = 0.0
+            target["slowTimer"] = duration
+            return
+    if active and current < mult - 1e-9:
+        return  # 已有更强的减速/定身
+    if active and abs(current - mult) <= 1e-9:
+        target["slowTimer"] = max(remain, duration)  # 同强度只延长到更长
+        return
+    target["slowMult"] = mult
+    target["slowTimer"] = duration
 
 
 def apply_dot(projectile, target):
-    """可复用持续伤害：刷新时长与每秒伤害，不叠乘。只挂单位。"""
+    """可复用持续伤害（控制规则 H，全阵营通用）。只挂存活单位，不叠乘。
+
+    强度 = dps × 伤种对目标护甲倍率。已有更强的忽略；同强度且剩余不短于
+    新时长的忽略；否则整组覆盖 dps、计时、伤种与来源——谁写入计时，
+    谁拥有击杀归属（tick_dot 记给 dotOwner）。
+    """
     dot = projectile.get("dot")
     if not dot or not target["id"].startswith("u") or target["hp"] <= 0:
         return
@@ -5440,18 +5514,71 @@ def apply_dot(projectile, target):
     duration = float(dot.get("duration") or 0.0)
     if dps <= 0.0 or duration <= 0.0:
         return
+    damage_type = dot.get("damageType")
+    remain = float(target.get("dotTimer") or 0.0)
+    current_dps = float(target.get("dotDps") or 0.0)
+    if remain > 0.0 and current_dps > 0.0:
+        # 与 apply_damage 相同的护甲解析：缺省按 structure。
+        armor = UNIT_TYPES.get(target.get("kind"), {}).get("armor", "structure")
+        strength = dps * damage_armor_multiplier(damage_type, armor)
+        current = current_dps * damage_armor_multiplier(
+            target.get("dotDamageType"), armor)
+        if current > strength + 1e-9:
+            return  # 已有更强的持续伤害
+        if abs(current - strength) <= 1e-9 and remain >= duration:
+            return  # 同强度且剩余不短于新时长
     target["dotDps"] = dps
     target["dotTimer"] = duration
-    target["dotDamageType"] = dot.get("damageType")
+    target["dotDamageType"] = damage_type
     target["dotOwner"] = projectile.get("owner")
     target["dotSourceId"] = projectile.get("sourceId")
     target["dotSourceKind"] = projectile.get("sourceKind")
+
+
+def apply_hunt_mark(projectile, target):
+    """猎手命中存活单位刷新猎印；建筑不带印。"""
+    if (projectile.get("sourceKind") in HUNT_MARK_SOURCES
+            and target["id"].startswith("u") and target["hp"] > 0):
+        target["huntMarkTimer"] = HUNT_MARK_SECONDS
+
+
+def hunt_mark_multiplier(projectile, target):
+    if (projectile.get("sourceKind") not in TRIBE_BEAST_KINDS
+            or not target["id"].startswith("u")
+            or float(target.get("huntMarkTimer") or 0.0) <= 0.0):
+        return 1.0
+    base = max(1.0, float(projectile.get("tribeBonus") or 1.0))
+    return max(1.0, min(HUNT_MARK_BONUS, TRIBE_BONUS_CAP / base))
+
+
+def command_aura_multiplier(game, unit, spatial_index=None):
+    """己方与盟友号令只取最强，按开火时位置计算。"""
+    if unit["kind"] not in TRIBE_BEAST_KINDS or COMMAND_AURA_QUERY <= 0.0:
+        return 1.0
+    best = 1.0
+    candidates = (spatial_candidates(spatial_index, unit["x"], unit["y"], COMMAND_AURA_QUERY)
+                  if spatial_index else game["units"])
+    for other in candidates:
+        aura = UNIT_TYPES.get(other.get("kind"), {}).get("commandAura")
+        if (not aura or other is unit or other.get("hp", 0) <= 0
+                or not other["id"].startswith("u")
+                or not is_friendly(game, unit["owner"], other["owner"])):
+            continue
+        if math.hypot(other["x"] - unit["x"], other["y"] - unit["y"]) <= float(aura["radius"]):
+            best = max(best, float(aura["mult"]))
+    return best
+
+
+def tribe_attack_bonus(game, unit, raging, spatial_index=None):
+    bonus = PANDA_RAGE_DAMAGE if raging else 1.0
+    return min(TRIBE_BONUS_CAP, bonus * command_aura_multiplier(game, unit, spatial_index))
 
 
 def apply_hit_status(projectile, target):
     """弹丸命中时的控制/持续伤害。溅射与直击共用。"""
     apply_slow(projectile, target)
     apply_dot(projectile, target)
+    apply_hunt_mark(projectile, target)
 
 
 def update_panda_rage(unit):
@@ -5572,7 +5699,7 @@ def defense_shot_multiplier(game, structure, definition, combat_mult):
     return combat_mult * (storm_network_damage(definition, len(supporters)) / base)
 
 
-def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
+def launch_projectile(game, attacker, target, definition, damage_mult=1.0, tribe_bonus=1.0):
     # 发射就算交战：不能让远程弹丸在飞行时攻击者先回血。
     mark_unit_combat(attacker, game)
     span = math.hypot(target["x"] - attacker["x"], target["y"] - attacker["y"])
@@ -5586,6 +5713,7 @@ def launch_projectile(game, attacker, target, definition, damage_mult=1.0):
         "id": new_id("q"), "owner": attacker["owner"],
         "sourceId": attacker["id"],
         "sourceKind": attacker["kind"],
+        "tribeBonus": tribe_bonus,
         "x": attacker["x"], "y": attacker["y"],
         "span": max(1.0, span),
         "targetId": target["id"], "targetX": target["x"], "targetY": target["y"],
@@ -5793,7 +5921,7 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
             if source_id and entity_index is not None:
                 source_unit = entity_index.get(source_id)
             if target:
-                apply_damage(room, target, projectile["damage"], projectile["owner"],
+                apply_damage(room, target, projectile["damage"] * hunt_mark_multiplier(projectile, target), projectile["owner"],
                              projectile.get("damageType"), game,
                              source_id, source_unit, projectile.get("sourceKind"))
                 apply_hit_status(projectile, target)
@@ -5812,7 +5940,7 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
                     radius_sq = dx * dx + dy * dy
                     if radius_sq < splash * splash:
                         radius = math.sqrt(radius_sq)
-                        apply_damage(room, entity, projectile["damage"] * 0.45 * (1.0 - radius / splash), projectile["owner"],
+                        apply_damage(room, entity, projectile["damage"] * 0.45 * (1.0 - radius / splash) * hunt_mark_multiplier(projectile, entity), projectile["owner"],
                                      projectile.get("damageType"), game,
                                      source_id, source_unit, projectile.get("sourceKind"))
                         apply_hit_status(projectile, entity)
@@ -5831,6 +5959,10 @@ def tick_projectiles(room, dt, entity_index=None, combat_spatial=None):
 
 def tick_repair_unit(room, unit, dt, entity_index, power_cache, terrain):
     game = room["game"]
+    if unit["kind"] not in REPAIRABLE_KINDS:
+        clear_repair_order(unit)
+        unit["order"] = "guard"
+        return
     repair_bay = find_entity(game, unit.get("repairTargetId"), entity_index)
     if (not repair_bay or structure_role(repair_bay.get("kind")) != "repair"
             or repair_bay["owner"] != unit["owner"]
@@ -6156,16 +6288,12 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
             unit["hp"] = min(
                 unit["maxHp"],
                 unit["hp"] + unit["maxHp"] * regen_fraction * dt)
-        if update_panda_rage(unit):
-            dam_mult *= PANDA_RAGE_DAMAGE
+        raging = update_panda_rage(unit)
         unit["repairing"] = False
         unit["cooldown"] = max(0.0, unit["cooldown"] - dt * (1.0 / cd_mult))
         unit["scan"] = max(0.0, unit["scan"] - dt)
-        # 冰霜减速 / 蛛网定身衰减：计时归零则恢复满速
-        if unit.get("slowTimer", 0.0) > 0.0:
-            unit["slowTimer"] = max(0.0, unit["slowTimer"] - dt)
-            if unit["slowTimer"] <= 0.0:
-                unit["slowMult"] = 1.0
+        # 冰霜减速 / 蛛网定身 / 定身抗性衰减：计时归零则恢复满速，定身到期进入抗性
+        tick_status_timers(unit, dt)
         if unit.get("dotTimer", 0.0) > 0.0:
             tick_dot(room, unit, dt, entity_index)
             if unit["hp"] <= 0:
@@ -6236,7 +6364,7 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                     game, unit["owner"], unit["x"], unit["y"], aggro,
                     combat_spatial)
                 # 攻城炮 / 裂地晶兽优先打建筑，附近没有建筑时才打单位
-                if (target and unit["kind"] in ("artillery", "colossus", "comet")
+                if (target and unit["kind"] in ("artillery", "colossus", "comet", "catapult")
                         and target["kind"] not in STRUCTURE_TYPES):
                     building = nearest_enemy_structure(
                         game, unit["owner"], unit["x"], unit["y"], aggro,
@@ -6272,7 +6400,8 @@ def tick_units(room, dt, entity_index=None, combat_spatial=None):
                     unit["hp"] = 0
                     trigger_death_explosion(room, unit, game, combat_spatial)
                 elif definition.get("damage", 0) > 0 and unit["cooldown"] <= 0:
-                    launch_projectile(game, unit, target, definition, dam_mult)
+                    bonus = tribe_attack_bonus(game, unit, raging, combat_spatial)
+                    launch_projectile(game, unit, target, definition, dam_mult * bonus, tribe_bonus=bonus)
                     unit["cooldown"] = definition["cooldown"]
             elif not holding:
                 move_toward(terrain, unit, target["x"], target["y"], definition["speed"] * spd_mult, dt, max(8, desired - 12))
@@ -6380,7 +6509,7 @@ def trap_enemy_units(game, owner, x, y, radius):
 
 
 def tick_trap_structure(room, structure, dt):
-    """兽夹：上膛后一次定身+爆发然后拆除。毒坑：脉冲给敌军挂毒。"""
+    """兽夹：按目录充能定身爆发，最后一次静默拆除；毒坑脉冲给敌军挂毒。"""
     game = room["game"]
     definition = STRUCTURE_TYPES.get(structure.get("kind"), {})
     trap_radius = float(definition.get("trapRadius") or 0.0)
@@ -6422,7 +6551,9 @@ def tick_trap_structure(room, structure, dt):
             "entityId": structure["id"], "entityKind": structure["kind"],
             "size": structure.get("size", 16.0),
         })
-        if definition.get("trapExpire"):
+        if "trapCharges" in definition:
+            structure["charges"] = max(0, int(structure.get("charges", definition["trapCharges"])) - 1)
+        if definition.get("trapExpire") or ("trapCharges" in definition and structure["charges"] <= 0):
             structure["hp"] = 0.0
             structure["_combatDestroyed"] = True
             structure["_silentRemoval"] = True
@@ -6576,16 +6707,16 @@ BOT_SUICIDE_BLAST = UNIT_TYPES["bomb_truck"]["deathExplosion"]
 BOT_CHEAP_KINDS = frozenset((
     "rifle", "rocket", "sniper", "dog", "tesla",
     "mage", "frost", "imp", "oracle", "panther", "scout", "warden",
-    "spear", "tamer", "wolf",
+    "spear", "tamer", "wolf", "javelin", "slinger",
 ))
 BOT_INFANTRY_KINDS = frozenset((
     "rifle", "rocket", "sniper", "tesla", "mage", "frost", "imp", "oracle",
-    "spear",
+    "spear", "slinger", "javelin", "tamer",
 ))
 BOT_MAGE_KINDS = frozenset(("mage", "frost"))
 BOT_LATE_UNITS = frozenset((
     "overlord", "prism", "v3", "dragon", "colossus", "comet",
-    "behemoth", "mammoth", "spider", "scorpion",
+    "behemoth", "mammoth", "spider", "panda", "catapult",
 ))
 BOT_LATE_STRUCTURES = frozenset(("repair", "mspring", "taltar"))
 BOT_SCOUT_VEHICLES = VEHICLE_KINDS - frozenset((
@@ -6942,11 +7073,13 @@ def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
             if opening:
                 choices.extend(("spear", "spear"))
             else:
-                choices.extend(("spear", "spear", "slinger", "tamer"))
+                choices.extend(("spear", "slinger", "javelin", "tamer"))
         if "factory" in roles:
-            choices.append("wolf")
+            choices.extend(("wolf", "scorpion"))
             if "repair" in roles:
-                choices.extend(("spider", "scorpion", "panda", "mammoth"))
+                choices.extend(("spider", "panda", "mammoth"))
+                if late:
+                    choices.append("catapult")
             if rich and harvester_n < 2:
                 choices.append("tharvester")
         return choices
@@ -7006,10 +7139,10 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
     if inbound:
         if tribe:
             if "barracks" in roles:
-                return ["spear", "slinger", "tamer"]
+                return ["javelin", "slinger", "spear"]
             if "factory" in roles:
-                return (["wolf", "panda", "mammoth"]
-                        if "repair" in roles else ["wolf"])
+                return (["scorpion", "panda", "mammoth"]
+                        if "repair" in roles else ["scorpion"])
             return []
         if magic:
             if "barracks" in roles:
@@ -7060,11 +7193,11 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         if tribe:
             choices = []
             if "factory" in roles:
+                choices.append("scorpion")
                 if "repair" in roles:
-                    choices.extend(("scorpion", "panda", "mammoth"))
-                choices.append("wolf")
+                    choices.extend(("panda", "mammoth"))
             if "barracks" in roles:
-                choices.extend(("slinger", "spear"))
+                choices.extend(("javelin", "spear"))
             return choices
         if magic:
             choices = []
@@ -7090,9 +7223,9 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         if tribe:
             choices = []
             if "barracks" in roles:
-                choices.extend(("spear", "slinger", "tamer"))
+                choices.extend(("javelin", "spear", "slinger", "tamer"))
             if "factory" in roles:
-                choices.append("wolf")
+                choices.extend(("wolf", "scorpion"))
                 if "repair" in roles:
                     choices.extend(("spider", "panda", "mammoth"))
             return choices
@@ -7119,9 +7252,9 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
         if tribe:
             choices = []
             if "factory" in roles:
-                choices.extend(("spider", "scorpion", "panda", "mammoth", "wolf"))
+                choices.extend(("spider", "scorpion", "panda", "mammoth", "catapult", "wolf"))
             if "barracks" in roles:
-                choices.extend(("slinger", "spear", "tamer"))
+                choices.extend(("javelin", "slinger", "spear", "tamer"))
             return choices
         if magic:
             choices = ["colossus", "dragon", "behemoth"]
@@ -7142,7 +7275,30 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
     return choices
 
 
+BOT_TAMER_CAP = 2
+BOT_TAMER_MIN_BEASTS = 3
+
+
+def bot_tame_targets_available(room, game):
+    return neutrals_enabled(room, game) and any(
+        u.get("owner") == NEUTRAL_OWNER and is_tameable_combat_unit(u)
+        for u in game["units"])
+
+
+def bot_filter_choices(room, bot, choices):
+    """驯兽师需要中立目标或三只野兽；存量含队列，最多两名。"""
+    if "tamer" not in choices:
+        return choices
+    game = room["game"]
+    beasts = sum(1 for u in game["units"] if u["owner"] == bot["id"]
+                 and u["hp"] > 0 and u["kind"] in TRIBE_BEAST_KINDS)
+    allowed = (bot_kind_stock(game, bot["id"], "tamer") < BOT_TAMER_CAP
+               and (bot_tame_targets_available(room, game) or beasts >= BOT_TAMER_MIN_BEASTS))
+    return choices if allowed else [k for k in choices if k != "tamer"]
+
+
 def bot_try_choices(room, bot, choices):
+    choices = bot_filter_choices(room, bot, choices)
     if not choices:
         return False
     unique = []
@@ -7224,8 +7380,8 @@ def bot_queue_unit(room, bot, faction, roles, phase, scout, defend):
             late_choices = (("colossus", "dragon", "comet", "behemoth") +
                             (("warden",) if "barracks" in roles else ()))
         elif faction == "tribe":
-            late_choices = (("spider", "scorpion", "panda", "mammoth", "wolf") if "factory" in roles else ()) + (
-                ("slinger", "spear", "tamer") if "barracks" in roles else ())
+            late_choices = (("spider", "scorpion", "panda", "mammoth", "catapult") if "factory" in roles else ()) + (
+                ("javelin", "slinger", "spear", "tamer") if "barracks" in roles else ())
         else:
             late_choices = ("overlord", "prism", "artillery")
         if bot_try_choices(room, bot, late_choices):
@@ -7532,7 +7688,7 @@ def tick_bots(room):
         ]
         damaged = [
             unit for unit in game["units"]
-            if unit["owner"] == bot["id"] and unit["kind"] in VEHICLE_KINDS
+            if unit["owner"] == bot["id"] and unit["kind"] in REPAIRABLE_KINDS
             and unit["hp"] > 0 and unit["hp"] / unit["maxHp"] < 0.62
             and unit.get("order") != "repair"
         ]

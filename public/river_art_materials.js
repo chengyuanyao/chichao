@@ -78,7 +78,8 @@ export function applyRiverPBR(material,maps) {
       .replace('diffuseColor.rgb = mix(vOwnColor, diffuseColor.rgb, vTeamMix);',
         'vec3 riverOwn=max(max(vOwnColor.r,vOwnColor.g),vOwnColor.b)>1.0?vOwnColor:pow(max(vOwnColor,vec3(0.0)),vec3(2.2));\n diffuseColor.rgb = mix(riverOwn, diffuseColor.rgb, vTeamMix);')
       .replace('float gSurfaceLum = 0.5;',`float gSurfaceLum = 0.5;
-        float riverKind=clamp(floor(gMode+0.01),0.0,3.0);
+        float riverFur=step(3.2,gMode)*step(gMode,3.3);
+        float riverKind=mix(clamp(floor(gMode+0.01),0.0,3.0),2.0,riverFur);
         vec2 riverTile=vec2(mod(riverKind,2.0),1.0-floor(riverKind/2.0));
         vec3 riverAxis=abs(normalize(vRiverLocalNormal));
         vec2 riverSurfaceUv=riverAxis.y>max(riverAxis.x,riverAxis.z)?vArmyLocal.xz:
@@ -88,7 +89,7 @@ export function applyRiverPBR(material,maps) {
         vec4 riverORM=texture2D(uRiverORM,vec2(riverUV.x,1.0-riverUV.y));`)
       .replace('vec2 gAtlasUv = vec2(mix(0.01, 0.51, gAtlasSide) + gMirror.x * 0.48, 0.01 + gMirror.y * 0.98);','vec2 gAtlasUv = riverUV;')
       .replace('float gRelief = mix(0.62, 1.42, smoothstep(0.17, 0.60, gSurfaceLum));','float gRelief = mix(0.48, 1.24, smoothstep(0.22, 0.78, gSurfaceLum));')
-      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=gMode>3.5?0.26:clamp(riverORM.g,0.24,0.96);\nif(gMode>0.2&&gMode<0.3) roughnessFactor=max(0.28,roughnessFactor-0.18);')
+      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=gMode>3.5?0.26:clamp(riverORM.g,0.24,0.96);\nif(gMode>0.2&&gMode<0.3) roughnessFactor=max(0.28,roughnessFactor-0.18);\nif(riverFur>0.5) roughnessFactor=0.9;')
       // 0.25 explicitly marks bare hardware. Dark steel must not become plastic
       // just because its albedo is dark; ordinary paint retains the old mask.
       .replace('#include <metalnessmap_fragment>','#include <metalnessmap_fragment>\nmetalnessFactor=gMode<0.5?riverORM.b*(gMode>0.2?1.0:smoothstep(0.30,0.62,max(max(vOwnColor.r,vOwnColor.g),vOwnColor.b)))*(1.0-vTeamMix*0.96):0.0;')
@@ -96,12 +97,19 @@ export function applyRiverPBR(material,maps) {
       .replace('gBumpScale * gDetailFade * gGrad','0.0 * gDetailFade * gGrad')
       .replace('#include <normal_fragment_maps>',`vec3 riverN=texture2D(normalMap,vec2(riverUV.x,1.0-riverUV.y)).xyz*2.0-1.0;
         riverN.xy*=normalScale*(1.0-smoothstep(800.0,1800.0,length(vViewPosition)));
+        if(riverFur>0.5) {
+          float furFade=1.0-smoothstep(600.0,1400.0,length(vViewPosition));
+          vec2 fq=vec2(vArmyLocal.z*2.4+sin(vArmyLocal.x*0.8)*0.9,vArmyLocal.y*0.6+vArmyLocal.x*0.25);
+          float strand=sin(fq.x*3.2+sin(fq.y*2.1)*1.7);
+          riverN.xy=riverN.xy*0.3+vec2(strand*0.30,cos(fq.x*3.2)*0.12)*furFade;
+          diffuseColor.rgb*=1.0+0.04*strand*furFade;
+        }
         mat3 riverTBN=getTangentFrame(-vViewPosition,normal,riverSurfaceUv);
         normal=normalize(riverTBN*normalize(riverN));
         float riverDirt=(1.0-smoothstep(1.0,12.0,vArmyLocal.y))*(0.10+0.08*sin(vArmyLocal.x*0.47+vArmyLocal.z*0.73));
         diffuseColor.rgb*=riverORM.r*mix(vec3(1.0),vec3(0.46,0.38,0.28),riverDirt);`);
   };
-  material.customProgramCacheKey=()=>key()+'-river-pbr-v3';return material;
+  material.customProgramCacheKey=()=>key()+'-river-pbr-v4';return material;
 }
 
 export function applyRiverGround(material) {

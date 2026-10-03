@@ -41,12 +41,12 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     mspring: { icon: '✚', desc: '修复受损构装、巨龙与晶簇；解锁进阶召唤' },
     tpower: { icon: '↟', desc: '提供 120 图腾之力' },
     trefinery: { icon: '◆', desc: '接收驮兽运回的兽骨矿' },
-    tcamp: { icon: '♟', desc: '训练骨矛猎手、投石猎手与驯兽师' },
-    tpen: { icon: '▰', desc: '驯养驮兽、战狼、蛛网巨蛛、穿甲巨蝎、竹甲熊猫与猛犸战象' },
-    taltar: { icon: '✚', desc: '修复驮兽与迁徙驮队；需围栏与图腾柱' },
-    tspiketower: { icon: '↟', desc: '短距骨矛防空，早期基地守卫 · 需营地' },
-    ttoxtower: { icon: '☠', desc: '远距毒矢，命中挂毒 · 需血祭坛' },
-    ttrap: { icon: '⋈', desc: '上膛后夹住敌军，定身并爆发一次 · 需营地' },
+    tcamp: { icon: '♟', desc: '训练骨矛猎手、燧石标枪手、投石猎手与驯兽师' },
+    tpen: { icon: '▰', desc: '驯养驮兽、战狼、巨蝎；祭坛后解锁进阶野兽与巨石投石车' },
+    taltar: { icon: '✚', desc: '治疗驮兽、迁徙驮队、野兽与投石车；解锁进阶驯养' },
+    tspiketower: { icon: '↟', desc: '中距骨矛炮弹，反甲近防 · 需营地' },
+    ttoxtower: { icon: '☠', desc: '远距穿甲毒矢，溅射挂毒 · 需血祭坛' },
+    ttrap: { icon: '⋈', desc: '上膛后夹住敌军，可触发 2 次 · 需营地' },
     tpit: { icon: '◌', desc: '持续喷毒雾，拒止敌军地面单位 · 需血祭坛' }
   };
   var UNIT_VFX = {
@@ -79,14 +79,16 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     mharvester: { icon: '◈', desc: '自动采集水晶' },
     mmcv: { icon: '⬡', desc: '可展开为魔法主堡' },
     hexling: { icon: '✶', desc: '符核魔仆，贴脸或阵亡引爆；轻甲非载具，军犬咬不动' },
-    spear: { icon: '↟', desc: '廉价骨矛猎手，短中距穿刺，对位突击兵' },
-    tamer: { icon: '✦', desc: '脆弱辅助，耗时+矿招降中立作战单位；关闭中立后不可用' },
+    spear: { icon: '↟', desc: '廉价骨矛猎手，短中距穿刺，命中挂猎印' },
+    tamer: { icon: '✦', desc: '驯兽号令：220 内野兽伤害 ×1.10；开启中立时可招降' },
     wolf: { icon: '♞', desc: '围栏战狼，扑咬步兵；兽甲，无自爆' },
     spider: { icon: '🕷', desc: '吐丝定身并造成持续毒伤 · 需血祭坛' },
-    scorpion: { icon: '🦂', desc: '穿甲尾刺点杀重甲，玻璃大炮 · 需血祭坛' },
+    scorpion: { icon: '🦂', desc: '穿甲尾刺点杀重甲，玻璃大炮 · 围栏即可驯' },
     mammoth: { icon: '🐘', desc: '后期重兽前排，短距砸击拆建筑 · 需血祭坛' },
     panda: { icon: '🐼', desc: '中坚前排，低血狂暴砸击 · 需血祭坛' },
-    slinger: { icon: '◉', desc: '营地中距投石，溅射压步兵' },
+    slinger: { icon: '◉', desc: '营地中距投石，溅射压步兵，命中挂猎印' },
+    javelin: { icon: '➶', desc: '燧石标枪，营地反甲步兵，命中挂猎印' },
+    catapult: { icon: '🪨', desc: '巨石弧线攻城，专拆建筑 · 需血祭坛' },
     tharvester: { icon: '▣', desc: '自动采集矿石的驮兽' },
     tmcv: { icon: '⬢', desc: '可展开为新的部落大营' }
   };
@@ -235,12 +237,12 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       harvester: '驮兽',
       hq: '部落大营',
       mcv: '迁徙驮队',
-      repairBtn: '祭坛修复',
+      repairBtn: '祭坛治疗',
       repairTitle: '前往最近血祭坛 (R)',
-      repairHint: '修复驮兽',
+      repairHint: '祭坛治疗',
       repairNeed: '没有可用的血祭坛',
-      repairSelect: '请选择受损的驮兽或迁徙驮队',
-      repairSent: '头驮兽已前往血祭坛'
+      repairSelect: '请选择受损的驮兽、野兽或投石车',
+      repairSent: '个单位已前往血祭坛'
     }
   };
 
@@ -346,7 +348,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     thq: 1, tpower: 1, trefinery: 1, tcamp: 1, tpen: 1, taltar: 1,
     tspiketower: 1, ttoxtower: 1, ttrap: 1, tpit: 1,
     spear: 1, tamer: 1, wolf: 1, spider: 1, scorpion: 1, mammoth: 1,
-    panda: 1, slinger: 1,
+    panda: 1, slinger: 1, javelin: 1, catapult: 1,
     tharvester: 1, tmcv: 1
   };
 
@@ -1389,6 +1391,33 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       pPoly(c, [[50, 12], [66, 8], [58, 20]], P_BONE);
       pCirc(c, 72, 36, 1.2, P_FIRE);
       pCirc(c, 58, 14, 1.4, P_FIRE);
+    },
+    javelin: function (c) {
+      // 燧石标枪手：骨环、后举标枪与肩后三支短枪。
+      pBust(c, P_HIDE);
+      pLine(c, 25, 28, 48, 26, 3, P_BONE);
+      pLine(c, 17, 15, 64, 11, 3, P_BARK);
+      pPoly(c, [[64, 7], [74, 10], [64, 14]], P_STONE);
+      for (var i = 0; i < 3; i++) {
+        pLine(c, 24 + i * 5, 51, 20 + i * 5, 19 - i * 3, 2, P_BARK);
+      }
+      pLine(c, 40, 33, 47, 36, 2, P_BLOOD);
+      pLine(c, 40, 38, 47, 41, 2, P_BLOOD);
+    },
+    catapult: function (c) {
+      // 巨石投石车：实心木轮、A 字框、抛臂皮兜与队旗。
+      pShadow(c, 44, 62, 32);
+      pPoly(c, [[12, 47], [71, 47], [65, 55], [18, 55]], P_BARK);
+      c.fillStyle = P_BARK;
+      [23, 61].forEach(function (x) { c.beginPath(); c.arc(x, 57, 10, 0, Math.PI * 2); c.fill(); });
+      c.fillStyle = P_BONE;
+      [23, 61].forEach(function (x) { c.beginPath(); c.arc(x, 57, 3, 0, Math.PI * 2); c.fill(); });
+      pLine(c, 21, 47, 42, 22, 5, P_BARK);
+      pLine(c, 63, 47, 42, 22, 5, P_BARK);
+      pLine(c, 49, 44, 26, 13, 4, P_BARK);
+      pPoly(c, [[16, 13], [30, 10], [35, 18], [20, 22]], P_HIDE);
+      c.fillStyle = P_STONE; c.beginPath(); c.arc(25, 12, 7, 0, Math.PI * 2); c.fill();
+      pPoly(c, [[43, 22], [61, 25], [43, 32]], P_BLOOD);
     },
     tharvester: function (c) {
       pShadow(c, 48, 60, 26);
@@ -3785,6 +3814,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
           '载矿 ' + Math.floor(one.cargo) + ' / ' + Math.floor(one.capacity) :
         (one ? '生命 ' + Math.ceil(one.hp) + ' / ' + Math.ceil(one.maxHp) + rankLabel : sameKind ? '同型编队' : '混合编队')));
       if (one && one.rage) { detail += ' · 狂暴'; }
+      if (one && one.marked) { detail += ' · 猎印'; }
       var patrols = (roomState.game.patrols || []).filter(function (route) { return selectedUnits.has(route.unitId); });
       if (patrols.length) {
         detail += one ? ' · 巡逻节点 ' + (patrols[0].next + 1) + '/' + patrols[0].points.length
@@ -3812,7 +3842,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
           (unit.kills || 0) + ':' + (unit.repairing ? 1 : 0) + ':' +
           (unit.taming ? 1 : 0) + ':' +
           (unit.harvestPaused ? 1 : 0) + ':' + (unit.tacticalOrder || '') + ':' +
-          (unit.rage ? 1 : 0);
+          (unit.rage ? 1 : 0) + ':' + (unit.marked ? 1 : 0);
       }).join(',') + '|patrol:' + patrols.map(function (route) {
         return route.unitId + ':' + route.next + ':' + route.points.length;
       }).join(',');
@@ -3842,10 +3872,14 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
           Math.floor((1 - structure.queue[0].remaining / structure.queue[0].total) * 100) + '%';
       } else if (structure.active && structureRole(structure.kind) === 'repair') {
         activeText = isOwnMagicFaction() ?
-          '圣泉待命 · 右键派遣构装' : '维修系统待命 · 右键派遣载具';
+          '圣泉待命 · 右键派遣构装' : ownFaction() === 'tribe' ?
+          '祭坛待命 · 右键派遣野兽或投石车' : '维修系统待命 · 右键派遣载具';
       } else if (structure.active && structure.owner === session.playerId &&
           structureRole(structure.kind) === 'defense') {
         activeText = '防御系统待命 · 右键敌军指定攻击';
+      }
+      if (structure.kind === 'ttrap' && structure.charges != null) {
+        activeText += ' · 剩余 ' + structure.charges + '/2 次';
       }
       var ownCompletedStructure = structure.owner === session.playerId && structure.active;
       var repair = ownCompletedStructure ?
