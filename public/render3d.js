@@ -14,6 +14,9 @@ import {wreckFamily,collapsePose,COLLAPSE_LIMIT,suspensionSlope,applyBuildingCol
 import { createBlastSurface, BLAST_FRAGMENT } from './blast_surface.js';
 import { warmAssetTasks, solidSurface } from './asset_warmup.js';
 import { createPostFX } from './postfx.js';
+import {createMotionClock,pushVisualMotion,sampleVisualMotion} from './visual_motion.js';
+import {createShadowSchedule} from './shadow_schedule.js';
+import {renderProfile} from './render_profile.js';
 import { riverUnitModel, riverStructureDetails, artJointAngle } from './river_art_models.js';
 import { advanceDragonFlight, dragonFlightPoint } from './dragon_flight.js';
 import { createRiverSurfaceMaps, createRiverEnvironment, applyRiverPBR, applyRiverGround } from './river_art_materials.js';
@@ -182,6 +185,41 @@ function bakeOcclusion(prepared, position, normal, out) {
     }
   }
 }
+const INDEXED_RENDER_GEOMETRY=new WeakMap();
+/** 只合并所有属性逐位相同的顶点；CPU 模板、面顺序、法线/UV 接缝均保留。 */
+function indexedRenderGeometry(source) {
+  if(!source || source.index || !source.attributes.position) return source;
+  if(INDEXED_RENDER_GEOMETRY.has(source)) return INDEXED_RENDER_GEOMETRY.get(source);
+  const count=source.attributes.position.count,attributes=Object.entries(source.attributes);
+  if(count<12 || Object.values(source.morphAttributes).some(a=>a.length) ||
+    attributes.some(([,a])=>a.isInterleavedBufferAttribute||a.isInstancedBufferAttribute||a.isFloat16BufferAttribute||a.count!==count||!a.array||a.array.BYTES_PER_ELEMENT>4)) return source;
+  const channels=attributes.map(([,a])=>({attribute:a,bits:a.array.BYTES_PER_ELEMENT===4?
+    new Uint32Array(a.array.buffer,a.array.byteOffset,a.array.length):a.array}));
+  const groupAt=new Uint32Array(count);
+  source.groups.forEach((group,g)=>groupAt.fill(g+1,group.start,Math.min(count,group.start+group.count)));
+  const slots=new Map(),unique=[],indices=new Array(count);
+  for(let i=0;i<count;i++) {
+    let key=groupAt[i]+'|';
+    for(const {attribute:a,bits} of channels) key+=bits.subarray(i*a.itemSize,(i+1)*a.itemSize).join(',')+'|';
+    let slot=slots.get(key);
+    if(slot==null) {slot=unique.length;slots.set(key,slot);unique.push(i);}
+    indices[i]=slot;
+  }
+  if(unique.length>=count*.95) {INDEXED_RENDER_GEOMETRY.set(source,source);return source;}
+  const geometry=source.clone();
+  for(const [name,a] of attributes) {
+    const array=new a.array.constructor(unique.length*a.itemSize);
+    for(let i=0;i<unique.length;i++) array.set(a.array.subarray(unique[i]*a.itemSize,(unique[i]+1)*a.itemSize),i*a.itemSize);
+    const compact=new THREE.BufferAttribute(array,a.itemSize,a.normalized);
+    compact.setUsage(a.usage);compact.gpuType=a.gpuType;compact.name=a.name;
+    geometry.setAttribute(name,compact);
+  }
+  geometry.setIndex(indices);
+  geometry.userData.renderVertices={source:count,indexed:unique.length};
+  INDEXED_RENDER_GEOMETRY.set(source,geometry);
+  return geometry;
+}
+
 function mergeParts(parts, options) {
   // 直接把源顶点按矩阵变换写进输出缓冲，不做 geometry.clone()。
   // 单位、建筑和山岩会合并大量零件，clone 一份 BufferGeometry 再
@@ -3488,7 +3526,7 @@ function structureGroup(kind, size, teamMaterial, artSample = false) {
   const group = new THREE.Group();
   const attach = function (geometry, material, parent, shadow) {
     if (!geometry) return null;
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(indexedRenderGeometry(geometry), material);
     mesh.castShadow = !!shadow;
     mesh.receiveShadow = !!shadow;
     parent.add(mesh);
@@ -3806,12 +3844,15 @@ export function createRenderer(canvas) {
   });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
-  // 软阴影：PCFSoft 的软边比硬 PCF 更接近 Apple 那种柔和的接触影
+  // 当前 PCF 实现自带软边，兼容新版引擎的阴影过滤。
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.autoUpdate=false;
+  const shadowSchedule=createShadowSchedule();
   renderer.setClearColor(0x9ec8d8);
 
   const textureLoader = new THREE.TextureLoader();
   const sharedTextureCache = new Map();
+  let textureAnisotropy=4;
   function loadSharedTexture(path, mirrored, anisotropy) {
     let tex = sharedTextureCache.get(path);
     if (tex) return tex;
@@ -3821,7 +3862,8 @@ export function createRenderer(canvas) {
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
     tex.generateMipmaps = true;
-    tex.anisotropy = Math.min(anisotropy || 4, renderer.capabilities.getMaxAnisotropy());
+    tex.userData.baseAnisotropy=anisotropy||4;
+    tex.anisotropy = Math.min(Math.max(tex.userData.baseAnisotropy,textureAnisotropy),renderer.capabilities.getMaxAnisotropy());
     sharedTextureCache.set(path, tex);
     return tex;
   }
@@ -3868,7 +3910,7 @@ export function createRenderer(canvas) {
 
   const sun = new THREE.DirectionalLight(0xffedc2, 2.0);
   sun.castShadow = true;
-  // 固定 1024 阴影预算，避免大地图和混战额外占用显存/填充率。
+  // 默认 1024；精细档按设备上限升到 2048，静止镜头复用投影。
   sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.camera.near = 50;
   sun.shadow.camera.far = 3200;
@@ -3885,13 +3927,23 @@ export function createRenderer(canvas) {
 
   const worldRoot = new THREE.Group();
   scene.add(worldRoot);
+  const unitDepthMaterial=new THREE.MeshDepthMaterial({colorWrite:false});
+  function drawUnitDepth() {
+    const layers=camera.layers.mask,override=scene.overrideMaterial,shadows=renderer.shadowMap.enabled;
+    camera.layers.set(1);scene.overrideMaterial=unitDepthMaterial;renderer.shadowMap.enabled=false;
+    try {renderer.render(scene,camera);} finally {
+      // colorWrite:false 会留在 GL 状态中，阴影和颜色路径继续前先恢复颜色写入。
+      renderer.state.buffers.color.setMask(true);
+      camera.layers.mask=layers;scene.overrideMaterial=override;renderer.shadowMap.enabled=shadows;
+    }
+  }
 
   const state = {
     width: 1, height: 1, dpr: 1,
     map: null, terrain: null,
     camX: 0, camY: 0, zoom: 0.78, yaw: 0, pitch: 0.94,
     shadows: 'structures', lod: true, fogScale: 6, particleBudget: 600,
-    bloom: true,
+    bloom: true,depthPrepass:true,
     showProjectiles: true,
     buildTerrainMs: 0, groundDetailParts: 0, forestChunks: 0, forestTrees: 0,
     snapshotUnits: 0, renderedUnits: 0, renderedStructures: 0,
@@ -4997,6 +5049,7 @@ export function createRenderer(canvas) {
 
   function buildTerrain() {
     const buildStarted = performance.now();
+    renderer.shadowMap.needsUpdate=true;
     heightField = null;
     terrainInput = null;
     _ghCache.clear();
@@ -6399,8 +6452,10 @@ export function createRenderer(canvas) {
   let riverSurfaceMaps=null,riverEnvironment=null;
   const riverUnitMaterials=new Map();
   function makeRiverMaterial(surfaceKind) {
-    if(!riverSurfaceMaps) riverSurfaceMaps=createRiverSurfaceMaps(
-      loadSharedTexture('/assets/textures/river-material-atlas-v1.png',false,4));
+    if(!riverSurfaceMaps) {
+      riverSurfaceMaps=createRiverSurfaceMaps(loadSharedTexture('/assets/textures/river-material-atlas-v1.png',false,4));
+      for(const tex of [riverSurfaceMaps.normal,riverSurfaceMaps.orm]) tex.anisotropy=Math.min(textureAnisotropy,renderer.capabilities.getMaxAnisotropy());
+    }
     if(!riverEnvironment) riverEnvironment=createRiverEnvironment(renderer);
     return applyRiverPBR(applyEmissiveByVertexColor(new THREE.MeshStandardMaterial({
       vertexColors:true,roughness:.72,metalness:.1,envMap:riverEnvironment.texture,envMapIntensity:.32
@@ -6932,11 +6987,12 @@ export function createRenderer(canvas) {
         pool[key] = null;
       }
       if (!geometry) return;
-      geometry = geometry.clone();
+      geometry = indexedRenderGeometry(geometry).clone();
       const feedback = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
       feedback.setUsage(THREE.DynamicDrawUsage);
       geometry.setAttribute('aFeedback', feedback);
       const mesh = new THREE.InstancedMesh(geometry, material, capacity);
+      mesh.layers.enable(1); // 不透明、无顶点形变的单位参加共用深度预绘；正常层仍保留。
       // 未进入当前景别的池也会参与预热，先建立队色属性以复用同一着色器。
       mesh.setColorAt(0,new THREE.Color(0xffffff));
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -9073,6 +9129,7 @@ export function createRenderer(canvas) {
   let renderGeneration = 0;
   let lastFogGame = null;
   let lastEntityGame = null;
+  const motionClock=createMotionClock();
   let lastOreAt = -Infinity;
   let lastBarsAt = -Infinity;
 
@@ -9536,6 +9593,8 @@ export function createRenderer(canvas) {
     // Map 查找、实体创建和阵亡清理只在 8Hz 网络快照变化时做一次。上一版把
     // 它们放在 60Hz 热循环中，400 单位时每秒会产生两万多次无意义查找。
     if (game !== lastEntityGame) {
+      const sourceTime=Number.isFinite(game.elapsed)?game.elapsed*1000:payload.time;
+      motionClock.push(payload.time,sourceTime);
       renderGeneration++;
       snapshotVisuals.length = game.units.length;
       for (let i = 0; i < game.units.length; i++) {
@@ -9549,6 +9608,7 @@ export function createRenderer(canvas) {
         vis.previousHp = u.hp;
         vis.condition = conditionFromHealth(u.hp,u.maxHp);
         vis.unit = u;
+        pushVisualMotion(vis,u,sourceTime);
         vis.seen = renderGeneration;
         snapshotVisuals[i] = vis;
       }
@@ -9603,17 +9663,10 @@ export function createRenderer(canvas) {
         vis.inRenderRange = false;
         continue;
       }
-      // 位置线性追赶，朝向走最短弧
+      // 缓冲后的权威轨迹，朝向按帧率无关的最短弧平滑。
       const oldX = vis.x;
       const oldY = vis.y;
-      const k = Math.min(1, dt * 13);
-      vis.x += (u.x - vis.x) * k;
-      vis.y += (u.y - vis.y) * k;
-      let dd = u.dir - vis.dir;
-      while (dd > Math.PI) dd -= TAU;
-      while (dd < -Math.PI) dd += TAU;
-      const turn = dd * Math.min(1, dt * 11);
-      vis.dir += turn;
+      const turn=sampleVisualMotion(vis,motionClock.time(payload.time),dt)||0;
       vis.inRenderRange = inViewportBounds(vis.x, vis.y);
       if (!vis.inRenderRange) continue;
       state.renderedUnits++;
@@ -9990,11 +10043,13 @@ export function createRenderer(canvas) {
 
     /* --- 建筑 --- */
     state.renderedStructures = 0;
+    let animatedShadow=state.shadows==='all'||collapsingStructures.length>0;
     for (let i = 0; i < game.structures.length; i++) {
       const s = game.structures[i];
       const node = structureNodes.get(s.id);
       node.group.visible = inViewportBounds(s.x, s.y);
       if (!node.group.visible) continue;
+      if(node.spinner || (node.head && payload.time-(node.firedAt??-Infinity)<350)) animatedShadow=true;
       state.renderedStructures++;
       if (node.x !== s.x || node.y !== s.y) {
         node.x = s.x;
@@ -10417,7 +10472,10 @@ export function createRenderer(canvas) {
       sunDirViewUniform.value.copy(SUN_DIR).transformDirection(camera.matrixWorldInverse);
     }
 
-    postfx.render(scene, camera, payload.time);
+    if(state.shadows!=='off') renderer.shadowMap.needsUpdate=shadowSchedule.update(
+      payload.time,cameraChanged||visionChanged||renderer.shadowMap.needsUpdate,animatedShadow);
+    // 小场景跳过额外几何遍历；密集军团先确定可见面，减少重叠部分的 PBR 着色。
+    postfx.render(scene, camera, payload.time,state.artSample&&state.depthPrepass&&state.renderedUnits>=240&&camDist<=UNIT_LOD_DISTANCE?drawUnitDepth:null);
   }
 
   /* -------------------- 对外接口 -------------------- */
@@ -10467,6 +10525,7 @@ export function createRenderer(canvas) {
   }
   function warmMesh(root, geometry, material, instanced) {
     if (!geometry) return;
+    geometry=indexedRenderGeometry(geometry);
     const mesh = instanced ? new THREE.InstancedMesh(geometry,material,1) : new THREE.Mesh(geometry,material);
     if (instanced) mesh.setColorAt(0,new THREE.Color(0xffffff));
     mesh.receiveShadow = true;
@@ -10500,6 +10559,19 @@ export function createRenderer(canvas) {
         return compile(root,lightCount);
       });
     }
+    tasks.push(()=>{
+      const geometry=warmRoots[0].children.find(mesh=>mesh.isInstancedMesh)?.geometry;
+      if(!geometry) return;
+      const root=new THREE.Group();warmMesh(root,geometry,unitDepthMaterial,true);
+      const layers=camera.layers.mask,shadows=renderer.shadowMap.enabled,target=renderer.getRenderTarget();
+      camera.layers.set(1);renderer.shadowMap.enabled=false;
+      try {
+        renderer.setRenderTarget(postfx.enabled?postfx.sceneTarget:null);
+        return renderer.compileAsync(root,camera,scene).finally(()=>root.children.forEach(mesh=>mesh.dispose()));
+      } finally {
+        camera.layers.mask=layers;renderer.shadowMap.enabled=shadows;renderer.setRenderTarget(target);
+      }
+    });
     shaderWarmup = warmAssetTasks(tasks).catch(error=>{
       assetWarmup.error=String(error);console.warn('Shader warmup:',error);
     }).finally(()=>{
@@ -10576,7 +10648,8 @@ export function createRenderer(canvas) {
     resize: function (width, height, dpr) {
       state.width = Math.max(1, width);
       state.height = Math.max(1, height);
-      state.dpr = dpr || 1;
+      const maxSize=renderer.capabilities.maxTextureSize||Infinity;
+      state.dpr = Math.min(dpr||1,maxSize/Math.max(state.width,state.height));
       renderer.setPixelRatio(state.dpr);
       renderer.setSize(state.width, state.height, false);
       postfx.setSize(state.width, state.height, state.dpr);
@@ -10585,8 +10658,35 @@ export function createRenderer(canvas) {
     },
 
     setQuality: function (options) {
+      if(options.resolutionScale!=null && Object.keys(options).length===1) {
+        postfx.setOptions({resolutionScale:options.resolutionScale});
+        return;
+      }
       shadersDirty=true;
       if(assetWarmup.ready) compileWarmAssets();
+      if(options.imageQuality!=null) {
+        const profile=renderProfile(options.imageQuality);
+        state.imageQuality=options.imageQuality;
+        const maxSize=renderer.capabilities.maxTextureSize||2048;
+        const size=Math.min(profile.shadowMapSize,maxSize);
+        if(sun.shadow.mapSize.x!==size) {
+          sun.shadow.map?.dispose();sun.shadow.map=null;
+          sun.shadow.mapPass?.dispose();sun.shadow.mapPass=null;
+          sun.shadow.mapSize.set(size,size);renderer.shadowMap.needsUpdate=true;
+        }
+        textureAnisotropy=profile.anisotropy;
+        const maxAnisotropy=renderer.capabilities.getMaxAnisotropy();
+        sharedTextureCache.forEach(tex=>{
+          const value=Math.min(Math.max(tex.userData.baseAnisotropy||4,textureAnisotropy),maxAnisotropy);
+          if(tex.anisotropy!==value) {tex.anisotropy=value;tex.needsUpdate=true;}
+        });
+        for(const tex of [riverSurfaceMaps?.normal,riverSurfaceMaps?.orm]) if(tex) {
+          tex.anisotropy=Math.min(textureAnisotropy,maxAnisotropy);tex.needsUpdate=true;
+        }
+        postfx.setOptions({contactAO:profile.contactAO,aoRadius:profile.aoRadius,msaaSamples:profile.msaaSamples});
+      }
+      if(options.contactAO!=null) postfx.setOptions({contactAO:options.contactAO});
+      if(options.depthPrepass!=null) state.depthPrepass=!!options.depthPrepass;
       if(options.artSample != null) {
         state.artSampleOption=!!options.artSample;
         const next=!!state.map&&state.artSampleOption;
@@ -10623,6 +10723,8 @@ export function createRenderer(canvas) {
         postfx.setOptions({ enabled: true, bloomEnabled: state.bloom, fastBloom: !!options.fastBloom });
       }
       if (options.showProjectiles != null) state.showProjectiles = !!options.showProjectiles;
+      if(options.msaaSamples!=null) postfx.setOptions({msaaSamples:options.msaaSamples});
+      if(options.resolutionScale!=null) postfx.setOptions({resolutionScale:options.resolutionScale});
       if (options.postfx) postfx.setOptions(options.postfx);
     },
 
@@ -10719,12 +10821,19 @@ export function createRenderer(canvas) {
       let instanced = 0;
       let detailedUnits = 0;
       let lodUnits = 0;
+      let vertexSource=0,vertexIndexed=0;
       let visibleOre = 0;
       oreMeshes.forEach(function (cluster) { if (cluster.visible) visibleOre++; });
       unitPools.forEach(function (pool) {
         if (pool.mesh) detailedUnits += pool.mesh.count;
         if (pool.staticBody) detailedUnits += pool.staticBody.count;
         if (pool.simple) lodUnits += pool.simple.count;
+        for(const key of ['mesh','staticBody','simple','barrel'].concat((pool.rigs||[]).map((_,i)=>'rig'+i))) {
+          const mesh=pool[key];if(!mesh?.visible||!mesh.count) continue;
+          const actual=mesh.geometry.attributes.position.count;
+          vertexSource+=(mesh.geometry.userData.renderVertices?.source||actual)*mesh.count;
+          vertexIndexed+=actual*mesh.count;
+        }
       });
       instanced = detailedUnits + lodUnits;
       return {
@@ -10733,6 +10842,11 @@ export function createRenderer(canvas) {
         postPasses: postfx.passStats.total,
         triangles: info.triangles,
         programs: renderer.info.programs ? renderer.info.programs.length : 0,
+        engineRevision:THREE.REVISION,renderResolution:postfx.resolution,
+        depthPrepass:postfx.depthStats,
+        unitVertexStorage:{source:vertexSource,indexed:vertexIndexed},
+        contactAO:postfx.contactStats,shadowSchedule:shadowSchedule.stats,
+        shadowMapSize:sun.shadow.mapSize.x,textureAnisotropy:Math.min(textureAnisotropy,renderer.capabilities.getMaxAnisotropy()),
         units: instanced,
         detailedUnits: detailedUnits,
         lodUnits: lodUnits,
@@ -10790,6 +10904,8 @@ export function createRenderer(canvas) {
     /** 换局时清空所有单位/建筑，避免上一局的模型残留。 */
     clearEntities: function () {
       modelPicker.clear();
+      motionClock.reset();
+      shadowSchedule.reset();
       for(const item of collapsingStructures) retireCollapse(item);
       collapsingStructures.length=0;
       resetFogState();

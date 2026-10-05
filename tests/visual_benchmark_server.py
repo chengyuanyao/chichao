@@ -60,9 +60,11 @@ class FixtureHandler(SimpleHTTPRequestHandler):
         # Local fixture-only screenshot export. No caller-supplied filesystem path,
         # no overwrite, and no cross-origin requests from other websites.
         expected_origin = "http://127.0.0.1:%d" % self.server.server_port
-        if (urlsplit(self.path).path != "/capture" or
+        report = urlsplit(self.path).path == "/benchmark-report"
+        expected_type = "application/json" if report else "image/png"
+        if (urlsplit(self.path).path not in ("/capture", "/benchmark-report") or
                 self.headers.get("Origin") != expected_origin or
-                self.headers.get("Content-Type") != "image/png"):
+                self.headers.get("Content-Type") != expected_type):
             self.send_error(403)
             return
         try:
@@ -73,12 +75,23 @@ class FixtureHandler(SimpleHTTPRequestHandler):
             self.send_error(413)
             return
         png = self.rfile.read(size)
-        if len(png) != size or not png.startswith(b"\x89PNG\r\n\x1a\n"):
+        if len(png) != size:
             self.send_error(400)
             return
-        folder = ROOT / "artifacts" / "river-art-captures"
+        if report:
+            try:
+                payload = json.loads(png.decode("utf-8"))
+                if not isinstance(payload, dict) or not isinstance(payload.get("samples"), int):
+                    raise ValueError("Not a sampled benchmark result")
+            except (ValueError, UnicodeDecodeError):
+                self.send_error(400)
+                return
+        elif not png.startswith(b"\x89PNG\r\n\x1a\n"):
+            self.send_error(400)
+            return
+        folder = ROOT / "artifacts" / ("battle-benchmarks" if report else "river-art-captures")
         folder.mkdir(parents=True, exist_ok=True)
-        target = folder / ("render-" + uuid.uuid4().hex + ".png")
+        target = folder / (("benchmark-" if report else "render-") + uuid.uuid4().hex + (".json" if report else ".png"))
         target.write_bytes(png)
         result = json.dumps({"path": str(target)}, ensure_ascii=False).encode("utf-8")
         self.send_response(200)

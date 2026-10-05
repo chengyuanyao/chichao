@@ -57,9 +57,10 @@ const source=readFileSync(new URL('../public/render3d.js',import.meta.url),'utf8
 const start=source.indexOf('  const warmRoots ='),end=source.indexOf('\n  return {\n    get camera()',start);
 assert.ok(start>0&&end>start);
 let builds=0,compiles=0;
-const geometry=new THREE.BoxGeometry(),material=new THREE.MeshPhongMaterial();
+const geometry=new THREE.BoxGeometry().toNonIndexed(),material=new THREE.MeshPhongMaterial();
 const mesh=()=>new THREE.InstancedMesh(geometry,material,64);
 const fixture={THREE,console,warmAssetTasks,applyBuildingCollapse,state:{},scene:new THREE.Scene(),camera:new THREE.PerspectiveCamera(),
+  unitDepthMaterial:new THREE.MeshDepthMaterial({colorWrite:false}),
   flashPool:[{light:{visible:false}},{light:{visible:true}}],
   makeRiverMaterial:()=>new THREE.MeshStandardMaterial(),applyEmissiveByVertexColor:m=>solidSurface(m),
   CLOTH_UNIT_KINDS:{},HIDE_UNIT_KINDS:{},MAGIC_UNIT_KINDS:{},MAGIC_STRUCTURE_KINDS:{},
@@ -69,7 +70,7 @@ const fixture={THREE,console,warmAssetTasks,applyBuildingCollapse,state:{},scene
   ensureTracerMesh:mesh,ensureTracerOrbMesh:mesh,ensureTracerShardMesh:mesh,
   ensureApocArmMesh:mesh,ensureDragonOrbitMesh:mesh,
   postfx:{enabled:true,sceneTarget:{}},
-  renderer:{getRenderTarget(){return null;},setRenderTarget(){},initTexture(){},render(){},async compileAsync(){compiles++;}}};
+  renderer:{shadowMap:{enabled:true},getRenderTarget(){return null;},setRenderTarget(){},initTexture(){},render(){},async compileAsync(){compiles++;}}};
 fixture.blastSurface=new THREE.Texture();
 for(const key of ['shockLayer','scorchLayer','trackLayer']) {
   fixture[key]={mesh:mesh()};fixture.scene.add(fixture[key].mesh);
@@ -79,10 +80,14 @@ for(const l of fixture.wreckLayers) fixture.scene.add(l.mesh);
 for(const key of ['fireLayer','smokeLayer']) {
   fixture[key]={points:new THREE.Points(geometry,material)};fixture.scene.add(fixture[key].points);
 }
-vm.createContext(fixture);vm.runInContext(source.slice(start,end),fixture);
+vm.createContext(fixture);
+vm.runInContext(source.slice(source.indexOf('const INDEXED_RENDER_GEOMETRY='),source.indexOf('function mergeParts(')),fixture);
+vm.runInContext(source.slice(start,end),fixture);
 const catalog={units:{tank:{},dragon:{}},buildings:{hq:{size:90}}};
-await fixture.prepareAssets(catalog);assert.equal(builds,10);assert.equal(compiles,9);
+await fixture.prepareAssets(catalog);assert.equal(builds,10);assert.equal(compiles,10);
+assert.ok(vm.runInContext('warmRoots[0].children.some(m=>m.geometry.index)',fixture),'render indices prepared before units enter combat');
 assert.deepEqual(fixture.flashPool.map(f=>f.light.visible),[false,true],'lighting state restored after compile');
+assert.equal(fixture.camera.layers.mask,1);assert.equal(fixture.renderer.shadowMap.enabled,true,'depth warmup restores normal rendering');
 await fixture.prepareAssets(catalog);assert.equal(builds,10,'reconnect does not rebuild all assets');
 assert.equal(vm.runInContext('assetWarmup.ready',fixture),true);
 assert.equal(fixture.trackLayer.mesh.parent,fixture.scene,'GPU warmup restores parents');

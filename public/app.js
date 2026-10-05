@@ -12,6 +12,7 @@ import { createTelemetryUploader } from './telemetry_upload.js';
 import { createUnitCommandQueue, ORDERED_UNIT_COMMANDS } from './unit_commands.js';
 import { createStateStream } from './state_stream.js';
 import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './build_queues.js';
+import { renderProfile, displayPixelRatio } from './render_profile.js';
 
 (function () {
   'use strict';
@@ -1744,7 +1745,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     }
     navigator.sendBeacon('/api/telemetry',new Blob([body],{type:'application/json'}));
   });
-  var renderScaleSteps = [1, 0.90, 0.80, 0.70, 0.60];
+  var renderScaleSteps = [1, 0.90, 0.80, 0.70, 0.60, 0.50];
   var lowFpsSamples = 0;
   var highFpsSamples = 0;
   var adaptiveStartedAt = 0;
@@ -1816,7 +1817,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   }
 
   var SETTINGS_KEY = 'steel-front-settings';
-  var settings = { masterVolume: 70, sfxVolume: 80, particleQuality: 'low', fogQuality: 'low', shadowQuality: 'structures', bloomQuality: 'off', projectileQuality: 'on' };
+  var settings = { masterVolume: 70, sfxVolume: 80, particleQuality: 'low', fogQuality: 'low', shadowQuality: 'structures', bloomQuality: 'off', projectileQuality: 'on', imageQuality: 'balanced' };
   // 性能模式硬参数
   var PERF_PARTICLE_BUDGET = { low: 60, medium: 150, high: 300 };
   var PERF_FOG_SCALE = { low: 14, medium: 9, high: 6 };
@@ -1837,6 +1838,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       settings.shadowQuality = 'structures';
     }
     settings.mapDisplayV2 = 1;
+    if (['smooth', 'balanced', 'detailed'].indexOf(settings.imageQuality) < 0) settings.imageQuality = 'balanced';
     applySettings();
   })();
 
@@ -1845,7 +1847,11 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
   }
 
   function applySettings() {
+    var profile = renderProfile(settings.imageQuality);
     view3d.setQuality({
+      imageQuality:settings.imageQuality,
+      msaaSamples: profile.msaaSamples,
+      resolutionScale: renderScale,
       shadows: settings.shadowQuality === 'off' ? 'off'
         : (settings.shadowQuality === 'all' ? 'all' : 'structures'),
       particleBudget: PERF_PARTICLE_BUDGET[settings.particleQuality] || 200,
@@ -1855,6 +1861,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       showProjectiles: settings.projectileQuality !== 'off',
       lod: true
     });
+    lastDpr = -1;
   }
 
   function showSettings() {
@@ -1867,6 +1874,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     $('#shadowQuality').value = settings.shadowQuality;
     if ($('#bloomQuality')) { $('#bloomQuality').value = settings.bloomQuality; }
     if ($('#projectileQuality')) { $('#projectileQuality').value = settings.projectileQuality; }
+    if ($('#imageQuality')) { $('#imageQuality').value = settings.imageQuality; }
   }
 
   function htmlEscape(value) {
@@ -4085,7 +4093,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       return;
     }
     var rect = canvas.getBoundingClientRect();
-    dpr = Math.min(1, window.devicePixelRatio || 1) * renderScale;
+    dpr = displayPixelRatio(window.devicePixelRatio, settings.imageQuality);
     viewWidth = Math.max(1, rect.width);
     viewHeight = Math.max(1, rect.height);
     if (viewWidth === lastViewWidth && viewHeight === lastViewHeight && dpr === lastDpr) {
@@ -4101,6 +4109,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
       hudCanvas.height = height;
     }
     view3d.resize(viewWidth, viewHeight, dpr);
+    view3d.setQuality({resolutionScale:renderScale});
   }
 
   // 3D 下这两个换算不再是简单的线性变换：屏幕坐标要投射到地面平面上，
@@ -4153,7 +4162,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
           timestamp - adaptiveStartedAt > 2000) {
         // 60FPS 的预算只有 16.7ms，等掉到 43FPS 再处理已经太迟。连续约
         // 0.6 秒低于 56 就降一级；严重掉帧会加速降档。恢复则要求约 12 秒
-        // 接近满帧，避免复杂战场中分辨率来回震荡。
+        // 接近满帧，避免复杂战场中分辨率来回震荡。只调整场景目标，HUD 保持清晰。
         if (fps > 0 && fps < 56) {
           lowFpsSamples += fps < 48 ? 2 : 1;
           highFpsSamples = 0;
@@ -4168,6 +4177,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
           for (var down = 1; down < renderScaleSteps.length; down++) {
             if (renderScale > renderScaleSteps[down] + 0.001) {
               renderScale = renderScaleSteps[down];
+              view3d.setQuality({resolutionScale:renderScale});
               lastDpr = -1;
               break;
             }
@@ -4177,6 +4187,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
           for (var up = renderScaleSteps.length - 2; up >= 0; up--) {
             if (renderScale < renderScaleSteps[up] - 0.001) {
               renderScale = renderScaleSteps[up];
+              view3d.setQuality({resolutionScale:renderScale});
               lastDpr = -1;
               break;
             }
@@ -6399,6 +6410,7 @@ import { BUILD_LANES, buildingQueue, readyBuildings, queueCaption } from './buil
     settings.shadowQuality = $('#shadowQuality').value;
     if ($('#bloomQuality')) { settings.bloomQuality = $('#bloomQuality').value; }
     if ($('#projectileQuality')) { settings.projectileQuality = $('#projectileQuality').value; }
+    if ($('#imageQuality')) { settings.imageQuality = $('#imageQuality').value; }
     saveSettings();
     applySettings();
     $('#settingsModal').classList.add('hidden');

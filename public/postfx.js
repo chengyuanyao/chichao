@@ -1,10 +1,11 @@
 /**
- * 后处理链：亮度提取 → 两级模糊 → 合成（辉光 + 调色 + 暗角）→ FXAA。
+ * 后处理链：亮度提取 → 两级模糊 → 可选接触遮蔽 → 合成 → FXAA。
  *
  * 没有用 three.js 的 postprocessing 附加包：UnrealBloomPass 要额外内置约十个
  * 文件、跑五级 mip 的可分离模糊，对一个局域网小游戏太重。这里只做两级半分辨
  * 率模糊，加上合成与 FXAA 共七个 pass。快速模式省去远场的两次模糊；关闭辉光
  * 只留下调色与抗锯齿两个 pass，让低配也保持相同的色彩与清晰边缘。
+ * 接触遮蔽复用场景深度，只额外增加一次半分辨率绘制，按深度上采样。
  *
  * 色彩管线：场景渲染到 HalfFloat 的线性目标（保留 >1 的高光，辉光才有东西可
  * 提取），全部中间 pass 都在线性空间。合成 pass 做「曝光 → 白平衡 → 电影
@@ -17,12 +18,12 @@
  * 离屏的 FXAA 输入，所以 sRGB 编码必须自己写。FXAA 收到的已经是 sRGB 数据，
  * 直接输出即可，不能再转换一次。
  *
- * 为什么需要 FXAA：画布的 antialias:true 只对直接渲染到画布生效；场景一旦
- * 先渲染进 FBO（辉光开启时的路径），MSAA 就不存在了 —— 之前辉光开着其实
- * 一直没有抗锯齿。
+ * 场景目标可按画质档位使用 MSAA，后处理目标不多重采样。FXAA 负责最终
+ * 合成图的细边。动态分辨率只缩放场景和泛光，最终输出保持屏幕像素密度。
  */
 
 import * as THREE from './vendor/three.module.min.js';
+import {CONTACT_AO_FRAGMENT,CONTACT_AO_COMPOSITE} from './contact_ao.js';
 
 const FULLSCREEN_VERT = `
 varying vec2 vUv;
@@ -64,6 +65,7 @@ void main() {
 `;
 
 const COMPOSITE_FRAG = `
+${CONTACT_AO_COMPOSITE}
 uniform sampler2D tScene;
 uniform sampler2D tBloomNear;
 uniform sampler2D tBloomFar;
@@ -146,6 +148,7 @@ vec3 OETFsRGB(vec3 c) {
 void main() {
   vec3 scene = texture2D(tScene, vUv).rgb;
   vec3 color = scene;
+  if(uContactAO>0.0) color*=mix(1.0,contactVisibility(vUv),uContactAO);
   // 关闭辉光时既不跑提取/模糊，也不读取两张模糊纹理。
   if (uBloom > 0.0) {
     vec3 bloom = texture2D(tBloomNear, vUv).rgb * 0.72
@@ -287,6 +290,20 @@ function fullscreenGeometry() {
   return geo;
 }
 
+export function supportedSceneSamples(renderer,requested,type=THREE.HalfFloatType) {
+  const wanted=Math.min(4,Math.max(0,Math.floor(Number(requested)||0)));
+  const cap=Math.max(0,Number(renderer.capabilities.maxSamples)||0);
+  if(!wanted||!cap) return 0;
+  const gl=renderer.getContext?.();
+  if(!gl?.getInternalformatParameter) return Math.min(wanted,cap);
+  try {
+    const color=gl.getInternalformatParameter(gl.RENDERBUFFER,type===THREE.HalfFloatType?gl.RGBA16F:gl.RGBA8,gl.SAMPLES);
+    const depth=gl.getInternalformatParameter(gl.RENDERBUFFER,gl.DEPTH_COMPONENT24,gl.SAMPLES);
+    const choices=Array.from(color||[]).filter(n=>n>0&&n<=Math.min(4,cap)&&Array.from(depth||[]).includes(n)).sort((a,b)=>a-b);
+    return choices.filter(n=>n<=wanted).at(-1)||choices[0]||0;
+  } catch (_) { return 0; }
+}
+
 export function createPostFX(renderer) {
   const quadGeo = fullscreenGeometry();
   const quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -307,11 +324,16 @@ export function createPostFX(renderer) {
   };
 
   const sceneTarget = new THREE.WebGLRenderTarget(1, 1, targetOptions);
+  sceneTarget.resolveDepthBuffer=false;
   const blurOptions = Object.assign({}, targetOptions, { depthBuffer: false });
   const nearA = new THREE.WebGLRenderTarget(1, 1, blurOptions);
   const nearB = new THREE.WebGLRenderTarget(1, 1, blurOptions);
   const farA = new THREE.WebGLRenderTarget(1, 1, blurOptions);
   const farB = new THREE.WebGLRenderTarget(1, 1, blurOptions);
+  const aoTarget = new THREE.WebGLRenderTarget(1,1,{
+    type:targetOptions.type,minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter,
+    depthBuffer:false,stencilBuffer:false
+  });
   // FXAA 的输入：合成后的 sRGB 图，8 位足够（不再有 >1 的值）
   const postTarget = new THREE.WebGLRenderTarget(1, 1, {
     minFilter: THREE.LinearFilter,
@@ -346,6 +368,8 @@ export function createPostFX(renderer) {
 
   const compositeMat = new THREE.ShaderMaterial({
     uniforms: {
+      tContactAO:{value:null},tSceneDepth:{value:null},uContactAO:{value:0},
+      uAOResolution:{value:new THREE.Vector2(1,1)},uCameraRange:{value:new THREE.Vector2(12,12000)},
       tScene: { value: null },
       tBloomNear: { value: null },
       tBloomFar: { value: null },
@@ -378,34 +402,49 @@ export function createPostFX(renderer) {
     depthTest: false,
     depthWrite: false
   });
+  const aoMat=new THREE.ShaderMaterial({
+    uniforms:{tDepth:{value:null},uProjectionInverse:{value:new THREE.Matrix4()},
+      uProjection:{value:new THREE.Matrix4()},uSceneResolution:{value:new THREE.Vector2()},uRadius:{value:18}},
+    vertexShader:FULLSCREEN_VERT,fragmentShader:CONTACT_AO_FRAGMENT,depthTest:false,depthWrite:false
+  });
 
   // 后处理会多次调用 renderer.render，而 renderer.info.render 每次都会重置，
   // 所以在场景 pass 之后立刻把统计抄下来，供外部读取。
   const state = {
-    width: 1, height: 1, enabled: true, fxaa: true, fastBloom: false,
+    width: 1, height: 1, sceneWidth:1,sceneHeight:1,resolutionScale:1,msaaSamples:0,
+    enabled: true, fxaa: true, fastBloom: false,
     bloomEnabled: true, bloom: compositeMat.uniforms.uBloom.value,
-    calls: 0, triangles: 0, postPasses: 0, bloomPasses: 0
+    contactAO:0,aoPasses:0,
+    calls: 0, triangles: 0, depthCalls:0,depthTriangles:0,postPasses: 0, bloomPasses: 0
   };
 
   function blit(material, target) {
     quad.material = material;
     renderer.setRenderTarget(target);
-    renderer.clear(true, false, false);
-    renderer.render(quadScene, quadCamera);
+    // 全屏三角形每个分支都写出整张图，无须先清空或清除未使用的深度。
+    const autoClear=renderer.autoClear;renderer.autoClear=false;
+    try {renderer.render(quadScene, quadCamera);} finally {renderer.autoClear=autoClear;}
     state.postPasses++;
+  }
+
+  function sizeSceneTarget() {
+    const w=Math.max(1,Math.floor(state.width*state.resolutionScale));
+    const h=Math.max(1,Math.floor(state.height*state.resolutionScale));
+    state.sceneWidth=w;state.sceneHeight=h;
+    if(sceneTarget.width!==w||sceneTarget.height!==h) sceneTarget.setSize(w,h);
   }
 
   function sizeBloomTargets() {
     // 到真正开启辉光时再分配纹理；低配无需四张模糊缓冲区的显存。
-    const nearW = Math.max(1, state.width >> 1);
-    const nearH = Math.max(1, state.height >> 1);
+    const nearW = Math.max(1, state.sceneWidth >> 1);
+    const nearH = Math.max(1, state.sceneHeight >> 1);
     if (nearA.width !== nearW || nearA.height !== nearH) {
       nearA.setSize(nearW, nearH);
       nearB.setSize(nearW, nearH);
     }
     if (!state.fastBloom) {
-      const farW = Math.max(1, state.width >> 2);
-      const farH = Math.max(1, state.height >> 2);
+      const farW = Math.max(1, state.sceneWidth >> 2);
+      const farH = Math.max(1, state.sceneHeight >> 2);
       if (farA.width !== farW || farA.height !== farH) {
         farA.setSize(farW, farH);
         farB.setSize(farW, farH);
@@ -416,6 +455,8 @@ export function createPostFX(renderer) {
   return {
     get sceneTarget() { return sceneTarget; },
     get enabled() { return state.enabled; },
+    get resolution() { return {width:state.sceneWidth,height:state.sceneHeight,
+      outputWidth:state.width,outputHeight:state.height,scale:state.resolutionScale,samples:state.msaaSamples}; },
 
     setSize: function (width, height, pixelRatio) {
       const ratio = pixelRatio ?? 1;
@@ -423,13 +464,40 @@ export function createPostFX(renderer) {
       const h = Math.max(1, Math.floor(height * ratio));
       state.width = w;
       state.height = h;
-      sceneTarget.setSize(w, h);
+      sizeSceneTarget();
       postTarget.setSize(w, h);
       compositeMat.uniforms.uResolution.value.set(w, h);
       fxaaMat.uniforms.uInvRes.value.set(1 / w, 1 / h);
     },
 
     setOptions: function (options) {
+      if(options.contactAO!=null) {
+        const strength=Number(options.contactAO);
+        const next=renderer.capabilities.isWebGL2&&supportsHalfFloat&&Number.isFinite(strength)?Math.max(0,Math.min(1,strength)):0;
+        if(Boolean(next)!==Boolean(state.contactAO)) {
+          sceneTarget.dispose();
+          if(next) {
+            sceneTarget.depthTexture=new THREE.DepthTexture(sceneTarget.width,sceneTarget.height,THREE.UnsignedIntType);
+            sceneTarget.depthTexture.minFilter=sceneTarget.depthTexture.magFilter=THREE.NearestFilter;
+          }
+          else {sceneTarget.depthTexture?.dispose();sceneTarget.depthTexture=null;aoTarget.dispose();aoTarget.setSize(1,1);}
+          sceneTarget.resolveDepthBuffer=next>0;
+        }
+        state.contactAO=next;
+      }
+      if(options.aoRadius!=null) aoMat.uniforms.uRadius.value=Math.max(4,Math.min(32,Number(options.aoRadius)||18));
+      if(options.resolutionScale!=null) {
+        const value=Number(options.resolutionScale);
+        state.resolutionScale=Number.isFinite(value)?Math.max(.5,Math.min(1,value)):1;
+        sizeSceneTarget();
+      }
+      if(options.msaaSamples!=null) {
+        const samples=supportedSceneSamples(renderer,options.msaaSamples,sceneTarget.texture.type);
+        if(samples!==state.msaaSamples) {
+          // 样本数改变需要重建 FBO，纹理对象仍由同一场景目标持有。
+          sceneTarget.dispose();sceneTarget.samples=samples;state.msaaSamples=samples;
+        }
+      }
       if (options.enabled != null) state.enabled = !!options.enabled;
       if (options.fxaa != null) state.fxaa = !!options.fxaa;
       if (options.fastBloom != null) state.fastBloom = !!options.fastBloom;
@@ -448,13 +516,17 @@ export function createPostFX(renderer) {
     },
 
     get sceneStats() { return { calls: state.calls, triangles: state.triangles }; },
+    get depthStats() {return {calls:state.depthCalls,triangles:state.depthTriangles};},
     // 后处理绘制次数，不含主场景；方便质量档位/性能面板验证实际工作量。
     get passStats() { return { total: state.postPasses, bloom: state.bloomPasses }; },
+    get contactStats() {return {strength:state.contactAO,passes:state.aoPasses,width:aoTarget.width,height:aoTarget.height};},
 
     /** 渲染一帧：关闭后处理时直接画到画布。 */
-    render: function (scene, camera, time) {
+    render: function (scene, camera, time, depthPass) {
       state.postPasses = 0;
       state.bloomPasses = 0;
+      state.aoPasses = 0;
+      state.depthCalls=0;state.depthTriangles=0;
       if (!state.enabled) {
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
@@ -463,10 +535,22 @@ export function createPostFX(renderer) {
         return;
       }
       renderer.setRenderTarget(sceneTarget);
-      renderer.clear();
-      renderer.render(scene, camera);
-      state.calls = renderer.info.render.calls;
-      state.triangles = renderer.info.render.triangles;
+      const autoClear=renderer.autoClear;renderer.autoClear=false;
+      try {
+        renderer.clear();
+        if(depthPass) {
+          const colorResolve=sceneTarget.resolveColorBuffer,depthResolve=sceneTarget.resolveDepthBuffer;
+          // 同一 MSAA 附件继续画颜色，先存深度时不做额外颜色/深度解析。
+          sceneTarget.resolveColorBuffer=false;sceneTarget.resolveDepthBuffer=false;
+          try {depthPass();} finally {
+            sceneTarget.resolveColorBuffer=colorResolve;sceneTarget.resolveDepthBuffer=depthResolve;
+          }
+          state.depthCalls=renderer.info.render.calls;state.depthTriangles=renderer.info.render.triangles;
+        }
+        renderer.render(scene, camera);
+        state.calls = renderer.info.render.calls+state.depthCalls;
+        state.triangles = renderer.info.render.triangles+state.depthTriangles;
+      } finally {renderer.autoClear=autoClear;}
 
       const bloomStrength = state.bloomEnabled ? state.bloom : 0;
       compositeMat.uniforms.uBloom.value = bloomStrength;
@@ -495,6 +579,22 @@ export function createPostFX(renderer) {
         state.bloomPasses = state.postPasses;
       }
 
+      const useAO=state.contactAO>0&&camera.projectionMatrix&&camera.projectionMatrixInverse;
+      compositeMat.uniforms.uContactAO.value=useAO?state.contactAO:0;
+      compositeMat.uniforms.tContactAO.value=useAO?aoTarget.texture:null;
+      compositeMat.uniforms.tSceneDepth.value=useAO?sceneTarget.depthTexture:null;
+      if(useAO) {
+        const w=Math.max(1,state.sceneWidth>>1),h=Math.max(1,state.sceneHeight>>1);
+        if(aoTarget.width!==w||aoTarget.height!==h) aoTarget.setSize(w,h);
+        aoMat.uniforms.tDepth.value=sceneTarget.depthTexture;
+        aoMat.uniforms.uProjection.value.copy(camera.projectionMatrix);
+        aoMat.uniforms.uProjectionInverse.value.copy(camera.projectionMatrixInverse);
+        aoMat.uniforms.uSceneResolution.value.set(state.sceneWidth,state.sceneHeight);
+        compositeMat.uniforms.uAOResolution.value.set(w,h);
+        compositeMat.uniforms.uCameraRange.value.set(camera.near,camera.far);
+        blit(aoMat,aoTarget);state.aoPasses=1;
+      }
+
       compositeMat.uniforms.tScene.value = sceneTarget.texture;
       compositeMat.uniforms.tBloomNear.value = bloomStrength > 0 ? nearA.texture : null;
       compositeMat.uniforms.tBloomFar.value = bloomStrength > 0
@@ -512,8 +612,8 @@ export function createPostFX(renderer) {
     },
 
     dispose: function () {
-      [sceneTarget, nearA, nearB, farA, farB, postTarget].forEach(function (t) { t.dispose(); });
-      [brightMat, blurMat, compositeMat, fxaaMat].forEach(function (m) { m.dispose(); });
+      [sceneTarget, nearA, nearB, farA, farB, postTarget,aoTarget].forEach(function (t) { t.dispose(); });
+      [brightMat, blurMat, compositeMat, fxaaMat,aoMat].forEach(function (m) { m.dispose(); });
       quadGeo.dispose();
     }
   };

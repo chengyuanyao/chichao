@@ -132,7 +132,7 @@ def main():
     assert "let movingVisibleBar = false;" in render
     assert "if (movingVisibleBar || payload.time - lastBarsAt >= 50)" in render
     assert "selected.forEach(function (id)" in render
-    assert "var renderScaleSteps = [1, 0.90, 0.80, 0.70, 0.60];" in app
+    assert "var renderScaleSteps = [1, 0.90, 0.80, 0.70, 0.60, 0.50];" in app
     assert "timestamp - lastHudOverlayAt >= 50" in app
     assert "game.units.length >" not in render
 
