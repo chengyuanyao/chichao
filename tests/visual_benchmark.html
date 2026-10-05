@@ -22,6 +22,8 @@ input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;
 <select id="lod"><option value="auto">自动 LOD</option><option value="off">禁用 LOD</option></select>
 <select id="particles" aria-label="粒子上限"><option value="60">粒子 60</option><option value="150" selected>粒子 150</option><option value="400">粒子 400</option></select>
 <input id="count" type="number" value="400" min="1" max="2000" aria-label="单位数">
+<select id="msaa" aria-label="场景抗锯齿"><option value="0">FXAA</option><option value="2" selected>平滑边缘</option><option value="4">精细边缘</option></select>
+<select id="imageQuality" aria-label="画面细节"><option value="smooth">流畅细节</option><option value="balanced" selected>均衡细节</option><option value="detailed">精细光影</option></select>
 <button id="apply">应用场景</button><button id="quality">即时应用画质</button><button id="run">运行基准</button>
 <button id="cycles">连续换图检查</button>
 <button id="warmAssets">预热接敌资源</button>
@@ -31,6 +33,7 @@ input {width:60px} #results {position:fixed;right:16px;top:16px;max-height:70vh;
 <button id="capture">保存实际渲染 PNG</button>
 <button id="flightStep">飞翔动作下一帧</button>
 <button id="audio">试听战场音效</button><button id="healed">修复全部</button><button id="fxBurst">密集爆炸测试</button>
+<button id="saveReport">保存基准 JSON</button>
 <span id="fogControls" hidden><button id="scout">侦察首个矿区</button><button id="retreat">撤走侦察单位</button><button id="observe">淘汰观战</button><button id="restart">重开本图</button></span>
 </div>
 <pre id="results" hidden></pre>
@@ -50,6 +53,8 @@ const [{createRenderer}, catalog] = await Promise.all([
   import(moduleUrl.href), fetch('/benchmark-data.json').then(r => r.json())
 ]);
 const {createBattleAudio}=await import('/public/battle_audio.js');
+const {createFixtureBattle}=await import('./fixture_battle.mjs');
+const fixtureBattle=createFixtureBattle(catalog);
 let battleAudio=null,syntheticEffects=[],nextShotAt=0,healthy=false;
 const renderer = createRenderer(document.querySelector('canvas'));
 const canvas = document.querySelector('canvas');
@@ -63,11 +68,15 @@ const players = [{id:'steel',color:'#de6451'}, {id:'arcane',color:'#5caddc'}, {i
 renderer.setPalette(players, 'steel', () => true);
 const selected = new Set();
 let settings = {shadows:query.get('shadows') || 'structures', bloom:query.get('bloom') === '1',
+  imageQuality:query.get('imageQuality')||'balanced',
+  depthPrepass:query.get('depthPrepass')!=='0',
+  msaaSamples:Number(query.get('msaa')??2),resolutionScale:Number(query.get('scale')??1),
   artSample:query.get('art')!=='0',
   fastBloom:query.get('bloom') !== 'high', lod:query.get('lod') !== 'off', fogScale:9, particleBudget:Number(query.get('particles'))||150};
 if (query.get('bloom') === 'high') settings.bloom = true;
 renderer.setQuality(settings);
 let game, map, scenario, camera, buildPreview = null, pickedStructure = null, sceneTime = 18000, lastAt = 0, snapshotAt = -Infinity;
+let cameraBase=null;
 let paused = query.get('paused') === '1', moving = query.get('moving') === '1';
 let frameObserver = null, runningBenchmark = false, frameError = null;
 // Opt-in deterministic workload; wall-clock frame/CPU/GPU measurements remain
@@ -111,6 +120,7 @@ function loadScenario(options={}) {
   map = catalog.maps[options.map || query.get('map') || 'iron_river_duel'];
   if (!map) throw new Error('Unknown map');
   renderer.clearEntities();
+  fixtureBattle.reset();
   buildPreview = null;
   selected.clear(); pickedStructure = null;
   const focus = map.id === 'iron_river_duel' ? {x:1000,y:1600}
@@ -158,7 +168,7 @@ function loadScenario(options={}) {
     const count = Math.min(2000,Math.max(1,Number(options.count || query.get('count')) || 400));
     const columns = Math.ceil(Math.sqrt(count*1.65));
     // Stress profiles inspired by report compositions, not replayed concurrent armies.
-    const profiles={tribe:['spear','javelin','slinger','tamer','wolf','spider','scorpion','panda','mammoth','catapult','tharvester','tmcv'],dragons:['dragon'],heroes:['overlord','dragon'],rockets:['rocket','rocket','rocket','dog','tesla','sniper'],
+    const profiles={battle:['rifle','rifle','rocket','tank','tank','artillery','overlord','mage','mage','frost','dragon','spear','javelin','slinger','wolf','spider','scorpion','mammoth','panda','catapult'],tribe:['spear','javelin','slinger','tamer','wolf','spider','scorpion','panda','mammoth','catapult','tharvester','tmcv'],dragons:['dragon'],heroes:['overlord','dragon'],rockets:['rocket','rocket','rocket','dog','tesla','sniper'],
       demolition:['overlord','overlord','bomb_truck']};
     const armyKinds=profiles[query.get('mix')] || keys;
     for (let i=0;i<count;i++) game.units.push(unit(armyKinds[i%armyKinds.length],i,
@@ -290,6 +300,7 @@ function loadScenario(options={}) {
     : {x:focus.x,y:focus.y-100,zoom:0.82,yaw:0.14,pitch:0.96};
   for(const key of ['x','y','zoom','yaw','pitch']) if(query.has(key)) camera[key]=Number(query.get(key));
   renderer.setCamera(camera); renderer.setFogRevealed(revealMap);
+  cameraBase={...camera};
   snapshotAt = -Infinity; sceneTime = 18000;
   return {scenario,map:map.id,units:game.units.length,structures:game.structures.length,camera:{...camera}};
 }
@@ -311,10 +322,12 @@ function draw(at) {
     snapshotAt=sceneTime;
     game={...game,elapsed:sceneTime/1000};
     if(moving) game.units.forEach((u,i)=> {
-      u.x=u.originX+Math.sin(sceneTime*0.00042+i*0.17)*12;
-      u.y=u.originY+Math.cos(sceneTime*0.00042+i*0.17)*12;
+      const combat=query.get('combat')==='1',amplitude=combat?46:12,frequency=combat?.0018:.00042;
+      u.x=u.originX+Math.sin(sceneTime*frequency+i*0.17)*amplitude;
+      u.y=u.originY+Math.cos(sceneTime*frequency+i*0.17)*amplitude;
     });
-    if((scenario==='feedback'||query.get('combat')==='1')&&sceneTime>=nextShotAt&&!paused) {
+    if(query.get('combat')==='1'&&!paused) syntheticEffects.push(...fixtureBattle.step(game,sceneTime));
+    if(scenario==='feedback'&&query.get('combat')!=='1'&&sceneTime>=nextShotAt&&!paused) {
       nextShotAt=sceneTime+480;
       const beat=Math.floor(sceneTime/480);
       game.units.forEach((u,i)=>{
@@ -335,6 +348,11 @@ function draw(at) {
     Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
   }
   const start=performance.now();
+  if(query.get('cameraMotion')==='1') {
+    Object.assign(camera,{x:cameraBase.x+Math.sin(sceneTime*.0006)*40,
+      y:cameraBase.y+Math.cos(sceneTime*.0006)*40,yaw:cameraBase.yaw+Math.sin(sceneTime*.0004)*.04});
+    renderer.setCamera(camera);
+  }
   const gpuQuery=gpuTimer&&runningBenchmark&&gpuPending.length<8?gl.createQuery():null;
   if(gpuQuery) gl.beginQuery(gpuTimer.TIME_ELAPSED_EXT,gpuQuery);
   try {
@@ -349,7 +367,11 @@ function draw(at) {
     Math.random=realRandom;
     if(gpuQuery) {gl.endQuery(gpuTimer.TIME_ELAPSED_EXT);gpuPending.push(gpuQuery);}
   }
-  if(frameObserver) frameObserver({interval,cpu:performance.now()-start});
+  if(frameObserver) {
+    const cpu=performance.now()-start,work=renderer.stats();
+    frameObserver({interval,cpu,sceneCalls:work.drawCalls,postCalls:work.postPasses,
+      units:work.renderedUnits,particles:work.particles,projectiles:game.projectiles.length,visible:document.visibilityState==='visible'});
+  }
   if(fixedSimulation&&destructionWave&&[121,150,180,300].includes(fixedFrame)) {
     destructionChecks.push({frame:fixedFrame,stats:renderer.stats()});
   }
@@ -485,22 +507,37 @@ window.benchmark = {
       }
       halted=false;lastAt=0;kick();
       status.textContent='预热与采样中，请保持当前页面可见…';
-      await waitFrames(Math.max(1,options.warmupFrames ?? 90));
+      await waitFrames(Math.max(1,options.warmupFrames ?? Number(query.get('warmupFrames')||90)));
       gpuTimes=[];
-      const values=[];const cpus=[];const deathFrames=[],deathCpus=[];const count=Math.max(2,options.frames || 300);
+      const values=[];const cpus=[];const sceneCalls=[],postCalls=[],visibleUnits=[],particleCounts=[],projectileCounts=[];
+      const deathFrames=[],deathCpus=[];let hiddenFrames=0;
+      const count=Math.max(2,Math.min(3600,options.frames||Number(query.get('frames'))||300));
       await new Promise(resolve=>{frameObserver=sample=>{
         values.push(sample.interval);cpus.push(sample.cpu);
+        sceneCalls.push(sample.sceneCalls);postCalls.push(sample.postCalls);
+        visibleUnits.push(sample.units);particleCounts.push(sample.particles);projectileCounts.push(sample.projectiles);
+        if(!sample.visible) hiddenFrames++;
         if(destructionWave&&fixedFrame>=121&&fixedFrame<=180){deathFrames.push(sample.interval);deathCpus.push(sample.cpu);}
         if(values.length>=count){frameObserver=null;resolve();}
       };});
       const avg=values.reduce((a,b)=>a+b,0)/values.length;
+      const slowest=values.slice().sort((a,b)=>b-a).slice(0,Math.max(1,Math.ceil(values.length*.01)));
       const result={...this.state(),rendererModule:moduleUrl.pathname,gpu,
         fixedSimulationStepMs:fixedSimulation?fixedStepMs:null,
         destruction:destructionWave?{count:destructionWave,checks:destructionChecks,
           windowFrames:deathFrames.length,frameP95:percentile(deathFrames,.95),cpuP95:percentile(deathCpus,.95)}:null,
         viewport:{width:innerWidth,height:innerHeight,pixelWidth:canvas.width,pixelHeight:canvas.height},
-        samples:values.length,frameMs:{mean:+avg.toFixed(3),p50:percentile(values,0.5),p95:percentile(values,0.95),p99:percentile(values,0.99)},
+        samples:values.length,frameMs:{mean:+avg.toFixed(3),p50:percentile(values,0.5),p95:percentile(values,0.95),p99:percentile(values,0.99),max:Math.max(...values)},
+        onePercentLowFps:+(1000/(slowest.reduce((a,b)=>a+b,0)/slowest.length)).toFixed(2),
+        slowFrames:{over33ms:values.filter(v=>v>33.34).length,over50ms:values.filter(v=>v>50.01).length},
+        workload:{combat:query.get('combat')==='1',cameraMotion:query.get('cameraMotion')==='1',totalUnits:game.units.length,
+          visibleUnits:{min:Math.min(...visibleUnits),max:Math.max(...visibleUnits)},
+          particles:{min:Math.min(...particleCounts),max:Math.max(...particleCounts)},
+          projectiles:{min:Math.min(...projectileCounts),max:Math.max(...projectileCounts)},
+          battle:fixtureBattle.stats,hiddenFrames},
         cpuRenderMs:{p50:percentile(cpus,0.5),p95:percentile(cpus,0.95)},fps:+(1000/avg).toFixed(2),
+        drawCalls:{sceneMean:sceneCalls.reduce((a,b)=>a+b,0)/sceneCalls.length,
+          sceneP95:percentile(sceneCalls,.95),postMean:postCalls.reduce((a,b)=>a+b,0)/postCalls.length},
         gpuRenderMs:gpuTimes.length?{samples:gpuTimes.length,p50:percentile(gpuTimes,.5),p95:percentile(gpuTimes,.95)}:null,
         stats:renderer.stats(),visibility:document.visibilityState};
       window.benchmarkResult=result;
@@ -531,16 +568,18 @@ for(const [key,value] of Object.entries(catalog.maps)) {
   const option=document.createElement('option');option.value=key;option.textContent=value.name;
   document.querySelector('#map').append(option);
 }
-for(const [id,value] of Object.entries({scenario,map:map.id,shadows:settings.shadows,bloom:query.get('bloom')||'0',lod:settings.lod?'auto':'off',particles:settings.particleBudget,count:query.get('count')||400})) document.getElementById(id).value=value;
+for(const [id,value] of Object.entries({scenario,map:map.id,shadows:settings.shadows,bloom:query.get('bloom')||'0',lod:settings.lod?'auto':'off',particles:settings.particleBudget,msaa:settings.msaaSamples,imageQuality:settings.imageQuality,count:query.get('count')||400})) document.getElementById(id).value=value;
 document.querySelector('#apply').onclick=()=>{
   const next=new URL(location.href);
-  for(const id of ['scenario','map','shadows','bloom','lod','particles','count']) next.searchParams.set(id,document.getElementById(id).value);
+  for(const id of ['scenario','map','shadows','bloom','lod','particles','msaa','imageQuality','count']) next.searchParams.set(id,document.getElementById(id).value);
   location.href=next.href;
 };
 document.querySelector('#quality').onclick=async()=>{
   if(runningBenchmark) {status.textContent='采样进行中，请完成后再切换画质';return;}
   const bloom=document.querySelector('#bloom').value;
   window.benchmark.setQuality({shadows:document.querySelector('#shadows').value,
+    imageQuality:document.querySelector('#imageQuality').value,
+    msaaSamples:Number(document.querySelector('#msaa').value),
     bloom:bloom!=='0',fastBloom:bloom!=='high',lod:document.querySelector('#lod').value!=='off',
     particleBudget:Number(document.querySelector('#particles').value)});
   window.benchmark.resume();
@@ -553,6 +592,12 @@ document.querySelector('#quality').onclick=async()=>{
   status.textContent=`已即时应用 · 阴影 ${settings.shadows} · 泛光 ${bloom} · LOD ${settings.lod?'自动':'禁用'}\n当前场景继续渲染，未重建地图`;
 };
 document.querySelector('#run').onclick=()=>window.benchmark.run().catch(error=>{status.textContent=String(error.stack||error);});
+document.querySelector('#saveReport').onclick=async()=>{
+  if(!window.benchmarkResult||runningBenchmark) {status.textContent='请先完成基准采样';return;}
+  const response=await fetch('/benchmark-report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(window.benchmarkResult)});
+  if(!response.ok) throw new Error('Report export failed: '+response.status);
+  status.textContent='基准结果已保存：'+(await response.json()).path;
+};
 document.querySelector('#cycles').onclick=()=>window.benchmark.cycleMaps().catch(error=>{status.textContent=String(error.stack||error);});
 document.querySelector('#artToggle').onclick=async()=>{
   window.benchmark.setQuality({artSample:!settings.artSample});
