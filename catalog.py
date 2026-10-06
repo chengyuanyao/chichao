@@ -51,7 +51,7 @@ def veteran_rank(kills):
 
 
 # 载具集合用于扑咬免疫、猎物与侦察分类；维修另读 REPAIRABLE_KINDS。
-# 晶铠卫士是轻甲反甲构装（对位磁暴），仍留在本表：圣泉可修，军犬 bite ×0。
+# 晶铠卫士是轻甲反甲构装（对位电弧步兵），仍留在本表：圣泉可修，军犬 bite ×0。
 VEHICLE_KINDS = frozenset((
     "tank", "scout", "harvester", "artillery", "tank_destroyer", "mcv",
     "v3", "overlord", "prism", "bomb_truck",
@@ -105,7 +105,7 @@ UNIT_TYPES = {
         "projectile": "sniper", "projectileSpeed": 1200.0, "splash": 0.0,
         "sight": 480.0, "armor": "infantry", "damageType": "sniper",
     },
-    # 军犬：红色警戒式近战特种兵。全场最速，扑咬对步兵一击必杀（克制表 ×4），
+    # 军犬：近战扑咬特种兵。全场最速，扑咬对步兵一击必杀（克制表 ×4），
     # 但对载具/建筑零伤害；便宜的肉盾与侦察兵，专咬成群步兵。
     "dog": {
         "name": "军犬", "cost": 120, "hp": 55, "speed": 146.4,
@@ -151,7 +151,7 @@ UNIT_TYPES = {
         "sight": 410.0, "armor": "heavy", "damageType": "ap",
     },
     "mcv": {
-        "name": "基地车", "cost": 2500, "hp": 900, "speed": 45.6,
+        "name": "野战指挥车", "cost": 2500, "hp": 900, "speed": 45.6,
         "damage": 0.0, "range": 0.0, "cooldown": 0.0,
         "size": 24.0, "build": 14.0, "producer": "factory",
         "projectile": "none", "projectileSpeed": 0.0, "splash": 0.0,
@@ -167,7 +167,7 @@ UNIT_TYPES = {
     },
     # ---- 高级兵种：靠 requires 卡在二级科技后，贵在单兵质量而非数量 ----
     "overlord": {
-        "name": "天启坦克", "cost": 1700, "hp": 1700, "speed": 57.6,
+        "name": "钢核重坦", "cost": 1700, "hp": 1700, "speed": 57.6,
         "damage": 120.0, "range": 195.0, "cooldown": 1.6,
         "size": 24.0, "build": 16.0, "producer": "factory",
         "requires": ["repair"],
@@ -175,7 +175,7 @@ UNIT_TYPES = {
         "sight": 450.0, "armor": "heavy", "damageType": "shell",
     },
     "tesla": {
-        "name": "磁暴步兵", "cost": 650, "hp": 190, "speed": 81.6,
+        "name": "电弧步兵", "cost": 650, "hp": 190, "speed": 81.6,
         "damage": 26.0, "range": 150.0, "cooldown": 0.5,
         "size": 11.0, "build": 7.0, "producer": "barracks",
         "requires": ["factory"],
@@ -183,7 +183,7 @@ UNIT_TYPES = {
         "sight": 380.0, "armor": "infantry", "damageType": "tesla",
     },
     "prism": {
-        "name": "光棱坦克", "cost": 1450, "hp": 360, "speed": 67.2,
+        "name": "折光炮车", "cost": 1450, "hp": 360, "speed": 67.2,
         "damage": 100.0, "range": 305.0, "cooldown": 1.8,
         "size": 19.0, "build": 13.0, "producer": "factory",
         "requires": ["repair"],
@@ -191,10 +191,10 @@ UNIT_TYPES = {
         "sight": 480.0, "armor": "light", "damageType": "laser",
     },
     # 自爆卡车：中期玻璃大炮。工厂就能出，不卡维修厂。无常规火力，
-    # 贴近或阵亡时炸开。轻甲载具：军犬咬不动，磁暴/火箭能拆。
+    # 贴近或阵亡时炸开。轻甲载具：军犬咬不动，电弧/火箭能拆。
     # 造价 1000 / 训练 8.5 / 移速 97.9，与爆裂魔仆对齐（贵、慢造、慢走）。
     # 爆炸 700 / 半径 120。爆破专攻建筑与采矿单位 ×1.5，其余单位固定 ×0.8：
-    # 步兵堆照样一发清，但天启、巨龙这类高血单位不再被自爆当成兑子答案。
+    # 步兵堆照样一发清，但钢核重坦、巨龙这类高血单位不再被自爆当成兑子答案。
     # 单车仍拆不掉满血指挥中心，避免兼任清兵、反甲与拆家三种角色。
     # 邻近自爆只吃 700 溅射，不会连带引爆。
     "bomb_truck": {
@@ -217,8 +217,8 @@ UNIT_TYPES = {
         "detonateOnContact": True,
     },
     # ==================== 魔法阵营「秘法会」（faction=magic） ====================
-    # 独立经济：自己的主堡/法力塔/精炼所/采矿/基地车，数值与科技对位、只换皮换名。
-    # 采矿/迁徙与钢铁一样走 heavy：轻甲会让步枪/侦察/光棱多吃一层隐藏税。
+    # 独立经济：自己的主堡/法力塔/精炼所/采矿/行营，数值与科技对位、只换皮换名。
+    # 采矿/迁徙与钢铁一样走 heavy：轻甲会让步枪/侦察/折光炮车多吃一层隐藏税。
     "mharvester": {
         "name": "浮游晶簇", "cost": 920, "hp": 680, "speed": 63.6,
         "damage": 0.0, "range": 0.0, "cooldown": 0.0,
@@ -282,8 +282,8 @@ UNIT_TYPES = {
         "sight": 360.0, "armor": "arcane", "damageType": "magic",
     },
     # 玄岩巨像：傀儡进阶，新单位不是原地升级。圣泉后的地面重甲前排，
-    # 短距巨石溅射推线，对位天启的地面存在；巨龙仍是远程溅射压轴。
-    # 移速必须与岩石傀儡相同。heavy/light 混甲，磁暴/狙击/军犬不能当
+    # 短距巨石溅射推线，对位钢核重坦的地面存在；巨龙仍是远程溅射压轴。
+    # 移速必须与岩石傀儡相同。heavy/light 混甲，电弧/狙击/军犬不能当
     # 纯魔导一锅端。算载具，圣泉可修。
     "behemoth": {
         "name": "玄岩巨像", "cost": 1520, "hp": 1520, "speed": 52.0,
@@ -303,7 +303,7 @@ UNIT_TYPES = {
         "sight": 520.0, "armor": "light", "damageType": "magic",
     },
     # 秘法巨龙：远程大火球大溅射。圣泉二级后才许召唤，避免法阵一立就能出 1600 压轴。
-    # 1100 血仍低于天启 1700；靠射程/溅射/熔甲换耐久，不当新的碾压前排。
+    # 1100 血仍低于钢核重坦 1700；靠射程/溅射/熔甲换耐久，不当新的碾压前排。
     "dragon": {
         "name": "秘法巨龙", "cost": 1600, "hp": 1100, "speed": 60.0,
         "damage": 95.0, "range": 260.0, "cooldown": 1.7,
@@ -313,10 +313,10 @@ UNIT_TYPES = {
         "sight": 460.0, "armor": "arcane", "damageType": "magic",
     },
     # ---- 进阶：圣泉卡二级。不改开局 3 法师+傀儡，只补中后期缺口 ----
-    # 晶铠卫士：对位磁暴步兵的反甲晶击构装，不是 1280 混甲前排。
-    # 圣殿训练、仍卡圣泉。轻甲 + tesla 伤种（对轻/重/魔导同磁暴表），
-    # 无溅射，快脉冲。比磁暴略贵略厚：圣泉门槛 + 轻甲（军犬 bite ×0，
-    # 火箭/磁暴仍打）。仍算载具，圣泉可修。前排继续交给岩石傀儡 / 玄岩巨像。
+    # 晶铠卫士：对位电弧步兵的反甲晶击构装，不是 1280 混甲前排。
+    # 圣殿训练、仍卡圣泉。轻甲 + tesla 伤种（对轻/重/魔导同电弧表），
+    # 无溅射，快脉冲。比电弧步兵略贵略厚：圣泉门槛 + 轻甲（军犬 bite ×0，
+    # 火箭/电弧仍打）。仍算载具，圣泉可修。前排继续交给岩石傀儡 / 玄岩巨像。
     "warden": {
         "name": "晶铠卫士", "cost": 720, "hp": 220, "speed": 80.0,
         "damage": 28.0, "range": 155.0, "cooldown": 0.50,
@@ -336,8 +336,8 @@ UNIT_TYPES = {
         "projectile": "comet", "projectileSpeed": 165.0, "splash": 110.0,
         "sight": 300.0, "armor": "light", "damageType": "missile",
     },
-    # 裂地晶兽：缺的攻城行。siege ×1.8 拆建筑，对单位很差，对位攻城炮/光棱。
-    # 600 血不再一碰就碎，仍远低于傀儡 760 / 巨龙 1100 / 天启 1700。
+    # 裂地晶兽：缺的攻城行。siege ×1.8 拆建筑，对单位很差，对位攻城炮/折光炮车。
+    # 600 血不再一碰就碎，仍远低于傀儡 760 / 巨龙 1100 / 钢核重坦 1700。
     # 与玄岩巨像同走 heavy/light 混甲（晶铠已改为轻甲反甲脉冲）。
     "colossus": {
         "name": "裂地晶兽", "cost": 1280, "hp": 600, "speed": 48.0,
@@ -512,12 +512,12 @@ for _unit_definition in UNIT_TYPES.values():
         _unit_definition.get("sight", 350.0) or 350.0)
     _unit_definition["sight"] = unit_sight_radius(_unit_definition)
 
-# ---- 战功换装：天启坦克的老兵弹种 ----
+# ---- 战功换装：钢核重坦的老兵弹种 ----
 # 纯表现层映射。伤害、射速、溅射与护甲判定仍走 UNIT_TYPES 和既有军衔倍率；
 # 这里不额外叠加数值，只决定客户端画哪一种弹道，好让「一星换弹、二星换形态」
 # 在战场上一眼看得出来。阈值与 VETERAN_RANKS 的 3/8/16 军衔线保持一致。
 VETERAN_PROJECTILES = {
-    # 天启坦克：三杀(一星)换等离子穿甲弹，八杀(二星)展开人形态改用双臂炮。
+    # 钢核重坦：三杀(一星)换等离子穿甲弹，八杀(二星)展开步行炮台改用双臂炮。
     "overlord": ((8, "plasmalance"), (3, "plasma")),
 }
 
@@ -619,7 +619,7 @@ STRUCTURE_TYPES = {
         "projectile": "arcane", "projectileSpeed": 700.0, "splash": 30.0,
         "armor": "structure", "damageType": "magic",
     },
-    # 雷暴塔：对位钢铁远程塔的秘法联网防空，红警光棱支援 + 雷电主题。
+    # 雷暴塔：对位钢铁远程塔的秘法联网防空，友军塔把充能喂给开火塔。
     # 单塔 70/1.1，比导弹炮塔（120/1.6）单体更弱、射更快。射程仍锁 420。
     # 伤种 tesla：克载具/魔导，拆建筑只有 ×0.50（拆家仍归钢铁导弹炮塔）。
     # 支援：同阵营/友军已建成的雷暴塔在 supportRadius 内、且冷却就绪时
@@ -717,7 +717,7 @@ STRUCTURE_TYPES = {
 # ---- 阵营与角色分类 ----
 # faction：tech(钢铁军团) / magic(秘法会) / tribe(原始部落)，
 # 建造与生产按 player["faction"] 校验。
-# role：跨阵营的功能角色。经济逻辑（出生配置、采矿返回、精炼厂赠车、基地车
+# role：跨阵营的功能角色。经济逻辑（出生配置、采矿返回、精炼厂赠车、行营
 # 展开、出售保护、bot 寻目标）一律按 role 判定而不是写死 kind —— 新阵营出
 # 同 role 的换皮建筑即可整套复用。新增兵种/建筑 = 加定义 + 在下面登记 role。
 MAGIC_STRUCTURES = frozenset((

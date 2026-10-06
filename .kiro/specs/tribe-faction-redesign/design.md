@@ -21,7 +21,7 @@
 | bot 不看中立就带 tamer；按存量最少优先；inbound 带 tamer | `bot_support_choices`/`bot_unit_choices`（defend/late/inbound）与 `bot_queue_unit` 的 late 列表都含 tamer；`bot_try_choices` 按 `bot_kind_stock` 升序 | 属实 |
 | 作战单位 8 / 13 / 12 | 部落 spear、tamer、wolf、spider、scorpion、mammoth、panda、slinger | 属实 |
 | 巨蛛冷却 1.45 < 定身 2.2；减速/DoT 后写覆盖；测试断言「后手冰霜覆盖定身」 | `apply_slow`/`apply_dot` 直接覆写；`tribe_spider_test` Test 7 | 属实 |
-| 开局守军 | `start_game`：3×`loadout["infantry"]` + 1×`loadout["armor"]`，仅非 `packedStart` 地图。运行时只有 `start_game` 读 `["infantry"]`/`["armor"]`（另有 `tests/tribe_test.py` 断言）；`ensure_starting_command`、精炼厂赠车、`tests/battle_report_visual_server.py`、`tests/central_scramble_test.py` 只读 hq/power/refinery/harvester/mcv；客户端、ai_commander、README 不读装备表；bot 开局推进阈值 `BOT_ARMY_PUSH = 3` | 属实（五车/裂谷只发基地车） |
+| 开局守军 | `start_game`：3×`loadout["infantry"]` + 1×`loadout["armor"]`，仅非 `packedStart` 地图。运行时只有 `start_game` 读 `["infantry"]`/`["armor"]`（另有 `tests/tribe_test.py` 断言）；`ensure_starting_command`、精炼厂赠车、`tests/battle_report_visual_server.py`、`tests/central_scramble_test.py` 只读 hq/power/refinery/harvester/mcv；客户端、ai_commander、README 不读装备表；bot 开局推进阈值 `BOT_ARMY_PUSH = 3` | 属实（五车/裂谷只发行营） |
 | 近景管线 | `RIVER_ART_KINDS`={tank, overlord, overlord_v1, overlord_v2, dragon, rifle, mage}；rig 仅 `walk`/`wing`，轴只有 x/z；每 rig 每兵种一个 InstancedMesh；`riverStructureDetails` 返回的零件**整体替换**基础 `structureParts`，`aBreak` 由 `structureGeometries` 的 `mergeParts(...,{fracture:true})` 统一烘焙 | 属实 |
 | 材质 | `bakeRiverSurfaceData` 2×2 图集 512²；kind 3 为错行圆鼓包（即巨龙鳞片）；部落野兽现走 `SURF.hide=3`，近景样板下就是鳞片 | 属实，兽毛需另做 |
 
@@ -416,7 +416,7 @@ for (dx, dy), kind in zip(START_GARRISON_OFFSETS, garrison):
     game["units"].append(make_unit(kind, player["id"], x + toward_x * dx, y + toward_y * dy))
 ```
 
-- 只影响非 `packedStart` 地图；五车争霸、裂谷旷野仍只发基地车。
+- 只影响非 `packedStart` 地图；五车争霸、裂谷旷野仍只发行营。
 - 钢铁/秘法的守军 kind、创建顺序（决定 `u` 序号）与坐标和旧实现一致。部落每名玩家多创建 1 名单位，之后实体的 `u` 序号整体后移；实现后以 `python run_tests.py` 确认没有依赖具体序号的断言。
 - `start_game` 注释同步为「部落(大营/图腾柱/精炼棚/驮兽 + 骨矛猎手×3/战狼/燧石标枪手)」。
 - `zip` 在守军数超过落位格数时截断，由 1.5 的约束测试保证不会发生。
@@ -522,7 +522,7 @@ export function tribeStructureDetails(kind, s, k) { /* → parts[]，完整替�
 | wolf | 胸深腰收、长吻、立耳、颈背鬃毛脊、蓬尾上扬 | 躯 9 站、头吻 7 站、尾 6 站 | 侧腹战纹条、背毯 | 毛 3.25、牙骨 1 | 四腿 | 2000 / 2600 |
 | spider | 小头胸 + 大圆腹（腹背部落图纹）、八足高膝外撑、骨色螯牙 | 头胸 7 站、腹 9 站 | 腹背图纹、鞍毯 | 甲壳 3、刚毛 3.25、骨 1 | 两组足 | 2500 / 3200 |
 | scorpion | 分节背甲、双大螯前伸、五节尾弓过背、骨刺 | 躯 8 站（站点收腰表现分节） | 鞍毯、尾节漆环 | 甲壳 3、骨 1 | 两组足 + 尾 | 2700 / 3200 |
-| panda | 已确认的功夫熊猫：圆滚黑白、眼斑、腰封，左臂护体右掌抬，造型与配色不改 | 肚身 uprightShell 8 站、头 6 站 | 腰封结与飘带（保留现有 0.90 条带） | 黑白毛 3.25、腰封 2 | 双腿 + 双掌 | 2800 / 3000 |
+| panda | 圆滚黑白兽 + 肩上竹甲 + 拍击前掌，不要腰封或功夫架势 | 躯连续体积 + 头 | 肩上竹甲与骨绑（0.90 条带） | 黑白毛 3.25、竹甲 1 | 双腿组 + 前掌 | 2800 / 3000 |
 | mammoth | 高隆肩峰、垂地长毛裙、弯长牙、长鼻、背驮木轿 + 兽皮篷 + 队旗 | 躯 11 站、头 7 站、鼻 8 站 | 轿旗、鞍毯、牙箍 | 毛 3.25、木 1、篷 2 | 四腿 | 3800 / 4800 |
 | tharvester | 牦牛式驮畜：弯角、长毛、两侧筐（矿光） | 躯 9 站、头 6 站 | 筐罩布 | 毛 3.25、木 1 | 四腿 | 2400 / 3000 |
 | tmcv | 两头驮畜拉兽皮篷橇，篷后竖图腾柱与旗幡 | 牲畜各 9 站 + 篷 | 篷面条纹、旗幡 | 毛 3.25、篷 2、木 1 | 四腿（两头同位腿共用） | 3000 / 3500 |

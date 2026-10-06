@@ -110,7 +110,7 @@
 - [x] 9. 开局守军
   - [x] 9.1 实现
     - catalog.py：`FACTION_LOADOUT["tribe"]["garrison"] = ("spear", "spear", "spear", "wolf", "javelin")`、`START_GARRISON_OFFSETS`、`faction_start_garrison(faction)`（§1.5）；tech、magic 不加 garrison，`infantry`/`armor` 全部保持；server 再导出
-    - server.py `start_game` 按 §2.9 落位；packedStart 地图仍只发基地车
+    - server.py `start_game` 按 §2.9 落位；packedStart 地图仍只发行营
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8, 13.9_
   - [x] 9.2 测试
     - tests/tribe_test.py：保留 infantry/armor 断言，新增 garrison 与 `faction_start_garrison("tribe")` 断言，出生单位精确断言为 `sorted(["spear"] * 3 + ["javelin", "wolf", "tharvester"])`
@@ -226,7 +226,7 @@
 
 - [x] 21. 熊猫近景（依赖 16）
   - [x] 21.1 模型
-    - 保持已确认的功夫熊猫造型与配色（圆滚黑白、眼斑、腰封、左臂护体右掌抬、0.90 条带），改用连续体积；2 个 walk 腿 rig 加双掌 strike rig；黑白毛 aSurf 3.25，腰封走布料
+    - 圆滚黑白兽 + 肩上竹甲 + 拍击前掌，改用连续体积；2 个 walk 腿 rig 加前掌 strike rig；黑白毛 aSurf 3.25，竹甲走石面
     - 预算 ≤ 3000；完成后加入 `TRIBE_ART_KINDS`
     - _Requirements: 19.3, 19.4, 19.5, 19.6, 19.7, 19.8, 20.4, 20.10, 21.7, 22.1, 22.2_
   - [x] 21.2 测试
