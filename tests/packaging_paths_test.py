@@ -127,6 +127,24 @@ def main():
             assert paths.should_open_browser(["ChichaoSteelFront"], frozen_env) is False
 
     assert paths.game_local_url("127.0.0.1", 18081) == "http://127.0.0.1:18081/"
+
+    httpd = server.ThreadedHTTPServer(("127.0.0.1", 0), server.GameHandler)
+    worker = threading.Thread(target=httpd.serve_forever, daemon=True)
+    worker.start()
+    try:
+        port = httpd.server_address[1]
+        opener = build_opener(ProxyHandler({}))
+        with opener.open("http://127.0.0.1:%d/api/health" % port, timeout=3) as response:
+            assert response.status == 200
+        with opener.open("http://127.0.0.1:%d/" % port, timeout=3) as response:
+            body = response.read()
+            assert response.status == 200
+            assert b"html" in body.lower()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(3)
+
     print("packaging paths: frozen ROOT, writable reports, browser policy passed.")
 
 
