@@ -19,8 +19,22 @@
 
 `SteelFrontLauncher.exe` 是一个很薄的启动外壳，不把游戏代码打包进去。它每次都直接
 运行仓库当前的 `server.py`，因此执行 `git pull` 后无需重新编译，下一次点击启动就是
-最新代码。Python 3 仍需安装在电脑上；启动错误会写入根目录的 `launcher.log`。
+最新代码。**从源码运行时**电脑上仍需安装 Python 3；启动错误会写入根目录的 `launcher.log`。
 房间没有任何浏览器玩家在线后会保留 10 秒重连窗口，随后自动从房间列表移除；正常刷新页面不会误删房间。
+`start-game.bat` / `start-game.sh` 在桌面环境下会打开本机游戏页；启动器自己开标签，不会重复打开。
+
+### Windows 一键包（不必预装 Python）
+
+itch / 发行用的 Windows zip 用 PyInstaller 打成 `ChichaoSteelFront.exe`，买家解压后双击即可，
+**不需要先安装 Python**。未签名 exe 可能被 SmartScreen 拦截：点「更多信息」再「仍要运行」。
+打包步骤、zip 排除清单和 macOS / Linux 的 `start-game.sh` 说明见 [`PACKAGING.md`](PACKAGING.md)。
+
+```
+powershell -ExecutionPolicy Bypass -File scripts/build_windows_release.ps1
+```
+
+Linux / macOS 开发机可以先跑 `./scripts/build_windows_release.sh`，生成源码包并检查排除清单；
+Windows 冻结 exe 必须在 Windows 上构建。
 
 ### 选择网卡与本地 Wi-Fi 热点（Windows）
 
@@ -280,7 +294,7 @@ OpenAI 兼容服务。未配置 LLM 时，规则执行器仍可自动生产、�
 
 ## 技术说明
 
-- 服务端：Python 3 标准库，权威状态与 20Hz 模拟，零第三方依赖。
+- 服务端：Python 3 标准库，权威状态与 20Hz 模拟，零第三方依赖。冻结路径与战报目录见 `paths.py`；Windows 一键包构建见 `PACKAGING.md`。
 - 客户端：three.js（内置于 `public/vendor/`）+ WebGL2。地形、单位、建筑、弹道、爆炸的网格由代码生成；表面共用 4 张压缩 WebP 写实材质（军械、地表、森林、矿石）。
   - `public/render3d.js` —— 渲染层：场景、相机、三点布光与阴影、山地地形、迷雾、拾取。
   - `public/wilderness.js` —— 写实旷野：地表生态混合、草地随机错位平铺、

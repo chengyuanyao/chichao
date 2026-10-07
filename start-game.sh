@@ -10,4 +10,7 @@ else
   export PORT="${PORT:-18081}"
 fi
 
+# 有桌面会话时打开本机页面；无显示器或显式关闭时 server.py 会自己跳过。
+export STEEL_FRONT_OPEN_BROWSER="${STEEL_FRONT_OPEN_BROWSER:-1}"
+
 exec python3 server.py

@@ -6,5 +6,11 @@ __pycache__/
 artifacts/
 battle_reports/
 
+# Packaging outputs (PyInstaller / itch zip staging).
+dist/
+build/
+release/
+.packaging-venv/
+
 # Kiro local execution history; keep the authored specs and task plan.
 .kiro/specs/**/tasks.meta.json
