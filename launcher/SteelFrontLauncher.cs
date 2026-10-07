@@ -263,7 +263,7 @@ namespace SteelFrontLauncher
 
             Label sourceCaption = MakeCaption("运行文件", 30, 153);
             Controls.Add(sourceCaption);
-            _sourceLabel = MakeValue(Path.Combine(_repoRoot, "server.py"), 116, 151, 590);
+            _sourceLabel = MakeValue(DescribeLaunchSource(_repoRoot), 116, 151, 590);
             Controls.Add(_sourceLabel);
 
             Label portCaption = MakeCaption("服务端口", 30, 194);
@@ -279,7 +279,7 @@ namespace SteelFrontLauncher
             Controls.Add(_portInput);
 
             Label modeNote = new Label();
-            modeNote.Text = "拉取代码后无需重新生成 EXE，下次启动自动使用最新源码";
+            modeNote.Text = LaunchModeNote(_repoRoot);
             modeNote.AutoSize = true;
             modeNote.ForeColor = Muted;
             modeNote.Location = new Point(246, 193);
@@ -524,29 +524,22 @@ namespace SteelFrontLauncher
             if (!available) { MessageBox.Show("所选网卡已断开或 IP 已改变，请刷新网卡后重试。"); return; }
             _boundAddress = selected.Address;
 
-            string script = Path.Combine(_repoRoot, "server.py");
-            if (!File.Exists(script))
-            {
-                MessageBox.Show("找不到 server.py。请把启动器放在游戏仓库根目录。",
-                    "无法启动", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            string python = PythonLocator.FindPython3();
-            if (String.IsNullOrEmpty(python))
+            string fileName, arguments, displayPath;
+            if (!TryResolveLaunch(_repoRoot, out fileName, out arguments, out displayPath))
             {
                 MessageBox.Show(
-                    "没有找到 Python 3。\n\n安装 Python 3 并勾选 Add Python to PATH 后重试。",
+                    "找不到 ChichaoSteelFront.exe、捆绑的 python\\python.exe 或系统 Python 3。\n\n" +
+                    "itch 一键包请与 exe 放在同一目录。源码运行请安装 Python 3 并勾选 Add Python to PATH。",
                     "无法启动", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             int port = Decimal.ToInt32(_portInput.Value);
-            InitializeLog(python, script, port);
+            InitializeLog(fileName, displayPath, port);
 
             ProcessStartInfo startInfo = new ProcessStartInfo();
-            startInfo.FileName = python;
-            startInfo.Arguments = Quote(script);
+            startInfo.FileName = fileName;
+            startInfo.Arguments = arguments;
             startInfo.WorkingDirectory = _repoRoot;
             startInfo.UseShellExecute = false;
             startInfo.CreateNoWindow = true;
@@ -559,6 +552,8 @@ namespace SteelFrontLauncher
             startInfo.EnvironmentVariables["HOST"] = _boundAddress;
             startInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
             startInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
+            startInfo.EnvironmentVariables["STEEL_FRONT_LAUNCHER"] = "1";
+            startInfo.EnvironmentVariables["STEEL_FRONT_NO_BROWSER"] = "1";
 
             Process process = new Process();
             process.StartInfo = startInfo;
@@ -1005,12 +1000,94 @@ namespace SteelFrontLauncher
             return "\"" + value.Replace("\"", "\\\"") + "\"";
         }
 
+        private static string FrozenExePath(string root)
+        {
+            return Path.Combine(root, "ChichaoSteelFront.exe");
+        }
+
+        private static bool IsFrozenExe(string path)
+        {
+            try
+            {
+                return File.Exists(path) &&
+                    !string.Equals(Path.GetFullPath(path),
+                        Path.GetFullPath(Application.ExecutablePath),
+                        StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return File.Exists(path);
+            }
+        }
+
+        private static string BundledPythonPath(string root)
+        {
+            return Path.Combine(root, "python", "python.exe");
+        }
+
+        private static string DescribeLaunchSource(string root)
+        {
+            string frozen = FrozenExePath(root);
+            if (IsFrozenExe(frozen))
+                return frozen;
+            string bundled = BundledPythonPath(root);
+            if (File.Exists(bundled))
+                return bundled + " + server.py";
+            return Path.Combine(root, "server.py");
+        }
+
+        private static string LaunchModeNote(string root)
+        {
+            if (IsFrozenExe(FrozenExePath(root)))
+                return "发行包：直接运行捆绑的游戏 exe，不需要系统 Python";
+            if (File.Exists(BundledPythonPath(root)))
+                return "发行包：使用目录内的嵌入式 Python 运行 server.py";
+            return "拉取代码后无需重新生成 EXE，下次启动自动使用最新源码";
+        }
+
+        private static bool TryResolveLaunch(string root, out string fileName,
+            out string arguments, out string displayPath)
+        {
+            string frozen = FrozenExePath(root);
+            if (IsFrozenExe(frozen))
+            {
+                fileName = frozen;
+                arguments = "--no-browser";
+                displayPath = frozen;
+                return true;
+            }
+
+            string script = Path.Combine(root, "server.py");
+            if (!File.Exists(script))
+            {
+                fileName = null;
+                arguments = null;
+                displayPath = null;
+                return false;
+            }
+
+            string python = PythonLocator.FindPython3(root);
+            if (String.IsNullOrEmpty(python))
+            {
+                fileName = null;
+                arguments = null;
+                displayPath = null;
+                return false;
+            }
+
+            fileName = python;
+            arguments = Quote(script);
+            displayPath = script;
+            return true;
+        }
+
         private static string FindRepoRoot(string start)
         {
             DirectoryInfo directory = new DirectoryInfo(start);
             for (int depth = 0; directory != null && depth < 6; depth++, directory = directory.Parent)
             {
-                if (File.Exists(Path.Combine(directory.FullName, "server.py")))
+                if (File.Exists(Path.Combine(directory.FullName, "server.py")) ||
+                    File.Exists(Path.Combine(directory.FullName, "ChichaoSteelFront.exe")))
                     return directory.FullName;
             }
             return start;
@@ -1046,9 +1123,23 @@ namespace SteelFrontLauncher
     {
         public static string FindPython3()
         {
+            return FindPython3(null);
+        }
+
+        public static string FindPython3(string repoRoot)
+        {
             List<string> candidates = new List<string>();
             string configured = Environment.GetEnvironmentVariable("STEEL_FRONT_PYTHON");
             if (!String.IsNullOrEmpty(configured)) candidates.Add(configured.Trim('"'));
+            if (!String.IsNullOrEmpty(repoRoot))
+                candidates.Add(Path.Combine(repoRoot, "python", "python.exe"));
+            try
+            {
+                string startup = AppDomain.CurrentDomain.BaseDirectory;
+                if (!String.IsNullOrEmpty(startup))
+                    candidates.Add(Path.Combine(startup, "python", "python.exe"));
+            }
+            catch { }
 
             string launcherResult = Capture("py.exe",
                 "-3 -c \"import sys; print(sys.executable)\"", 5000);

@@ -19,6 +19,7 @@ set "GAME_PORT=18081"
 if not "%~1"=="" set "GAME_PORT=%~1"
 set "PORT=%GAME_PORT%"
 set "PYTHONIOENCODING=utf-8"
+if not defined STEEL_FRONT_OPEN_BROWSER set "STEEL_FRONT_OPEN_BROWSER=1"
 
 echo.
 echo ==========================================================
@@ -29,6 +30,10 @@ echo   Press Ctrl+C or close this window to stop the server.
 echo   Change port:   start-game.bat 8090
 echo ==========================================================
 echo.
+
+rem itch 一键包：冻结 exe ^> 包内 embeddable Python ^> 系统 Python。
+if exist "%~dp0ChichaoSteelFront.exe" goto run_frozen
+if exist "%~dp0python\python.exe" goto run_bundled_python
 
 rem 优先用 Windows Python Launcher / PATH 上的 python，避免锁死到本机
 rem 某次安装留下的 Python 3.6 绝对路径。找不到时再回退到那个路径。
@@ -42,8 +47,19 @@ set "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python36\python.exe"
 if exist "%PYTHON_EXE%" goto run_known_python
 
 echo [ERROR] Python 3 was not found.
-echo Install Python 3 and enable "Add Python to PATH", then retry.
+echo For the itch zip: run ChichaoSteelFront.exe from this folder.
+echo For source checkouts: install Python 3 and enable "Add Python to PATH".
 goto failed
+
+:run_frozen
+echo [INFO] Bundled game executable
+"%~dp0ChichaoSteelFront.exe"
+goto finished
+
+:run_bundled_python
+echo [INFO] Bundled embeddable Python
+"%~dp0python\python.exe" "%~dp0server.py"
+goto finished
 
 :run_known_python
 echo [INFO] Python: %PYTHON_EXE%

@@ -19,8 +19,22 @@
 
 `SteelFrontLauncher.exe` 是一个很薄的启动外壳，不把游戏代码打包进去。它每次都直接
 运行仓库当前的 `server.py`，因此执行 `git pull` 后无需重新编译，下一次点击启动就是
-最新代码。Python 3 仍需安装在电脑上；启动错误会写入根目录的 `launcher.log`。
+最新代码。**从源码运行时**电脑上仍需安装 Python 3；启动错误会写入根目录的 `launcher.log`。
 房间没有任何浏览器玩家在线后会保留 10 秒重连窗口，随后自动从房间列表移除；正常刷新页面不会误删房间。
+`start-game.bat` / `start-game.sh` 在桌面环境下会打开本机游戏页；启动器自己开标签，不会重复打开。
+
+### Windows 一键包（不必预装 Python）
+
+itch / 发行用的 Windows zip 用 PyInstaller 打成 `ChichaoSteelFront.exe`，买家解压后双击即可，
+**不需要先安装 Python**。未签名 exe 可能被 SmartScreen 拦截：点「更多信息」再「仍要运行」。
+打包步骤、zip 排除清单和 macOS / Linux 的 `start-game.sh` 说明见 [`PACKAGING.md`](PACKAGING.md)。
+
+```
+powershell -ExecutionPolicy Bypass -File scripts/build_windows_release.ps1
+```
+
+Linux / macOS 开发机可以先跑 `./scripts/build_windows_release.sh`，生成源码包并检查排除清单；
+Windows 冻结 exe 必须在 Windows 上构建。
 
 ### 选择网卡与本地 Wi-Fi 热点（Windows）
 
@@ -280,7 +294,7 @@ OpenAI 兼容服务。未配置 LLM 时，规则执行器仍可自动生产、�
 
 ## 技术说明
 
-- 服务端：Python 3 标准库，权威状态与 20Hz 模拟，零第三方依赖。
+- 服务端：Python 3 标准库，权威状态与 20Hz 模拟，零第三方依赖。冻结路径与战报目录见 `paths.py`；Windows 一键包构建见 `PACKAGING.md`。
 - 客户端：three.js（内置于 `public/vendor/`）+ WebGL2。地形、单位、建筑、弹道、爆炸的网格由代码生成；表面共用 4 张压缩 WebP 写实材质（军械、地表、森林、矿石）。
   - `public/render3d.js` —— 渲染层：场景、相机、三点布光与阴影、山地地形、迷雾、拾取。
   - `public/wilderness.js` —— 写实旷野：地表生态混合、草地随机错位平铺、
@@ -492,7 +506,7 @@ python3 tests/integration_test.py http://127.0.0.1:18081  # 需要服务器已�
 - 直接关闭浏览器只尝试 beacon 发送（60 KB 以内）；超过浏览器限制则只发摘要。崩溃、断电、断网或页面被强制关闭时，未送达的详细记录不能保证保存。
 - 服务器自己的模拟耗时、等锁、状态生成/编码、每位玩家状态发送量和写出耗时也会统计。每分钟保存诊断检查点；收到详细记录时立即保存诊断，整局终局时保存完整战报。JSON 序列化、磁盘写入在后台线程执行，房间锁内仍有有界快照复制成本，并非零开销。
 
-自动档案位于项目根目录 `battle_reports/*.json`，包含战报及全员已收到的诊断数据，重启后仍可查看并导出 JSON / CSV。
+自动档案默认位于项目根目录 `battle_reports/*.json`（冻结的 Windows 一键包则写在 exe 旁边，写不进去时改到 `%APPDATA%\ChichaoSteelFront`），包含战报及全员已收到的诊断数据，重启后仍可查看并导出 JSON / CSV。
 对局尚未结束的周期检查点只有诊断，不冒充完整战报；异常停服可能丢失最后一分钟检查点及尚未上传的客户端明细。
 启动器强制结束服务进程时同样有此限制。退出玩家的数据会保留到该局最终战报。
 每位玩家最多保留 4 个浏览器会话、每个会话最多 120 个时间段；超长局合并时段，超出的会话数量会标注。

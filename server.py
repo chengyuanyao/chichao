@@ -82,11 +82,12 @@ from formation import (
     normalize_formation,
     resolve_move_formation,
 )
+import paths
 
 
 VERSION = "2.1.0"
-ROOT = os.path.dirname(os.path.abspath(__file__))
-PUBLIC_ROOT = os.path.join(ROOT, "public")
+ROOT = paths.resource_root()
+PUBLIC_ROOT = paths.public_root()
 # 高位端口：8080 在装了 WSL2 / Hyper-V / Docker 的 Windows 上常被系统预留，
 # 绑定会失败并报 WinError 10013。详见 README 的「端口说明」。
 PORT = int(os.environ.get("PORT", "18081"))
@@ -8978,6 +8979,19 @@ def explain_bind_failure(exc, host, port):
     print("")
 
 
+def open_game_browser(url):
+    """Open the local game page without blocking the accept loop."""
+    def worker():
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception as exc:
+            print("未能自动打开浏览器：%s" % exc)
+            print("请手动打开 %s" % url)
+
+    threading.Thread(target=worker, name="open-browser", daemon=True).start()
+
+
 def main():
     global RUNNING
     signal.signal(signal.SIGINT, shutdown_handler)
@@ -8989,14 +9003,16 @@ def main():
         explain_bind_failure(exc, HOST, PORT)
         return 1
     # 端口绑定成功后再开模拟线程，避免失败退出时留下后台线程
-    diagnostics.WRITER = diagnostics.ArchiveWriter(os.path.join(ROOT, "battle_reports"))
+    reports_dir = paths.battle_reports_dir()
+    diagnostics.WRITER = diagnostics.ArchiveWriter(reports_dir)
     loop_thread = threading.Thread(target=game_loop, name="game-loop")
     loop_thread.daemon = True
     loop_thread.start()
     server.timeout = 0.5
+    local_url = paths.game_local_url(local_server_host(), PORT)
     print("=" * 58)
     print("  赤潮：钢铁前线 LAN 服务器 v%s" % VERSION)
-    print("  本机访问:   http://%s:%d" % (local_server_host(), PORT))
+    print("  本机访问:   %s" % local_url.rstrip("/"))
     lan_ips = lan_addresses() if HOST == "0.0.0.0" else ([] if HOST == "127.0.0.1" else [HOST])
     if lan_ips:
         print("  局域网地址: http://%s:%d   <- 优先发给队友" % (lan_ips[0], PORT))
@@ -9004,8 +9020,12 @@ def main():
             print("              http://%s:%d" % (extra, PORT))
     else:
         print("  监听地址:   %s:%d（未能探测到局域网 IP）" % (HOST, PORT))
+    print("  战报目录:   %s" % reports_dir)
     print("  按 Ctrl+C 停止")
     print("=" * 58)
+    if paths.should_open_browser():
+        print("  正在打开浏览器: %s" % local_url)
+        open_game_browser(local_url)
     try:
         while RUNNING:
             server.handle_request()
