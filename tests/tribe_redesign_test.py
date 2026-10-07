@@ -392,19 +392,23 @@ def test_new_units_and_garrison():
     catapult = server.make_unit("catapult", a["id"], 2000, 2000)
     tank = server.make_unit("tank", b["id"], 2080, 2000)
     tower = server.make_structure("turret", b["id"], 2200, 2000)
+    # 坦克随机冷却/扫描就绪时会回击，不能用 projectiles[-1] 当投石车开火结果。
+    tank["scan"] = tank["cooldown"] = 99.0
     isolate(game, catapult, tank)
     game["structures"] = [tower]
     catapult["order"] = "guard"
     catapult["scan"] = catapult["cooldown"] = 0
     server.tick_units(room, .05)
-    assert game["projectiles"][-1]["targetId"] == tower["id"]
+    assert any(shot.get("sourceId") == catapult["id"] and shot.get("targetId") == tower["id"]
+               for shot in game["projectiles"])
     before = tower["hp"]
     server.tick_projectiles(room, 2.0)
     assert abs(before - tower["hp"] - 171) < 1e-6
     server.issue_attack(game, a["id"], [catapult["id"]], tank["id"])
     catapult["cooldown"] = 0
     server.tick_units(room, .05)
-    assert game["projectiles"][-1]["targetId"] == tank["id"]
+    assert any(shot.get("sourceId") == catapult["id"] and shot.get("targetId") == tank["id"]
+               for shot in game["projectiles"])
     # 真实开火路径会记录攻方号令倍率；命中逐个读取目标猎印。
     scorpion = server.make_unit("scorpion", a["id"], 2000, 2000)
     tamer = server.make_unit("tamer", a["id"], 2100, 2100)
