@@ -458,11 +458,11 @@ MAPS = {
         "theme": "grassland",
         "visualStyle": "open_wilderness",
         "briefing": (
-            "五名指挥官只带一辆折叠基地车，在无矿的中央草甸同时落地。"
+            "五名指挥官只带一辆折叠行营，在无矿的中央草甸同时落地。"
             "先抢方向再展开：外围五个方向各随机生成一片 23 万无守军矿区，"
             "中央低地经长缓坡通往五处高地，岩脊与深浅沟谷之间留有侧翼绕行口。"
         ),
-        # 五辆基地车停在中央 190 半径的小环上：彼此都在视野内，但不发生
+        # 五辆行营停在中央 190 半径的小环上：彼此都在视野内，但不发生
         # 单位分离。这里是落地点，不是固定发展区；玩家应先驶离中央再展开。
         "spawnPoints": [
             (2000, 1810),
@@ -479,7 +479,7 @@ MAPS = {
         "mountains": _CENTRAL_WILDERNESS["mountains"],
         "landforms": _CENTRAL_WILDERNESS["landforms"],
         "authoredLandscape": True,
-        # 五条放射路只负责把基地车迅速送出中央，不预先划定玩家领地。
+        # 五条放射路只负责把行营迅速送出中央，不预先划定玩家领地。
         "roads": [
             {"x1": 2000, "y1": 1810, "x2": 2000, "y2": 500, "width": 115},
             {"x1": 2181, "y1": 1941, "x2": 3427, "y2": 1536, "width": 115},
@@ -662,7 +662,7 @@ COMBAT_REWARD_UNIT_RATE = 0.08
 COMBAT_REWARD_STRUCTURE_RATE = 0.05
 
 # 可选大厅模式「指挥官模式」：人类只下方针，执行层做微操。
-# 方针一变立即清掉该席位的作战指令（方针覆盖微操）；矿车/基地车继续干活。
+# 方针一变立即清掉该席位的作战指令（方针覆盖微操）；矿车/行营继续干活。
 COMMANDER_MODE = "commander_mode"
 COMMANDER_INTENT_KINDS = ("rush", "eco", "defend", "snipe")
 COMMANDER_INTENT_LABELS = {
@@ -710,10 +710,10 @@ DAMAGE_MULTIPLIER = {
     "super":   {"infantry": 1.50, "light": 1.30, "heavy": 1.10, "structure": 1.40, "beast": 1.20},
     # V3 / 坠星台 远程曲射：拆建筑，溅射清阵，弹速慢能被看见躲
     "missile": {"infantry": 0.50, "light": 0.70, "heavy": 0.65, "structure": 1.50, "beast": 0.65},
-    # 磁暴步兵的电弧：快脉冲专电载具，对建筑和步兵都一般；电磁干扰魔力场，是科技杀法师的关键。
+    # 电弧步兵的电弧：快脉冲专电载具，对建筑和步兵都一般；电磁干扰魔力场，是科技杀法师的关键。
     # 对魔导 2.00→1.60：仍明显高于对步兵 0.80 / 对轻甲 1.40，不当成中性。
     "tesla":   {"infantry": 0.80, "light": 1.40, "heavy": 1.30, "structure": 0.50, "arcane": 1.60, "beast": 1.15},
-    # 光棱坦克的聚焦光束：精准点杀伤，克轻型与建筑，打不动重甲与人群；也能切开魔导护甲
+    # 折光炮车的聚焦光束：精准点杀伤，克轻型与建筑，打不动重甲与人群；也能切开魔导护甲
     "laser":   {"infantry": 0.45, "light": 1.50, "heavy": 0.85, "structure": 1.70, "arcane": 1.50, "beast": 1.00},
     # 军犬扑咬：一口一个步兵，对装甲和建筑完全无从下口（×0）。
     # 对魔导仍 ×1.50（咬 90）；法师/女巫 160 血一口剩 70，两口仍死。
@@ -2411,7 +2411,7 @@ def start_game(room):
         "commanderMode": bool(room.get("commanderMode")),
         # 只锁定战斗中的队伍变更；大厅已经分好的 team 原样写入 playerTeams。
         "dynamicAlliances": dynamic_alliances_enabled(room),
-        # 默认保留经典规则：总部折叠成基地车后，已取得资格的建筑队列仍可
+        # 默认保留经典规则：总部折叠成行营后，已取得资格的建筑队列仍可
         # 继续生产，并能在现有基地控制区内部署。
         "mobileConstruction": mobile_construction_enabled(room),
         "nextOrbitalRainAt": (
@@ -2552,7 +2552,7 @@ def start_game(room):
         x, y = spawn_points[sp]
         toward_x = 1 if x < center_x else -1
         toward_y = 1 if y < center_y else -1
-        # 五车争霸只发一辆折叠基地车；没有预建建筑、矿车或作战单位。
+        # 五车争霸只发一辆折叠行营；没有预建建筑、矿车或作战单位。
         # 其他地图继续按阵营发完整出生装备：科技(指挥中心/电站/精炼厂/采矿车 + 突击兵/坦克)，
         # 魔法(主堡/法力塔/精炼所/浮游晶簇 + 法师/傀儡)，
         # 部落(大营/图腾柱/精炼棚/驮兽 + 三骨矛/战狼/标枪)。kind 全部取自阵营装备表。
@@ -2642,7 +2642,7 @@ def start_game(room):
             "publicOreSectorJitterDegrees", 0.0),
         sector_clearance=room_map.get("publicOreSectorClearance", 0.0))
 
-    # 折叠开局的人类玩家完全自行选址。AI 没有人拖动基地车，给它写入一个
+    # 折叠开局的人类玩家完全自行选址。AI 没有人拖动行营，给它写入一个
     # 私有的外环目标；bot_maybe_pack 会先沿放射路驶离中央，到点后再展开。
     if room_map.get("packedStart"):
         bot_deploy_points = room_map.get("botDeployPoints") or spawn_points
@@ -2663,7 +2663,7 @@ def start_game(room):
 
     # 开局发布必须是原子的：先补齐并复核每个席位的指挥实体，再把房间切到
     # playing。这样 SSE / 首个胜负扫描永远看不到“对局已开始、某人却还没
-    # 有总部/基地车”的半成品状态。
+    # 有总部/行营”的半成品状态。
     packed_start = bool(room_map.get("packedStart"))
     for player in players:
         spawn = player_spawns[player["id"]]
@@ -2788,10 +2788,10 @@ def place_structure(room, player_id, kind, x, y, free=False,
     definition = STRUCTURE_TYPES[kind]
     if definition.get("faction", "tech") != player.get("faction", "tech"):
         raise ValueError("你的阵营无法建造该建筑")
-    # 机动建造开启时，折叠后的基地车保留总部授权；实际落点仍必须靠近
-    # 已完成的核心建筑，基地车本身不会变成可移动的建造半径。
+    # 机动建造开启时，折叠后的行营保留总部授权；实际落点仍必须靠近
+    # 已完成的核心建筑，行营本身不会变成可移动的建造半径。
     if not player_has_construction_authority(room, player_id):
-        raise ValueError("请先展开基地车，或开启机动建造")
+        raise ValueError("请先展开行营，或开启机动建造")
     map_w = game["map"]["width"]
     map_h = game["map"]["height"]
     x = clamp(float(x), definition["size"] + 12, map_w - definition["size"] - 12)
@@ -2835,7 +2835,7 @@ def queue_structure(room, player_id, kind):
     if definition.get("faction", "tech") != player.get("faction", "tech"):
         raise ValueError("你的阵营无法建造该建筑")
     if not player_has_construction_authority(room, player_id):
-        raise ValueError("请先展开基地车，或开启机动建造")
+        raise ValueError("请先展开行营，或开启机动建造")
     for requirement in definition["requires"]:
         if not has_active_structure(game, player_id, requirement):
             raise ValueError("缺少前置建筑")
@@ -2957,7 +2957,7 @@ def clear_repair_order(unit):
 
 
 def is_tameable_combat_unit(entity):
-    """活着的中立作战单位才能驯。建筑、采矿单位和基地车不行。"""
+    """活着的中立作战单位才能驯。建筑、采矿单位和行营不行。"""
     if not entity or entity.get("hp", 0) <= 0:
         return False
     if not str(entity.get("id", "")).startswith("u"):
@@ -3333,7 +3333,7 @@ def issue_tactical_order(game, player_id, unit_ids, command):
     selected = [u for u in game["units"] if u["owner"] == player_id
                 and u["id"] in unit_ids and u["hp"] > 0 and unit_can_attack(u["kind"])]
     if not selected:
-        raise ValueError("请选择作战单位（不含矿车和基地车）")
+        raise ValueError("请选择作战单位（不含矿车和行营）")
     destinations = (scatter_destinations(selected, game_terrain(game), game["structures"])
                     if command == "scatter" else {})
     issue_stop(game, player_id, {u["id"] for u in selected})
@@ -3506,7 +3506,7 @@ def issue_deploy(game, player_id, unit_ids):
             raise ValueError("此处无法展开：空间不足")
         if game_terrain(game).blocked(unit["x"], unit["y"], 30):
             raise ValueError("不能在水中或山地展开")
-        # 基地车展开为该阵营的主堡（科技→指挥中心 / 魔法→魔法主堡 / 部落→部落大营）
+        # 行营展开为该阵营的主堡（科技→指挥中心 / 魔法→魔法主堡 / 部落→部落大营）
         hq_kind = UNIT_TYPES[unit["kind"]].get("deploysInto", "hq")
         new_hq = make_structure(hq_kind, player_id, unit["x"], unit["y"], True)
         new_hq["packable"] = True
@@ -3520,7 +3520,7 @@ def issue_deploy(game, player_id, unit_ids):
         })
         deployed = True
     if not deployed:
-        raise ValueError("请选择可展开的基地车")
+        raise ValueError("请选择可展开的行营")
 
 
 def issue_undeploy(game, player_id, structure_id):
@@ -3675,7 +3675,7 @@ def set_combat_rewards(room, player, enabled):
 
 
 def set_mobile_construction(room, player, enabled):
-    """房主在大厅决定基地车移动时是否保留建筑生产与部署授权。"""
+    """房主在大厅决定行营移动时是否保留建筑生产与部署授权。"""
     if room.get("status") != "lobby":
         raise ValueError("战斗已经开始")
     if not player or room.get("hostId") != player.get("id"):
@@ -3685,7 +3685,7 @@ def set_mobile_construction(room, player, enabled):
         return enabled
     room["mobileConstruction"] = enabled
     if enabled:
-        add_chat(room, "作战系统", "已开启机动建造：基地车移动时建筑队列继续运转。", True)
+        add_chat(room, "作战系统", "已开启机动建造：行营移动时建筑队列继续运转。", True)
     else:
         add_chat(room, "作战系统", "已关闭机动建造：总部折叠后建筑生产暂停。", True)
     return enabled
@@ -3879,7 +3879,7 @@ def commander_focus_point(player):
 
 
 def is_economy_unit(unit):
-    """矿车 / 基地车：方针覆盖微操时不要打断采集或展开。"""
+    """矿车 / 行营：方针覆盖微操时不要打断采集或展开。"""
     return unit_role(unit.get("kind")) in ("harvester", "mcv")
 
 
@@ -3894,7 +3894,7 @@ def clear_unit_path(unit):
 
 
 def clear_combat_orders(game, player_id):
-    """方针覆盖微操：清掉作战单位的目的地/指令/路径，留下矿车和基地车。"""
+    """方针覆盖微操：清掉作战单位的目的地/指令/路径，留下矿车和行营。"""
     if not game:
         return 0
     cleared = 0
@@ -5703,7 +5703,7 @@ def launch_projectile(game, attacker, target, definition, damage_mult=1.0, tribe
     # 发射就算交战：不能让远程弹丸在飞行时攻击者先回血。
     mark_unit_combat(attacker, game)
     span = math.hypot(target["x"] - attacker["x"], target["y"] - attacker["y"])
-    # 弹种只影响客户端表现：老兵天启换等离子弹/双臂炮，不在既有军衔倍率
+    # 弹种只影响客户端表现：老兵钢核重坦换等离子弹/双臂炮，不在既有军衔倍率
     # 之外额外改变伤害、弹速或溅射。
     # 建筑没有 kills，取默认值 0 后一律走目录里的原弹种。
     base_kind = definition["projectile"]
@@ -6437,8 +6437,8 @@ def tick_build_queues(room, dt):
                  if player.get(key) and not player[key][0].get("ready")]
         if not items:
             continue
-        # 关闭机动建造时，最后一座总部折叠后暂停；默认开启时，存活基地车
-        # 继续承接建筑生产。总部与基地车都不存在则始终没有建造授权。
+        # 关闭机动建造时，最后一座总部折叠后暂停；默认开启时，存活行营
+        # 继续承接建筑生产。总部与行营都不存在则始终没有建造授权。
         if not player_has_construction_authority(room, player["id"]):
             battle_report.production_delay(room, player["id"], "authorityPause", dt * len(items))
             continue
@@ -7091,7 +7091,7 @@ def bot_support_choices(faction, roles, opening, late, rich, harvester_n):
                 choices.extend(("imp", "mage", "frost"))
                 choices.append("oracle")
                 if "repair" in roles:
-                    # 对位磁暴：中期圣殿+圣泉的反甲脉冲，不是替傀儡挡线。
+                    # 对位电弧步兵：中期圣殿+圣泉的反甲脉冲，不是替傀儡挡线。
                     choices.append("warden")
         if "factory" in roles:
             choices.extend(("panther", "panther"))
@@ -7203,7 +7203,7 @@ def bot_unit_choices(faction, roles, phase, scout, defend, rich, harvester_n,
             choices = []
             if "barracks" in roles:
                 choices.extend(("mage", "mage", "frost"))
-                # 晶铠对位磁暴：看见载具才加反甲脉冲，不当肉盾。
+                # 晶铠对位电弧步兵：看见载具才加反甲脉冲，不当肉盾。
                 if "repair" in roles:
                     choices.append("warden")
             if "factory" in roles:
@@ -7564,7 +7564,7 @@ def bot_evade_suicide(game, bot, inbound):
 
 
 def bot_maybe_pack(game, bot, roles, elapsed):
-    """前 3 分钟不收总部。只有起点明显丢了且还有基地车时才转移。"""
+    """前 3 分钟不收总部。只有起点明显丢了且还有行营时才转移。"""
     mcv = None
     for unit in game["units"]:
         if (unit["owner"] == bot["id"] and unit["hp"] > 0
@@ -7573,7 +7573,7 @@ def bot_maybe_pack(game, bot, roles, elapsed):
             break
     hq = bot_own_hq(game, bot["id"])
     # 地图专属折叠开局：AI 先驶出所有玩家挤在一起的中央落地区，再展开。
-    # 这条在 3 分钟折叠保护之前执行；没有私有目标的普通基地车不受影响。
+    # 这条在 3 分钟折叠保护之前执行；没有私有目标的普通行营不受影响。
     if (hq is None and mcv is not None
             and mcv.get("_openingDeployX") is not None
             and mcv.get("_openingDeployY") is not None):
@@ -7818,7 +7818,7 @@ def remove_destroyed(room):
 
 
 def player_has_command(game, player_id):
-    """指挥体系还在：活着的总部建筑，或已折叠成的基地车/迁徙法阵。"""
+    """指挥体系还在：活着的总部建筑，或已折叠成的行营/迁徙法阵。"""
     for structure in game["structures"]:
         if (structure["owner"] == player_id and structure["hp"] > 0
                 and structure_role(structure["kind"]) == "hq"):
@@ -7865,7 +7865,7 @@ def record_match_winner(room, winner):
 def check_elimination_and_victory(room, force=False):
     """淘汰与胜负判定。仍按 victoryClock 的 0.45s 节奏跑，不需要 20Hz 的精度。
 
-    规则与开局提示一致：摧毁指挥中心（含魔法主堡）即淘汰。折叠成基地车
+    规则与开局提示一致：摧毁指挥中心（含魔法主堡）即淘汰。折叠成行营
     不算失去指挥——否则开局就能把主堡收起然后立刻战败。
     force 用于玩家中途离开等弃权情形：不等开局 15 秒缓冲，立即定胜负。
     """

@@ -60,7 +60,7 @@ import { renderProfile, displayPixelRatio } from './render_profile.js';
     artillery: { icon: '◉', desc: '极远溅射，克建筑/重甲' },
     tank_destroyer: { icon: '◭', desc: '专杀坦克，×2.1反重甲' },
     v3: { icon: '⊹', desc: '超远程导弹打击，大溅射' },
-    overlord: { icon: '⬟', desc: '超重型主战，双管重炮抗线 · 需维修厂 · 一星换等离子弹，二星展开人形态双臂炮' },
+    overlord: { icon: '⬟', desc: '超重型主战，双管重炮抗线 · 需维修厂 · 一星换等离子弹，二星展开步行炮台双臂炮' },
     tesla: { icon: '⚡', desc: '动力甲反甲步兵，电弧专电载具 · 需工厂' },
     prism: { icon: '✦', desc: '远程聚焦光束，点杀轻型与建筑 · 需维修厂' },
     harvester: { icon: '▣', desc: '自动采集矿石' },
@@ -207,7 +207,7 @@ import { renderProfile, displayPixelRatio } from './render_profile.js';
       powerLoad: '电力负载',
       harvester: '采矿车',
       hq: '指挥中心',
-      mcv: '基地车',
+      mcv: '野战指挥车',
       repairBtn: '维修载具',
       repairTitle: '前往最近维修厂 (R)',
       repairHint: '维修载具',
@@ -338,7 +338,7 @@ import { renderProfile, displayPixelRatio } from './render_profile.js';
   var P_BLOOD = '#8a2020';
   var P_PANDA_W = '#f2f0ea';
   var P_PANDA_B = '#161412';
-  var P_SASH = '#9a3420';
+  var P_BAMBOO = '#76b32e';
   // 魔法阵营类型集：肖像底子换成暗紫，一眼与钢铁军团的深红区分
   var MAGIC_KINDS = {
     mhq: 1, mpower: 1, mrefinery: 1, mtemple: 1, mcircle: 1, mspring: 1, mtower: 1, mstorm: 1,
@@ -810,7 +810,7 @@ import { renderProfile, displayPixelRatio } from './render_profile.js';
       c.fill();
       pRect(c, 37, 27, 22, 4, P_DARK);
       pRect(c, 40, 29, 16, 2, P_LCD);
-      // 背部磁暴线圈：两根竖杆 + 顶端电弧球，线圈间拉一道闪电
+      // 背部电弧线圈：两根竖杆 + 顶端电弧球，线圈间拉一道闪电
       pLine(c, 36, 42, 36, 20, 2.5, P_BRASS_D);
       pLine(c, 60, 42, 60, 20, 2.5, P_BRASS_D);
       pCirc(c, 36, 18, 2.6, P_LCD);
@@ -1344,25 +1344,19 @@ import { renderProfile, displayPixelRatio } from './render_profile.js';
       pRect(c, 52, 50, 6, 10, P_BARK);
     },
     panda: function (c) {
-      // 竹甲熊猫：圆耳黑眼斑 + 腰封，功夫熊猫剪影，不要狼或猛犸
-      pShadow(c, 48, 64, 24);
-      pCirc(c, 46, 52, 17, P_PANDA_W);
-      pCirc(c, 54, 30, 13, P_PANDA_W);
-      pCirc(c, 46, 18, 5.4, P_PANDA_B);
-      pCirc(c, 64, 18, 5.4, P_PANDA_B);
-      pCirc(c, 47, 19, 2.1, P_PANDA_W);
-      pCirc(c, 63, 19, 2.1, P_PANDA_W);
-      pCirc(c, 50, 30, 4.6, P_PANDA_B);
-      pCirc(c, 62, 30, 4.6, P_PANDA_B);
-      pCirc(c, 51, 30, 1.35, P_FIRE);
-      pCirc(c, 61, 30, 1.35, P_FIRE);
-      pCirc(c, 56, 36, 1.8, P_PANDA_B);
-      pRect(c, 30, 50, 32, 6, P_SASH);
-      pRect(c, 32, 49, 28, 2, P_THATCH);
-      pCirc(c, 38, 64, 6.2, P_PANDA_B);
-      pCirc(c, 54, 64, 6.2, P_PANDA_B);
-      pLine(c, 60, 44, 72, 30, 5.6, P_PANDA_B);
-      pCirc(c, 74, 26, 5.4, P_PANDA_B);
+      // 竹甲熊猫：圆耳黑眼斑 + 肩上竹甲，不要狼或猛犸剪影
+      pShadow(c, 48, 60, 24);
+      pCirc(c, 46, 46, 16, P_PANDA_W);
+      pCirc(c, 62, 36, 11, P_PANDA_W);
+      pCirc(c, 56, 28, 5.2, P_PANDA_B);
+      pCirc(c, 70, 28, 5.2, P_PANDA_B);
+      pCirc(c, 58, 36, 3.6, P_PANDA_B);
+      pCirc(c, 68, 36, 3.6, P_PANDA_B);
+      pCirc(c, 70, 38, 1.3, P_FIRE);
+      pRect(c, 28, 34, 22, 7, P_BAMBOO);
+      pRect(c, 30, 32, 18, 3, P_BONE);
+      pRect(c, 34, 52, 6, 8, P_PANDA_B);
+      pRect(c, 50, 52, 6, 8, P_PANDA_B);
     },
     slinger: function (c) {
       // 投石猎手：兽皮短褂 + 投石索，不要骨矛剪影
@@ -1617,8 +1611,8 @@ import { renderProfile, displayPixelRatio } from './render_profile.js';
     snipe: '偷家'
   };
   var BUILTIN_MAPS = {
-    central_rift: { id: 'central_rift', name: '五车争霸·裂谷旷野', width: 4000, height: 4000, maxPlayers: 5, theme: 'temperate', neutralOreGuards: false, briefing: '五辆折叠基地车中央出发。五处背靠林岩的高台，河谷与桥梁连接侧翼；五片15万主矿与五片8万争夺矿，无中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
-    central_scramble: { id: 'central_scramble', name: '五车争霸', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠基地车在无矿的中央低地同时落地。外围五个方向各有一片随机位置的23万矿，无中立守军。长缓坡通往五处高地，高耸岩脊与沟谷之间留有侧翼绕行口。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
+    central_rift: { id: 'central_rift', name: '五车争霸·裂谷旷野', width: 4000, height: 4000, maxPlayers: 5, theme: 'temperate', neutralOreGuards: false, briefing: '五辆折叠行营中央出发。五处背靠林岩的高台，河谷与桥梁连接侧翼；五片15万主矿与五片8万争夺矿，无中立守军。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
+    central_scramble: { id: 'central_scramble', name: '五车争霸', width: 4000, height: 4000, maxPlayers: 5, theme: 'grassland', neutralOreGuards: false, briefing: '五名指挥官只带折叠行营在无矿的中央低地同时落地。外围五个方向各有一片随机位置的23万矿，无中立守军。长缓坡通往五处高地，高耸岩脊与沟谷之间留有侧翼绕行口。', spawnLabels: ['中央北位', '中央东北位', '中央东南位', '中央西南位', '中央西北位'], spawnPoints: [[2000,1810],[2181,1941],[2112,2154],[1888,2154],[1819,1941]] },
     gold_crater_small: { id: 'gold_crater_small', name: '赤金陨坑·紧凑', width: 6400, height: 6400, maxPlayers: 5, theme: 'crater', briefing: '五方围着陨石核打，地图紧凑，邻里火拼更早打响。', spawnLabels: ['北岗', '东北高地', '东南谷地', '西南谷地', '西北高地'], spawnPoints: [[3200,750],[5530,2443],[4640,5182],[1760,5182],[870,2443]] },
     iron_river_duel: { id: 'iron_river_duel', name: '铁峡争渡', width: 4800, height: 3200, maxPlayers: 2, theme: 'temperate', briefing: '左右对称的写实河谷战场：上中下三座钢桥分出正面与两路侧翼战线。', spawnLabels: ['西岸指挥部', '东岸指挥部'], spawnPoints: [[700,1600],[4100,1600]] }
   };
@@ -3601,7 +3595,7 @@ import { renderProfile, displayPixelRatio } from './render_profile.js';
     }
     if (!hasConstructionAuthority()) {
       toast(item ? '总部已折叠，建筑生产已暂停' :
-        '请先展开基地车，或在大厅开启机动建造', 'error');
+        '请先展开行营，或在大厅开启机动建造', 'error');
       sound('error');
       return;
     }
@@ -5141,7 +5135,7 @@ import { renderProfile, displayPixelRatio } from './render_profile.js';
     var kind = buildMode;
     if (!hasConstructionAuthority()) {
       cancelModes();
-      toast('请先展开基地车，或在大厅开启机动建造', 'error');
+      toast('请先展开行营，或在大厅开启机动建造', 'error');
       sound('error');
       return;
     }
@@ -5517,7 +5511,7 @@ import { renderProfile, displayPixelRatio } from './render_profile.js';
       return selectedUnits.has(u.id) && u.owner === session.playerId && u.hp > 0 &&
         unitRole(u.kind) !== 'harvester' && unitRole(u.kind) !== 'mcv';
     }).map(function (u) { return u.id; });
-    if (!ids.length) { toast('请选择作战单位（不含矿车和基地车）', 'info'); return; }
+    if (!ids.length) { toast('请选择作战单位（不含矿车和行营）', 'info'); return; }
     cancelModes();
     var requestSession = session, requestKey = gameKey;
     sendAction('command', {command:command,unitIds:ids}).then(function (result) {

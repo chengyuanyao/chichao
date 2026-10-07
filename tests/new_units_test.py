@@ -66,7 +66,7 @@ def main():
         server.issue_deploy(game, a["id"], {rifle["id"]})
         raise AssertionError("should reject non-MCV deploy")
     except ValueError as exc:
-        assert "基地车" in str(exc)
+        assert "行营" in str(exc)
     print("  Non-MCV rejection: PASS")
 
     print("\n=== Test 4: Refinery gift harvester ===")

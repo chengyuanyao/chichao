@@ -57,7 +57,7 @@
 - **零军衔**：`kills` 低于首个军衔门槛（3）、伤害倍率为 1.0 的单位。
 - **可驯中立作战单位**：owner 为 `NEUTRAL_OWNER` 且 `is_tameable_combat_unit` 为真的单位。
 - **inbound**：bot 检测到敌方自爆单位逼近己方基地的状态。
-- **packedStart 地图**：开局只发一辆基地车的地图（五车争霸、裂谷旷野）。
+- **packedStart 地图**：开局只发一辆行营的地图（五车争霸、裂谷旷野）。
 - **开局守军**：非 packedStart 地图开局时在总部旁生成的作战单位。
 - **近景样板**：`RIVER_ART_KINDS` 使用的近景高精度模型与 PBR 材质管线；关闭时回到基础 builder 与原材质。
 - **远景 LOD**：`simpleUnitParts` 生成的远距简模。
@@ -260,7 +260,7 @@
 5. WHEN 非 packedStart 地图开局，THE Server SHALL 按 `faction_start_garrison` 的顺序创建守军，第 i 名位于出生点（总部）坐标加 (toward_x × dx_i, toward_y × dy_i)，(dx_i, dy_i) 取 `START_GARRISON_OFFSETS[i]`。
 6. WHEN 钢铁或秘法玩家在非 packedStart 地图开局，THE Server SHALL 创建与改动前 kind、创建顺序与坐标都相同的 4 名守军。
 7. WHEN 部落玩家在非 packedStart 地图开局，THE Server SHALL 创建 3 名 `spear`、1 名 `wolf` 与 1 名 `javelin`，守军造价合计 1310。
-8. WHILE 地图为 packedStart 地图，THE Server SHALL 只为每名玩家发放一辆基地车，不创建守军。
+8. WHILE 地图为 packedStart 地图，THE Server SHALL 只为每名玩家发放一辆行营，不创建守军。
 9. THE Catalog SHALL 使每个阵营的守军数量不超过 `START_GARRISON_OFFSETS` 的格数，且每名守军的 `kind_faction` 等于该阵营。
 
 ### Requirement 14: 内置 bot 驯兽师过滤（决策 E）
@@ -373,7 +373,7 @@
 5. THE Renderer SHALL 使部落近景几何的 position、normal、uv、aTeam、aOcc、aSurf 属性全部为有限值。
 6. THE Renderer SHALL 使部落近景主体与每个 rig 都能被模型拾取命中。
 7. THE Renderer SHALL 保持 `simpleUnitParts` 中既有部落条目不变，并使近景样板开启与关闭时的远景 LOD 几何逐字节一致。
-8. THE Renderer SHALL 保持竹甲熊猫已确认的造型与配色（圆滚黑白、眼斑、腰封、左臂护体右掌抬、0.90 条带）。
+8. THE Renderer SHALL 保持竹甲熊猫为圆滚黑白兽、黑眼斑与肩上竹甲，不得使用腰封或功夫架势。
 9. THE Renderer SHALL 让皮肤与木头使用石纹（kind 1）低频起伏，并只让甲壳类（`spider`、`scorpion`）使用鳞片（kind 3）。
 
 ### Requirement 20: 关节动画（美术）

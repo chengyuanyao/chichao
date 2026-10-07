@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""高级兵种（天启坦克/磁暴步兵/光棱坦克）测试：
+"""高级兵种（钢核重坦/电弧步兵/折光炮车）测试：
    1) 单位定义齐全、归入正确的生产方与克制表
-   2) 二级科技门槛：磁暴需工厂，天启/光棱需维修厂，缺了则拒绝排队
+   2) 二级科技门槛：电弧需工厂，钢核/折光需维修厂，缺了则拒绝排队
    3) 新伤害类型 tesla / laser 的克制系数生效
 """
 
@@ -50,7 +50,7 @@ def main():
     assert server.UNIT_TYPES["overlord"]["damageType"] == "shell"
     assert server.UNIT_TYPES["tesla"]["damageType"] == "tesla"
     assert server.UNIT_TYPES["prism"]["damageType"] == "laser"
-    # 新伤害类型已入克制表；载具已入维修厂白名单（磁暴是步兵不算）
+    # 新伤害类型已入克制表；载具已入维修厂白名单（电弧步兵是步兵不算）
     assert "tesla" in server.DAMAGE_MULTIPLIER
     assert "laser" in server.DAMAGE_MULTIPLIER
     assert "overlord" in server.VEHICLE_KINDS
@@ -58,21 +58,21 @@ def main():
     assert "tesla" not in server.VEHICLE_KINDS
     print("  定义/克制表/载具归类: PASS")
 
-    print("\n=== Test 2: 磁暴步兵需工厂 ===")
+    print("\n=== Test 2: 电弧步兵需工厂 ===")
     room, a, b = make_room("ADV01")
     game = room["game"]
     a["cash"] = 99999
     give(game, a["id"], "barracks")   # 只有兵营，没有工厂
     try:
         server.queue_unit(room, a["id"], "tesla")
-        raise AssertionError("无工厂时不该能出磁暴步兵")
+        raise AssertionError("无工厂时不该能出电弧步兵")
     except ValueError as exc:
         assert "前置建筑" in str(exc), str(exc)
     give(game, a["id"], "factory")    # 补上工厂
     server.queue_unit(room, a["id"], "tesla")
     print("  缺工厂拒绝 / 补工厂放行: PASS")
 
-    print("\n=== Test 3: 天启/光棱需维修厂 ===")
+    print("\n=== Test 3: 钢核/折光需维修厂 ===")
     room, a, b = make_room("ADV02")
     game = room["game"]
     a["cash"] = 99999
@@ -91,7 +91,7 @@ def main():
     print("\n=== Test 4: 新伤害类型克制系数 ===")
     room, a, b = make_room("ADV03")
     game = room["game"]
-    # 磁暴 vs 轻型载具（猎犬）×1.4
+    # 电弧 vs 轻型载具（猎犬）×1.4
     scout = server.make_unit("scout", b["id"], 9000, 9000)
     scout["hp"] = 1000
     game["units"].append(scout)
@@ -99,7 +99,7 @@ def main():
     server.apply_damage(room, scout, 100, a["id"], "tesla", game)
     assert abs((before - scout["hp"]) - 100 * 1.4) < 0.1, (before - scout["hp"])
     print("  tesla vs 轻型: ×1.4 PASS")
-    # 光棱 vs 建筑 ×1.7
+    # 折光 vs 建筑 ×1.7
     turret = server.make_structure("turret", b["id"], 9000, 9000, True)
     game["structures"].append(turret)
     before = turret["hp"]

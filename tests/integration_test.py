@@ -66,7 +66,7 @@ def main():
 
     style_status, style_type, stylesheet = fetch_static("/styles.css")
     assert style_status == 200 and style_type == "text/css"
-    assert b"Soviet Steel v3" in stylesheet
+    assert b"Steel Front HUD v3" in stylesheet
     assert b"#hudCanvas" in stylesheet, "3D 叠加层样式缺失"
     script_status, script_type, script = fetch_static("/app.js")
     assert script_status == 200 and "javascript" in script_type

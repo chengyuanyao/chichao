@@ -224,7 +224,7 @@ def main():
             kind, hq["hp"], hq_hit))
 
     print("\n=== Test 6b: 只增伤建筑与采矿单位，其余单位（含天启/巨龙）×0.8 ===")
-    # 步兵、坦克、法师，以及天启坦克 / 秘法巨龙这类高血单位，一律走 default ×0.8：
+    # 步兵、坦克、法师，以及钢核重坦 / 秘法巨龙这类高血单位，一律走 default ×0.8：
     # 自爆仍是清步兵堆与拆家的工具，不能兼任兑掉重甲王牌的答案。
     for kind in ("bomb_truck", "hexling"):
         room, a, b = make_room("SU04b-" + kind, magic_b=True)

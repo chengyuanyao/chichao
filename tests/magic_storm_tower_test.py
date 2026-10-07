@@ -215,7 +215,7 @@ def main():
     assert abs((before - hq["hp"]) - expect) < 0.1
     print("  弹种 storm / tesla 拆建筑 ×0.50: PASS")
 
-    print("\n=== Test 6: 光棱式支援加伤；奥术塔不支援 ===")
+    print("\n=== Test 6: 联网支援加伤；奥术塔不支援 ===")
     room, a, b = make_room("STORM05")
     game = room["game"]
     game["terrainCtx"] = server.FLAT_TERRAIN

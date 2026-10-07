@@ -99,7 +99,7 @@ def test_counter_table():
           abs(codex.counter("bite", "mage") - 1.50) < 1e-6)
     check("自爆单位按死亡爆炸算输出，不是 0",
           codex.sustained_damage("bomb_truck") > 0)
-    check("卡车/魔仆只对建筑与矿车 ×1.50，其他单位（含天启/巨龙）×0.80",
+    check("卡车/魔仆只对建筑与矿车 ×1.50，其他单位（含钢核/巨龙）×0.80",
           all(codex.attacker_counter(kind, "power") == 1.50
               and codex.attacker_counter(kind, "harvester") == 1.50
               and codex.attacker_counter(kind, "mharvester") == 1.50

@@ -34,7 +34,7 @@ def build_map():
         "maxPlayers": 5, "theme": "temperate", "visualStyle": "river_valley",
         "bridgeDeckHeight": 18, "packedStart": True, "neutralOreGuards": False,
         "authoredLandscape": True, "publicOreCount": 0,
-        "briefing": ("五辆折叠基地车从无矿中央出发，五处高台背靠林岩。"
+        "briefing": ("五辆折叠行营从无矿中央出发，五处高台背靠林岩。"
                      "五条河谷与五座桥连接侧翼，中央保留绕行通路。"
                      "后方五片15万主矿、交界五片8万争夺矿，同类矿每局等量小幅偏移；无中立守军。"),
         "spawnPoints": [(2000,1810),(2181,1941),(2112,2154),(1888,2154),(1819,1941)],

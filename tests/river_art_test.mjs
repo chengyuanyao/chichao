@@ -54,7 +54,7 @@ for(const kind of RIVER_ART_KINDS) {
    const p=sample.body.attributes.position;let shoulderVertices=0;
    for(let i=0;i<p.count;i++) if(p.getY(i)>32&&p.getY(i)<42&&Math.abs(p.getZ(i))>14) shoulderVertices++;
    assert.ok(shoulderVertices>=24,'retain both shoulder armor housings around existing arm pivots');
-   assert.ok(triangles<=2600,'shoulder fix stays within core robot geometry budget');
+   assert.ok(triangles<=2600,'shoulder fix stays within core walker geometry budget');
  }
  console.log(kind,triangles,'triangles',sample.rigs?.length||0,'rig batches');
 }

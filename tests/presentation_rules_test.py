@@ -570,7 +570,7 @@ def main():
     assert "奥术法师：高挑长袍施法者，暗紫袍 + 金饰法杖" in render
     assert "冰霜女巫：宽檐帽 + 苍白斗篷 + 霜环" in render
     assert "秘法巨龙：「奥德赛」硬表面构装龙" in render
-    assert "天启级巨型持盾构装" in render
+    assert "重坦级巨型持盾构装" in render
     assert "}, 1.18, 1.14, 1.18);" in render
     assert "warden: 1.55" in render
     assert "behemoth: 1.62" in render
@@ -610,21 +610,21 @@ def main():
     assert "爆裂魔仆与自爆卡车同为轻甲" in readme
     assert "影豹同为轻甲" in readme
     assert "奥术圣殿在圣泉建成后可训练晶铠卫士" in readme
-    assert "对位磁暴步兵的轻甲反甲晶击构装" in readme
+    assert "对位电弧步兵的轻甲反甲晶击构装" in readme
     assert "玄岩巨像" in readme
     assert "傀儡进阶 · 玄岩重甲前排 · 需圣泉" in app
     assert "圣殿训练 · 需圣泉" in hud
     assert "反甲晶击 · 圣殿训练 · 需圣泉" in hud
     assert "玄岩巨像" in hud
     assert "裂地/玄岩走混甲" in hud
-    assert "晶铠轻甲构装走磁暴伤种" in hud
+    assert "晶铠轻甲构装走电弧伤种" in hud
     assert "混甲前排" not in hud
     assert "反甲晶击脉冲" in app
     assert "圣殿晶铠前排" not in app
-    assert "混甲抗磁暴" not in app
+    assert "混甲抗电弧" not in app
     assert "需圣泉" in app
-    assert "魔导甲怕磁暴/狙击×1.6" in hud
-    assert "魔导甲怕磁暴/狙击×2.0" not in hud
+    assert "魔导甲怕电弧/狙击×1.6" in hud
+    assert "魔导甲怕电弧/狙击×2.0" not in hud
     assert "frostRobe:" in render
     assert "look: 'shard'" in render
     assert "look: 'fireball'" in render
@@ -784,10 +784,10 @@ def main():
     assert "竹甲熊猫" in readme
     assert "投石猎手" in hud
     assert "投石猎手" in readme
-    assert "竹甲熊猫：圆滚黑白功夫熊猫，软肚 + 眼斑 + 腰封" in render
-    assert "肩上竹甲" not in render
-    assert "MAT.sashRust" in render
-    assert "圆耳黑眼斑 + 腰封，功夫熊猫剪影" in app
+    assert "竹甲熊猫：圆滚黑白兽 + 肩上竹甲" in render
+    assert "功夫熊猫" not in render
+    assert "MAT.bamboo" in render
+    assert "圆耳黑眼斑 + 肩上竹甲" in app
     assert "投石猎手：兽皮短褂 + 骨环 + 投石索" in render
     assert "look: 'rock'" in render
     assert "panda: 1.72" in render
@@ -966,9 +966,9 @@ def main():
     assert "function syncNeutralCampsToggle" in app
     assert "function roomHasNeutrals" in app
 
-    # 机动建造默认开；折叠基地车保留建筑队列授权，房主也可在大厅关闭。
+    # 机动建造默认开；折叠行营保留建筑队列授权，房主也可在大厅关闭。
     assert "机动建造" in hud
-    assert "基地车移动时继续生产、部署建筑，默认开" in hud
+    assert "行营移动时继续生产、部署建筑，默认开" in hud
     assert 'data-mode="mobile_construction"' in hud
     assert 'id="mobileConstructionToggle" checked' in hud
     assert "机动建造" in readme

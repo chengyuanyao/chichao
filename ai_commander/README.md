@@ -69,7 +69,7 @@ hook.py       运行时替换 server.tick_bots
 cooldown / range）和 `server.DAMAGE_MULTIPLIER`（`apply_damage` 真正查的那张
 表），连两条特判也复用同一套规则：
 
-* 混甲（裂地晶兽、玄岩巨像的 `("heavy","light")`）取两种倍率的平均；晶铠卫士已改为轻甲 + tesla 伤种，对位磁暴步兵；
+* 混甲（裂地晶兽、玄岩巨像的 `("heavy","light")`）取两种倍率的平均；晶铠卫士已改为轻甲 + tesla 伤种，对位电弧步兵；
 * 扑咬对**载具**是硬 0——秘法巨龙、岩石傀儡的护甲是 `arcane`，只看护甲类
   会以为军犬能咬，实际是零伤害。
 
@@ -99,7 +99,7 @@ cooldown / range）和 `server.DAMAGE_MULTIPLIER`（`apply_damage` 真正查的�
 
 | 局势 | 配比 | 为什么 |
 |---|---|---|
-| tech / arcane / mid | `tesla:4 rifle:3 tank:2` | 磁暴对魔导甲 ×1.60、子弹 ×1.50；**穿甲只有 ×1.00，别造歼击车** |
+| tech / arcane / mid | `tesla:4 rifle:3 tank:2` | 电弧对魔导甲 ×1.60、子弹 ×1.50；**穿甲只有 ×1.00，别造歼击车** |
 | tech / heavy / mid | `tank_destroyer:4 rocket:3 tank:2` | 穿甲对重甲 ×2.10，是硬克星 |
 
 ### 克制安全过滤（LLM 也改不动的硬约束）
@@ -158,7 +158,7 @@ cooldown / range）和 `server.DAMAGE_MULTIPLIER`（`apply_damage` 真正查的�
 接管的是整个 `tick_bots`，所以内置 AI 那几件事也得自己接着做，别丢：自爆单位
 **单独按波次砸建筑**（`_launch_suicides`，不进野战编制——`_score_target` 会把它
 送去撞步兵，1000 块换一个步兵）、躲开进家的敌方自爆车（`bot_evade_suicide`）、
-基地车折叠转移（`bot_maybe_pack`）、血量低于 45% 的兵不跟着推进。
+行营折叠转移（`bot_maybe_pack`）、血量低于 45% 的兵不跟着推进。
 
 ## 离线对战结果
 

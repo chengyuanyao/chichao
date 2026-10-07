@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""天启坦克「战功换形态」的回归检查：
+"""钢核重坦「战功换形态」的回归检查：
 
    1) veteran_projectile 的阈值与 tick_units 的 3/8/16 军衔线一致
    2) launch_projectile 只换 kind，不在既有军衔倍率外追加数值变化
@@ -157,10 +157,10 @@ def main():
     assert "kind === 'overlord_v2'" in render
     assert "overlord: 1.30, overlord_v1: 1.30, overlord_v2: 1.06," in render
     app = read("public/app.js")
-    assert "二星展开人形态双臂炮" in app
+    assert "二星展开步行炮台双臂炮" in app
     print("  三副形态/两种弹道/抬臂动画的客户端定义齐全: PASS")
 
-    print("\n天启坦克战功换形态：全部通过")
+    print("\n钢核重坦战功换形态：全部通过")
 
 
 if __name__ == "__main__":

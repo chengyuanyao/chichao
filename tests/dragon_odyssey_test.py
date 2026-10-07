@@ -86,7 +86,7 @@ def test_orbit_layer():
     assert "function dragonOrbitParts()" in render
     assert "function ensureDragonOrbitMesh(needed)" in render
     assert "const dragons = byKind.get('dragon');" in render
-    # 和天启双臂同一套：合进一份几何体、原点即环绕中心、远景 LOD 不跑这层
+    # 和钢核双臂同一套：合进一份几何体、原点即环绕中心、远景 LOD 不跑这层
     orbit = slice_between(render, u"    /* --- 秘法巨龙：环绕核球 --- */",
                           u"    /* --- 建筑 --- */")
     assert "if (!state.lod || camDist <= HERO_LOD_DISTANCE) {" in orbit

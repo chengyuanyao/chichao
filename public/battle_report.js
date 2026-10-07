@@ -239,7 +239,7 @@ export function renderBattleReport(report, playerId) {
     '<p class="report-note">价值按目录原价计算，包含初始赠送单位。击毁只计敌方玩家；损失含主动自爆、中立和环境伤害，不含出售、基地折叠 / 展开、淘汰撤军及退场后的遗留建筑。交换比＝摧毁价值 ÷ 损失价值。</p></section>' +
     '<section data-report-panel="curves" class="hidden"><div class="report-legend">' + legend + '</div><div class="report-charts">' +
     chart(report, 0, '累计采集收入', '只计矿车卸矿到账，不含初始资金、补给箱或战斗奖励。') +
-    chart(report, 2, '现存作战部队价值', '不含矿车、基地车、建筑与队列；按原价计，不随残血或军衔折算。') + '</div>' +
+    chart(report, 2, '现存作战部队价值', '不含矿车、行营、建筑与队列；按原价计，不随残血或军衔折算。') + '</div>' +
     '<p class="report-note">初始每 5 秒采样；长局自动稀疏，当前采样间隔约 ' + number(report.sampleInterval) +
     ' 秒。峰值为采样峰值，可能略过短暂变化；淘汰后的军力归零是部队退场，不代表全部被击毁。</p>' + performancePanel(report) + renderDiagnostics(report.serverDiagnostics) + '</section>' +
     '<section data-report-panel="events" class="hidden"><div class="report-table-wrap"><table class="report-table report-times"><thead><tr><th>指挥官</th><th>首次交战</th><th>退场时间</th><th>最终结果</th></tr></thead><tbody>' + opening +
@@ -260,7 +260,7 @@ export function reportCsv(report) {
   };
   const players = Object.fromEntries(report.players.map(row => [row.id, row]));
   const rows = [['赤潮战报', report.mapName, '时长', battleTime(report.duration)],
-    ['统计口径', '价值按原价；损失含自爆/环境，不含出售/折叠/淘汰撤离/退场后遗留建筑；采集不含初始/补给/奖励；军力不含矿车/基地车/建筑'],
+    ['统计口径', '价值按原价；损失含自爆/环境，不含出售/折叠/淘汰撤离/退场后遗留建筑；采集不含初始/补给/奖励；军力不含矿车/行营/建筑'],
     ['玩家', '阵营', '最终队伍', '结果', '采集资金', '战斗奖励', '击毁单位', '击毁建筑', '损失单位', '损失建筑',
       '摧毁价值', '损失价值', '自爆消耗', '交换比', '采样军力峰值', '终局军力', '首次交战', '退场时间']];
   report.players.forEach(p => rows.push([p.name, p.faction === 'magic' ? '秘法会' : p.faction === 'tribe' ? '原始部落' : '钢铁军团', p.team, status(p),

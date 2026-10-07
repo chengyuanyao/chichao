@@ -182,17 +182,46 @@ export function tribeUnitModel(kind,base,k) {
   if(['wolf','mammoth','tharvester'].includes(kind)) return quadruped(kind,k);
   if(['spider','scorpion'].includes(kind)) return arthropod(kind,k);
   if(kind==='panda') {
-    // 保留已确认的黑白眼斑、贴肚腰封与侧抬右掌，连续体积只替换肚身和头。
-    const {MAT}=k,body=base.body.slice(0,21);
-    body[0]=uprightShell([[2.4,1,.5,1],[3,5.8,.5,6.6],[6.2,7.5,.5,8.2],
-      [8.8,7.4,.5,8],[11,6.4,.5,6.9],[12,4.1,.5,4.5],[12.6,1,.5,1]],MAT.pandaWhite,FUR,k);
-    body[2]=uprightShell([[10.8,.2,4.2,.2],[12,3.5,4.2,3.5],[15.3,5.7,4.2,5.7],
-      [18,5.5,4.2,5.5],[21,3.8,4.2,3.8],[22.4,.2,4.2,.2]],MAT.pandaWhite,FUR,k);
-    for(const p of base.body) if([MAT.pandaWhite,MAT.pandaCream,MAT.pandaBlack].includes(p.rgb)) p.surf=FUR;
-    const rigs=[rig(base.body.slice(21,24),[-1.8,6.2,3.2],{side:1,amp:.28}),
-      rig(base.body.slice(24,27),[-1.8,6.2,-3.2],{side:-1,amp:.28}),
-      rig(base.body.slice(27),[2,12.8,0],{mode:'strike',swing:.60,attack:.12,duration:.55})];
-    return {body,rigs,glow:base.glow};
+    // 圆滚黑白兽 + 肩上竹甲：连续体积替换肚身和头，腿走对角步，前掌单独拍击。
+    const {box,cyl,ellipsoid,limb,organicShell,ROT_Z90,MAT}=k;
+    const W=MAT.pandaWhite,B=MAT.pandaBlack,C=MAT.pandaCream;
+    const BAM=MAT.bamboo,BD=MAT.bambooDark;
+    const body=[
+      organicShell([[-11,3.4,9.4,3.6],[-7,6.8,10.2,7.0],[-2,7.8,10.6,8.2],
+        [3,7.4,10.4,7.8],[7,6.0,11.0,6.2],[10.4,3.2,11.4,3.4]],W,FUR),
+      organicShell([[10.2,2.4,11.6,2.6],[12.4,5.2,12.2,5.4],[14.8,5.6,12.0,5.8],
+        [16.8,3.8,11.4,4.0],[18.2,1.8,10.8,2.0]],W,FUR),
+      surface(ellipsoid(2.6,2.0,2.2,15.4,11.0,0,C),FUR),
+      surface(ellipsoid(2.8,2.6,1.8,9.2,13.4,2.6,B),FUR),
+      surface(ellipsoid(2.8,2.6,1.8,9.2,13.4,-2.6,B),FUR),
+      surface(ellipsoid(2.2,2.8,1.6,8.2,17.4,3.3,B),FUR),
+      surface(ellipsoid(2.2,2.8,1.6,8.2,17.4,-3.3,B),FUR),
+      surface(ellipsoid(4.8,2.4,5.2,-10.2,10.4,0,W),FUR),
+      surface(ellipsoid(2.2,1.4,1.4,-14.0,11.0,0,B),FUR),
+      surface(ellipsoid(5.2,.7,6.8,-.2,15.2,0,.90),2),
+      surface(cyl(1.3,1.3,9.0,6,2.0,14.4,4.2,BAM,ROT_Z90),1),
+      surface(cyl(1.3,1.3,9.0,6,2.0,14.4,-4.2,BAM,ROT_Z90),1),
+      surface(cyl(.95,.95,6.8,6,1.2,15.6,3.6,BD,ROT_Z90),1),
+      surface(cyl(.95,.95,6.8,6,1.2,15.6,-3.6,BD,ROT_Z90),1),
+      surface(box(6.2,.85,9.8,1.4,14.0,0,BAM),1),
+      surface(box(7.0,2.2,8.2,-1.6,11.8,0,BD),1),
+      surface(box(4.4,.45,3.6,3.6,15.0,4.6,BONE),1),
+      surface(box(4.4,.45,3.6,3.6,15.0,-4.6,BONE),1)
+    ];
+    const left=[],right=[];
+    for(const [x,side,bag] of [[5.6,1,left],[-6.0,1,left],[5.6,-1,right],[-6.0,-1,right]]) {
+      bag.push(surface(limb(1.7,1.3,x,8.0,side*3.4,x+.2,.7,side*3.4,B),FUR));
+      bag.push(surface(ellipsoid(1.6,.7,1.3,x+.3,.65,side*3.4,B),FUR));
+    }
+    const paw=[
+      surface(limb(1.55,1.2,6.4,10.2,4.2,12.6,14.8,6.4,B),FUR),
+      surface(ellipsoid(2.2,1.4,2.0,14.2,15.6,6.8,B),FUR)
+    ];
+    return {body,rigs:[
+      rig(left,[5.6,8.0,3.4],{side:1,amp:.28}),
+      rig(right,[5.6,8.0,-3.4],{side:-1,amp:.28}),
+      rig(paw,[6.4,10.2,4.2],{mode:'strike',swing:.55,attack:.12,duration:.55})
+    ],glow:base.glow};
   }
   if(kind==='catapult') {
     const {box,cyl,ellipsoid,limb,armorShell,ROT_X90}=k;
