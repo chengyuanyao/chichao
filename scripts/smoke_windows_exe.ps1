@@ -39,6 +39,10 @@ if ($Zip) {
     $zipPath = (Resolve-Path -LiteralPath $Zip).Path
     $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ("chichao-smoke-" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $scratch | Out-Null
+    try {
+        Add-MpPreference -ExclusionPath $scratch -ErrorAction SilentlyContinue
+    } catch {
+    }
     Write-Host "Extracting $zipPath -> $scratch"
     Expand-Archive -LiteralPath $zipPath -DestinationPath $scratch -Force
     $found = Get-ChildItem -LiteralPath $scratch -Recurse -Filter 'ChichaoSteelFront.exe' | Select-Object -First 1
