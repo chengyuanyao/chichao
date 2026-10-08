@@ -47,10 +47,6 @@ jobs:
             '{0} {1:N0} bytes ({2:N2} MiB)' -f $_.Name, $_.Length, ($_.Length / 1MB)
           }
 
-      - name: Smoke-test frozen exe
-        shell: powershell
-        run: powershell -ExecutionPolicy Bypass -File scripts/smoke_windows_exe.ps1 -Zip release\ChichaoSteelFront-win64.zip
-
       - name: Upload Windows zip
         uses: actions/upload-artifact@v4
         with:
@@ -64,6 +60,10 @@ jobs:
           name: ChichaoSteelFront-source.zip
           path: release/ChichaoSteelFront-source.zip
           if-no-files-found: error
+
+      - name: Smoke-test frozen exe
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File scripts/smoke_windows_exe.ps1 -Zip release\ChichaoSteelFront-win64.zip
 
       - name: Attach zips to a draft GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')

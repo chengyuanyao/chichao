@@ -78,6 +78,10 @@ python3 scripts/stage_release.py check
 流水线还会在 runner 上解压 zip、启动冻结 exe（`--no-browser`，只监听
 `127.0.0.1`）、请求 `/api/health` 和首页，然后停掉进程。
 
+英文 Windows（控制台常是 cp1252）上，冻结 exe 会把 stdout/stderr 改成 UTF-8
+（失败则 `errors=replace`），避免打印中文横幅时直接 `UnicodeEncodeError` 退出。
+`start-game.bat` 仍会先 `chcp 65001`。
+
 ## 冻结后的路径
 
 `paths.py` 统一处理：

@@ -73,6 +73,8 @@ $env:PORT = [string]$Port
 $env:STEEL_FRONT_NO_BROWSER = '1'
 $env:STEEL_FRONT_OPEN_BROWSER = '0'
 $env:STEEL_FRONT_DATA_DIR = Join-Path $workDir 'smoke-data'
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
 
 Write-Host "Starting $exePath --no-browser on 127.0.0.1:$Port"
 $proc = Start-Process -FilePath $exePath -ArgumentList '--no-browser' `

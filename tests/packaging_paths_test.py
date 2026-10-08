@@ -128,6 +128,44 @@ def main():
 
     assert paths.game_local_url("127.0.0.1", 18081) == "http://127.0.0.1:18081/"
 
+    class ReconfigurableStream(object):
+        def __init__(self):
+            self.encoding = "cp1252"
+            self.errors = "strict"
+            self.written = []
+
+        def reconfigure(self, encoding=None, errors=None):
+            if encoding is not None:
+                self.encoding = encoding
+            if errors is not None:
+                self.errors = errors
+
+        def write(self, text):
+            text.encode(self.encoding, self.errors)
+            self.written.append(text)
+
+        def flush(self):
+            pass
+
+    banner = u"  赤潮：钢铁前线 LAN 服务器"
+    strict = ReconfigurableStream()
+    try:
+        banner.encode(strict.encoding, strict.errors)
+        raised = False
+    except UnicodeEncodeError:
+        raised = True
+    assert raised, "fixture must reject Chinese on cp1252"
+
+    old_out = sys.stdout
+    sys.stdout = ReconfigurableStream()
+    try:
+        paths.configure_stdio()
+        sys.stdout.write(banner)
+        sys.stdout.flush()
+        assert sys.stdout.encoding.lower() == "utf-8" or sys.stdout.errors == "replace"
+    finally:
+        sys.stdout = old_out
+
     httpd = server.ThreadedHTTPServer(("127.0.0.1", 0), server.GameHandler)
     worker = threading.Thread(target=httpd.serve_forever, daemon=True)
     worker.start()

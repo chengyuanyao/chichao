@@ -8,6 +8,7 @@
 
 from __future__ import print_function
 
+import io
 import os
 import sys
 import tempfile
@@ -16,6 +17,46 @@ import tempfile
 def is_frozen():
     """True when running inside a PyInstaller (or similar) bundle."""
     return bool(getattr(sys, "frozen", False)) or hasattr(sys, "_MEIPASS")
+
+
+def configure_stdio():
+    """Keep Chinese print() from crashing on English Windows consoles.
+
+    Frozen exe / ``python server.py`` on a cp1252 console raise
+    UnicodeEncodeError while printing the LAN banner. Prefer UTF-8; if the
+    stream cannot be reconfigured, at least replace unencodable characters
+    instead of aborting the server.
+    """
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+            ctypes.windll.kernel32.SetConsoleCP(65001)
+        except Exception:
+            pass
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name, None)
+        if stream is None:
+            continue
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+                continue
+            except Exception:
+                try:
+                    stream.reconfigure(errors="replace")
+                    continue
+                except Exception:
+                    pass
+        buffer = getattr(stream, "buffer", None)
+        if buffer is None:
+            continue
+        try:
+            wrapped = io.TextIOWrapper(
+                buffer, encoding="utf-8", errors="replace", line_buffering=True)
+            setattr(sys, name, wrapped)
+        except Exception:
+            pass
 
 
 def _environ(environ):
