@@ -141,7 +141,7 @@ python3 scripts/stage_release.py check
 | `CLAUDE.md` | 给代理看的开发备忘 |
 | `ai_commander/llm.example.json`、`ai_commander/llm.json` | 密钥样例 / 本机凭据 |
 | `__pycache__/`、`*.pyc`、`*.pid`、`*.log` | 生成物 |
-| `dist/`、`build/`、`release/`、`scripts/` | 打包中间物；脚本只留在仓库 |
+| `dist/`、`build/`、`release/`、`scripts/`、`.packaging-venv/` | 打包中间物；脚本只留在仓库 |
 | `artifacts/`、`battle_reports/` | 本机输出 |
 
 **要保留：** `public/`（含 `public/vendor/three.js` 与 MIT 声明）、`public/assets/audio/KENNEY-LICENSE.txt`、`server.py` 与同目录游戏模块、`start-game.sh` / `start-game.bat`、`README.md`。

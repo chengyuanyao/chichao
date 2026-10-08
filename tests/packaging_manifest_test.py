@@ -28,9 +28,22 @@ def main():
     assert "ai_commander/llm.example.json" not in rels
     for rel in rels:
         top = rel.split("/")[0]
-        assert top not in ("tests", ".git", ".kiro", "scripts", "dist", "build")
+        assert top not in (
+            "tests", ".git", ".kiro", "scripts", "dist", "build",
+            ".packaging-venv", ".venv", "venv")
         assert not rel.endswith(".pyc")
         assert os.path.basename(rel) != "give_cash.py"
+
+    with tempfile.TemporaryDirectory() as fake_root:
+        os.makedirs(os.path.join(fake_root, ".packaging-venv", "Lib", "site-packages"))
+        with open(os.path.join(fake_root, ".packaging-venv", "Lib", "site-packages", "marker.py"), "w") as handle:
+            handle.write("# build-only\n")
+        with open(os.path.join(fake_root, "server.py"), "w") as handle:
+            handle.write("# stub\n")
+        leaked = [rel for rel in stage_release.iter_source_files(fake_root)
+                  if rel.split("/")[0] in (".packaging-venv", ".venv", "venv")]
+        assert not leaked, leaked
+        assert "server.py" in list(stage_release.iter_source_files(fake_root))
 
     with tempfile.TemporaryDirectory() as folder:
         staged = os.path.join(folder, "source")
