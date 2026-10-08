@@ -45,6 +45,39 @@ Linux / macOS 上可以先跑检查和源码包（**不会**交叉编译出 Wind
 python3 scripts/stage_release.py check
 ```
 
+## 用 GitHub Actions 打 Windows 包（不必本机有 Windows）
+
+仓库自带 [`.github/workflows/windows-release.yml`](.github/workflows/windows-release.yml)。
+它在 `windows-latest` 上安装 Python、跑 `python run_tests.py`、执行
+`scripts/build_windows_release.ps1`，再把 zip 上传为 Actions 产物。
+流水线**不会**发布到 itch.io，也不需要仓库 secrets。
+
+### 怎么触发
+
+1. **手动：** GitHub → **Actions** → **Windows one-click release** → **Run workflow**
+   （选 `main` 或带这个 workflow 的分支）。
+2. **版本标签：** `git tag v2.1.1 && git push origin v2.1.1`（匹配 `v*` 的标签都会跑）。
+3. 打开或更新 pull request 时也会跑，用来确认打包脚本和冻结 exe 没坏。
+
+`workflow_dispatch` 只有在默认分支已经有这份 workflow 之后才会出现在 Actions 菜单里。
+在那之前，用 PR 检查或推 `v*` 标签即可。
+
+### 怎么下载产物
+
+1. 打开对应的 [workflow run](https://github.com/chengyuanyao/chichao/actions/workflows/windows-release.yml)。
+2. 滚到页面底部 **Artifacts**。
+3. 下载 `ChichaoSteelFront-win64.zip`（以及可选的 `ChichaoSteelFront-source.zip`）。
+4. 解压后仍是 `ChichaoSteelFront-win64/ChichaoSteelFront.exe` + `_internal/`。
+
+产物保留期限以 GitHub Actions 默认为准（通常 90 天）。需要长期存放时，把 zip
+拷走或挂到自己的 Release。
+
+打 `v*` 标签时，同一份 zip 会附到一份 **GitHub Release 草稿**（`draft: true`，
+不会自动发布，也不会上传 itch）。到 **Releases** 检查草稿后再手动发布即可。
+
+流水线还会在 runner 上解压 zip、启动冻结 exe（`--no-browser`，只监听
+`127.0.0.1`）、请求 `/api/health` 和首页，然后停掉进程。
+
 ## 冻结后的路径
 
 `paths.py` 统一处理：
