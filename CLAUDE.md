@@ -33,8 +33,9 @@ and is intentionally skipped by `run_tests.py`.
 - `server.py`: HTTP/SSE API, rooms, maps, pathfinding, authoritative simulation, visibility,
   combat, economy, and static-file serving.
 - `paths.py`: resource root (`sys._MEIPASS` when frozen) and writable dirs for battle reports.
-- `scripts/`: itch/Windows packaging (`chichao.spec`, `build_windows_release.*`, `stage_release.py`).
-  See `PACKAGING.md`. Do not add a runtime pip dependency.
+- `scripts/`: itch/Windows packaging (`chichao.spec`, `build_windows_release.*`, `stage_release.py`,
+  `smoke_windows_exe.ps1`). CI: `.github/workflows/windows-release.yml` builds the zip on
+  `windows-latest`. See `PACKAGING.md`. Do not add a runtime pip dependency.
 - `catalog.py`: shared unit, structure, faction, and public catalog definitions. `server.py`
   re-exports these symbols for compatibility with existing tests and imports.
 - `easter_eggs.py`: deterministic flavor payload helpers; decorative map props were removed, so

@@ -33,6 +33,11 @@ EXCLUDE_DIR_NAMES = frozenset((
     "scripts",
     "artifacts",
     "battle_reports",
+    # Created by scripts/build_windows_release.ps1 on the build machine.
+    # Must not enter the player zip (also blows past Windows MAX_PATH).
+    ".packaging-venv",
+    ".venv",
+    "venv",
 ))
 
 # 仅按文件名排除。
@@ -151,7 +156,10 @@ def stage_source(output, root=None):
         parent = os.path.dirname(dest)
         if parent and not os.path.isdir(parent):
             os.makedirs(parent)
-        shutil.copy2(src, dest)
+        try:
+            shutil.copy2(src, dest)
+        except OSError as exc:
+            raise SystemExit("复制失败 %s -> %s: %s" % (src, dest, exc))
         copied.append(rel)
     missing = missing_required(output, REQUIRED_SOURCE_FILES)
     if missing:

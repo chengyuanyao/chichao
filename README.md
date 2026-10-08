@@ -34,7 +34,9 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows_release.ps1
 ```
 
 Linux / macOS 开发机可以先跑 `./scripts/build_windows_release.sh`，生成源码包并检查排除清单；
-Windows 冻结 exe 必须在 Windows 上构建。
+Windows 冻结 exe 必须在 Windows 上构建。没有本机 Windows 时，用 GitHub Actions
+工作流 **Windows one-click release**（手动 `Run workflow` 或推 `v*` 标签），
+从 run 页面底部的 Artifacts 下载 `ChichaoSteelFront-win64.zip`。详见 [`PACKAGING.md`](PACKAGING.md)。
 
 ### 选择网卡与本地 Wi-Fi 热点（Windows）
 

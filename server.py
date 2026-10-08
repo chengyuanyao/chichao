@@ -83,6 +83,7 @@ from formation import (
     resolve_move_formation,
 )
 import paths
+paths.configure_stdio()
 
 
 VERSION = "2.1.0"

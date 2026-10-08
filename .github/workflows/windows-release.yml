@@ -1,0 +1,88 @@
+# Build the Windows one-click zip on a GitHub-hosted runner.
+# No itch.io publish, no repository secrets.
+name: Windows one-click release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run offline tests
+        run: python run_tests.py
+
+      - name: Build Windows one-click zip
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File scripts/build_windows_release.ps1
+
+      - name: Show zip sizes
+        shell: pwsh
+        run: |
+          Get-ChildItem release\*.zip | ForEach-Object {
+            '{0} {1:N0} bytes ({2:N2} MiB)' -f $_.Name, $_.Length, ($_.Length / 1MB)
+          }
+
+      - name: Upload Windows zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChichaoSteelFront-win64.zip
+          path: release/ChichaoSteelFront-win64.zip
+          if-no-files-found: error
+
+      - name: Upload source zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChichaoSteelFront-source.zip
+          path: release/ChichaoSteelFront-source.zip
+          if-no-files-found: error
+
+      - name: Smoke-test frozen exe
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File scripts/smoke_windows_exe.ps1 -Zip release\ChichaoSteelFront-win64.zip
+
+      - name: Attach zips to a draft GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" \
+              release/ChichaoSteelFront-win64.zip \
+              release/ChichaoSteelFront-source.zip \
+              --clobber
+          else
+            gh release create "$tag" \
+              --draft \
+              --title "Chichao Steel Front ${tag}" \
+              --notes "Windows one-click zip built by GitHub Actions. Unsigned. Not published to itch.io." \
+              release/ChichaoSteelFront-win64.zip \
+              release/ChichaoSteelFront-source.zip
+          fi
